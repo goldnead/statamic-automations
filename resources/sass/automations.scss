@@ -626,6 +626,58 @@ $sa-radius: 6px;
     transform: translateY(8px);
 }
 
+/* ---- Autosave indicator ---- */
+
+.sa-autosave {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    color: $sa-color-muted;
+    padding: 0.25rem 0.5rem;
+    border-radius: $sa-radius;
+
+    &__dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: $sa-color-muted;
+        flex-shrink: 0;
+    }
+
+    &--pending,
+    &--saving {
+        color: $sa-color-running;
+        .sa-autosave__dot { background: $sa-color-running; animation: sa-pulse 1.4s ease-in-out infinite; }
+    }
+    &--saved {
+        color: $sa-color-success;
+        .sa-autosave__dot { background: $sa-color-success; }
+    }
+    &--error {
+        color: $sa-color-danger;
+        .sa-autosave__dot { background: $sa-color-danger; }
+    }
+}
+
+@keyframes sa-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+}
+
+.sa-builder__toggle--autosave {
+    margin-left: 0.4rem;
+    padding: 0.25rem 0.5rem;
+    border-left: 1px solid $sa-color-border;
+    padding-left: 0.6rem;
+}
+
+.sa-btn--xs {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.7rem;
+    margin-left: auto;
+}
+
 /* ---- Import page ---- */
 
 .sa-import {

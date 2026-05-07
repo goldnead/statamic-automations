@@ -22,6 +22,16 @@
                 <button class="sa-btn sa-btn--ghost" @click="toggleDrawer">
                     {{ drawerOpen ? 'Hide log' : 'Run log' }}
                 </button>
+                <label v-if="automation.id" class="sa-builder__toggle sa-builder__toggle--autosave">
+                    <input type="checkbox" :checked="autosave.enabled.value" @change="autosave.toggle($event.target.checked)" />
+                    <span>Autosave</span>
+                </label>
+                <AutosaveIndicator
+                    v-if="automation.id && autosave.enabled.value"
+                    :status="autosave.status.value"
+                    :last-saved-at="autosave.lastSavedAt.value"
+                    :last-error="autosave.lastError.value"
+                />
             </div>
         </header>
 
@@ -67,7 +77,9 @@ import ConfigPanel from './ConfigPanel.vue';
 import ValidationDrawer from './ValidationDrawer.vue';
 import RunLogDrawer from './RunLogDrawer.vue';
 import Toast from './ui/Toast.vue';
+import AutosaveIndicator from './ui/AutosaveIndicator.vue';
 import { toast, useToastState } from '../composables/useToast.js';
+import { useAutosave } from '../composables/useAutosave.js';
 
 const toastState = useToastState();
 
@@ -106,6 +118,25 @@ const dataPickerSource = computed(() => {
     const trigger = canvasNodes.value.find((n) => isTrigger(n.type));
     if (!trigger) return null;
     return trigger.type;
+});
+
+// Autosave: watches the automation's nodes/edges/name and saves them
+// 2 seconds after the last change. Disabled by default; the user opts
+// in via the topbar toggle. Skipped silently while the automation has
+// no id yet (i.e. before the first manual save).
+const autosave = useAutosave({
+    source: () => ({
+        name: automation.value.name,
+        description: automation.value.description,
+        nodes: automation.value.nodes,
+        edges: automation.value.edges,
+    }),
+    saver: async () => {
+        if (!automation.value.id) return;
+        await save({ silent: true });
+    },
+    debounceMs: 2000,
+    defaultEnabled: false,
 });
 
 const validationByNode = computed(() => {
@@ -223,7 +254,7 @@ function removeNode(key) {
     if (selectedNodeKey.value === key) selectedNodeKey.value = null;
 }
 
-async function save() {
+async function save({ silent = false } = {}) {
     saving.value = true;
     try {
         const payload = {
@@ -235,17 +266,18 @@ async function save() {
         if (automation.value.id) {
             const updated = await api.automations.update(automation.value.id, payload);
             automation.value = updated;
-            toast.success('Automation saved.');
+            if (!silent) toast.success('Automation saved.');
         } else {
             const created = await api.automations.create(payload);
             automation.value = created;
             // Update URL so refresh keeps the same automation.
             const newUrl = window.location.pathname.replace(/\/create$/, `/${created.id}`);
             window.history.replaceState({}, '', newUrl);
-            toast.success(`Created “${created.name}”.`);
+            if (!silent) toast.success(`Created “${created.name}”.`);
         }
     } catch (e) {
-        toast.error(e?.response?.data?.message ?? 'Save failed.');
+        if (!silent) toast.error(e?.response?.data?.message ?? 'Save failed.');
+        throw e;
     } finally {
         saving.value = false;
     }

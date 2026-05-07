@@ -59,6 +59,12 @@ export const api = {
         get: (id) => client.get(`/runs/${id}`).then((r) => r.data.data),
         retry: (id) => client.post(`/runs/${id}/retry`).then((r) => r.data),
     },
+    nodeRuns: {
+        retry: (id) => client.post(`/node-runs/${id}/retry`).then((r) => r.data),
+    },
+    license: {
+        status: () => client.get('/license/status').then((r) => r.data.data),
+    },
     templates: {
         list: () => client.get('/templates').then((r) => r.data.data),
         install: (handle) => client.post(`/templates/${handle}/install`).then((r) => r.data.data),

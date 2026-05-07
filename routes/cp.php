@@ -74,6 +74,7 @@ Route::prefix('automations')
 
             // Settings
             Route::get('settings', [SettingsController::class, 'show'])->name('settings.show');
+            Route::get('license/status', [SettingsController::class, 'license'])->name('license.status');
 
             // Export / Import
             Route::get('automations/{automation}/export', [ExportImportController::class, 'export'])->name('automations.export');

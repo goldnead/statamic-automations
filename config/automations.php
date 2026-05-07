@@ -29,6 +29,12 @@ return [
         'store_node_io' => true,
         'prune_after_days' => 30,
         'keep_failed_runs_days' => null, // null = same as prune_after_days
+
+        // When true, AutomationRun.context and AutomationNodeRun.input/output
+        // are encrypted at rest with Laravel Crypt (uses APP_KEY). Reads are
+        // transparent — the API response shape is unchanged. Pre-existing
+        // unencrypted rows continue to work after enabling.
+        'encrypt_context' => env('STATAMIC_AUTOMATIONS_ENCRYPT_CONTEXT', false),
     ],
 
     /*
@@ -110,13 +116,30 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Built-in Nodes
+    | Licensing
     |--------------------------------------------------------------------------
     |
-    | Disable individual built-in nodes by setting them to false. Custom
-    | nodes registered through the Automations facade are not affected
-    | by this list.
+    | Optional Pro-tier licensing. The default mode is "config" which
+    | keeps everything local — set `mode = remote` if you operate a
+    | central license endpoint.
     |
+    */
+
+    'license' => [
+        'key' => env('STATAMIC_AUTOMATIONS_LICENSE_KEY', ''),
+        'mode' => env('STATAMIC_AUTOMATIONS_LICENSE_MODE', 'config'), // config | remote
+        'endpoint' => env('STATAMIC_AUTOMATIONS_LICENSE_ENDPOINT', ''),
+        'cache_ttl_minutes' => 360,
+        // Used when mode = config; any of these keys grants Pro access.
+        'allowed_keys' => [],
+        // Default feature handles unlocked for "config" mode validations.
+        'features' => ['custom_actions', 'custom_triggers'],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Optional Integrations
+    |--------------------------------------------------------------------------
     */
 
     'integrations' => [

@@ -225,6 +225,10 @@ The package ships with unit + feature tests for the engine, validators, integrat
 | [Architecture](docs/architecture.md) | Engine flow, data model, lifecycle |
 | [Extending](docs/extending.md) | Custom triggers, actions, conditions |
 | [API reference](docs/api.md) | The complete CP JSON API |
+| [Templates](docs/templates.md) | Catalog of every built-in template |
+| [File sync](docs/file-sync.md) | `resources/automations/` + `automations:sync` |
+| [Licensing](docs/licensing.md) | Pro tier, license modes, status endpoint |
+| [Autosave](docs/autosave.md) | Builder autosave behavior |
 | [Changelog](CHANGELOG.md) | Versioned release notes |
 
 ## Roadmap
@@ -239,7 +243,12 @@ The package ships with unit + feature tests for the engine, validators, integrat
 - [x] Phase H — Vue Flow canvas + schema-driven config
 - [x] Phase I — Templates + JSON export / import + file sync
 - [x] Phase J — Polish (empty / loading / error states, toast feedback, marketplace docs)
-- [ ] Future — File-backed automation auto-sync on deploy, partial-run retry, encrypted run logs
+- [x] **Sprint 4** — `automations:sync` + `automations:prune` Artisan commands, partial-from-node retry, encrypted run logs (`EncryptedJson` cast), license manager (`config` + `remote` modes), Vue Flow autosave, verified Statamic v6 events
+
+The PRD-defined roadmap is now complete. Future iterations will focus
+on community feedback, marketplace screenshots, and quality-of-life
+improvements (loop detection in branches, parallel execution, code
+nodes — all explicitly out of scope for v1 per the PRD non-goals).
 
 ## License
 

@@ -42,6 +42,15 @@
                         <span class="sa-runlog__node-type">{{ nodeRun.node_type }}</span>
                         <span :class="`sa-runlog__status sa-runlog__status--${nodeRun.status}`">{{ nodeRun.status }}</span>
                         <span v-if="nodeRun.duration_ms != null">{{ nodeRun.duration_ms }} ms</span>
+                        <button
+                            type="button"
+                            class="sa-btn sa-btn--ghost sa-btn--xs"
+                            :disabled="retryingNodeId === nodeRun.id"
+                            @click="retryNode(nodeRun)"
+                            :title="`Re-run from ${nodeRun.node_key} forward`"
+                        >
+                            {{ retryingNodeId === nodeRun.id ? 'Queued…' : 'Retry from here' }}
+                        </button>
                     </header>
                     <details v-if="nodeRun.input">
                         <summary>Input</summary>
@@ -77,6 +86,7 @@ const props = defineProps({
 const run = ref(null);
 const loading = ref(false);
 const error = ref(null);
+const retryingNodeId = ref(null);
 const toastState = useToastState();
 
 onMounted(load);
@@ -101,6 +111,20 @@ async function retry() {
         await load();
     } catch (e) {
         toast.error(e?.response?.data?.message ?? 'Retry failed.');
+    }
+}
+
+async function retryNode(nodeRun) {
+    retryingNodeId.value = nodeRun.id;
+    try {
+        const response = await api.nodeRuns.retry(nodeRun.id);
+        toast.success(
+            `Re-queued from ${response.resuming_from} (run #${response.run_id})`,
+        );
+    } catch (e) {
+        toast.error(e?.response?.data?.message ?? 'Partial retry failed.');
+    } finally {
+        retryingNodeId.value = null;
     }
 }
 

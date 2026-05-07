@@ -3,6 +3,7 @@
 namespace Goldnead\StatamicAutomations\Http\Controllers;
 
 use Goldnead\StatamicAutomations\Http\Resources\AutomationRunResource;
+use Goldnead\StatamicAutomations\Jobs\RetryFromNode;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
 use Goldnead\StatamicAutomations\Models\AutomationNodeRun;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
@@ -82,13 +83,17 @@ class RunsController extends Controller
         ]);
     }
 
+    /**
+     * Retry from a specific node — re-execute just $nodeRun's node and
+     * everything downstream of it. The trigger and earlier nodes are
+     * not re-run; their original outputs are reused as context seed.
+     */
     public function retryNodeRun(AutomationNodeRun $nodeRun): JsonResponse
     {
         $this->authorizeAction('retry automation runs');
 
-        // For now we re-run the entire automation (Phase F task to support
-        // partial-from-node retry). Document the behavior in the response.
         $run = $nodeRun->run;
+
         $newRun = AutomationRun::create([
             'automation_id' => $run->automation_id,
             'trigger_node_key' => $run->trigger_node_key,
@@ -98,13 +103,38 @@ class RunsController extends Controller
             'is_test' => $run->is_test,
         ]);
 
-        RunAutomation::dispatch($newRun->id, $run->context ?? [], (bool) $run->is_test);
+        // Seed the new run's context with the original run's context plus
+        // every node output that already finished successfully *before*
+        // the retry point. This keeps tokens like {{ nodes.previous.id }}
+        // working without re-executing those nodes.
+        $context = is_array($run->context) ? $run->context : [];
+        $context['nodes'] = $context['nodes'] ?? [];
+
+        $previousOutputs = $run->nodeRuns()
+            ->where('id', '<', $nodeRun->id)
+            ->where('status', AutomationNodeRun::STATUS_SUCCESS)
+            ->orderBy('id')
+            ->get();
+
+        foreach ($previousOutputs as $previous) {
+            if (! empty($previous->node_key)) {
+                $context['nodes'][$previous->node_key] = $previous->output ?? [];
+            }
+        }
+
+        RetryFromNode::dispatch(
+            $newRun->id,
+            $nodeRun->node_key,
+            $context,
+            (bool) $run->is_test,
+        );
 
         return response()->json([
             'ok' => true,
             'run_id' => $newRun->id,
             'queued' => true,
-            'note' => 'Entire automation re-queued; partial retry from a specific node is on the roadmap.',
+            'resuming_from' => $nodeRun->node_key,
+            'replayed_node_outputs' => $previousOutputs->pluck('node_key')->all(),
         ]);
     }
 }

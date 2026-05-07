@@ -2,13 +2,19 @@
 
 namespace Goldnead\StatamicAutomations;
 
+use Goldnead\StatamicAutomations\Console\Commands\PruneRuns;
+use Goldnead\StatamicAutomations\Console\Commands\SyncAutomations;
 use Goldnead\StatamicAutomations\Engine\ConditionEvaluator;
 use Goldnead\StatamicAutomations\Engine\FlowValidator;
 use Goldnead\StatamicAutomations\Engine\NodeExecutor;
 use Goldnead\StatamicAutomations\Engine\RunLogger;
 use Goldnead\StatamicAutomations\Engine\TokenResolver;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
+use Goldnead\StatamicAutomations\Export\AutomationExporter;
+use Goldnead\StatamicAutomations\Export\AutomationFileSync;
+use Goldnead\StatamicAutomations\Export\AutomationImporter;
 use Goldnead\StatamicAutomations\Integrations\IntegrationDetector;
+use Goldnead\StatamicAutomations\Licensing\LicenseManager;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\Actions as LH;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\Triggers as LHT;
@@ -61,12 +67,21 @@ class ServiceProvider extends AddonServiceProvider
         $this->app->singleton(NodeExecutor::class);
         $this->app->singleton(WorkflowRunner::class);
 
+        // Licensing.
+        $this->app->singleton(LicenseManager::class);
+
+        // Export / import services.
+        $this->app->singleton(AutomationExporter::class);
+        $this->app->singleton(AutomationImporter::class);
+        $this->app->singleton(AutomationFileSync::class);
+
         // The public API entry point used by the Automations facade.
         $this->app->singleton('automations', function ($app) {
             return new Automations(
                 $app->make(TriggerRegistry::class),
                 $app->make(ActionRegistry::class),
                 $app->make(NodeRegistry::class),
+                $app->make(LicenseManager::class),
             );
         });
     }
@@ -99,6 +114,20 @@ class ServiceProvider extends AddonServiceProvider
         $this->registerEventListeners();
         $this->registerPermissions();
         $this->registerNavigation();
+        $this->registerCommands();
+    }
+
+    /**
+     * Register Artisan commands. Only loaded inside the console kernel.
+     */
+    protected function registerCommands(): void
+    {
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                SyncAutomations::class,
+                PruneRuns::class,
+            ]);
+        }
     }
 
     /**
@@ -131,18 +160,22 @@ class ServiceProvider extends AddonServiceProvider
 
         foreach ($triggers as $key => $class) {
             if (($enabled[$key] ?? true) && class_exists($class)) {
+                // Mark as built-in BEFORE registering so Pro-gating skips it.
+                $automations->registerBuiltIn($class::handle());
                 $automations->trigger($class::handle(), $class);
             }
         }
 
         foreach ($logic as $key => $class) {
             if (($enabled[$key] ?? true) && class_exists($class)) {
+                $automations->registerBuiltIn($class::handle());
                 $automations->node($class::handle(), $class);
             }
         }
 
         foreach ($actions as $key => $class) {
             if (($enabled[$key] ?? true) && class_exists($class)) {
+                $automations->registerBuiltIn($class::handle());
                 $automations->action($class::handle(), $class);
             }
         }
@@ -160,6 +193,7 @@ class ServiceProvider extends AddonServiceProvider
         $automations = $this->app->make('automations');
 
         if ($detector->hasWebhookManager()) {
+            $automations->registerBuiltIn(WebhookManagerSendAction::handle());
             $automations->action(WebhookManagerSendAction::handle(), WebhookManagerSendAction::class);
         }
 
@@ -172,6 +206,7 @@ class ServiceProvider extends AddonServiceProvider
                 LHT\LeadNoteAddedTrigger::class,
                 LHT\LeadFollowUpDueTrigger::class,
             ] as $triggerClass) {
+                $automations->registerBuiltIn($triggerClass::handle());
                 $automations->trigger($triggerClass::handle(), $triggerClass);
             }
 
@@ -185,6 +220,7 @@ class ServiceProvider extends AddonServiceProvider
                 LH\CreateFollowUpAction::class,
                 LH\CompleteFollowUpAction::class,
             ] as $actionClass) {
+                $automations->registerBuiltIn($actionClass::handle());
                 $automations->action($actionClass::handle(), $actionClass);
             }
         }
@@ -195,13 +231,19 @@ class ServiceProvider extends AddonServiceProvider
      *
      * Event class names are referenced as strings so the package keeps
      * working even when a particular Statamic version does not ship a
-     * given event class.
+     * given event class. The list below is verified against Statamic
+     * v5/v6 (https://statamic.dev/extending/events).
      */
     protected function registerEventListeners(): void
     {
         $listeners = [
+            // Form submissions — Statamic v5 emits SubmissionCreated;
+            // older versions used FormSubmitted. We listen to both.
             'Statamic\\Events\\SubmissionCreated' => HandleFormSubmitted::class,
             'Statamic\\Events\\FormSubmitted' => HandleFormSubmitted::class,
+            // Entry publish events. EntryPublished fires only on actual
+            // publish; EntrySaved fires on every save and is filtered
+            // inside the trigger when the user wants "only if published".
             'Statamic\\Events\\EntryPublished' => HandleEntryPublished::class,
             'Statamic\\Events\\EntrySaved' => HandleEntryPublished::class,
         ];

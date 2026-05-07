@@ -114,20 +114,83 @@ class WorkflowRunner
     }
 
     /**
+     * Resume execution from a specific node — used by partial-from-node
+     * retries. The given node is executed (re-executed) and the runner
+     * continues forward along outgoing edges.
+     *
+     * Unlike {@see execute()}, this never re-runs the trigger and only
+     * walks forward from the chosen point.
+     *
+     * Returns the refreshed run model.
+     */
+    public function executeFromNode(
+        AutomationRun $run,
+        AutomationContext $context,
+        string $nodeKey,
+    ): AutomationRun {
+        $automation = $run->automation;
+        $startNode = $automation->nodes()->where('node_key', $nodeKey)->first();
+
+        if ($startNode === null) {
+            $this->logger->finishRun(
+                $run,
+                AutomationRun::STATUS_FAILED,
+                "Cannot resume — node '{$nodeKey}' not found in automation.",
+            );
+
+            return $run->fresh();
+        }
+
+        $this->logger->startRun($run);
+
+        try {
+            $finalStatus = $this->walk(
+                $run,
+                $automation,
+                $startNode,
+                $context,
+                executeFirst: true,
+            );
+        } catch (\Throwable $e) {
+            $this->logger->finishRun($run, AutomationRun::STATUS_FAILED, $e->getMessage());
+
+            return $run->fresh();
+        }
+
+        if ($finalStatus === AutomationRun::STATUS_WAITING) {
+            return $run->fresh();
+        }
+
+        $this->logger->finishRun($run, $finalStatus);
+
+        $automation->forceFill(['last_run_at' => now()])->save();
+
+        return $run->fresh();
+    }
+
+    /**
      * Walk the graph from $startNode using DFS along outgoing edges.
      *
      * Returns the run's terminal status string.
+     *
+     * @param  bool  $executeFirst  When true, the start node itself is
+     *                              executed (used for partial retries).
+     *                              When false, the start node is treated
+     *                              as the trigger and skipped.
      */
     protected function walk(
         AutomationRun $run,
         Automation $automation,
         AutomationNode $startNode,
         AutomationContext $context,
+        bool $executeFirst = false,
     ): string {
         $edges = $automation->edges()->get();
         $nodes = $automation->nodes()->get()->keyBy('node_key');
 
-        $current = $this->nextNode($startNode, 'default', $edges, $nodes);
+        $current = $executeFirst
+            ? $startNode
+            : $this->nextNode($startNode, 'default', $edges, $nodes);
         $visited = [];
         $maxNodes = 1000; // safety net; cycles are blocked by validator
 

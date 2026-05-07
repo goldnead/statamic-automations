@@ -6,6 +6,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Added — Sprint 4 (Roadmap futures)
+
+- **File-backed automations**: `automations:sync` Artisan command with
+  `--from=files|db|auto`, `--strategy=db_wins|file_wins`, `--dry-run`
+  and `--watch`. Auto-detects sync direction when one side is empty.
+- **Run pruning**: `automations:prune` command honors
+  `runs.prune_after_days` and `runs.keep_failed_runs_days`.
+- **Partial-from-node retry**: `WorkflowRunner::executeFromNode()`
+  resumes a run from a specific node. The CP `POST /node-runs/{id}/retry`
+  endpoint dispatches a new `RetryFromNode` job and replays prior
+  successful node outputs into the new run's context. The Run Detail
+  screen exposes a "Retry from here" button per node-run.
+- **Encrypted run logs**: `EncryptedJson` cast wraps the encrypted
+  payload in a `{ "_encrypted": "…" }` JSON envelope so existing JSON
+  columns stay valid. Toggle via `automations.runs.encrypt_context`
+  (default off). Legacy unencrypted rows continue to read transparently.
+- **License Manager**: `LicenseManager` service supports `config` and
+  `remote` modes with caching. Pro gating is opt-in via
+  `automations.features.custom_actions_requires_pro`. Built-in nodes
+  (including LeadHub + Webhook Manager) are never gated.
+  New endpoint: `GET /cp/automations/api/license/status`.
+- **Autosave**: `useAutosave` composable with debounced writes (2s),
+  topbar toggle and inline status indicator. Skipped silently for
+  unsaved automations to keep handle generation a deliberate action.
+- **Verified Statamic v6 events**: Listener mapping references the
+  documented v5/v6 event class names with explanatory comments.
+- **Docs**: `docs/file-sync.md`, `docs/licensing.md`, `docs/autosave.md`.
+
 ### Added — Sprint 3 (Phase I + J)
 
 - **Templates**: two new built-in templates — _Lead Magnet Delivery_ and _Follow-up Reminder_.

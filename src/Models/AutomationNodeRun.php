@@ -2,6 +2,7 @@
 
 namespace Goldnead\StatamicAutomations\Models;
 
+use Goldnead\StatamicAutomations\Casts\EncryptedJson;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -31,8 +32,8 @@ class AutomationNodeRun extends Model
     ];
 
     protected $casts = [
-        'input' => 'array',
-        'output' => 'array',
+        'input' => EncryptedJson::class,
+        'output' => EncryptedJson::class,
         'started_at' => 'datetime',
         'finished_at' => 'datetime',
         'duration_ms' => 'integer',

@@ -3,11 +3,12 @@
 namespace Goldnead\StatamicAutomations\Http\Controllers;
 
 use Goldnead\StatamicAutomations\Integrations\IntegrationDetector;
+use Goldnead\StatamicAutomations\Licensing\LicenseManager;
 use Illuminate\Http\JsonResponse;
 
 class SettingsController extends Controller
 {
-    public function show(IntegrationDetector $detector): JsonResponse
+    public function show(IntegrationDetector $detector, LicenseManager $license): JsonResponse
     {
         $this->authorizeAction('view automations');
 
@@ -22,7 +23,17 @@ class SettingsController extends Controller
                     'redact_keys' => config('automations.security.redact_keys'),
                 ],
                 'integrations' => $detector->snapshot(),
+                'license' => $license->status(),
             ],
+        ]);
+    }
+
+    public function license(LicenseManager $license): JsonResponse
+    {
+        $this->authorizeAction('view automations');
+
+        return response()->json([
+            'data' => $license->status(),
         ]);
     }
 }
