@@ -1,0 +1,66 @@
+<?php
+
+namespace Goldnead\StatamicAutomations\Models;
+
+use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+class Automation extends Model
+{
+    protected $table = 'automations';
+
+    protected $fillable = [
+        'uuid',
+        'name',
+        'handle',
+        'description',
+        'enabled',
+        'version',
+        'created_by',
+        'last_run_at',
+    ];
+
+    protected $casts = [
+        'enabled' => 'boolean',
+        'version' => 'integer',
+        'last_run_at' => 'datetime',
+    ];
+
+    /**
+     * Boot a uuid for new models if not provided.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (Automation $automation) {
+            if (empty($automation->uuid)) {
+                $automation->uuid = (string) \Illuminate\Support\Str::uuid();
+            }
+        });
+    }
+
+    public function nodes(): HasMany
+    {
+        return $this->hasMany(AutomationNode::class);
+    }
+
+    public function edges(): HasMany
+    {
+        return $this->hasMany(AutomationEdge::class);
+    }
+
+    public function runs(): HasMany
+    {
+        return $this->hasMany(AutomationRun::class);
+    }
+
+    public function scheduledJobs(): HasMany
+    {
+        return $this->hasMany(AutomationScheduledJob::class);
+    }
+
+    public function triggerNode(): ?AutomationNode
+    {
+        return $this->nodes->first(fn (AutomationNode $node) => str_contains($node->type, 'trigger') || $node->isTrigger());
+    }
+}

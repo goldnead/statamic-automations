@@ -1,0 +1,52 @@
+<?php
+
+namespace Goldnead\StatamicAutomations\Nodes\Logic;
+
+use Goldnead\StatamicAutomations\Context\AutomationContext;
+use Goldnead\StatamicAutomations\Contracts\AutomationNode;
+use Goldnead\StatamicAutomations\Support\ActionResult;
+
+class StopNode implements AutomationNode
+{
+    public static function handle(): string
+    {
+        return 'stop';
+    }
+
+    public static function label(): string
+    {
+        return 'Stop Flow';
+    }
+
+    public static function description(): ?string
+    {
+        return 'Ends the automation immediately with status "stopped".';
+    }
+
+    public static function group(): string
+    {
+        return 'Logic';
+    }
+
+    public static function supportsTestMode(): bool
+    {
+        return true;
+    }
+
+    public static function schema(): array
+    {
+        return [
+            [
+                'handle' => 'reason',
+                'label' => 'Reason',
+                'type' => 'text',
+                'required' => false,
+            ],
+        ];
+    }
+
+    public function execute(AutomationContext $context, array $config): ActionResult
+    {
+        return ActionResult::stopped($config['reason'] ?? 'Stopped by Stop Node.');
+    }
+}
