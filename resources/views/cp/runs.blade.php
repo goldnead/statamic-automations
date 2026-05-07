@@ -2,6 +2,15 @@
 @section('title', __('Automation Runs'))
 
 @section('content')
-    <h1 class="mb-6">{{ __('Runs') }}</h1>
-    <p class="text-grey">{{ __('Run logs UI coming in Phase H.') }}</p>
+    @php $runId = request()->route('run'); @endphp
+
+    @if($runId)
+        <div data-automations-app="run-detail" data-prop-run_id="{{ json_encode($runId) }}"></div>
+    @else
+        <div data-automations-app="runs"></div>
+    @endif
 @endsection
+
+@push('head')
+    @include('statamic-automations::cp.partials.assets')
+@endpush

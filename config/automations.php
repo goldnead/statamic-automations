@@ -102,6 +102,33 @@ return [
     |
     */
 
+    'integrations' => [
+        'webhook_manager' => [
+            // Class names checked by IntegrationDetector. The first
+            // class that exists wins — leave the defaults in place
+            // unless you ship a forked Webhook Manager package.
+            'detect' => [
+                'Goldnead\\WebhookManager\\Facades\\WebhookManager',
+                'Goldnead\\WebhookManager\\WebhookManager',
+            ],
+            'facade' => [
+                'Goldnead\\WebhookManager\\Facades\\WebhookManager',
+            ],
+        ],
+        'leadhub' => [
+            'detect' => [
+                'Goldnead\\LeadHub\\Facades\\LeadHub',
+                'Goldnead\\LeadHub\\LeadHub',
+            ],
+            'facade' => [
+                'Goldnead\\LeadHub\\Facades\\LeadHub',
+            ],
+            // When true, write timeline entries on the lead whenever an
+            // automation modifies it. Honored by the LeadHub addon.
+            'emit_timeline_events' => true,
+        ],
+    ],
+
     'builtin_nodes' => [
         // Triggers
         'manual' => true,

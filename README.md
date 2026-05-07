@@ -153,11 +153,33 @@ composer test
 - [x] Phase C: Registries & Contracts
 - [x] Phase D: Execution Engine
 - [x] Phase E: Built-in Nodes (Manual, Form Submitted, Entry Published, Filter, Branch, Stop, Delay, Email, Webhook, Log)
-- [ ] Phase F: Optional Integrations (Webhook Manager, LeadHub)
-- [ ] Phase G: CP API
-- [ ] Phase H: Canvas UI (Vue Flow)
-- [ ] Phase I: Templates + Export/Import
+- [x] Phase F: Optional Integrations (Webhook Manager + LeadHub adapters with conditional registration)
+- [x] Phase G: CP API (Automations CRUD, Nodes/Triggers/Actions metadata, Runs, Templates, Settings)
+- [x] Phase H: Canvas UI — Vue Flow builder, schema-driven config panel, token picker, condition builder, run log drawer
+- [ ] Phase I: Templates + Export/Import (templates exist as a registry; export/import endpoints to come)
 - [ ] Phase J: Polish + Marketplace
+
+## Frontend build
+
+```bash
+npm install
+npm run build
+```
+
+Then publish the assets:
+
+```bash
+php artisan vendor:publish --tag=statamic-automations-assets
+```
+
+## Optional integrations
+
+| Integration | Detect | Adds |
+|---|---|---|
+| Webhook Manager | `Goldnead\WebhookManager\Facades\WebhookManager` | "Send Webhook (via Webhook Manager)" action |
+| LeadHub | `Goldnead\LeadHub\Facades\LeadHub` | Lead Created / Status Changed / Tag Added / Note Added / Follow-up Due triggers + Create-or-Update / Status / Tags / Notes / Follow-up actions |
+
+Class names can be overridden in `config/automations.php` under `integrations`.
 
 ## License
 

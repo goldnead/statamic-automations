@@ -8,6 +8,12 @@ use Goldnead\StatamicAutomations\Engine\NodeExecutor;
 use Goldnead\StatamicAutomations\Engine\RunLogger;
 use Goldnead\StatamicAutomations\Engine\TokenResolver;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
+use Goldnead\StatamicAutomations\Integrations\IntegrationDetector;
+use Goldnead\StatamicAutomations\Integrations\LeadHub\Actions as LH;
+use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
+use Goldnead\StatamicAutomations\Integrations\LeadHub\Triggers as LHT;
+use Goldnead\StatamicAutomations\Integrations\WebhookManager\WebhookManagerAdapter;
+use Goldnead\StatamicAutomations\Integrations\WebhookManager\WebhookManagerSendAction;
 use Goldnead\StatamicAutomations\Listeners\HandleEntryPublished;
 use Goldnead\StatamicAutomations\Listeners\HandleFormSubmitted;
 use Goldnead\StatamicAutomations\Nodes\Actions\AddLogEntryAction;
@@ -41,6 +47,12 @@ class ServiceProvider extends AddonServiceProvider
         $this->app->singleton(ActionRegistry::class);
         $this->app->singleton(NodeRegistry::class);
 
+        // Integration helpers (cheap singletons; the underlying sister
+        // addons are detected lazily).
+        $this->app->singleton(IntegrationDetector::class);
+        $this->app->singleton(WebhookManagerAdapter::class);
+        $this->app->singleton(LeadHubAdapter::class);
+
         // Engine services. Most are stateless or use injected registries.
         $this->app->singleton(TokenResolver::class);
         $this->app->singleton(ConditionEvaluator::class);
@@ -66,6 +78,7 @@ class ServiceProvider extends AddonServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
         $this->loadRoutesFrom(__DIR__ . '/../routes/cp.php');
+        $this->loadViewsFrom(__DIR__ . '/../resources/views', 'statamic-automations');
 
         $this->publishes([
             __DIR__ . '/../config/automations.php' => config_path('automations.php'),
@@ -75,7 +88,14 @@ class ServiceProvider extends AddonServiceProvider
             __DIR__ . '/../database/migrations' => database_path('migrations'),
         ], 'statamic-automations-migrations');
 
+        // Frontend assets — built into resources/dist/ via `npm run build`
+        // and exposed via php artisan vendor:publish.
+        $this->publishes([
+            __DIR__ . '/../resources/dist' => public_path('vendor/statamic-automations'),
+        ], 'statamic-automations-assets');
+
         $this->registerBuiltInNodes();
+        $this->registerOptionalIntegrations();
         $this->registerEventListeners();
         $this->registerPermissions();
         $this->registerNavigation();
@@ -124,6 +144,48 @@ class ServiceProvider extends AddonServiceProvider
         foreach ($actions as $key => $class) {
             if (($enabled[$key] ?? true) && class_exists($class)) {
                 $automations->action($class::handle(), $class);
+            }
+        }
+    }
+
+    /**
+     * Conditionally register Webhook Manager + LeadHub triggers / actions
+     * when the sister addons are installed.
+     */
+    protected function registerOptionalIntegrations(): void
+    {
+        /** @var IntegrationDetector $detector */
+        $detector = $this->app->make(IntegrationDetector::class);
+        /** @var \Goldnead\StatamicAutomations\Automations $automations */
+        $automations = $this->app->make('automations');
+
+        if ($detector->hasWebhookManager()) {
+            $automations->action(WebhookManagerSendAction::handle(), WebhookManagerSendAction::class);
+        }
+
+        if ($detector->hasLeadHub()) {
+            // Triggers
+            foreach ([
+                LHT\LeadCreatedTrigger::class,
+                LHT\LeadStatusChangedTrigger::class,
+                LHT\LeadTagAddedTrigger::class,
+                LHT\LeadNoteAddedTrigger::class,
+                LHT\LeadFollowUpDueTrigger::class,
+            ] as $triggerClass) {
+                $automations->trigger($triggerClass::handle(), $triggerClass);
+            }
+
+            // Actions
+            foreach ([
+                LH\CreateOrUpdateLeadAction::class,
+                LH\ChangeLeadStatusAction::class,
+                LH\AddLeadTagAction::class,
+                LH\RemoveLeadTagAction::class,
+                LH\AddLeadNoteAction::class,
+                LH\CreateFollowUpAction::class,
+                LH\CompleteFollowUpAction::class,
+            ] as $actionClass) {
+                $automations->action($actionClass::handle(), $actionClass);
             }
         }
     }

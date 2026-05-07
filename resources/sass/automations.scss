@@ -1,0 +1,514 @@
+/* -----------------------------------------------------------------------
+ * Statamic Automations — CP styles
+ * Lightweight, intentionally not a full design system. The Builder
+ * component should still feel at home inside Statamic's CP without
+ * fighting Statamic's own utility classes.
+ * -------------------------------------------------------------------- */
+
+$sa-color-bg: #f7f8fa;
+$sa-color-surface: #ffffff;
+$sa-color-border: #e3e5ea;
+$sa-color-text: #1f2937;
+$sa-color-muted: #6b7280;
+$sa-color-primary: #3b82f6;
+$sa-color-success: #16a34a;
+$sa-color-warning: #f59e0b;
+$sa-color-danger: #dc2626;
+$sa-color-running: #3b82f6;
+$sa-radius: 6px;
+
+.sa-builder {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    height: calc(100vh - 80px);
+    background: $sa-color-bg;
+
+    &__topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem 1rem;
+        background: $sa-color-surface;
+        border-bottom: 1px solid $sa-color-border;
+    }
+
+    &__title {
+        display: flex;
+        flex-direction: column;
+        gap: 0.125rem;
+    }
+
+    &__name-input {
+        font-size: 1.125rem;
+        font-weight: 600;
+        border: none;
+        background: transparent;
+        color: $sa-color-text;
+        outline: none;
+        min-width: 280px;
+
+        &:focus {
+            border-bottom: 2px solid $sa-color-primary;
+        }
+    }
+
+    &__handle {
+        font-size: 0.75rem;
+        color: $sa-color-muted;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    &__topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    &__toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.875rem;
+    }
+
+    &__main {
+        display: grid;
+        grid-template-columns: 240px 1fr 360px;
+        gap: 1px;
+        background: $sa-color-border;
+        min-height: 0;
+    }
+}
+
+.sa-btn {
+    appearance: none;
+    border: 1px solid $sa-color-primary;
+    background: $sa-color-primary;
+    color: white;
+    padding: 0.4rem 0.85rem;
+    border-radius: $sa-radius;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: background 0.15s ease;
+
+    &:hover { background: darken($sa-color-primary, 4%); }
+    &:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    &--secondary {
+        background: $sa-color-surface;
+        color: $sa-color-text;
+        border-color: $sa-color-border;
+        &:hover { background: $sa-color-bg; }
+    }
+
+    &--ghost {
+        background: transparent;
+        color: $sa-color-text;
+        border-color: transparent;
+        &:hover { background: $sa-color-bg; }
+    }
+
+    &--danger {
+        background: $sa-color-danger;
+        border-color: $sa-color-danger;
+    }
+}
+
+.sa-library {
+    background: $sa-color-surface;
+    padding: 1rem;
+    overflow-y: auto;
+
+    &__heading {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: $sa-color-muted;
+        margin: 0 0 0.5rem;
+    }
+
+    &__group { margin-bottom: 1.25rem; }
+    &__group-title {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: $sa-color-muted;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        margin: 0 0 0.4rem;
+    }
+
+    &__list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+
+    &__item {
+        padding: 0.5rem 0.6rem;
+        border: 1px solid $sa-color-border;
+        border-radius: $sa-radius;
+        cursor: pointer;
+        background: $sa-color-bg;
+        transition: border-color 0.15s ease;
+
+        &:hover { border-color: $sa-color-primary; }
+    }
+
+    &__item-label { font-size: 0.875rem; font-weight: 500; }
+    &__item-description { font-size: 0.75rem; color: $sa-color-muted; margin-top: 0.125rem; }
+
+    &__hint {
+        margin-top: 1rem;
+        padding: 0.5rem 0.6rem;
+        font-size: 0.75rem;
+        color: $sa-color-muted;
+        background: $sa-color-bg;
+        border-radius: $sa-radius;
+    }
+}
+
+.sa-canvas {
+    background: $sa-color-bg;
+    overflow: hidden;
+    position: relative;
+
+    &__flow { width: 100%; height: 100%; }
+}
+
+.sa-config {
+    background: $sa-color-surface;
+    padding: 1rem;
+    overflow-y: auto;
+
+    &__empty { color: $sa-color-muted; text-align: center; padding: 2rem 0; }
+
+    &__title { font-size: 1rem; font-weight: 600; margin: 0 0 0.25rem; }
+    &__description { font-size: 0.75rem; color: $sa-color-muted; margin: 0 0 1rem; }
+
+    &__field { margin-bottom: 1rem; }
+    &__label {
+        display: block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: $sa-color-muted;
+        margin-bottom: 0.25rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    &__required { color: $sa-color-danger; margin-left: 2px; }
+    &__help { font-size: 0.75rem; color: $sa-color-muted; margin: 0.25rem 0 0; }
+    &__input {
+        width: 100%;
+        padding: 0.4rem 0.6rem;
+        border: 1px solid $sa-color-border;
+        border-radius: $sa-radius;
+        font-size: 0.875rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        &:focus { outline: 2px solid rgba($sa-color-primary, 0.3); border-color: $sa-color-primary; }
+    }
+}
+
+.sa-field {
+    &__textarea {
+        width: 100%;
+        padding: 0.4rem 0.6rem;
+        border: 1px solid $sa-color-border;
+        border-radius: $sa-radius;
+        font-size: 0.875rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        resize: vertical;
+    }
+    &__select {
+        width: 100%;
+        padding: 0.4rem 0.6rem;
+        border: 1px solid $sa-color-border;
+        border-radius: $sa-radius;
+        font-size: 0.875rem;
+        background: white;
+    }
+    &__input--small { width: auto; flex: 1; }
+    &__input--inline { flex: 1; min-width: 120px; border: none; padding: 0.25rem 0.4rem; }
+    &__row { display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.4rem; }
+    &__remove {
+        appearance: none;
+        background: transparent;
+        border: 1px solid $sa-color-border;
+        color: $sa-color-danger;
+        width: 26px; height: 26px;
+        border-radius: $sa-radius;
+        cursor: pointer;
+    }
+    &__add {
+        appearance: none;
+        background: transparent;
+        border: 1px dashed $sa-color-border;
+        padding: 0.3rem 0.6rem;
+        font-size: 0.75rem;
+        border-radius: $sa-radius;
+        cursor: pointer;
+        color: $sa-color-muted;
+    }
+
+    &--tags {
+        display: flex; flex-wrap: wrap; gap: 0.25rem;
+        padding: 0.25rem;
+        border: 1px solid $sa-color-border;
+        border-radius: $sa-radius;
+        background: white;
+    }
+    &__tag {
+        background: $sa-color-bg;
+        padding: 0.125rem 0.4rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        display: inline-flex; align-items: center; gap: 0.25rem;
+    }
+    &__tag-remove {
+        appearance: none; background: transparent; border: none; cursor: pointer;
+        color: $sa-color-muted;
+    }
+    &__hint { font-size: 0.7rem; color: $sa-color-muted; margin: 0.25rem 0 0; }
+}
+
+.sa-token-picker {
+    margin-top: 0.25rem;
+    position: relative;
+
+    &__trigger {
+        appearance: none;
+        background: transparent;
+        border: 1px dashed $sa-color-border;
+        padding: 0.2rem 0.5rem;
+        border-radius: $sa-radius;
+        font-size: 0.75rem;
+        color: $sa-color-muted;
+        cursor: pointer;
+    }
+
+    &__panel {
+        position: absolute;
+        z-index: 10;
+        background: white;
+        border: 1px solid $sa-color-border;
+        border-radius: $sa-radius;
+        padding: 0.4rem;
+        min-width: 240px;
+        max-height: 240px;
+        overflow-y: auto;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
+    }
+
+    &__list { list-style: none; padding: 0; margin: 0; }
+
+    &__entry {
+        padding: 0.25rem 0.4rem;
+        cursor: pointer;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        display: flex; justify-content: space-between; gap: 0.5rem;
+        &:hover { background: $sa-color-bg; }
+    }
+
+    &__type { color: $sa-color-muted; }
+    &__empty, &__loading { font-size: 0.75rem; color: $sa-color-muted; }
+}
+
+.sa-conditions {
+    &__mode { display: flex; gap: 0.75rem; margin-bottom: 0.5rem; font-size: 0.75rem; }
+    &__list { list-style: none; padding: 0; margin: 0; }
+    &__row { display: flex; gap: 0.4rem; align-items: center; margin-bottom: 0.4rem; }
+    &__field, &__value { flex: 1; padding: 0.3rem 0.4rem; border: 1px solid $sa-color-border; border-radius: $sa-radius; font-size: 0.75rem; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    &__operator { padding: 0.3rem 0.4rem; border: 1px solid $sa-color-border; border-radius: $sa-radius; font-size: 0.75rem; }
+    &__no-value { font-size: 0.7rem; color: $sa-color-muted; flex: 1; }
+    &__remove { appearance: none; background: transparent; border: 1px solid $sa-color-border; color: $sa-color-danger; width: 26px; height: 26px; border-radius: $sa-radius; cursor: pointer; }
+    &__add { appearance: none; background: transparent; border: 1px dashed $sa-color-border; padding: 0.3rem 0.6rem; font-size: 0.75rem; border-radius: $sa-radius; cursor: pointer; color: $sa-color-muted; margin-top: 0.25rem; }
+}
+
+/* ---- Custom Vue Flow nodes ---- */
+
+.sa-node {
+    background: white;
+    border: 1px solid $sa-color-border;
+    border-radius: $sa-radius;
+    padding: 0.5rem 0.75rem;
+    min-width: 180px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    font-family: inherit;
+
+    &__badge {
+        display: inline-block;
+        font-size: 0.625rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: $sa-color-muted;
+        padding: 0.125rem 0.4rem;
+        background: $sa-color-bg;
+        border-radius: 999px;
+        margin-bottom: 0.25rem;
+    }
+    &__title { font-size: 0.875rem; font-weight: 600; color: $sa-color-text; }
+    &__type { font-size: 0.7rem; color: $sa-color-muted; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    &__summary { font-size: 0.75rem; color: $sa-color-text; margin-top: 0.25rem; padding-top: 0.25rem; border-top: 1px dashed $sa-color-border; }
+
+    &__handles { display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.4rem; font-size: 0.6rem; color: $sa-color-muted; }
+    &__handle-label { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    &__handle-label--true { color: $sa-color-success; }
+    &__handle-label--false { color: $sa-color-danger; }
+
+    &--trigger { border-left: 3px solid $sa-color-primary; }
+    &--logic { border-left: 3px solid $sa-color-warning; }
+    &--action { border-left: 3px solid $sa-color-success; }
+
+    &--invalid { border-color: $sa-color-danger; }
+    &--incomplete { border-color: $sa-color-warning; }
+}
+
+/* ---- Validation drawer ---- */
+
+.sa-validation {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: white;
+    border-top: 1px solid $sa-color-border;
+    padding: 0.75rem 1rem;
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 5;
+
+    &__title { margin: 0 0 0.4rem; font-size: 0.875rem; }
+    &__list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+    &__item { display: flex; gap: 0.5rem; align-items: center; font-size: 0.75rem; padding: 0.25rem 0.4rem; border-radius: $sa-radius; }
+    &__item--error { background: rgba($sa-color-danger, 0.08); }
+    &__item--warning { background: rgba($sa-color-warning, 0.08); }
+    &__level { font-weight: 600; text-transform: uppercase; font-size: 0.6rem; }
+    &__node { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: $sa-color-muted; }
+}
+
+/* ---- Run log drawer ---- */
+
+.sa-runlog {
+    position: fixed;
+    right: 0; top: 0; bottom: 0;
+    width: 420px;
+    background: white;
+    border-left: 1px solid $sa-color-border;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
+    z-index: 6;
+
+    &--open { transform: translateX(0); }
+
+    &__header { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 1rem; border-bottom: 1px solid $sa-color-border; }
+    &__title { margin: 0; font-size: 0.875rem; }
+    &__close { appearance: none; background: transparent; border: none; font-size: 1.25rem; cursor: pointer; }
+
+    &__inner { padding: 1rem; overflow-y: auto; }
+    &__summary { display: flex; gap: 0.75rem; align-items: center; font-size: 0.875rem; margin-bottom: 0.75rem; }
+    &__error { color: $sa-color-danger; font-size: 0.75rem; margin-bottom: 0.5rem; }
+
+    &__nodes { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+    &__node { border: 1px solid $sa-color-border; border-radius: $sa-radius; padding: 0.5rem; background: $sa-color-bg; }
+    &__node-header { display: flex; gap: 0.4rem; align-items: center; font-size: 0.75rem; }
+    &__node-key { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+    &__node-type { color: $sa-color-muted; }
+    &__node-error { color: $sa-color-danger; font-size: 0.75rem; margin: 0.25rem 0 0; }
+    &__io {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.7rem;
+        background: white;
+        padding: 0.4rem;
+        border-radius: 4px;
+        margin-top: 0.4rem;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    &__node--success { border-left: 3px solid $sa-color-success; }
+    &__node--failed { border-left: 3px solid $sa-color-danger; }
+    &__node--stopped { border-left: 3px solid $sa-color-warning; }
+    &__node--skipped { border-left: 3px solid $sa-color-muted; }
+}
+
+.sa-runlog__nodes--full { gap: 0.75rem; }
+
+.sa-runlog__status, .sa-pill {
+    display: inline-block;
+    padding: 0.125rem 0.4rem;
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-radius: 999px;
+    background: $sa-color-bg;
+    color: $sa-color-text;
+}
+
+.sa-pill--success, .sa-runlog__status--success { background: rgba($sa-color-success, 0.12); color: $sa-color-success; }
+.sa-pill--failed, .sa-runlog__status--failed { background: rgba($sa-color-danger, 0.12); color: $sa-color-danger; }
+.sa-pill--stopped, .sa-runlog__status--stopped { background: rgba($sa-color-warning, 0.15); color: darken($sa-color-warning, 10%); }
+.sa-pill--running, .sa-runlog__status--running { background: rgba($sa-color-running, 0.15); color: $sa-color-running; }
+.sa-pill--waiting, .sa-runlog__status--waiting { background: rgba($sa-color-running, 0.15); color: $sa-color-running; }
+.sa-pill--queued, .sa-runlog__status--queued { background: rgba($sa-color-muted, 0.15); color: $sa-color-muted; }
+.sa-pill--skipped, .sa-runlog__status--skipped { background: rgba($sa-color-muted, 0.15); color: $sa-color-muted; }
+.sa-pill--green { background: rgba($sa-color-success, 0.12); color: $sa-color-success; }
+.sa-pill--gray { background: $sa-color-bg; color: $sa-color-muted; }
+
+/* ---- List screens ---- */
+
+.sa-list {
+    padding: 1rem 1.5rem;
+
+    &__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+    &__title { margin: 0; font-size: 1.5rem; }
+    &__subtitle { color: $sa-color-muted; font-size: 0.875rem; margin: 0.25rem 0 0; }
+    &__filters { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    &__search, &__filter {
+        padding: 0.4rem 0.6rem;
+        border: 1px solid $sa-color-border;
+        border-radius: $sa-radius;
+        font-size: 0.875rem;
+    }
+    &__search { flex: 1; max-width: 320px; }
+
+    &__loading, &__empty { padding: 2rem; text-align: center; color: $sa-color-muted; }
+
+    &__table {
+        width: 100%;
+        background: white;
+        border: 1px solid $sa-color-border;
+        border-radius: $sa-radius;
+        border-collapse: separate;
+        border-spacing: 0;
+
+        th, td { text-align: left; padding: 0.5rem 0.75rem; font-size: 0.875rem; border-bottom: 1px solid $sa-color-border; }
+        th { background: $sa-color-bg; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: $sa-color-muted; }
+        tr:last-child td { border-bottom: none; }
+    }
+
+    &__name { font-weight: 600; color: $sa-color-text; text-decoration: none; }
+    &__name:hover { color: $sa-color-primary; }
+
+    &__actions { display: flex; gap: 0.4rem; justify-content: flex-end; }
+}
+
+.sa-templates {
+    padding: 1rem 1.5rem;
+
+    &__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; }
+    &__card { background: white; border: 1px solid $sa-color-border; border-radius: $sa-radius; padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+    &__card-header { display: flex; flex-direction: column; gap: 0.25rem; }
+    &__card-title { margin: 0; font-size: 1rem; }
+    &__card-description { color: $sa-color-muted; font-size: 0.875rem; margin: 0; }
+    &__card-nodes { list-style: none; padding: 0; margin: 0; font-size: 0.75rem; color: $sa-color-muted; }
+    &__card-nodes li { padding: 0.125rem 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+}
+
+.sa-run-detail {
+    padding: 1rem 1.5rem;
+
+    &__header { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 1rem; }
+    &__back { color: $sa-color-muted; font-size: 0.875rem; text-decoration: none; }
+    &__back:hover { color: $sa-color-primary; }
+    &__title { margin: 0; font-size: 1.5rem; }
+    &__summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.5rem; margin-bottom: 1rem; padding: 0.75rem; background: white; border: 1px solid $sa-color-border; border-radius: $sa-radius; font-size: 0.875rem; }
+    &__error { color: $sa-color-danger; font-size: 0.875rem; margin-bottom: 0.75rem; }
+}
