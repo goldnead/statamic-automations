@@ -66,6 +66,15 @@ export const api = {
     settings: {
         show: () => client.get('/settings').then((r) => r.data.data),
     },
+    exports: {
+        download: (id) => client.get(`/automations/${id}/export`).then((r) => r.data),
+        syncStatus: (id) => client.get(`/automations/${id}/sync-status`).then((r) => r.data.data),
+        syncToFile: (id) => client.post(`/automations/${id}/sync-to-file`).then((r) => r.data),
+        listFiles: () => client.get('/automations/file-storage/list').then((r) => r.data.data),
+        import: (payload, options = {}) => client
+            .post('/automations/import', { payload, ...options })
+            .then((r) => r.data),
+    },
 };
 
 export default client;

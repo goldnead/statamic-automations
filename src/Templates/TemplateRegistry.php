@@ -21,6 +21,8 @@ class TemplateRegistry
             $this->formSubmissionToWebhook(),
             $this->qualifiedLeadToCrm(),
             $this->workshopInquiryFlow(),
+            $this->leadMagnetDelivery(),
+            $this->followUpReminder(),
             $this->entryPublishedNotification(),
             $this->webhookFailureAlert(),
         ];
@@ -148,6 +150,75 @@ class TemplateRegistry
                 ['from_node_key' => 'lead', 'to_node_key' => 'tag'],
                 ['from_node_key' => 'tag', 'to_node_key' => 'email'],
                 ['from_node_key' => 'email', 'to_node_key' => 'follow_up'],
+            ],
+        ];
+    }
+
+    protected function leadMagnetDelivery(): array
+    {
+        return [
+            'handle' => 'lead_magnet_delivery',
+            'name' => 'Lead Magnet Delivery',
+            'description' => 'Capture an email through a form, deliver the lead magnet by email, and create a tagged LeadHub lead.',
+            'requires' => ['leadhub'],
+            'nodes' => [
+                ['node_key' => 'trigger', 'type' => 'form_submitted', 'position_x' => 0, 'position_y' => 0, 'config' => [
+                    'form_handle' => 'lead_magnet',
+                ]],
+                ['node_key' => 'filter', 'type' => 'filter', 'position_x' => 260, 'position_y' => 0, 'config' => [
+                    'mode' => 'all',
+                    'conditions' => [
+                        ['field' => 'form.email', 'operator' => 'is_not_empty'],
+                    ],
+                ]],
+                ['node_key' => 'deliver', 'type' => 'send_email', 'position_x' => 520, 'position_y' => -80, 'config' => [
+                    'to' => '{{ form.email }}',
+                    'subject' => 'Your free guide is here',
+                    'body' => "Hi {{ form.first_name }},\n\nThanks for signing up. You can download your guide here:\n\nhttps://example.com/lead-magnet.pdf\n\n— The team",
+                ]],
+                ['node_key' => 'lead', 'type' => 'leadhub.create_or_update_lead', 'position_x' => 520, 'position_y' => 80, 'config' => [
+                    'email' => '{{ form.email }}',
+                    'first_name' => '{{ form.first_name }}',
+                    'source' => 'lead-magnet',
+                ]],
+                ['node_key' => 'tag', 'type' => 'leadhub.add_tag', 'position_x' => 800, 'position_y' => 80, 'config' => [
+                    'lead_id' => '{{ lead.id }}',
+                    'tag' => 'Lead Magnet',
+                ]],
+                ['node_key' => 'log', 'type' => 'add_log_entry', 'position_x' => 1060, 'position_y' => 0, 'config' => [
+                    'level' => 'info',
+                    'message' => 'Lead magnet delivered to {{ form.email }}',
+                ]],
+            ],
+            'edges' => [
+                ['from_node_key' => 'trigger', 'to_node_key' => 'filter'],
+                ['from_node_key' => 'filter', 'to_node_key' => 'deliver'],
+                ['from_node_key' => 'deliver', 'to_node_key' => 'lead'],
+                ['from_node_key' => 'lead', 'to_node_key' => 'tag'],
+                ['from_node_key' => 'tag', 'to_node_key' => 'log'],
+            ],
+        ];
+    }
+
+    protected function followUpReminder(): array
+    {
+        return [
+            'handle' => 'follow_up_reminder',
+            'name' => 'Follow-up Reminder',
+            'description' => 'Email yourself a reminder whenever a LeadHub follow-up becomes due.',
+            'requires' => ['leadhub'],
+            'nodes' => [
+                ['node_key' => 'trigger', 'type' => 'leadhub.lead_follow_up_due', 'position_x' => 0, 'position_y' => 0, 'config' => [
+                    'window' => 'due_today',
+                ]],
+                ['node_key' => 'email', 'type' => 'send_email', 'position_x' => 280, 'position_y' => 0, 'config' => [
+                    'to' => 'admin@example.com',
+                    'subject' => 'Follow-up due: {{ lead.full_name }}',
+                    'body' => "A follow-up is due today.\n\nLead: {{ lead.full_name }} ({{ lead.email }})\nNote: {{ follow_up.note }}\nDue at: {{ follow_up.due_at }}",
+                ]],
+            ],
+            'edges' => [
+                ['from_node_key' => 'trigger', 'to_node_key' => 'email'],
             ],
         ];
     }

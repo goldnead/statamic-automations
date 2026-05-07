@@ -4,6 +4,7 @@ import AutomationsList from './components/AutomationsList.vue';
 import RunsList from './components/RunsList.vue';
 import RunDetail from './components/RunDetail.vue';
 import Templates from './components/Templates.vue';
+import ImportPage from './components/ImportPage.vue';
 
 import '@vue-flow/core/dist/style.css';
 import '@vue-flow/core/dist/theme-default.css';
@@ -22,6 +23,7 @@ const apps = {
     runs: RunsList,
     'run-detail': RunDetail,
     templates: Templates,
+    import: ImportPage,
 };
 
 document.querySelectorAll('[data-automations-app]').forEach((el) => {

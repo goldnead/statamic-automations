@@ -1,33 +1,64 @@
+<div align="center">
+
 # Statamic Automations
 
-> A visual automation layer built specifically for Statamic websites.
+**A visual automation layer built specifically for Statamic websites.**
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/goldnead/statamic-automations.svg?style=flat-square)](https://packagist.org/packages/goldnead/statamic-automations)
 [![License](https://img.shields.io/github/license/goldnead/statamic-automations.svg?style=flat-square)](LICENSE)
+[![Statamic](https://img.shields.io/badge/statamic-5.x%20%7C%206.x-orange?style=flat-square)](https://statamic.com)
 
-Statamic Automations gives your Statamic site a lightweight visual workflow builder. Create simple automations from forms, content events, LeadHub contacts and webhooks — without writing a custom Laravel listener for every small process.
+Build automations for Statamic forms, entries, leads and webhooks  
+— with a familiar visual flow builder inside the Control Panel.
 
-Build flows with **Trigger**, **Filter**, **Branch** and **Action** nodes, test them with real sample data, and inspect every run with node-by-node logs.
+</div>
 
-> It is not a full n8n replacement. It is the missing automation layer for Statamic websites.
+---
+
+> Statamic Automations gives your site a lightweight visual workflow builder. Create automations from forms, content events, LeadHub contacts and webhooks — without writing a custom Laravel listener for every small process.
+>
+> Build flows with **Trigger**, **Filter**, **Branch** and **Action** nodes, test them with real sample data, and inspect every run with node-by-node logs.
+>
+> _It's not a full n8n replacement. It's the **missing automation layer** for Statamic websites._
+
+## Why this exists
+
+Statamic is wonderful as a CMS and developer framework, but typical website automations still demand:
+
+- custom Laravel events + listeners
+- hand-rolled webhooks
+- third-party tools like Zapier / Make / n8n
+- opaque "what just happened?" lead and form pipelines
+
+For most Statamic projects an external automation tool is overkill, and custom code for every small workflow is expensive to maintain. **Statamic Automations** sits exactly in that gap.
 
 ## Features
 
-- 🎨 Visual node-based flow builder inside the Control Panel
-- ⚡ Trigger nodes for forms, entries, assets, users, leads and webhooks
-- 🔀 Filter and Branch nodes for simple logic
-- 🛠 Action nodes for emails, webhooks, LeadHub updates and Statamic changes
-- 🪄 Dynamic token picker for using event data in actions
-- 🧪 Test runs with sample data
-- 📋 Node-by-node execution logs
-- 🔌 Optional integration with [Webhook Manager](#) and [LeadHub](#)
-- 👨‍💻 Developer API for custom triggers and actions
+- 🎨 **Visual node-based flow builder** inside the Control Panel
+- ⚡ **Triggers** for forms, entries, assets, users, leads and webhooks
+- 🔀 **Filter** and **Branch** nodes for simple logic
+- 🛠 **Actions** for emails, webhooks, LeadHub updates and Statamic changes
+- 🪄 **Token picker** for using event data in actions (`{{ form.email }}`, `{{ lead.full_name }}` …)
+- 🧪 **Test runs** with real sample data — no real side-effects in test mode
+- 📋 **Node-by-node execution logs** with redacted sensitive payloads
+- 🧩 Optional **Webhook Manager** + **LeadHub** integrations (auto-detected, never required)
+- 📦 **Templates** that copy into user-owned automations
+- 📤 **JSON export / import** for version control, starter kits and cross-environment moves
+- 👨‍💻 Public **developer API** for custom triggers, actions and conditions
+
+## Screenshots
+
+> Screenshots will be added once a reference Statamic project is set up. Until then, the [Architecture overview](docs/architecture.md) gives you the big picture.
+
+| Builder | Run log | Templates |
+|---|---|---|
+| _coming soon_ | _coming soon_ | _coming soon_ |
 
 ## Requirements
 
-- PHP 8.2+
-- Statamic 5.x or 6.x
-- Laravel 11.x or 12.x
+- PHP **8.2+**
+- Laravel **11.x** or **12.x**
+- Statamic **5.x** or **6.x**
 
 ## Installation
 
@@ -35,53 +66,109 @@ Build flows with **Trigger**, **Filter**, **Branch** and **Action** nodes, test 
 composer require goldnead/statamic-automations
 ```
 
-Then publish and run the migrations:
+Run the migrations:
 
 ```bash
 php artisan vendor:publish --tag=statamic-automations-migrations
 php artisan migrate
 ```
 
-Optionally publish the config file:
+Optionally publish the config and frontend assets:
 
 ```bash
 php artisan vendor:publish --tag=statamic-automations-config
+php artisan vendor:publish --tag=statamic-automations-assets
 ```
 
-## Quick Start
+The frontend assets are built into `resources/dist/` inside the package. To build them yourself:
 
-1. Open the Control Panel and navigate to **Automations**.
-2. Click **Create Automation**.
-3. Drag a **Trigger** (e.g., Form Submitted) onto the canvas.
-4. Add **Filter** or **Branch** nodes for conditions.
-5. Add **Action** nodes (e.g., Send Email).
-6. Connect the nodes with edges.
-7. **Validate** the automation, then **Test** it with sample data.
-8. **Enable** the automation when ready.
+```bash
+cd vendor/goldnead/statamic-automations
+npm install
+npm run build
+```
 
-## Built-in Triggers
+Make sure your queue worker is running so automation runs are dispatched off the request thread:
 
-| Trigger | Group | Description |
+```bash
+php artisan queue:work --queue=default
+```
+
+## Quick start
+
+1. Open the Statamic CP and navigate to **Automations**.
+2. Click **New automation**.
+3. Drag a **Trigger** (e.g. _Form Submitted_) onto the canvas from the Node Library.
+4. Add **Filter** or **Branch** nodes if you need conditions.
+5. Add **Action** nodes (e.g. _Send Email_).
+6. Connect the nodes by dragging between handles.
+7. Click **Validate** then **Test** with sample data.
+8. Toggle **Enabled** when ready — the automation now runs against real events.
+
+Or skip steps 1–6 and start from a **template**: most common patterns ship as one-click installs.
+
+## Built-in nodes
+
+### Triggers
+
+| Trigger | Group | Source |
 |---|---|---|
-| Manual Trigger | Manual | For testing and ad-hoc workflows |
-| Form Submitted | Statamic | When a Statamic form receives a submission |
-| Entry Published | Statamic | When an entry is published |
+| Manual Trigger | Manual | For testing & ad-hoc runs |
+| Form Submitted | Statamic | A Statamic form receives a submission |
+| Entry Published | Statamic | An entry is published |
+| Lead Created _(LeadHub)_ | LeadHub | A new lead is added |
+| Lead Status Changed _(LeadHub)_ | LeadHub | A lead transitions between statuses |
+| Lead Tag Added _(LeadHub)_ | LeadHub | A tag is added to a lead |
+| Lead Note Added _(LeadHub)_ | LeadHub | A note is added to a lead |
+| Lead Follow-up Due _(LeadHub)_ | LeadHub | A scheduled follow-up becomes due |
 
-## Built-in Actions
+### Logic
 
-| Action | Group | Description |
+| Node | Purpose |
+|---|---|
+| Filter | Stop the flow if conditions aren't met |
+| Branch | Split into `true` / `false` paths |
+| Stop | End the flow with status `stopped` |
+| Delay | Wait for minutes / hours / days, then continue |
+
+### Actions
+
+| Action | Group | Notes |
 |---|---|---|
-| Send Email Notification | Notifications | Send email with token-resolved fields |
-| Send Webhook (Simple) | HTTP | POST a JSON payload to a URL |
-| Add Log Entry | Utilities | Write to the Automation log |
-| Stop Flow | Logic | End the flow intentionally |
+| Send Email Notification | Notifications | Token-resolved subject + body |
+| Send Webhook (Simple) | HTTP | Direct POST/PUT/PATCH |
+| Send Webhook _(via Webhook Manager)_ | Webhook Manager | Inherits transport, signing, retry, logs |
+| Add Log Entry | Utilities | Writes to your Laravel log channel |
+| Stop Flow | Logic | Ends the flow intentionally |
+| Create or Update Lead _(LeadHub)_ | LeadHub | Email-based upsert |
+| Change Lead Status _(LeadHub)_ | LeadHub | |
+| Add / Remove Lead Tag _(LeadHub)_ | LeadHub | |
+| Add Lead Note _(LeadHub)_ | LeadHub | Token-resolved body |
+| Create / Complete Follow-up _(LeadHub)_ | LeadHub | |
 
-## Logic Nodes
+## Templates
 
-- **Filter** — stop the flow if conditions don't match
-- **Branch** — split the flow into `true`/`false` paths
-- **Stop** — end the flow with status `stopped`
-- **Delay** — wait for minutes/hours/days before continuing
+Eight curated templates ship with the addon — each one is **copied** into a user-owned automation when installed, so updates to the addon never silently change your existing flows.
+
+- **New Lead Notification** — email the admin when a LeadHub lead is created
+- **Form Submission to Webhook** — forward submissions to an external URL
+- **Qualified Lead to CRM** — push qualified leads + add note + schedule follow-up
+- **Workshop Inquiry Flow** — capture, tag, notify, schedule follow-up
+- **Lead Magnet Delivery** — send the file, create a tagged lead, log the delivery
+- **Follow-up Reminder** — daily reminders for due follow-ups
+- **Entry Published Notification** — webhook on collection publish (Slack-friendly)
+- **Webhook Failure Alert** — admin email when a destination keeps failing
+
+## Optional integrations
+
+Sister addons are detected automatically through `class_exists`. The package keeps working without them.
+
+| Integration | Class | Adds |
+|---|---|---|
+| Webhook Manager | `Goldnead\WebhookManager\Facades\WebhookManager` | "Send Webhook (via Webhook Manager)" action with Webhook Manager destinations |
+| LeadHub | `Goldnead\LeadHub\Facades\LeadHub` | 5 LeadHub triggers + 7 LeadHub actions |
+
+Class names are configurable in `config/automations.php` under `integrations`, so you can swap implementations or use a fork.
 
 ## Developer API
 
@@ -93,52 +180,34 @@ use Goldnead\StatamicAutomations\Facades\Automations;
 Automations::action('my_package.send_to_internal_api', SendToInternalApiAction::class);
 ```
 
-Implement the contract:
-
-```php
-use Goldnead\StatamicAutomations\Contracts\AutomationAction;
-use Goldnead\StatamicAutomations\Context\AutomationContext;
-use Goldnead\StatamicAutomations\Support\ActionResult;
-
-class SendToInternalApiAction implements AutomationAction
-{
-    public static function handle(): string { return 'my_package.send_to_internal_api'; }
-    public static function label(): string { return 'Send to internal API'; }
-    public static function description(): ?string { return 'Sends the current context to an internal endpoint.'; }
-    public static function group(): string { return 'Custom'; }
-    public static function supportsTestMode(): bool { return true; }
-
-    public static function schema(): array
-    {
-        return [
-            ['handle' => 'endpoint', 'type' => 'text', 'label' => 'Endpoint URL', 'required' => true],
-            ['handle' => 'method', 'type' => 'select', 'label' => 'Method', 'options' => ['POST', 'PUT'], 'default' => 'POST'],
-        ];
-    }
-
-    public function execute(AutomationContext $context, array $config): ActionResult
-    {
-        // your logic here
-        return ActionResult::success(['response' => 'ok']);
-    }
-}
-```
-
 Register a custom trigger:
 
 ```php
 Automations::trigger('my_package.invoice_paid', InvoicePaidTrigger::class);
 ```
 
+Full documentation including interface definitions, schema fields and worked examples lives in [`docs/extending.md`](docs/extending.md).
+
+## Export & Import
+
+Every automation can be exported to a portable JSON file (schema-versioned), and re-imported in any environment:
+
+- **Export**: `GET /cp/automations/api/automations/{id}/export` (or click _Export_ in the builder topbar)
+- **Import**: drop a JSON file on `/cp/automations/import`
+- **File sync**: optionally store automations in `resources/automations/{handle}.json` for Git-based versioning
+
+Imports always create new automations (never silently overwrite), start disabled, and surface warnings for missing integrations or unknown node types.
+
 ## Configuration
 
-See [`config/automations.php`](config/automations.php) for available options:
+See [`config/automations.php`](config/automations.php). Highlights:
 
-- Queue connection
-- Run retention (default 30 days)
-- Test mode behavior (no real side effects)
-- Sensitive key redaction
-- Feature flags
+- `queue` / `queue_connection` — dedicated queue for automation runs
+- `runs.prune_after_days` — default 30, override or set to `null` to disable pruning
+- `test_mode.*` — fine-grained switches for what runs during a test (default: nothing real)
+- `security.redact_keys` — patterns redacted in run logs
+- `integrations.*` — class names for sister addon detection
+- `file_storage.path` — where exported JSON files are written
 
 ## Testing
 
@@ -146,41 +215,32 @@ See [`config/automations.php`](config/automations.php) for available options:
 composer test
 ```
 
+The package ships with unit + feature tests for the engine, validators, integrations, exporter/importer, registries and the CP API.
+
+## Documentation
+
+| Document | Topic |
+|---|---|
+| [Getting started](docs/getting-started.md) | Install, build assets, first automation |
+| [Architecture](docs/architecture.md) | Engine flow, data model, lifecycle |
+| [Extending](docs/extending.md) | Custom triggers, actions, conditions |
+| [API reference](docs/api.md) | The complete CP JSON API |
+| [Changelog](CHANGELOG.md) | Versioned release notes |
+
 ## Roadmap
 
-- [x] Phase A: Package Skeleton
-- [x] Phase B: Database & Models
-- [x] Phase C: Registries & Contracts
-- [x] Phase D: Execution Engine
-- [x] Phase E: Built-in Nodes (Manual, Form Submitted, Entry Published, Filter, Branch, Stop, Delay, Email, Webhook, Log)
-- [x] Phase F: Optional Integrations (Webhook Manager + LeadHub adapters with conditional registration)
-- [x] Phase G: CP API (Automations CRUD, Nodes/Triggers/Actions metadata, Runs, Templates, Settings)
-- [x] Phase H: Canvas UI — Vue Flow builder, schema-driven config panel, token picker, condition builder, run log drawer
-- [ ] Phase I: Templates + Export/Import (templates exist as a registry; export/import endpoints to come)
-- [ ] Phase J: Polish + Marketplace
-
-## Frontend build
-
-```bash
-npm install
-npm run build
-```
-
-Then publish the assets:
-
-```bash
-php artisan vendor:publish --tag=statamic-automations-assets
-```
-
-## Optional integrations
-
-| Integration | Detect | Adds |
-|---|---|---|
-| Webhook Manager | `Goldnead\WebhookManager\Facades\WebhookManager` | "Send Webhook (via Webhook Manager)" action |
-| LeadHub | `Goldnead\LeadHub\Facades\LeadHub` | Lead Created / Status Changed / Tag Added / Note Added / Follow-up Due triggers + Create-or-Update / Status / Tags / Notes / Follow-up actions |
-
-Class names can be overridden in `config/automations.php` under `integrations`.
+- [x] Phase A — Package skeleton
+- [x] Phase B — Database + Eloquent models
+- [x] Phase C — Registries + Contracts + Facade
+- [x] Phase D — Execution engine (validator, runner, token resolver, conditions, logger)
+- [x] Phase E — Built-in triggers, logic and actions
+- [x] Phase F — Optional Webhook Manager + LeadHub integrations
+- [x] Phase G — Full CP JSON API
+- [x] Phase H — Vue Flow canvas + schema-driven config
+- [x] Phase I — Templates + JSON export / import + file sync
+- [x] Phase J — Polish (empty / loading / error states, toast feedback, marketplace docs)
+- [ ] Future — File-backed automation auto-sync on deploy, partial-run retry, encrypted run logs
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](LICENSE)

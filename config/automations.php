@@ -70,6 +70,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | File Storage
+    |--------------------------------------------------------------------------
+    |
+    | When enabled, individual automations can be exported to JSON files
+    | inside the configured directory. Database remains the runtime
+    | source of truth — files are a portable representation suited for
+    | version control, starter kits and cross-environment migration.
+    |
+    */
+
+    'file_storage' => [
+        'enabled' => true,
+        'path' => env('STATAMIC_AUTOMATIONS_FILE_PATH', null),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Security
     |--------------------------------------------------------------------------
     |

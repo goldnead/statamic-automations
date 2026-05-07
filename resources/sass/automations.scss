@@ -512,3 +512,166 @@ $sa-radius: 6px;
     &__summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.5rem; margin-bottom: 1rem; padding: 0.75rem; background: white; border: 1px solid $sa-color-border; border-radius: $sa-radius; font-size: 0.875rem; }
     &__error { color: $sa-color-danger; font-size: 0.875rem; margin-bottom: 0.75rem; }
 }
+
+.sa-list__header-actions { display: flex; gap: 0.5rem; }
+
+/* ---- Empty / loading / error states ---- */
+
+.sa-empty {
+    text-align: center;
+    padding: 3rem 1rem;
+    background: white;
+    border: 1px dashed $sa-color-border;
+    border-radius: $sa-radius;
+
+    &__icon { font-size: 2rem; margin-bottom: 0.5rem; }
+    &__title { margin: 0 0 0.5rem; font-size: 1.125rem; color: $sa-color-text; }
+    &__message { margin: 0 0 1rem; color: $sa-color-muted; font-size: 0.875rem; max-width: 32rem; margin-left: auto; margin-right: auto; }
+    &__actions { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
+}
+
+.sa-spinner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 2rem;
+    color: $sa-color-muted;
+
+    &__ring {
+        display: inline-block;
+        width: 16px; height: 16px;
+        border: 2px solid rgba($sa-color-muted, 0.2);
+        border-top-color: $sa-color-primary;
+        border-radius: 50%;
+        animation: sa-spin 0.8s linear infinite;
+    }
+
+    &__label { font-size: 0.875rem; }
+
+    &--small &__ring { width: 12px; height: 12px; border-width: 2px; }
+    &--large &__ring { width: 24px; height: 24px; border-width: 3px; }
+}
+
+@keyframes sa-spin {
+    to { transform: rotate(360deg); }
+}
+
+.sa-error {
+    padding: 0.75rem 1rem;
+    border-radius: $sa-radius;
+    background: rgba($sa-color-danger, 0.06);
+    border: 1px solid rgba($sa-color-danger, 0.2);
+    color: $sa-color-danger;
+    margin: 1rem 0;
+
+    &__title { display: block; font-weight: 600; margin-bottom: 0.25rem; }
+    &__message { margin: 0; font-size: 0.875rem; }
+    &__actions { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+
+    &--warning {
+        background: rgba($sa-color-warning, 0.08);
+        border-color: rgba($sa-color-warning, 0.3);
+        color: darken($sa-color-warning, 15%);
+    }
+
+    &--info {
+        background: rgba($sa-color-running, 0.08);
+        border-color: rgba($sa-color-running, 0.3);
+        color: $sa-color-running;
+    }
+}
+
+/* ---- Toast ---- */
+
+.sa-toast {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    background: $sa-color-text;
+    color: white;
+    padding: 0.6rem 0.9rem;
+    border-radius: $sa-radius;
+    font-size: 0.875rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    z-index: 9999;
+    max-width: 360px;
+
+    &--success { background: $sa-color-success; }
+    &--error { background: $sa-color-danger; }
+    &--warning { background: darken($sa-color-warning, 5%); }
+    &--info { background: $sa-color-running; }
+
+    &__dismiss {
+        appearance: none;
+        background: transparent;
+        border: none;
+        color: rgba(255, 255, 255, 0.7);
+        cursor: pointer;
+        font-size: 1rem;
+        line-height: 1;
+        padding: 0;
+        &:hover { color: white; }
+    }
+}
+
+.sa-toast-enter-active, .sa-toast-leave-active {
+    transition: all 0.18s ease;
+}
+.sa-toast-enter-from, .sa-toast-leave-to {
+    opacity: 0;
+    transform: translateY(8px);
+}
+
+/* ---- Import page ---- */
+
+.sa-import {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+
+    &__dropzone {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 3rem 1.5rem;
+        background: white;
+        border: 2px dashed $sa-color-border;
+        border-radius: $sa-radius;
+        cursor: pointer;
+        transition: border-color 0.15s ease, background 0.15s ease;
+        text-align: center;
+
+        &--dragging {
+            border-color: $sa-color-primary;
+            background: rgba($sa-color-primary, 0.04);
+        }
+    }
+
+    &__file {
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        cursor: pointer;
+    }
+
+    &__hint { font-size: 0.875rem; color: $sa-color-muted; }
+    &__hint strong { color: $sa-color-text; }
+
+    &__paste { background: white; border: 1px solid $sa-color-border; border-radius: $sa-radius; padding: 0.75rem 1rem; }
+    &__paste summary { cursor: pointer; font-weight: 500; font-size: 0.875rem; }
+    &__paste textarea { margin-top: 0.5rem; margin-bottom: 0.5rem; }
+
+    &__result {
+        background: white;
+        border: 1px solid $sa-color-border;
+        border-radius: $sa-radius;
+        padding: 1rem;
+    }
+    &__warning { color: darken($sa-color-warning, 10%); font-size: 0.875rem; }
+    &__warning ul { margin: 0.25rem 0 0 1rem; padding: 0; }
+}

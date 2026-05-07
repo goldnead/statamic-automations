@@ -1,6 +1,7 @@
 <?php
 
 use Goldnead\StatamicAutomations\Http\Controllers\AutomationsController;
+use Goldnead\StatamicAutomations\Http\Controllers\ExportImportController;
 use Goldnead\StatamicAutomations\Http\Controllers\NodesController;
 use Goldnead\StatamicAutomations\Http\Controllers\RunsController;
 use Goldnead\StatamicAutomations\Http\Controllers\SettingsController;
@@ -27,6 +28,7 @@ Route::prefix('automations')
         Route::view('/runs', 'statamic-automations::cp.runs')->name('runs.index');
         Route::view('/runs/{run}', 'statamic-automations::cp.runs')->name('runs.show');
         Route::view('/templates', 'statamic-automations::cp.templates')->name('templates.index');
+        Route::view('/import', 'statamic-automations::cp.import')->name('import');
         Route::view('/settings', 'statamic-automations::cp.settings')->name('settings');
         Route::view('/{automation}', 'statamic-automations::cp.builder')->name('show');
 
@@ -72,5 +74,12 @@ Route::prefix('automations')
 
             // Settings
             Route::get('settings', [SettingsController::class, 'show'])->name('settings.show');
+
+            // Export / Import
+            Route::get('automations/{automation}/export', [ExportImportController::class, 'export'])->name('automations.export');
+            Route::get('automations/{automation}/sync-status', [ExportImportController::class, 'syncStatus'])->name('automations.sync-status');
+            Route::post('automations/{automation}/sync-to-file', [ExportImportController::class, 'syncToFile'])->name('automations.sync-to-file');
+            Route::post('automations/import', [ExportImportController::class, 'import'])->name('automations.import');
+            Route::get('automations/file-storage/list', [ExportImportController::class, 'listFiles'])->name('automations.files.list');
         });
     });

@@ -18,11 +18,14 @@
                 <button class="sa-btn" :disabled="saving" @click="save">{{ saving ? 'Saving…' : 'Save' }}</button>
                 <button class="sa-btn sa-btn--secondary" @click="validate">Validate</button>
                 <button class="sa-btn sa-btn--secondary" @click="testRun">Test</button>
+                <button v-if="automation.id" class="sa-btn sa-btn--ghost" @click="exportJson">Export</button>
                 <button class="sa-btn sa-btn--ghost" @click="toggleDrawer">
                     {{ drawerOpen ? 'Hide log' : 'Run log' }}
                 </button>
             </div>
         </header>
+
+        <Toast v-if="toastState.message" :key="toastState.seq" :message="toastState.message" :level="toastState.level" />
 
         <div class="sa-builder__main">
             <NodeLibrary :nodes="library" @add="addNodeFromLibrary" />
@@ -63,6 +66,10 @@ import Canvas from './Canvas.vue';
 import ConfigPanel from './ConfigPanel.vue';
 import ValidationDrawer from './ValidationDrawer.vue';
 import RunLogDrawer from './RunLogDrawer.vue';
+import Toast from './ui/Toast.vue';
+import { toast, useToastState } from '../composables/useToast.js';
+
+const toastState = useToastState();
 
 const props = defineProps({
     automation_id: { type: [String, Number], default: null },
@@ -228,50 +235,112 @@ async function save() {
         if (automation.value.id) {
             const updated = await api.automations.update(automation.value.id, payload);
             automation.value = updated;
+            toast.success('Automation saved.');
         } else {
             const created = await api.automations.create(payload);
             automation.value = created;
             // Update URL so refresh keeps the same automation.
             const newUrl = window.location.pathname.replace(/\/create$/, `/${created.id}`);
             window.history.replaceState({}, '', newUrl);
+            toast.success(`Created “${created.name}”.`);
         }
+    } catch (e) {
+        toast.error(e?.response?.data?.message ?? 'Save failed.');
     } finally {
         saving.value = false;
+    }
+}
+
+async function exportJson() {
+    if (!automation.value.id) return;
+    try {
+        const payload = await api.exports.download(automation.value.id);
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${automation.value.handle || 'automation'}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success('Exported.');
+    } catch (e) {
+        toast.error(e?.response?.data?.message ?? 'Export failed.');
     }
 }
 
 async function validate() {
     if (!automation.value.id) {
         issues.value = [{ level: 'warning', code: 'unsaved', message: 'Save the automation first to validate.' }];
+        toast.warning('Save the automation first.');
         return;
     }
-    const result = await api.automations.validate(automation.value.id);
-    issues.value = result.issues ?? [];
+    try {
+        const result = await api.automations.validate(automation.value.id);
+        issues.value = result.issues ?? [];
+        if (result.valid) {
+            toast.success('Automation is valid.');
+        } else {
+            toast.warning(`Found ${issues.value.length} issue${issues.value.length === 1 ? '' : 's'}.`);
+        }
+    } catch (e) {
+        toast.error(e?.response?.data?.message ?? 'Validation failed.');
+    }
 }
 
 async function testRun() {
     if (!automation.value.id) {
         issues.value = [{ level: 'warning', code: 'unsaved', message: 'Save the automation first to run a test.' }];
+        toast.warning('Save the automation first.');
         return;
     }
-    const result = await api.automations.test(automation.value.id, {});
-    lastRun.value = result;
-    drawerOpen.value = true;
+    try {
+        const result = await api.automations.test(automation.value.id, {});
+        lastRun.value = result;
+        drawerOpen.value = true;
+        if (result.status === 'success') {
+            toast.success('Test run completed successfully.');
+        } else if (result.status === 'failed') {
+            toast.error(result.error_message ?? 'Test run failed.');
+        } else {
+            toast.info(`Test run finished with status: ${result.status}`);
+        }
+    } catch (e) {
+        toast.error(e?.response?.data?.message ?? 'Test run failed.');
+    }
 }
 
 async function toggleEnabled(event) {
-    if (!automation.value.id) return;
+    if (!automation.value.id) {
+        event.target.checked = false;
+        toast.warning('Save the automation first to enable it.');
+        return;
+    }
     if (event.target.checked) {
-        const result = await api.automations.enable(automation.value.id);
-        if (result.ok) {
-            automation.value.enabled = true;
-        } else {
-            issues.value = result.issues ?? [];
+        try {
+            const result = await api.automations.enable(automation.value.id);
+            if (result.ok) {
+                automation.value.enabled = true;
+                toast.success('Automation enabled.');
+            } else {
+                issues.value = result.issues ?? [];
+                event.target.checked = false;
+                toast.error('Cannot enable — fix validation issues first.');
+            }
+        } catch (e) {
             event.target.checked = false;
+            toast.error(e?.response?.data?.message ?? 'Failed to enable.');
         }
     } else {
-        await api.automations.disable(automation.value.id);
-        automation.value.enabled = false;
+        try {
+            await api.automations.disable(automation.value.id);
+            automation.value.enabled = false;
+            toast.info('Automation disabled.');
+        } catch (e) {
+            event.target.checked = true;
+            toast.error(e?.response?.data?.message ?? 'Failed to disable.');
+        }
     }
 }
 
