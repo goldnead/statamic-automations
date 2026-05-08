@@ -73,7 +73,12 @@ class WorkflowRunner
         $this->logger->startRun($run);
 
         $startNode = $automation->nodes()->where('node_key', $run->trigger_node_key)->first();
-        if ($startNode === null) {
+
+        // If the run's recorded trigger_node_key doesn't actually point to
+        // a trigger (e.g. the caller passed the wrong node), fall back to
+        // the automation's actual trigger so the walk starts from the
+        // correct entry point.
+        if ($startNode === null || $this->registry->kind($startNode->type) !== 'trigger') {
             $startNode = $this->findTriggerNode($automation);
         }
 

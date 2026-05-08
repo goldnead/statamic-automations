@@ -40,6 +40,11 @@ abstract class TestCase extends Orchestra
 
         // Stable APP_KEY so Crypt-based casts (EncryptedJson) work in tests.
         $app['config']->set('app.key', 'base64:' . base64_encode(random_bytes(32)));
+
+        // The Pro-tier gate is opt-in for hosts but interferes with tests
+        // that intentionally register custom actions/triggers. Turn it off
+        // by default; individual tests can opt back in via config()->set.
+        $app['config']->set('automations.features.custom_actions_requires_pro', false);
     }
 
     protected function defineDatabaseMigrations(): void
