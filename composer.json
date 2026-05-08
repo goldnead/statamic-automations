@@ -57,6 +57,13 @@
     "scripts": {
         "test": "vendor/bin/phpunit"
     },
+    "config": {
+        "allow-plugins": {
+            "pixelfear/composer-dist-plugin": true,
+            "php-http/discovery": true,
+            "composer/package-versions-deprecated": true
+        }
+    },
     "minimum-stability": "stable",
     "prefer-stable": true
 }
