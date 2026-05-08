@@ -3,6 +3,11 @@
 use Goldnead\StatamicAutomations\Http\Controllers\AutomationsController;
 use Goldnead\StatamicAutomations\Http\Controllers\ExportImportController;
 use Goldnead\StatamicAutomations\Http\Controllers\NodesController;
+use Goldnead\StatamicAutomations\Http\Controllers\Pages\AutomationsPageController;
+use Goldnead\StatamicAutomations\Http\Controllers\Pages\ImportPageController;
+use Goldnead\StatamicAutomations\Http\Controllers\Pages\RunsPageController;
+use Goldnead\StatamicAutomations\Http\Controllers\Pages\SettingsPageController;
+use Goldnead\StatamicAutomations\Http\Controllers\Pages\TemplatesPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\RunsController;
 use Goldnead\StatamicAutomations\Http\Controllers\SettingsController;
 use Goldnead\StatamicAutomations\Http\Controllers\TemplatesController;
@@ -12,6 +17,15 @@ use Illuminate\Support\Facades\Route;
 |--------------------------------------------------------------------------
 | Statamic Automations CP Routes
 |--------------------------------------------------------------------------
+|
+| Two route trees live here:
+|
+|   - Inertia GET routes that render Vue pages via @statamic/cms.
+|     These are what users navigate to in the CP.
+|
+|   - /api/* JSON routes used by the canvas and list screens for AJAX
+|     interactions (save, validate, test, retry, etc.). They never
+|     render a page — only return JSON or no-content responses.
 */
 
 $middleware = class_exists(\Statamic\Http\Middleware\CP\Authorize::class)
@@ -19,21 +33,45 @@ $middleware = class_exists(\Statamic\Http\Middleware\CP\Authorize::class)
     : ['web', 'auth'];
 
 Route::prefix('automations')
-    ->name('automations.')
+    ->name('statamic-automations.')
     ->middleware($middleware)
     ->group(function () {
-        // ----- View routes (Blade entry points; UI lives in Vue Flow) -----
-        Route::view('/', 'statamic-automations::cp.index')->name('index');
-        Route::view('/create', 'statamic-automations::cp.builder')->name('create');
-        Route::view('/runs', 'statamic-automations::cp.runs')->name('runs.index');
-        Route::view('/runs/{run}', 'statamic-automations::cp.runs')->name('runs.show');
-        Route::view('/templates', 'statamic-automations::cp.templates')->name('templates.index');
-        Route::view('/import', 'statamic-automations::cp.import')->name('import');
-        Route::view('/settings', 'statamic-automations::cp.settings')->name('settings');
-        Route::view('/{automation}', 'statamic-automations::cp.builder')->name('show');
+        // ================================================================
+        // Inertia pages (rendered via Statamic.$inertia.register())
+        // ================================================================
 
-        // ----- JSON API endpoints (consumed by the Vue Flow front-end) -----
+        Route::get('/', [AutomationsPageController::class, 'index'])
+            ->name('automations.index');
+
+        Route::get('automations/create', [AutomationsPageController::class, 'create'])
+            ->name('automations.create');
+
+        Route::get('automations/{automation}/edit', [AutomationsPageController::class, 'edit'])
+            ->name('automations.edit');
+
+        Route::get('runs', [RunsPageController::class, 'index'])
+            ->name('runs.index');
+
+        Route::get('runs/{run}', [RunsPageController::class, 'show'])
+            ->name('runs.show');
+
+        Route::get('templates', [TemplatesPageController::class, 'index'])
+            ->name('templates.index');
+
+        Route::get('import', [ImportPageController::class, 'show'])
+            ->name('import');
+
+        Route::get('settings', [SettingsPageController::class, 'index'])
+            ->name('settings');
+
+        // ================================================================
+        // JSON API (consumed by Vue Flow canvas + Listing AJAX)
+        // ================================================================
         Route::prefix('api')->name('api.')->group(function () {
+            // Index "ping" endpoint used by the builder for sanity checks.
+            Route::get('/', fn () => ['ok' => true, 'service' => 'statamic-automations'])
+                ->name('index');
+
             // Automations CRUD + actions
             Route::get('automations', [AutomationsController::class, 'index'])->name('automations.index');
             Route::post('automations', [AutomationsController::class, 'store'])->name('automations.store');
@@ -61,13 +99,13 @@ Route::prefix('automations')
                 ->name('options');
 
             // Runs
-            Route::get('runs', [RunsController::class, 'index'])->name('runs.index');
-            Route::get('runs/{run}', [RunsController::class, 'show'])->name('runs.show');
+            Route::get('runs', [RunsController::class, 'index'])->name('runs.list');
+            Route::get('runs/{run}', [RunsController::class, 'show'])->name('runs.detail');
             Route::post('runs/{run}/retry', [RunsController::class, 'retry'])->name('runs.retry');
             Route::post('node-runs/{nodeRun}/retry', [RunsController::class, 'retryNodeRun'])->name('node-runs.retry');
 
             // Templates
-            Route::get('templates', [TemplatesController::class, 'index'])->name('templates.index');
+            Route::get('templates', [TemplatesController::class, 'index'])->name('templates.list');
             Route::post('templates/{handle}/install', [TemplatesController::class, 'install'])
                 ->where('handle', '[A-Za-z0-9_-]+')
                 ->name('templates.install');

@@ -1,51 +1,30 @@
-import { createApp } from 'vue';
-import AutomationBuilder from './components/AutomationBuilder.vue';
-import AutomationsList from './components/AutomationsList.vue';
-import RunsList from './components/RunsList.vue';
-import RunDetail from './components/RunDetail.vue';
-import Templates from './components/Templates.vue';
-import ImportPage from './components/ImportPage.vue';
-
-import '@vue-flow/core/dist/style.css';
-import '@vue-flow/core/dist/theme-default.css';
-import '@vue-flow/controls/dist/style.css';
-import '@vue-flow/minimap/dist/style.css';
-import '../sass/automations.scss';
-
 /**
- * Mount whichever component matches a `data-automations-app` attribute
- * on the page. The Statamic Blade views render an empty container with
- * the right attribute and we hydrate it here.
+ * Statamic Automations — CP entry point
+ *
+ * Statamic 6 uses Inertia.js to dispatch CP pages to Vue components.
+ * This file does NOT mount its own Vue app — it registers our pages
+ * with Statamic's Inertia plugin, which then renders them inside the
+ * native CP layout.
+ *
+ * See https://statamic.dev/extending/control-panel#inertia-pages
  */
-const apps = {
-    builder: AutomationBuilder,
-    list: AutomationsList,
-    runs: RunsList,
-    'run-detail': RunDetail,
-    templates: Templates,
-    import: ImportPage,
-};
 
-document.querySelectorAll('[data-automations-app]').forEach((el) => {
-    const appName = el.getAttribute('data-automations-app');
-    const Component = apps[appName];
+import '../css/cp.css';
 
-    if (!Component) {
-        console.warn(`[automations] unknown app: ${appName}`);
-        return;
-    }
+import AutomationsIndex from './pages/Automations/Index.vue';
+import AutomationsEdit from './pages/Automations/Edit.vue';
+import RunsIndex from './pages/Runs/Index.vue';
+import RunsShow from './pages/Runs/Show.vue';
+import TemplatesIndex from './pages/Templates/Index.vue';
+import ImportPage from './pages/Import.vue';
+import SettingsShow from './pages/Settings/Show.vue';
 
-    const props = {};
-    for (const attr of el.attributes) {
-        if (attr.name.startsWith('data-prop-')) {
-            const key = attr.name.replace('data-prop-', '').replace(/-/g, '_');
-            try {
-                props[key] = JSON.parse(attr.value);
-            } catch {
-                props[key] = attr.value;
-            }
-        }
-    }
-
-    createApp(Component, props).mount(el);
+Statamic.booting(() => {
+    Statamic.$inertia.register('statamic-automations::Automations/Index', AutomationsIndex);
+    Statamic.$inertia.register('statamic-automations::Automations/Edit', AutomationsEdit);
+    Statamic.$inertia.register('statamic-automations::Runs/Index', RunsIndex);
+    Statamic.$inertia.register('statamic-automations::Runs/Show', RunsShow);
+    Statamic.$inertia.register('statamic-automations::Templates/Index', TemplatesIndex);
+    Statamic.$inertia.register('statamic-automations::Import', ImportPage);
+    Statamic.$inertia.register('statamic-automations::Settings/Show', SettingsShow);
 });

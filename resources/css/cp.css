@@ -1,0 +1,84 @@
+/* -----------------------------------------------------------------------
+ * Statamic Automations — CP styles (Tailwind v4)
+ *
+ * The vast majority of styling comes from the Statamic CP design
+ * system via @statamic/cms/ui components and Tailwind utilities.
+ * Anything that does NOT have a `@ui` equivalent — primarily the
+ * Vue Flow canvas custom-node visuals — is layered into the
+ * `addon-utilities` Tailwind layer so it composes correctly with
+ * Statamic's built-in cascade.
+ *
+ * Layer order (Statamic):
+ *   base → addon-theme → addon-utilities → components → utilities → ui → ui-states
+ * ------------------------------------------------------------------- */
+
+@import "tailwindcss";
+@source "../js/**/*.{vue,js,ts}";
+@source "../views/**/*.blade.php";
+
+/* Statamic's dark mode is `.dark` on <html>, not prefers-color-scheme.
+ * Replicate the host's variant so this addon's components light up
+ * correctly in both modes when used standalone (e.g. in Storybook). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer addon-theme {
+    /* Status accent palette — used by node borders / pills. Pulled from
+     * the Statamic theme tokens so they stay in sync with the CP. */
+    :root {
+        --sa-color-trigger: var(--color-blue-500, #3b82f6);
+        --sa-color-action: var(--color-emerald-500, #10b981);
+        --sa-color-logic: var(--color-amber-500, #f59e0b);
+        --sa-color-success: var(--color-emerald-500, #10b981);
+        --sa-color-failed: var(--color-red-500, #ef4444);
+        --sa-color-stopped: var(--color-amber-500, #f59e0b);
+        --sa-color-running: var(--color-blue-500, #3b82f6);
+        --sa-color-skipped: var(--color-gray-400, #9ca3af);
+    }
+
+    .dark {
+        --sa-color-trigger: var(--color-blue-400, #60a5fa);
+        --sa-color-action: var(--color-emerald-400, #34d399);
+        --sa-color-logic: var(--color-amber-400, #fbbf24);
+    }
+}
+
+@layer addon-utilities {
+    /* Vue Flow canvas wrapper — must fill its grid cell. */
+    .sa-canvas-frame {
+        @apply relative size-full overflow-hidden bg-gray-50 dark:bg-gray-900;
+    }
+
+    /* Custom Vue Flow node card — base style applied to every node kind.
+     * Status accents come from CSS vars set above. */
+    .sa-node {
+        @apply rounded-md border bg-white dark:bg-gray-800
+               border-gray-200 dark:border-gray-700
+               shadow-sm min-w-[180px] px-3 py-2 text-sm
+               transition-colors;
+    }
+    .sa-node--trigger { border-left: 3px solid var(--sa-color-trigger); }
+    .sa-node--action  { border-left: 3px solid var(--sa-color-action); }
+    .sa-node--logic   { border-left: 3px solid var(--sa-color-logic); }
+
+    .sa-node--invalid    { @apply border-red-500 dark:border-red-400; }
+    .sa-node--incomplete { @apply border-amber-500 dark:border-amber-400; }
+
+    .sa-node__badge {
+        @apply inline-block text-[10px] font-semibold uppercase tracking-wider
+               text-gray-500 dark:text-gray-400 mb-0.5;
+    }
+    .sa-node__title {
+        @apply text-sm font-medium text-gray-900 dark:text-gray-100;
+    }
+    .sa-node__type {
+        @apply text-[11px] text-gray-500 dark:text-gray-400 font-mono;
+    }
+    .sa-node__summary {
+        @apply text-xs text-gray-700 dark:text-gray-300 mt-1 pt-1
+               border-t border-dashed border-gray-200 dark:border-gray-700;
+    }
+
+    /* Edge-handle labels rendered inside Vue Flow */
+    .sa-handle-label--true  { @apply text-emerald-600 dark:text-emerald-400; }
+    .sa-handle-label--false { @apply text-red-600 dark:text-red-400; }
+}

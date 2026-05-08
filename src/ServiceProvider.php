@@ -41,6 +41,24 @@ use Statamic\Providers\AddonServiceProvider;
 class ServiceProvider extends AddonServiceProvider
 {
     /**
+     * Statamic auto-loads these into the CP when the addon is enabled,
+     * provided they exist in the published path
+     * (public/vendor/statamic-automations/cp.js + cp.css).
+     *
+     * @var array<int, string>
+     */
+    protected $scripts = [
+        __DIR__ . '/../resources/dist/cp.js',
+    ];
+
+    /**
+     * @var array<int, string>
+     */
+    protected $stylesheets = [
+        __DIR__ . '/../resources/dist/cp.css',
+    ];
+
+    /**
      * Register the addon's service container bindings.
      */
     public function register(): void
@@ -93,7 +111,6 @@ class ServiceProvider extends AddonServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
         $this->loadRoutesFrom(__DIR__ . '/../routes/cp.php');
-        $this->loadViewsFrom(__DIR__ . '/../resources/views', 'statamic-automations');
 
         $this->publishes([
             __DIR__ . '/../config/automations.php' => config_path('automations.php'),
@@ -103,8 +120,10 @@ class ServiceProvider extends AddonServiceProvider
             __DIR__ . '/../database/migrations' => database_path('migrations'),
         ], 'statamic-automations-migrations');
 
-        // Frontend assets — built into resources/dist/ via `npm run build`
-        // and exposed via php artisan vendor:publish.
+        // Frontend bundle — built into resources/dist/ via `npm run build`.
+        // Statamic autoloads it via the $scripts / $stylesheets properties
+        // above; the publish target below is only needed if the host
+        // wants to copy the built assets into public/ for CDN fronting.
         $this->publishes([
             __DIR__ . '/../resources/dist' => public_path('vendor/statamic-automations'),
         ], 'statamic-automations-assets');
@@ -289,14 +308,15 @@ class ServiceProvider extends AddonServiceProvider
         \Statamic\Facades\CP\Nav::extend(function ($nav) {
             $nav->create(__('Automations'))
                 ->section(__('Tools'))
-                ->route('automations.index')
-                ->icon('automations')
+                ->route('statamic-automations.automations.index')
+                ->icon('hammer')
                 ->can('view automations')
                 ->children([
-                    $nav->item(__('Automations'))->route('automations.index'),
-                    $nav->item(__('Runs'))->route('automations.runs.index'),
-                    $nav->item(__('Templates'))->route('automations.templates.index'),
-                    $nav->item(__('Settings'))->route('automations.settings'),
+                    $nav->item(__('Automations'))->route('statamic-automations.automations.index'),
+                    $nav->item(__('Runs'))->route('statamic-automations.runs.index'),
+                    $nav->item(__('Templates'))->route('statamic-automations.templates.index'),
+                    $nav->item(__('Import'))->route('statamic-automations.import'),
+                    $nav->item(__('Settings'))->route('statamic-automations.settings'),
                 ]);
         });
     }

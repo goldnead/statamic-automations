@@ -6,6 +6,85 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Changed — Sprint 6 (Statamic 6 CP UI Patterns)
+
+The CP frontend has been completely rewritten on top of **Statamic 6's
+native Inertia.js + Vue 3 + Tailwind v4 stack**, following the official
+[Statamic 6 CP UI Patterns](https://statamic.dev) skill. This is a UI
+overhaul, not a feature change — the engine, public API, data model
+and JSON endpoints are all unchanged.
+
+#### Architecture
+
+- **Inertia.js pages** registered through `Statamic.$inertia.register()`
+  in `cp.js`. No more `data-automations-app` mounting — Statamic's
+  Inertia plugin renders our pages inside the native CP layout.
+- **All UI primitives** sourced from `@statamic/cms/ui`: `Header`,
+  `Listing`, `PublishForm`, `Panel`, `Button`, `Switch`, `Badge`,
+  `Alert`, `EmptyStateMenu`, `CodeEditor`, `Stack`, ... — no more
+  custom `.sa-*` SCSS for buttons, cards, tables, toasts.
+- **Tailwind v4** with the Statamic layer order
+  (`base → addon-theme → addon-utilities → components → utilities → ui → ui-states`).
+  Dark mode "for free" through Tailwind `dark:` variants.
+- **`@statamic/cms/inertia`** for navigation: `<Link>`, `router.visit()`,
+  `<Head>` (no more raw `<a href>` or `window.location`).
+- **`@statamic/cms`-marked external in Vite** so the addon bundle
+  doesn't ship a duplicate Statamic-UI library — uses whatever the
+  host install ships with.
+
+#### New CP page tree
+
+| Page | Component |
+|---|---|
+| Automations list | `pages/Automations/Index.vue` (Listing) |
+| Builder | `pages/Automations/Edit.vue` (Header + Vue Flow + Panel sidebars) |
+| Runs list | `pages/Runs/Index.vue` (Listing + filters) |
+| Run detail | `pages/Runs/Show.vue` (Panels + CodeEditor for context/IO) |
+| Templates | `pages/Templates/Index.vue` (Panel cards) |
+| Import | `pages/Import.vue` (drop zone + CodeEditor) |
+| Settings | `pages/Settings/Show.vue` (read-only Panels) |
+
+#### Backend changes
+
+- **`Pages/*PageController`** classes: `AutomationsPageController`,
+  `RunsPageController`, `TemplatesPageController`,
+  `ImportPageController`, `SettingsPageController`. Each returns
+  `Inertia::render('statamic-automations::Page', [...props])`.
+- **GET routes** now hit Inertia controllers; the existing JSON CRUD
+  / canvas / actions / runs / templates / settings routes remain
+  under `/automations/api/*` and are consumed by the Vue pages via
+  axios.
+- **CP nav** uses the new route names (`statamic-automations.*`).
+- **Asset loading** moved to Statamic's `protected $scripts` and
+  `$stylesheets` properties on the AddonServiceProvider.
+
+#### Removed
+
+- `resources/views/cp/*.blade.php` — Inertia renders pages directly.
+- All custom UI helper components: `EmptyState`, `LoadingSpinner`,
+  `ErrorMessage`, `Toast`, `AutosaveIndicator`, custom `Field*`
+  components, the old `useToast` composable, the axios `client.js`,
+  `utils/uuid.js`. All replaced by `@statamic/cms/ui` equivalents.
+- `resources/sass/automations.scss` — Tailwind v4 only now.
+
+#### Vue Flow canvas
+
+The canvas itself stays as a custom widget (no Statamic UI primitive
+matches a node-graph builder). It's slimmed down and lives at
+`resources/js/components/builder/` with five files: `Canvas`,
+`NodeCard`, `NodeLibrary`, `ConfigPanel`, `ConditionBuilder`,
+`RunLogPanel`. All wrapped by Statamic's `<Header>`, `<Panel>`,
+`<Button>`, `<Switch>`, `<Stack>` for the surrounding chrome.
+
+#### Migration impact for users
+
+- Existing automations are unchanged; the data model is identical.
+- After upgrading you must re-publish the assets:
+  `php artisan vendor:publish --tag=statamic-automations-assets --force`.
+- The `statamic-automations.*` route name prefix is new — anyone
+  who reverse-route-resolved against the old `automations.*` names
+  needs to update.
+
 ### Fixed — Sprint 5 (CI green-up)
 
 After landing the GitHub Actions workflows the test matrix surfaced

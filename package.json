@@ -2,7 +2,7 @@
     "name": "@goldnead/statamic-automations",
     "version": "0.1.0",
     "private": true,
-    "description": "Frontend assets for the Statamic Automations addon — Vue Flow canvas + UI components.",
+    "description": "Frontend assets for the Statamic Automations addon — Inertia-driven CP pages + Vue Flow canvas.",
     "type": "module",
     "scripts": {
         "dev": "vite",
@@ -11,15 +11,25 @@
     },
     "devDependencies": {
         "@vitejs/plugin-vue": "^5.0.0",
-        "sass": "^1.77.0",
+        "tailwindcss": "^4.0.0",
+        "@tailwindcss/vite": "^4.0.0",
         "vite": "^5.4.0"
     },
     "dependencies": {
+        "@inertiajs/vue3": "^1.3.0",
         "@vue-flow/background": "^1.3.0",
         "@vue-flow/controls": "^1.1.2",
         "@vue-flow/core": "^1.41.0",
         "@vue-flow/minimap": "^1.5.0",
         "axios": "^1.7.0",
         "vue": "^3.4.0"
+    },
+    "peerDependencies": {
+        "@statamic/cms": "^6.0"
+    },
+    "peerDependenciesMeta": {
+        "@statamic/cms": {
+            "optional": false
+        }
     }
 }
