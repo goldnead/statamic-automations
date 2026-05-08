@@ -18,7 +18,7 @@
                     :value="node.node_key"
                     @change="renameNode($event)"
                 />
-                <p class="sa-config__help">Used as a stable reference in tokens (e.g. {{ '{{' }} nodes.{{ node.node_key }}.field {{ '}}' }}).</p>
+                <p class="sa-config__help">Used as a stable reference in tokens (e.g. &#123;&#123; nodes.{{ node.node_key }}.field &#125;&#125;).</p>
             </div>
 
             <div v-for="field in schema?.schema ?? []" :key="field.handle" class="sa-config__field">
