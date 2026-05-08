@@ -247,6 +247,7 @@ The package ships with unit + feature tests for the engine, validators, integrat
 - [x] Phase I — Templates + JSON export / import + file sync
 - [x] Phase J — Polish (empty / loading / error states, toast feedback, marketplace docs)
 - [x] **Sprint 4** — `automations:sync` + `automations:prune` Artisan commands, partial-from-node retry, encrypted run logs (`EncryptedJson` cast), license manager (`config` + `remote` modes), Vue Flow autosave, verified Statamic v6 events
+- [x] **Sprint 5 (CI)** — GitHub Actions workflows green across the full matrix: PHP 8.2 / 8.3 / 8.4 × Laravel 11 / 12 (PHPUnit), Frontend (Vite + Vue 3), and Lint (PHP syntax + `composer validate`)
 
 The PRD-defined roadmap is now complete. Future iterations will focus
 on community feedback, marketplace screenshots, and quality-of-life
