@@ -6,6 +6,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Added — CI / DX
+
+- **GitHub Actions** workflows:
+  - `tests.yml` runs PHPUnit across PHP 8.2 / 8.3 / 8.4 × Laravel 11 / 12
+    plus a lowest-deps job (PHP 8.2 + Laravel 11 + `--prefer-lowest`).
+  - `build.yml` runs `npm ci && npm run build`, verifies `resources/dist/cp.js`
+    is non-empty, and uploads the built bundle as a 14-day artifact on
+    pushes to `main`.
+  - `lint.yml` checks PHP syntax across `src/`, `tests/`, `config/`,
+    `database/`, `routes/` and validates `composer.json` strictly.
+- README now ships **Tests / Build / Lint** status badges next to the
+  package metadata.
+
 ### Added — Sprint 4 (Roadmap futures)
 
 - **File-backed automations**: `automations:sync` Artisan command with
