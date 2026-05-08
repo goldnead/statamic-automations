@@ -10,6 +10,16 @@ abstract class TestCase extends Orchestra
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Statamic's AddonServiceProvider defers its `bootAddon()` to a
+        // `Statamic::booted()` callback, which Orchestra Testbench
+        // doesn't fire because Statamic itself is never fully booted in
+        // a unit-test context. Call our addon's bootstrap directly so
+        // registries, listeners and migrations are available.
+        $provider = $this->app->getProvider(ServiceProvider::class);
+        if ($provider !== null && method_exists($provider, 'bootAddon')) {
+            $provider->bootAddon();
+        }
     }
 
     protected function getPackageProviders($app): array
