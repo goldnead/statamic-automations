@@ -6,6 +6,28 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Fixed — Sprint 7 (full PHPUnit suite green, no skips)
+
+After running the test suite end-to-end inside a real PHP+Composer
+sandbox (with `statamic/cms` v6.18.0 actually installed), the
+previously skipped HTTP API test could finally be diagnosed:
+
+- `withoutMiddleware()` in `AutomationsApiTest::setUp` was disabling
+  every middleware including `Illuminate\Routing\Middleware\SubstituteBindings`,
+  so implicit route-model binding for `{automation}` silently returned
+  an empty Eloquent instance with `id = NULL` — and the
+  `WorkflowRunner::createRun` insert hit the `automation_id` FK.
+- Replaced the previous alias-to-noop with a proper
+  **middleware group** that wires both a no-op auth shim AND
+  `SubstituteBindings`. Route-model binding now resolves to the real
+  Automation row inside HTTP feature tests, the test passes, and the
+  `markTestSkipped` is removed.
+- New build dependency: a real PHP CLI environment with `statamic/cms`
+  installed. The CI matrix already provides this; for local runs see
+  the `statamic-6-phpunit-sandbox` skill recipe.
+
+**Result**: 71 tests / 223 assertions / 0 failures / 0 errors / 0 skipped.
+
 ### Changed — Sprint 6 (Statamic 6 CP UI Patterns)
 
 The CP frontend has been completely rewritten on top of **Statamic 6's

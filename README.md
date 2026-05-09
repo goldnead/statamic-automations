@@ -249,6 +249,7 @@ The package ships with unit + feature tests for the engine, validators, integrat
 - [x] **Sprint 4** — `automations:sync` + `automations:prune` Artisan commands, partial-from-node retry, encrypted run logs (`EncryptedJson` cast), license manager (`config` + `remote` modes), Vue Flow autosave, verified Statamic v6 events
 - [x] **Sprint 5 (CI)** — GitHub Actions workflows green across the full matrix: PHP 8.2 / 8.3 / 8.4 × Laravel 11 / 12 (PHPUnit), Frontend (Vite + Vue 3), and Lint (PHP syntax + `composer validate`)
 - [x] **Sprint 6 (Statamic 6 UI)** — CP frontend rewritten on Statamic 6's native Inertia.js + Vue 3 + Tailwind v4 stack with `@statamic/cms/ui` components. Dark-mode + command-palette + listing-presets all "for free" via the host's design system.
+- [x] **Sprint 7 (test suite)** — full PHPUnit suite passes end-to-end against a real Statamic 6.18 install. 71 tests / 223 assertions / 0 skipped. Diagnosed and fixed the route-model-binding edge case that had blocked one HTTP feature test for several sprints.
 
 The PRD-defined roadmap is now complete. Future iterations will focus
 on community feedback, marketplace screenshots, and quality-of-life
