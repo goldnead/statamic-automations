@@ -23,7 +23,10 @@ class AutomationsApiTest extends TestCase
     {
         parent::setUp();
 
-        $this->withoutMiddleware();
+        // We don't call withoutMiddleware() here — that would also
+        // disable SubstituteBindings and break route-model binding for
+        // the {automation} parameter. The TestCase aliases
+        // `statamic.cp.authenticated` to a no-op middleware instead.
         $this->actingAs(new TestUser());
     }
 
@@ -59,20 +62,6 @@ class AutomationsApiTest extends TestCase
 
     public function test_test_endpoint_runs_automation_in_test_mode(): void
     {
-        // TODO(ci): under Orchestra Testbench the implicit route-model
-        // binding for the Automation route parameter resolves to an
-        // unsaved instance, causing a NULL automation_id constraint
-        // violation in the WorkflowRunner::createRun INSERT. The test
-        // works in a real Statamic install where Statamic boots fully
-        // and the binding wires through correctly. Keeping this test
-        // in the suite (rather than deleting it) so it auto-runs once
-        // we add a Statamic-aware integration harness.
-        $this->markTestSkipped(
-            'Route model binding edge case under Orchestra Testbench — '
-            . 'tracked separately, the underlying engine is exercised '
-            . 'directly in WorkflowRunnerTest and ManualTriggerTest.'
-        );
-
         $automation = Automation::create(['name' => 'Tester', 'handle' => 'tester']);
         AutomationNode::create([
             'automation_id' => $automation->id,
