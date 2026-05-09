@@ -10,12 +10,18 @@ import { fileURLToPath, URL } from 'node:url';
  * register themselves through Statamic.$inertia.register() inside
  * cp.js — Statamic's Inertia plugin then dispatches to them.
  *
+ * `@statamic/cms`, `@statamic/cms/ui` and `@statamic/cms/inertia` are
+ * provided by the host Statamic install at runtime — they are NOT
+ * installed via npm. We mark them external so Vite leaves the import
+ * statements untouched in the output bundle; Statamic's CP loader
+ * resolves them when the bundle runs.
+ *
  * Output:
- *   - resources/dist/cp.js (entry)
+ *   - resources/dist/cp.js (entry, ESM)
  *   - resources/dist/cp.css (Tailwind v4 + addon styles)
  *
- * The ServiceProvider publishes these into public/vendor/statamic-automations
- * via `vendor:publish --tag=statamic-automations-assets`.
+ * The ServiceProvider then publishes these via
+ * `php artisan vendor:publish --tag=statamic-automations-assets`.
  */
 export default defineConfig({
     plugins: [
@@ -27,19 +33,14 @@ export default defineConfig({
             '@': fileURLToPath(new URL('./resources/js', import.meta.url)),
         },
     },
-    // `@statamic/cms/ui` and `@statamic/cms/inertia` are provided by the
-    // host Statamic install at runtime — never bundled into our cp.js.
-    // This keeps the addon bundle small AND ensures we use the same
-    // exact UI version the user is running.
     build: {
         outDir: 'resources/dist',
         emptyOutDir: true,
         manifest: true,
         rollupOptions: {
+            // Statamic ships these — they are not on npm.
             external: [
-                '@statamic/cms',
-                '@statamic/cms/ui',
-                '@statamic/cms/inertia',
+                /^@statamic\/cms($|\/.+)/,
             ],
             input: {
                 cp: fileURLToPath(new URL('./resources/js/cp.js', import.meta.url)),
@@ -48,11 +49,6 @@ export default defineConfig({
                 entryFileNames: '[name].js',
                 chunkFileNames: 'chunks/[name]-[hash].js',
                 assetFileNames: '[name][extname]',
-                globals: {
-                    '@statamic/cms': 'Statamic',
-                    '@statamic/cms/ui': 'StatamicUI',
-                    '@statamic/cms/inertia': 'StatamicInertia',
-                },
             },
         },
     },
