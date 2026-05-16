@@ -10,3 +10,6 @@ package-lock.json
 .DS_Store
 *.log
 .env
+
+# Codespaces playground (scaffolded Statamic site for addon dev)
+/playground

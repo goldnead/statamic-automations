@@ -1,0 +1,47 @@
+{
+    "name": "Statamic Addon Dev",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": "."
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/node:1": {
+            "version": "20"
+        },
+        "ghcr.io/devcontainers/features/github-cli:1": {}
+    },
+    "forwardPorts": [8000, 5173],
+    "portsAttributes": {
+        "8000": {
+            "label": "Statamic Site",
+            "onAutoForward": "openPreview"
+        },
+        "5173": {
+            "label": "Vite Dev Server",
+            "onAutoForward": "silent"
+        }
+    },
+    "postCreateCommand": "bash .devcontainer/post-create.sh",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "bmewburn.vscode-intelephense-client",
+                "xdebug.php-debug",
+                "onecentlin.laravel-blade",
+                "shufo.vscode-antlers-language-server",
+                "esbenp.prettier-vscode",
+                "Vue.volar",
+                "EditorConfig.EditorConfig",
+                "pestphp.pest-vscode"
+            ],
+            "settings": {
+                "editor.formatOnSave": true,
+                "php.suggest.basic": false,
+                "[php]": {
+                    "editor.defaultFormatter": "bmewburn.vscode-intelephense-client"
+                }
+            }
+        }
+    },
+    "remoteUser": "vscode"
+}
