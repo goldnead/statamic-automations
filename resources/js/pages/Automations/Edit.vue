@@ -297,7 +297,9 @@ function updateNodeConfig(config) {
 <template>
     <Head :title="[title, __('Statamic Automations')]" />
 
-    <div class="max-w-7xl mx-auto" data-max-width-wrapper>
+    <!-- The builder is a canvas tool, so it breaks out of the CP content
+         card's horizontal padding (px-12 at lg) to use the full width. -->
+    <div class="lg:-mx-12" data-max-width-wrapper>
         <Header :title="title" icon="hammer">
             <template #title>
                 <div class="flex items-center gap-2">
