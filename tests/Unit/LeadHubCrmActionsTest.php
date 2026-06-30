@@ -8,10 +8,29 @@ use Goldnead\StatamicAutomations\Integrations\LeadHub\Actions\CreateTaskAction;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\Actions\MoveStageAction;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\Actions\UpsertOpportunityAction;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
+use Goldnead\StatamicAutomations\Listeners\HandleLeadHubEvent;
 use Goldnead\StatamicAutomations\Tests\TestCase;
 
 class LeadHubCrmActionsTest extends TestCase
 {
+    public function test_leadhub_events_map_to_trigger_handles(): void
+    {
+        $map = HandleLeadHubEvent::EVENT_TRIGGERS;
+
+        $this->assertSame('leadhub.lead_created', $map['Goldnead\\Leadhub\\Events\\LeadHubContactCreated']);
+        $this->assertSame('leadhub.lead_status_changed', $map['Goldnead\\Leadhub\\Events\\LeadHubStatusChanged']);
+        $this->assertSame('leadhub.lead_follow_up_due', $map['Goldnead\\Leadhub\\Events\\LeadHubFollowupDue']);
+    }
+
+    public function test_unmapped_events_are_ignored_without_error(): void
+    {
+        $listener = $this->app->make(HandleLeadHubEvent::class);
+        // An event class not in the map must be a silent no-op.
+        $listener->handle(new \stdClass());
+
+        $this->assertTrue(true);
+    }
+
     public function test_new_actions_expose_expected_handles(): void
     {
         $this->assertSame('leadhub.create_task', CreateTaskAction::handle());
