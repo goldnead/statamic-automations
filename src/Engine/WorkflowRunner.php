@@ -202,7 +202,7 @@ class WorkflowRunner
         while ($current !== null && count($visited) < $maxNodes) {
             $visited[$current->node_key] = true;
 
-            $result = $this->executor->execute($current, $context);
+            $result = $this->executeWithRetries($current, $context);
 
             $this->logger->recordNodeRun(
                 $run,
@@ -215,6 +215,17 @@ class WorkflowRunner
             $context->recordNodeOutput($current->node_key, $result->output);
 
             if ($result->isFailed()) {
+                // A node may opt to continue the flow on error instead of
+                // failing the whole run — routing down its "error" edge if
+                // one exists, otherwise the default edge. Configure via the
+                // reserved `_on_error: continue` key on the node.
+                if ($this->onErrorPolicy($current) === 'continue') {
+                    $current = $this->nextNode($current, 'error', $edges, $nodes)
+                        ?? $this->nextNode($current, 'default', $edges, $nodes);
+
+                    continue;
+                }
+
                 throw new \RuntimeException(
                     "Node '{$current->node_key}' failed: " . ($result->error ?? 'unknown')
                 );
@@ -241,6 +252,30 @@ class WorkflowRunner
         }
 
         return AutomationRun::STATUS_SUCCESS;
+    }
+
+    /**
+     * Execute a node, retrying transient failures up to the node's
+     * configured attempt count. Retries are immediate (no backoff sleep) so
+     * the queue worker is never blocked; use the Delay/Wait nodes for
+     * time-spaced retries. Configure via the reserved `_retry_attempts` key.
+     */
+    protected function executeWithRetries(AutomationNode $node, AutomationContext $context): ActionResult
+    {
+        $extra = max(0, (int) data_get($node->config ?? [], '_retry_attempts', 0));
+
+        $result = $this->executor->execute($node, $context);
+
+        for ($attempt = 0; $attempt < $extra && $result->isFailed(); $attempt++) {
+            $result = $this->executor->execute($node, $context);
+        }
+
+        return $result;
+    }
+
+    protected function onErrorPolicy(AutomationNode $node): string
+    {
+        return (string) data_get($node->config ?? [], '_on_error', 'fail');
     }
 
     protected function nextNode(

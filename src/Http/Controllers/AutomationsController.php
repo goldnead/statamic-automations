@@ -74,6 +74,11 @@ class AutomationsController extends Controller
             return $automation;
         });
 
+        app(\Goldnead\StatamicAutomations\Engine\VersionManager::class)
+            ->snapshot($automation->fresh(['nodes', 'edges']), 'Initial version');
+        app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)
+            ->record('created', $automation, ['name' => $automation->name]);
+
         return (new AutomationResource($automation->fresh(['nodes', 'edges'])))
             ->response()
             ->setStatusCode(201);
@@ -83,12 +88,17 @@ class AutomationsController extends Controller
     {
         $data = $request->validated();
 
+        // Snapshot the pre-edit graph so this change can be rolled back.
+        app(\Goldnead\StatamicAutomations\Engine\VersionManager::class)
+            ->snapshot($automation->fresh(['nodes', 'edges']));
+
         DB::transaction(function () use ($automation, $data) {
             $automation->fill(array_filter([
                 'name' => $data['name'] ?? null,
                 'handle' => $data['handle'] ?? null,
                 'description' => array_key_exists('description', $data) ? $data['description'] : null,
             ], fn ($v) => $v !== null));
+            $automation->version = (int) $automation->version + 1;
             $automation->save();
 
             if (isset($data['nodes']) || isset($data['edges'])) {
@@ -100,6 +110,9 @@ class AutomationsController extends Controller
             }
         });
 
+        app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)
+            ->record('updated', $automation, ['version' => $automation->version]);
+
         return (new AutomationResource($automation->fresh(['nodes', 'edges'])))
             ->response()
             ->setStatusCode(200);
@@ -108,6 +121,9 @@ class AutomationsController extends Controller
     public function destroy(Automation $automation): JsonResponse
     {
         $this->authorizeAction('delete automations');
+
+        app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)
+            ->record('deleted', null, ['name' => $automation->name, 'handle' => $automation->handle]);
 
         $automation->delete();
 
@@ -189,6 +205,8 @@ class AutomationsController extends Controller
 
         $automation->forceFill(['enabled' => true])->save();
 
+        app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)->record('enabled', $automation);
+
         return response()->json(['ok' => true, 'enabled' => true]);
     }
 
@@ -197,6 +215,8 @@ class AutomationsController extends Controller
         $this->authorizeAction('enable automations');
 
         $automation->forceFill(['enabled' => false])->save();
+
+        app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)->record('disabled', $automation);
 
         return response()->json(['ok' => true, 'enabled' => false]);
     }

@@ -44,6 +44,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Versioning
+    |--------------------------------------------------------------------------
+    | Every save snapshots the automation graph so changes can be rolled
+    | back. `keep` caps how many versions are retained per automation.
+    */
+
+    'versioning' => [
+        'enabled' => true,
+        'keep' => 25,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Run Storage
     |--------------------------------------------------------------------------
     */

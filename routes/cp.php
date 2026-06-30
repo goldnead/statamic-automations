@@ -105,6 +105,11 @@ Route::prefix('automations')
                 ->where('source', '[A-Za-z0-9_.-]+')
                 ->name('options');
 
+            // Versions + audit
+            Route::get('automations/{automation}/versions', [\Goldnead\StatamicAutomations\Http\Controllers\VersionsController::class, 'index'])->name('automations.versions');
+            Route::post('automations/{automation}/versions/{version}/revert', [\Goldnead\StatamicAutomations\Http\Controllers\VersionsController::class, 'revert'])->name('automations.versions.revert');
+            Route::get('audit', [\Goldnead\StatamicAutomations\Http\Controllers\AuditController::class, 'index'])->name('audit.list');
+
             // Runs
             Route::get('runs', [RunsController::class, 'index'])->name('runs.list');
             Route::get('runs/{run}', [RunsController::class, 'show'])->name('runs.detail');
