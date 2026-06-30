@@ -18,7 +18,7 @@
                 <li
                     v-for="item in filtered(group.items)"
                     :key="item.handle"
-                    class="rounded border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 px-2.5 py-2 cursor-pointer hover:border-blue-500 transition-colors"
+                    class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2 cursor-pointer hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                     @click="$emit('add', item.handle)"
                 >
                     <div class="text-sm font-medium">{{ item.label }}</div>
