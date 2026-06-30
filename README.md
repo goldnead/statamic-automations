@@ -1,5 +1,7 @@
 <div align="center">
 
+![Statamic Automations](art/cover.png)
+
 # Statamic Automations
 
 **A visual automation layer built specifically for Statamic websites.**

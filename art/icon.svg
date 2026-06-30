@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#1E1B4B" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- rounded square background -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- flow edges: one trigger node fanning out to two action nodes -->
+  <g stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" opacity="0.95" fill="none">
+    <path d="M188 256 C 248 256, 248 176, 322 176"/>
+    <path d="M188 256 C 248 256, 248 336, 322 336"/>
+  </g>
+
+  <!-- nodes -->
+  <g filter="url(#sh)">
+    <circle cx="168" cy="256" r="46" fill="#FFFFFF"/>
+    <circle cx="344" cy="176" r="34" fill="#FFFFFF"/>
+    <circle cx="344" cy="336" r="34" fill="#FFFFFF"/>
+  </g>
+
+  <!-- accents inside nodes -->
+  <circle cx="168" cy="256" r="18" fill="#6366F1"/>
+  <circle cx="344" cy="176" r="12" fill="#8B5CF6"/>
+  <circle cx="344" cy="336" r="12" fill="#8B5CF6"/>
+</svg>
