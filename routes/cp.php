@@ -47,6 +47,9 @@ Route::prefix('automations')
         Route::get('/', [AutomationsPageController::class, 'index'])
             ->name('automations.index');
 
+        Route::get('dashboard', [\Goldnead\StatamicAutomations\Http\Controllers\Pages\DashboardPageController::class, 'index'])
+            ->name('dashboard');
+
         Route::get('automations/create', [AutomationsPageController::class, 'create'])
             ->name('automations.create');
 

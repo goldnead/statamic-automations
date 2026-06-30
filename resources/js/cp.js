@@ -11,6 +11,7 @@
 
 import '../css/cp.css';
 
+import Dashboard from './pages/Dashboard.vue';
 import AutomationsIndex from './pages/Automations/Index.vue';
 import AutomationsEdit from './pages/Automations/Edit.vue';
 import RunsIndex from './pages/Runs/Index.vue';
@@ -20,6 +21,7 @@ import ImportPage from './pages/Import.vue';
 import SettingsShow from './pages/Settings/Show.vue';
 
 Statamic.booting(() => {
+    Statamic.$inertia.register('statamic-automations::Dashboard', Dashboard);
     Statamic.$inertia.register('statamic-automations::Automations/Index', AutomationsIndex);
     Statamic.$inertia.register('statamic-automations::Automations/Edit', AutomationsEdit);
     Statamic.$inertia.register('statamic-automations::Runs/Index', RunsIndex);

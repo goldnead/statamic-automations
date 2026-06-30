@@ -31,6 +31,14 @@ function inertiaComponent($response): ?string
     return json_decode($response->getContent(), true)['component'] ?? null;
 }
 
+it('renders the dashboard', function (): void {
+    $response = $this->withHeaders(['X-Inertia' => 'true'])
+        ->get(cp_route('statamic-automations.dashboard'));
+
+    $response->assertStatus(200);
+    expect(inertiaComponent($response))->toBe('statamic-automations::Dashboard');
+});
+
 it('renders the automations index', function (): void {
     $response = $this->withHeaders(['X-Inertia' => 'true'])
         ->get(cp_route('statamic-automations.automations.index'));

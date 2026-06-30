@@ -374,6 +374,7 @@ class ServiceProvider extends AddonServiceProvider
                 ->icon('hammer')
                 ->can('view automations')
                 ->children([
+                    $nav->item(__('Dashboard'))->route('statamic-automations.dashboard'),
                     $nav->item(__('Automations'))->route('statamic-automations.automations.index'),
                     $nav->item(__('Runs'))->route('statamic-automations.runs.index'),
                     $nav->item(__('Templates'))->route('statamic-automations.templates.index'),
