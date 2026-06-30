@@ -305,9 +305,20 @@ class ServiceProvider extends AddonServiceProvider
                 LH\AddLeadNoteAction::class,
                 LH\CreateFollowUpAction::class,
                 LH\CompleteFollowUpAction::class,
+                LH\CreateTaskAction::class,
+                LH\MoveStageAction::class,
+                LH\UpsertOpportunityAction::class,
             ] as $actionClass) {
                 $automations->registerBuiltIn($actionClass::handle());
                 $automations->action($actionClass::handle(), $actionClass);
+            }
+
+            // Fire LeadHub triggers from LeadHub's domain events. Without this,
+            // the LeadHub trigger nodes are selectable but never actually run.
+            foreach (array_keys(\Goldnead\StatamicAutomations\Listeners\HandleLeadHubEvent::EVENT_TRIGGERS) as $eventClass) {
+                if (class_exists($eventClass)) {
+                    Event::listen($eventClass, \Goldnead\StatamicAutomations\Listeners\HandleLeadHubEvent::class);
+                }
             }
         }
     }
