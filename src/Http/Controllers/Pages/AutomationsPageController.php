@@ -126,7 +126,7 @@ class AutomationsPageController extends Controller
     protected function nodeLibraryPayload(): array
     {
         $registry = app(NodeRegistry::class);
-        $items = $registry->describeAll();
+        $items = $registry->all();
 
         return [
             'triggers' => array_values(array_filter($items, fn ($i) => $i['kind'] === 'trigger')),

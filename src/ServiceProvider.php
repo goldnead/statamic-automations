@@ -41,21 +41,35 @@ use Statamic\Providers\AddonServiceProvider;
 class ServiceProvider extends AddonServiceProvider
 {
     /**
-     * Statamic auto-loads these into the CP when the addon is enabled,
-     * provided they exist in the published path
-     * (public/vendor/statamic-automations/cp.js + cp.css).
+     * Statamic 6 Vite entry points. The compiled assets ship with the package
+     * under resources/dist/build/ (built via `npm run build` in this package
+     * directory). On install Statamic publishes them from there to the host's
+     * public/vendor/<package>/build/ and serves them in the CP via the Vite
+     * tag — so there is no end-user build step.
      *
-     * @var array<int, string>
+     * @var array<string, mixed>
      */
-    protected $scripts = [
-        __DIR__ . '/../resources/dist/cp.js',
+    protected $vite = [
+        'input' => [
+            'resources/js/cp.js',
+            'resources/css/cp.css',
+        ],
+        'publicDirectory' => 'resources/dist',
     ];
 
     /**
-     * @var array<int, string>
+     * CP routes. Registering them through Statamic's `$routes` property (rather
+     * than a manual loadRoutesFrom) mounts them under the Control Panel route
+     * group: the `/cp` URL prefix, the `statamic.cp.` route-name prefix and the
+     * CP authentication middleware are all applied by Statamic. This is what
+     * makes `cp_route('statamic-automations.*')` resolve in the controllers and
+     * navigation — a manual loadRoutesFrom registers bare names and 500s every
+     * CP page.
+     *
+     * @var array<string, string>
      */
-    protected $stylesheets = [
-        __DIR__ . '/../resources/dist/cp.css',
+    protected $routes = [
+        'cp' => __DIR__ . '/../routes/cp.php',
     ];
 
     /**
@@ -110,7 +124,9 @@ class ServiceProvider extends AddonServiceProvider
     public function bootAddon(): void
     {
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
-        $this->loadRoutesFrom(__DIR__ . '/../routes/cp.php');
+
+        // CP routes are registered via the $routes property above, which mounts
+        // them under Statamic's Control Panel route group automatically.
 
         $this->publishes([
             __DIR__ . '/../config/automations.php' => config_path('automations.php'),
@@ -120,13 +136,10 @@ class ServiceProvider extends AddonServiceProvider
             __DIR__ . '/../database/migrations' => database_path('migrations'),
         ], 'statamic-automations-migrations');
 
-        // Frontend bundle — built into resources/dist/ via `npm run build`.
-        // Statamic autoloads it via the $scripts / $stylesheets properties
-        // above; the publish target below is only needed if the host
-        // wants to copy the built assets into public/ for CDN fronting.
-        $this->publishes([
-            __DIR__ . '/../resources/dist' => public_path('vendor/statamic-automations'),
-        ], 'statamic-automations-assets');
+        // The compiled CP bundle (resources/dist/build/) is published
+        // automatically by Statamic's AddonServiceProvider from the $vite
+        // property above, under the package's publish tag — no manual
+        // publishes() registration needed.
 
         $this->registerBuiltInNodes();
         $this->registerOptionalIntegrations();

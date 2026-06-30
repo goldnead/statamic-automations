@@ -1,55 +1,41 @@
 import { defineConfig } from 'vite';
-import vue from '@vitejs/plugin-vue';
-import tailwind from '@tailwindcss/vite';
-import { fileURLToPath, URL } from 'node:url';
+import laravel from 'laravel-vite-plugin';
+import tailwindcss from '@tailwindcss/vite';
+import statamic from '@statamic/cms/vite-plugin';
 
 /**
  * Vite config for the Statamic Automations addon.
  *
- * Statamic 6 addons are Inertia.js + Vue 3 + Tailwind v4. Pages
- * register themselves through Statamic.$inertia.register() inside
- * cp.js — Statamic's Inertia plugin then dispatches to them.
+ * Statamic 6 addons are Inertia.js + Vue 3 + Tailwind v4. The CP pages
+ * import from `@statamic/cms/inertia` and `@statamic/cms/ui`; those bare
+ * specifiers are resolved against the host Control Panel at runtime, not
+ * bundled. The official `@statamic/cms/vite-plugin` wires that up: it
+ * externalises `vue` to the CP runtime build and registers the Vue plugin,
+ * so the addon's `@statamic/cms/*` imports resolve against the host instead
+ * of being re-bundled (which would otherwise ship a second Vue instance and
+ * 500 the CP).
  *
- * `@statamic/cms`, `@statamic/cms/ui` and `@statamic/cms/inertia` are
- * provided by the host Statamic install at runtime — they are NOT
- * installed via npm. We mark them external so Vite leaves the import
- * statements untouched in the output bundle; Statamic's CP loader
- * resolves them when the bundle runs.
+ * laravel-vite-plugin emits the manifest flat at resources/dist/build/, the
+ * same `<publicDirectory>/build` location configured on the ServiceProvider's
+ * `$vite` property. Statamic's AddonServiceProvider publishes those compiled
+ * assets to the host's public/vendor/<package>/build/ on install, and the
+ * Laravel/Statamic Vite tag serves them in the CP — no end-user build step.
  *
- * Output:
- *   - resources/dist/cp.js (entry, ESM)
- *   - resources/dist/cp.css (Tailwind v4 + addon styles)
- *
- * The ServiceProvider then publishes these via
- * `php artisan vendor:publish --tag=statamic-automations-assets`.
+ * Third-party Vue libraries that are NOT part of the CP runtime (the Vue Flow
+ * canvas, axios) are bundled normally; only `vue` and `@statamic/cms/*` are
+ * externalised by the Statamic plugin.
  */
 export default defineConfig({
     plugins: [
-        vue(),
-        tailwind(),
-    ],
-    resolve: {
-        alias: {
-            '@': fileURLToPath(new URL('./resources/js', import.meta.url)),
-        },
-    },
-    build: {
-        outDir: 'resources/dist',
-        emptyOutDir: true,
-        manifest: true,
-        rollupOptions: {
-            // Statamic ships these — they are not on npm.
-            external: [
-                /^@statamic\/cms($|\/.+)/,
+        laravel({
+            input: [
+                'resources/js/cp.js',
+                'resources/css/cp.css',
             ],
-            input: {
-                cp: fileURLToPath(new URL('./resources/js/cp.js', import.meta.url)),
-            },
-            output: {
-                entryFileNames: '[name].js',
-                chunkFileNames: 'chunks/[name]-[hash].js',
-                assetFileNames: '[name][extname]',
-            },
-        },
-    },
+            publicDirectory: 'resources/dist',
+            refresh: true,
+        }),
+        statamic(),
+        tailwindcss(),
+    ],
 });

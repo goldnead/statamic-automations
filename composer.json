@@ -5,6 +5,7 @@
     "license": "MIT",
     "keywords": [
         "statamic",
+        "statamic-addon",
         "automation",
         "workflow",
         "forms",
@@ -12,23 +13,26 @@
         "leads",
         "no-code"
     ],
+    "authors": [
+        {
+            "name": "goldnead",
+            "email": "info@adriangoldner.com"
+        }
+    ],
     "support": {
         "issues": "https://github.com/goldnead/statamic-automations/issues",
         "source": "https://github.com/goldnead/statamic-automations"
     },
-    "authors": [
-        {
-            "name": "goldnead"
-        }
-    ],
     "require": {
         "php": "^8.2",
-        "statamic/cms": "^5.0 || ^6.0"
+        "laravel/framework": "^11.0|^12.0|^13.0",
+        "statamic/cms": "^6.0",
+        "inertiajs/inertia-laravel": "^1.0|^2.0"
     },
     "require-dev": {
-        "orchestra/testbench": "^9.0 || ^10.0",
-        "phpunit/phpunit": "^10.0 || ^11.0",
-        "mockery/mockery": "^1.6"
+        "orchestra/testbench": "^9.0|^10.0|^11.0",
+        "pestphp/pest": "^2.0|^3.0",
+        "pestphp/pest-plugin-laravel": "^2.0|^3.0"
     },
     "autoload": {
         "psr-4": {
@@ -43,7 +47,11 @@
     "extra": {
         "statamic": {
             "name": "Statamic Automations",
-            "description": "Visual automation builder for Statamic forms, entries, leads and webhooks."
+            "description": "Visual automation builder for Statamic forms, entries, leads and webhooks.",
+            "vite": {
+                "input": ["resources/js/cp.js", "resources/css/cp.css"],
+                "publicDirectory": "resources/dist"
+            }
         },
         "laravel": {
             "providers": [
@@ -55,13 +63,17 @@
         }
     },
     "scripts": {
-        "test": "vendor/bin/phpunit"
+        "test": [
+            "@php vendor/bin/pest"
+        ]
     },
     "config": {
+        "sort-packages": true,
         "allow-plugins": {
+            "pestphp/pest-plugin": true,
             "pixelfear/composer-dist-plugin": true,
-            "php-http/discovery": true,
-            "composer/package-versions-deprecated": true
+            "composer/installers": true,
+            "php-http/discovery": true
         }
     },
     "minimum-stability": "stable",
