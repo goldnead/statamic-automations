@@ -45,6 +45,10 @@ class HandleLeadHubEvent
             return;
         }
 
+        if (! Automation::schemaReady()) {
+            return;
+        }
+
         $payload = $this->normalize($event);
 
         $automations = Automation::query()
