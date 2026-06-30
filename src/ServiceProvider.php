@@ -158,8 +158,14 @@ class ServiceProvider extends AddonServiceProvider
             $this->commands([
                 SyncAutomations::class,
                 PruneRuns::class,
+                \Goldnead\StatamicAutomations\Console\Commands\RunScheduledAutomations::class,
             ]);
         }
+
+        // Run due scheduled automations every minute via Laravel's scheduler.
+        $this->callAfterResolving(\Illuminate\Console\Scheduling\Schedule::class, function ($schedule) {
+            $schedule->command('automations:run-scheduled')->everyMinute()->withoutOverlapping();
+        });
     }
 
     /**
@@ -173,19 +179,28 @@ class ServiceProvider extends AddonServiceProvider
             'manual' => ManualTrigger::class,
             'form_submitted' => FormSubmittedTrigger::class,
             'entry_published' => EntryPublishedTrigger::class,
+            'entry_saved' => \Goldnead\StatamicAutomations\Nodes\Triggers\EntrySavedTrigger::class,
+            'entry_deleted' => \Goldnead\StatamicAutomations\Nodes\Triggers\EntryDeletedTrigger::class,
+            'user_registered' => \Goldnead\StatamicAutomations\Nodes\Triggers\UserRegisteredTrigger::class,
+            'scheduled' => \Goldnead\StatamicAutomations\Nodes\Triggers\ScheduledTrigger::class,
         ];
 
         $logic = [
             'filter' => FilterNode::class,
             'branch' => BranchNode::class,
+            'switch' => \Goldnead\StatamicAutomations\Nodes\Logic\SwitchNode::class,
             'stop' => StopNode::class,
             'delay' => DelayNode::class,
+            'set_variable' => \Goldnead\StatamicAutomations\Nodes\Actions\SetVariableAction::class,
         ];
 
         $actions = [
             'send_email' => SendEmailAction::class,
             'send_webhook' => SimpleWebhookAction::class,
             'add_log_entry' => AddLogEntryAction::class,
+            'create_entry' => \Goldnead\StatamicAutomations\Nodes\Actions\CreateEntryAction::class,
+            'update_entry' => \Goldnead\StatamicAutomations\Nodes\Actions\UpdateEntryAction::class,
+            'create_user' => \Goldnead\StatamicAutomations\Nodes\Actions\CreateUserAction::class,
         ];
 
         $automations = $this->app->make('automations');
@@ -227,6 +242,10 @@ class ServiceProvider extends AddonServiceProvider
         if ($detector->hasWebhookManager()) {
             $automations->registerBuiltIn(WebhookManagerSendAction::handle());
             $automations->action(WebhookManagerSendAction::handle(), WebhookManagerSendAction::class);
+
+            $webhookReceived = \Goldnead\StatamicAutomations\Nodes\Triggers\WebhookReceivedTrigger::class;
+            $automations->registerBuiltIn($webhookReceived::handle());
+            $automations->trigger($webhookReceived::handle(), $webhookReceived);
         }
 
         if ($detector->hasLeadHub()) {
@@ -284,6 +303,34 @@ class ServiceProvider extends AddonServiceProvider
             if (class_exists($event)) {
                 Event::listen($event, $listener);
             }
+        }
+
+        // Generic, registry-driven triggers — one closure per Statamic event
+        // mapped to a trigger handle. The TriggerDispatcher finds matching
+        // enabled automations, checks matches() and dispatches the run.
+        $dispatched = [
+            'Statamic\\Events\\EntrySaved' => 'entry_saved',
+            'Statamic\\Events\\EntryDeleted' => 'entry_deleted',
+            'Statamic\\Events\\UserRegistered' => 'user_registered',
+        ];
+
+        foreach ($dispatched as $event => $triggerHandle) {
+            if (class_exists($event)) {
+                Event::listen($event, function ($e) use ($triggerHandle) {
+                    $this->app->make(\Goldnead\StatamicAutomations\Engine\TriggerDispatcher::class)
+                        ->dispatch($triggerHandle, $e);
+                });
+            }
+        }
+
+        // Webhook Manager inbound bridge — listen to the configured inbound
+        // event class and fan it into the webhook_received trigger.
+        $inboundEvent = config('automations.integrations.webhook_manager.inbound_event');
+        if (is_string($inboundEvent) && $inboundEvent !== '' && class_exists($inboundEvent)) {
+            Event::listen($inboundEvent, function ($e) {
+                $this->app->make(\Goldnead\StatamicAutomations\Engine\TriggerDispatcher::class)
+                    ->dispatch('webhook_received', $e);
+            });
         }
     }
 

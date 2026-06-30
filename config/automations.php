@@ -154,6 +154,11 @@ return [
             'facade' => [
                 'Goldnead\\WebhookManager\\Facades\\WebhookManager',
             ],
+            // Inbound bridge: the event Webhook Manager fires when it receives
+            // a validated inbound request. When this class exists, the
+            // "Webhook Received" trigger listens to it. Adjust to match the
+            // Webhook Manager version you run.
+            'inbound_event' => 'Goldnead\\WebhookManager\\Events\\WebhookReceived',
         ],
         'leadhub' => [
             'detect' => [
