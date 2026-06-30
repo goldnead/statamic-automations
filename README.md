@@ -24,6 +24,13 @@ Build automations for Statamic forms, entries, leads and webhooks
 >
 > _It's not a full n8n replacement. It's the **missing automation layer** for Statamic websites._
 
+![Visual flow builder](screenshots/builder.png)
+
+<p align="center">
+  <img src="screenshots/dashboard.png" width="49%" alt="Overview dashboard" />
+  <img src="screenshots/runs.png" width="49%" alt="Run history" />
+</p>
+
 ## Why this exists
 
 Statamic is wonderful as a CMS and developer framework, but typical website automations still demand:
