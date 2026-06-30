@@ -6,6 +6,38 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-30
+
+First public release on the Statamic Marketplace.
+
+### Editions & licensing
+- **Free / Pro editions** declared via `extra.statamic.editions`. Pro features
+  (the AI action, custom node registration) are gated through Statamic's native
+  Marketplace licensing (`Addon::edition()`), with local `config`/`remote`
+  modes kept as a self-hosted fallback.
+- Commercial software license (replaces MIT).
+
+### Added — feature set
+- **Triggers:** manual, form submitted, entry published/saved/deleted, user
+  registered, scheduled (cron via `automations:run-scheduled`), and a
+  `webhook_received` bridge to Webhook Manager.
+- **Actions:** send email, send webhook, add log entry, create/update entry,
+  create user, set variable, call automation (sub-flows), and `ai_generate`
+  (Anthropic Claude Messages API, **Pro**).
+- **Control flow:** filter, branch, switch, stop, delay, wait-until, loop
+  (for-each), parallel (fan-out/join), throttle/deduplicate.
+- **Expressions:** `TokenResolver` pipe filters
+  (`lower|upper|ucfirst|title|trim|slug|length|json|default|date`).
+- **Reliability & ops:** overview dashboard (KPIs + trend + recent failures),
+  throttled failure alerts, per-node retries + on-error-continue policy,
+  node-by-node run logs with redaction.
+- **Versioning** via Statamic Revisions (flat-file), with rollback; **audit
+  log** with a native CP screen.
+- **Storage drivers:** `database` (default) or `flat_file` (one YAML file per
+  automation); runtime data always in the database.
+- **Platform:** secrets store (`{{ secret.* }}`), i18n (English + German),
+  per-node inline testing, importable template catalog.
+
 ### Changed — Marketplace-readiness pass (align with LeadHub)
 
 Brought the addon in line with the sister LeadHub addon's launch-grade

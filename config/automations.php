@@ -207,9 +207,14 @@ return [
     | Licensing
     |--------------------------------------------------------------------------
     |
-    | Optional Pro-tier licensing. The default mode is "config" which
-    | keeps everything local — set `mode = remote` if you operate a
-    | central license endpoint.
+    | Pro-tier gating. When the addon is installed from the Statamic
+    | Marketplace, licensing is handled natively: the active edition
+    | (free | pro) is read via Addon::edition() and the Statamic licensing
+    | utility validates it — no settings here are required.
+    |
+    | The keys below are a fallback for self-hosted / development use only,
+    | used when no Marketplace edition is detected. "config" trusts the local
+    | allowed_keys; "remote" verifies against a central endpoint.
     |
     */
 

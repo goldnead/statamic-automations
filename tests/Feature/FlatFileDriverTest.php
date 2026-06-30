@@ -126,6 +126,19 @@ it('resolves the {automation} route binding from a flat file', function () {
     expect($response->getContent())->toContain('Bind Me');
 });
 
+it('lists and searches flat-file definitions via the JSON API', function () {
+    $this->actingAsSuperUser();
+
+    flatRepo()->save(new Automation(['name' => 'Alpha Flow', 'handle' => 'alpha', 'enabled' => true]), [['node_key' => 't', 'type' => 'manual']], []);
+    flatRepo()->save(new Automation(['name' => 'Beta Flow', 'handle' => 'beta', 'enabled' => true]), [['node_key' => 't', 'type' => 'manual']], []);
+
+    $all = $this->getJson('/cp/automations/api/automations');
+    $all->assertOk()->assertJsonCount(2, 'data');
+
+    $search = $this->getJson('/cp/automations/api/automations?search=beta');
+    $search->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.handle', 'beta');
+});
+
 it('deletes a flat-file definition', function () {
     flatRepo()->save(new Automation(['name' => 'Del', 'handle' => 'del']), [['node_key' => 't', 'type' => 'manual']], []);
     expect(File::exists($this->dir . '/del.yaml'))->toBeTrue();

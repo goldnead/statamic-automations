@@ -5,7 +5,7 @@
 **A visual automation layer built specifically for Statamic websites.**
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/goldnead/statamic-automations.svg?style=flat-square)](https://packagist.org/packages/goldnead/statamic-automations)
-[![License](https://img.shields.io/github/license/goldnead/statamic-automations.svg?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/license-commercial-blue?style=flat-square)](LICENSE)
 [![Statamic](https://img.shields.io/badge/statamic-6.x-orange?style=flat-square)](https://statamic.com)
 [![Tests](https://github.com/goldnead/statamic-automations/actions/workflows/tests.yml/badge.svg)](https://github.com/goldnead/statamic-automations/actions/workflows/tests.yml)
 [![Build](https://github.com/goldnead/statamic-automations/actions/workflows/build.yml/badge.svg)](https://github.com/goldnead/statamic-automations/actions/workflows/build.yml)
@@ -251,6 +251,18 @@ on community feedback, marketplace screenshots, and quality-of-life
 improvements (loop detection in branches, parallel execution, code
 nodes — all explicitly out of scope for v1 per the PRD non-goals).
 
+## Editions
+
+Statamic Automations ships in two editions:
+
+- **Free** — the full visual builder, triggers, logic and core actions.
+- **Pro** — premium features (e.g. the AI action and custom node registration),
+  unlocked with a Pro license from the [Statamic Marketplace](https://statamic.com/addons).
+
+The active edition is resolved natively through Statamic's licensing system —
+the Control Panel's licensing utility shows your status.
+
 ## License
 
-[MIT](LICENSE)
+Commercial software, licensed (not sold) through the Statamic Marketplace.
+See [LICENSE](LICENSE). © 2026 Adrian Goldner.

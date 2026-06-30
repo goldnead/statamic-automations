@@ -24,24 +24,46 @@ class AutomationsController extends Controller
     {
         $this->authorizeAction('view automations');
 
-        $query = Automation::query()
-            ->withCount('runs')
-            ->latest('updated_at');
+        // Go through the storage driver so the listing works for both the
+        // database and flat-file drivers. Search, the enabled filter and
+        // pagination are applied in-memory on top of the driver collection.
+        $items = app(AutomationRepository::class)->all();
 
         if ($search = $request->string('search')->toString()) {
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('handle', 'like', "%{$search}%");
-            });
+            $needle = mb_strtolower($search);
+            $items = $items->filter(fn ($a) => str_contains(mb_strtolower((string) $a->name), $needle)
+                || str_contains(mb_strtolower((string) $a->handle), $needle));
         }
 
         if ($request->filled('enabled')) {
-            $query->where('enabled', $request->boolean('enabled'));
+            $enabled = $request->boolean('enabled');
+            $items = $items->filter(fn ($a) => (bool) $a->enabled === $enabled);
         }
 
-        $automations = $query->paginate($request->integer('per_page', 25));
+        // Attach run counts keyed by automation uuid (set on every run in both
+        // storage modes).
+        $runCounts = AutomationRun::query()
+            ->selectRaw('automation_uuid, count(*) as c')
+            ->groupBy('automation_uuid')
+            ->pluck('c', 'automation_uuid');
 
-        return AutomationResource::collection($automations)
+        $items = $items
+            ->sortByDesc(fn ($a) => optional($a->updated_at)->timestamp ?? optional($a->last_run_at)->timestamp ?? 0)
+            ->values()
+            ->each(fn ($a) => $a->setAttribute('runs_count', (int) ($runCounts[$a->uuid] ?? 0)));
+
+        $perPage = max(1, $request->integer('per_page', 25));
+        $page = max(1, $request->integer('page', 1));
+
+        $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
+            $items->forPage($page, $perPage)->values(),
+            $items->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()],
+        );
+
+        return AutomationResource::collection($paginator)
             ->response()
             ->setStatusCode(200);
     }
