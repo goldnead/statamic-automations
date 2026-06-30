@@ -6,6 +6,44 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Changed — Marketplace-readiness pass (align with LeadHub)
+
+Brought the addon in line with the sister LeadHub addon's launch-grade
+conventions and fixed two Control-Panel launch blockers.
+
+- **Statamic 6 Vite convention.** Switched `vite.config.js` to the official
+  `@statamic/cms/vite-plugin` + `laravel-vite-plugin` (publicDirectory
+  `resources/dist`), made `@statamic/cms` a `file:` npm dependency, and
+  replaced the ServiceProvider's `$scripts`/`$stylesheets` with the `$vite`
+  property. The compiled CP assets are now committed under
+  `resources/dist/build/` and published automatically on install — no
+  end-user build step.
+- **CP routing launch blocker.** Routes are now registered via
+  `$routes = ['cp' => ...]`, so Statamic mounts them under `/cp` with the
+  `statamic.cp.` name prefix and CP auth middleware. The controllers and nav
+  already used `cp_route('statamic-automations.*')`; the previous manual
+  `loadRoutesFrom` registered bare names, which made every `cp_route()` throw
+  and 500 the page.
+- **Controller bug fixes** (caught by new CP smoke tests):
+  `NodeRegistry::describeAll()` → `all()`, and the Settings page's
+  `LicenseManager::isValid()` → `status()` check.
+- **composer.json:** Statamic `^6`, `laravel/framework ^11|^12|^13`,
+  `inertiajs/inertia-laravel`, Pest dev dependencies; dropped Statamic 5
+  (the CP is Inertia/Vue 3 / `@statamic/cms`, which is v6-only).
+
+### Added
+
+- **Pest test harness** mirroring LeadHub: `TestCase` registers the real
+  Statamic service provider, forces `bootAddon()`, mounts the real CP routes,
+  and uses `RefreshDatabase` + real Statamic super users (the NoopAuth /
+  `TestServiceProvider` test hacks are gone).
+- **`CpRoutesTest`** renders every Inertia CP page and **`ApiSmokeTest`**
+  exercises every JSON endpoint the Vue builder calls. **91 tests pass.**
+- **`scripts/setup-playground.sh`** — builds a persistent, runnable Statamic 6
+  playground with the addon wired in as a path repo; `.devcontainer`
+  delegates to it.
+- **`MARKETPLACE.md`** listing copy and `.gitattributes` dist-export rules.
+
 ### Fixed — Sprint 7 (full PHPUnit suite green, no skips)
 
 After running the test suite end-to-end inside a real PHP+Composer

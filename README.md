@@ -6,7 +6,7 @@
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/goldnead/statamic-automations.svg?style=flat-square)](https://packagist.org/packages/goldnead/statamic-automations)
 [![License](https://img.shields.io/github/license/goldnead/statamic-automations.svg?style=flat-square)](LICENSE)
-[![Statamic](https://img.shields.io/badge/statamic-5.x%20%7C%206.x-orange?style=flat-square)](https://statamic.com)
+[![Statamic](https://img.shields.io/badge/statamic-6.x-orange?style=flat-square)](https://statamic.com)
 [![Tests](https://github.com/goldnead/statamic-automations/actions/workflows/tests.yml/badge.svg)](https://github.com/goldnead/statamic-automations/actions/workflows/tests.yml)
 [![Build](https://github.com/goldnead/statamic-automations/actions/workflows/build.yml/badge.svg)](https://github.com/goldnead/statamic-automations/actions/workflows/build.yml)
 [![Lint](https://github.com/goldnead/statamic-automations/actions/workflows/lint.yml/badge.svg)](https://github.com/goldnead/statamic-automations/actions/workflows/lint.yml)
@@ -60,36 +60,31 @@ For most Statamic projects an external automation tool is overkill, and custom c
 ## Requirements
 
 - PHP **8.2+**
-- Laravel **11.x** or **12.x**
-- Statamic **5.x** or **6.x**
+- Laravel **11.x**, **12.x** or **13.x**
+- Statamic **6.x**
 
 ## Installation
 
 ```bash
 composer require goldnead/statamic-automations
-```
-
-Run the migrations:
-
-```bash
-php artisan vendor:publish --tag=statamic-automations-migrations
 php artisan migrate
 ```
 
-Optionally publish the config and frontend assets:
+That's it. The addon ships its compiled Control Panel assets (Inertia + Vue 3)
+under `resources/dist/build/`, and Statamic publishes them to your site's
+`public/vendor/statamic-automations/` automatically on install — **there is no
+end-user build step.**
+
+Optionally publish the config to customise defaults:
 
 ```bash
 php artisan vendor:publish --tag=statamic-automations-config
-php artisan vendor:publish --tag=statamic-automations-assets
 ```
 
-The frontend assets are built into `resources/dist/` inside the package. To build them yourself:
-
-```bash
-cd vendor/goldnead/statamic-automations
-npm install
-npm run build
-```
+> **Developing the addon?** The frontend is built with the official Statamic 6
+> Vite convention (`@statamic/cms/vite-plugin`). From a clone, run
+> `composer install && npm install && npm run build`, or use
+> `scripts/setup-playground.sh` to spin up a full Statamic 6 playground.
 
 Make sure your queue worker is running so automation runs are dispatched off the request thread:
 
