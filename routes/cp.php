@@ -71,6 +71,9 @@ Route::prefix('automations')
         Route::get('settings', [SettingsPageController::class, 'index'])
             ->name('settings');
 
+        Route::get('audit', [\Goldnead\StatamicAutomations\Http\Controllers\Pages\AuditPageController::class, 'index'])
+            ->name('audit');
+
         // ================================================================
         // JSON API (consumed by Vue Flow canvas + Listing AJAX)
         // ================================================================

@@ -115,6 +115,14 @@ it('renders the settings page', function (): void {
     expect(inertiaComponent($response))->toBe('statamic-automations::Settings/Show');
 });
 
+it('renders the audit log page', function (): void {
+    $response = $this->withHeaders(['X-Inertia' => 'true'])
+        ->get(cp_route('statamic-automations.audit'));
+
+    $response->assertStatus(200);
+    expect(inertiaComponent($response))->toBe('statamic-automations::Audit/Index');
+});
+
 it('blocks users without the view-automations permission', function (): void {
     $regular = \Statamic\Facades\User::make()->email('regular@example.com');
     $regular->save();
