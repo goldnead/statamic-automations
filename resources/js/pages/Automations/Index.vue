@@ -17,20 +17,13 @@ import axios from 'axios';
 const props = defineProps({
     title: { type: String, required: true },
     rows: { type: Array, required: true },
+    columns: { type: Array, required: true },
     createUrl: { type: String, required: true },
     apiBase: { type: String, required: true },
     canCreate: { type: Boolean, default: false },
 });
 
 const isEmpty = computed(() => props.rows.length === 0);
-
-const columns = [
-    { key: 'name', label: __('Name'), required: true },
-    { key: 'enabled', label: __('Status') },
-    { key: 'runs_count', label: __('Runs') },
-    { key: 'last_run_at', label: __('Last run') },
-    { key: 'updated_at', label: __('Updated') },
-];
 
 function statusColor(enabled) {
     return enabled ? 'green' : 'gray';

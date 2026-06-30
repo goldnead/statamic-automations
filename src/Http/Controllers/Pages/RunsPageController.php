@@ -6,6 +6,7 @@ use Goldnead\StatamicAutomations\Http\Controllers\Controller;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Statamic\CP\Column;
 
 class RunsPageController extends Controller
 {
@@ -46,6 +47,14 @@ class RunsPageController extends Controller
         return Inertia::render('statamic-automations::Runs/Index', [
             'title' => __('Automation Runs'),
             'rows' => $runs,
+            'columns' => collect([
+                Column::make('id')->label(__('Run')),
+                Column::make('automation_name')->label(__('Automation')),
+                Column::make('status')->label(__('Status')),
+                Column::make('trigger_type')->label(__('Trigger')),
+                Column::make('duration_ms')->label(__('Duration')),
+                Column::make('started_at')->label(__('Started')),
+            ])->map->toArray()->all(),
             'filters' => [
                 'automation_id' => $request->input('automation_id'),
                 'status' => $request->input('status'),
