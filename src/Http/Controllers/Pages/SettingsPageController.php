@@ -26,7 +26,7 @@ class SettingsPageController extends Controller
             'license' => [
                 'mode' => config('automations.license.mode'),
                 'has_key' => ! empty(config('automations.license.key')),
-                'is_valid' => $license->isValid(),
+                'is_valid' => ($license->status()['status'] ?? null) === LicenseManager::STATUS_VALID,
                 'features' => config('automations.license.features', []),
             ],
         ]);

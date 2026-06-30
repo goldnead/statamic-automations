@@ -7,6 +7,7 @@ use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Statamic\CP\Column;
 
 /**
  * Renders the Inertia pages for the Automations list and builder.
@@ -43,6 +44,13 @@ class AutomationsPageController extends Controller
         return Inertia::render('statamic-automations::Automations/Index', [
             'title' => __('Automations'),
             'rows' => $rows,
+            'columns' => collect([
+                Column::make('name')->label(__('Name')),
+                Column::make('enabled')->label(__('Status')),
+                Column::make('runs_count')->label(__('Runs')),
+                Column::make('last_run_at')->label(__('Last run')),
+                Column::make('updated_at')->label(__('Updated')),
+            ])->map->toArray()->all(),
             'createUrl' => cp_route('statamic-automations.automations.create'),
             'apiBase' => cp_route('statamic-automations.api.automations.index'),
             'canCreate' => $this->userCan('create automations'),
@@ -126,7 +134,7 @@ class AutomationsPageController extends Controller
     protected function nodeLibraryPayload(): array
     {
         $registry = app(NodeRegistry::class);
-        $items = $registry->describeAll();
+        $items = $registry->all();
 
         return [
             'triggers' => array_values(array_filter($items, fn ($i) => $i['kind'] === 'trigger')),

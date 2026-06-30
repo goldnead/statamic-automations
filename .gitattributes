@@ -1,0 +1,18 @@
+/.github          export-ignore
+/tests            export-ignore
+/scripts          export-ignore
+/docs             export-ignore
+/.devcontainer    export-ignore
+/.gitattributes   export-ignore
+/.gitignore       export-ignore
+/phpunit.xml      export-ignore
+/MARKETPLACE.md   export-ignore
+
+# The compiled Control Panel assets ship with the package under
+# resources/dist/ — Statamic publishes them to the host's public/ on install.
+# Keep the build sources (resources/{js,css}/, vite.config.js, package.json)
+# shipped too so the addon can be rebuilt from source; only exclude the
+# installed node_modules / vendor / scaffolded playground from the dist tarball.
+/node_modules     export-ignore
+/vendor           export-ignore
+/playground       export-ignore

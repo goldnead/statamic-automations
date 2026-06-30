@@ -8,7 +8,6 @@ import {
     Stack,
     StackHeader,
     StackContent,
-    Panel,
     Field,
     Input,
     Alert,
@@ -298,7 +297,9 @@ function updateNodeConfig(config) {
 <template>
     <Head :title="[title, __('Statamic Automations')]" />
 
-    <div class="max-w-7xl mx-auto" data-max-width-wrapper>
+    <!-- The builder is a canvas tool, so it breaks out of the CP content
+         card's horizontal padding (px-12 at lg) to use the full width. -->
+    <div class="lg:-mx-12" data-max-width-wrapper>
         <Header :title="title" icon="hammer">
             <template #title>
                 <div class="flex items-center gap-2">
@@ -340,12 +341,12 @@ function updateNodeConfig(config) {
             </ul>
         </Alert>
 
-        <div class="grid grid-cols-[260px_1fr_360px] gap-px bg-gray-200 dark:bg-gray-800 rounded-md overflow-hidden h-[calc(100vh-220px)] min-h-[500px]">
-            <Panel class="!rounded-none overflow-y-auto bg-white dark:bg-gray-900">
+        <div class="grid grid-cols-[260px_1fr_360px] rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden h-[calc(100vh-220px)] min-h-[500px]">
+            <div class="overflow-y-auto border-r border-gray-200 dark:border-gray-800">
                 <NodeLibrary :library="library" @add="addNode" />
-            </Panel>
+            </div>
 
-            <div class="bg-gray-50 dark:bg-gray-900 sa-canvas-frame">
+            <div class="sa-canvas-frame">
                 <Canvas
                     :nodes="automation.nodes"
                     :edges="automation.edges"
@@ -360,7 +361,7 @@ function updateNodeConfig(config) {
                 />
             </div>
 
-            <Panel class="!rounded-none overflow-y-auto bg-white dark:bg-gray-900">
+            <div class="overflow-y-auto border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
                 <ConfigPanel
                     :node="selectedNode"
                     :library="library"
@@ -368,7 +369,7 @@ function updateNodeConfig(config) {
                     :api-base="apiBase"
                     @update:config="updateNodeConfig"
                 />
-            </Panel>
+            </div>
         </div>
     </div>
 

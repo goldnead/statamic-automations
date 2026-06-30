@@ -17,13 +17,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          coverage: none
+
+      # The Statamic 6 Vite convention pulls @statamic/cms from the installed
+      # Composer package (a `file:` npm dependency), so Composer must run first.
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # No `cache: 'npm'` because we don't commit package-lock.json
-          # (library convention). The manual cache step below keeps
-          # subsequent runs fast.
 
       - name: Cache npm packages
         uses: actions/cache@v4
@@ -33,23 +42,23 @@ jobs:
           restore-keys: |
             npm-${{ runner.os }}-
 
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund --legacy-peer-deps
+      - name: Install Node dependencies
+        run: npm install --no-audit --no-fund
 
       - name: Build production bundle
         run: npm run build
 
       - name: Verify build output
         run: |
-          test -f resources/dist/cp.js
-          test -s resources/dist/cp.js
-          echo "✓ resources/dist/cp.js exists ($(wc -c < resources/dist/cp.js) bytes)"
+          test -f resources/dist/build/manifest.json
+          echo "✓ manifest present:"
+          cat resources/dist/build/manifest.json
 
       - name: Upload build artifact
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: cp-assets-${{ github.sha }}
-          path: resources/dist/
+          path: resources/dist/build/
           retention-days: 14
           if-no-files-found: error

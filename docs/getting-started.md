@@ -26,19 +26,20 @@ php artisan migrate
 
 Six tables are created: `automations`, `automation_nodes`, `automation_edges`, `automation_runs`, `automation_node_runs`, `automation_scheduled_jobs`.
 
-## 3. Publish the assets and config (optional)
+## 3. Publish the config (optional)
 
 ```bash
 php artisan vendor:publish --tag=statamic-automations-config
-php artisan vendor:publish --tag=statamic-automations-assets
 ```
 
-The config copy gives you per-environment overrides for the queue, run retention and test-mode behavior. The assets copy publishes the compiled `cp.js` + `automations.css` into `public/vendor/statamic-automations/` so the Statamic CP can serve them.
+The config copy gives you per-environment overrides for the queue, run retention and test-mode behavior.
 
-If you want to build the assets yourself (e.g. you've forked the package), run:
+The compiled Control Panel assets ship with the package under `resources/dist/build/` and are published to `public/vendor/statamic-automations/` automatically on install (the Statamic 6 Vite convention) — there is no manual asset-publish or build step.
+
+If you've forked the package and want to rebuild the assets, run (from the package root):
 
 ```bash
-cd vendor/goldnead/statamic-automations
+composer install
 npm install
 npm run build
 ```
@@ -98,7 +99,7 @@ Templates are copies, not references — you can edit them freely without affect
 | Symptom | Cause | Fix |
 |---|---|---|
 | Nothing happens after a form submission | No queue worker running | Start `php artisan queue:work` |
-| The builder is blank | Assets not published | `php artisan vendor:publish --tag=statamic-automations-assets` |
+| The builder is blank | Compiled assets not published to `public/` | Re-run `php artisan vendor:publish --tag=statamic-automations --force` |
 | "Permission denied" on save | Role missing CP permissions | Grant the Automations permissions in Users → Roles |
 | The run errors with "Unknown node type" | Sister addon (LeadHub / Webhook Manager) was uninstalled after the automation was built | Re-install the addon, or replace the unknown node |
 | Test mode emails / webhooks aren't being sent | This is intentional | Toggle the relevant flag in `config/automations.php` under `test_mode` |

@@ -16,6 +16,7 @@ import {
 const props = defineProps({
     title: { type: String, required: true },
     rows: { type: Array, required: true },
+    columns: { type: Array, required: true },
     filters: { type: Object, default: () => ({}) },
     statusOptions: { type: Array, required: true },
     canRetry: { type: Boolean, default: false },
@@ -23,15 +24,6 @@ const props = defineProps({
 
 const status = ref(props.filters.status ?? '');
 const isTest = ref(props.filters.is_test ?? null);
-
-const columns = [
-    { key: 'id', label: __('Run') },
-    { key: 'automation_name', label: __('Automation') },
-    { key: 'status', label: __('Status') },
-    { key: 'trigger_type', label: __('Trigger') },
-    { key: 'duration_ms', label: __('Duration') },
-    { key: 'started_at', label: __('Started') },
-];
 
 function statusColor(s) {
     return {

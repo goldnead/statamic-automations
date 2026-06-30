@@ -1,6 +1,5 @@
 /vendor
 /node_modules
-/resources/dist
 composer.lock
 package-lock.json
 .phpunit.cache
@@ -10,6 +9,10 @@ package-lock.json
 .DS_Store
 *.log
 .env
+
+# Note: resources/dist/ (compiled CP assets) IS committed — Statamic ships and
+# publishes it to the host's public/ on install, so there is no end-user build
+# step. Do not ignore it.
 
 # Codespaces playground (scaffolded Statamic site for addon dev)
 /playground

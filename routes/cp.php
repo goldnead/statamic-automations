@@ -28,13 +28,17 @@ use Illuminate\Support\Facades\Route;
 |     render a page — only return JSON or no-content responses.
 */
 
-$middleware = class_exists(\Statamic\Http\Middleware\CP\Authorize::class)
-    ? ['statamic.cp.authenticated']
-    : ['web', 'auth'];
-
+/*
+ * These routes are registered through the ServiceProvider's
+ * `$routes = ['cp' => ...]` property, so Statamic mounts them under the
+ * Control Panel route group automatically — the `/cp` URL prefix, the
+ * `statamic.cp.` route-name prefix and the CP authentication middleware are
+ * all applied by Statamic. That is why the route names resolve through
+ * `cp_route('statamic-automations.*')` (= `statamic.cp.statamic-automations.*`)
+ * in the controllers and CP navigation.
+ */
 Route::prefix('automations')
     ->name('statamic-automations.')
-    ->middleware($middleware)
     ->group(function () {
         // ================================================================
         // Inertia pages (rendered via Statamic.$inertia.register())

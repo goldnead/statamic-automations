@@ -6,33 +6,25 @@ use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Tests\TestCase;
-use Illuminate\Contracts\Auth\Authenticatable;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * Phase G smoke tests — verify the JSON endpoints work.
  *
- * The CP middleware is stubbed out so we can hit the routes
- * without going through Statamic's authentication stack.
+ * These hit the real CP routes behind Statamic's authenticated CP
+ * middleware as a real super user, the same way the Control Panel does.
  */
 class AutomationsApiTest extends TestCase
 {
-    use RefreshDatabase;
-
     protected function setUp(): void
     {
         parent::setUp();
 
-        // We don't call withoutMiddleware() here — that would also
-        // disable SubstituteBindings and break route-model binding for
-        // the {automation} parameter. The TestCase aliases
-        // `statamic.cp.authenticated` to a no-op middleware instead.
-        $this->actingAs(new TestUser());
+        $this->actingAsSuperUser();
     }
 
     public function test_can_create_an_automation_via_api(): void
     {
-        $response = $this->postJson('/automations/api/automations', [
+        $response = $this->postJson('/cp/automations/api/automations', [
             'name' => 'My first automation',
             'nodes' => [
                 ['node_key' => 't', 'type' => 'manual'],
@@ -53,7 +45,7 @@ class AutomationsApiTest extends TestCase
     {
         $automation = Automation::create(['name' => 'X', 'handle' => 'x']);
 
-        $response = $this->postJson("/automations/api/automations/{$automation->id}/validate");
+        $response = $this->postJson("/cp/automations/api/automations/{$automation->id}/validate");
 
         $response->assertOk();
         $response->assertJsonPath('valid', false);
@@ -80,7 +72,7 @@ class AutomationsApiTest extends TestCase
             'to_node_key' => 'log',
         ]);
 
-        $response = $this->postJson("/automations/api/automations/{$automation->id}/test", [
+        $response = $this->postJson("/cp/automations/api/automations/{$automation->id}/test", [
             'context' => ['form' => ['email' => 'a@b.de']],
         ]);
 
@@ -90,7 +82,7 @@ class AutomationsApiTest extends TestCase
 
     public function test_nodes_endpoint_lists_all_built_in_nodes(): void
     {
-        $response = $this->getJson('/automations/api/nodes');
+        $response = $this->getJson('/cp/automations/api/nodes');
 
         $response->assertOk();
         $this->assertNotEmpty($response->json('data.triggers'));
@@ -100,7 +92,7 @@ class AutomationsApiTest extends TestCase
 
     public function test_templates_endpoint_returns_built_in_catalog(): void
     {
-        $response = $this->getJson('/automations/api/templates');
+        $response = $this->getJson('/cp/automations/api/templates');
 
         $response->assertOk();
         $this->assertNotEmpty($response->json('data'));
@@ -108,55 +100,10 @@ class AutomationsApiTest extends TestCase
 
     public function test_template_install_creates_a_new_automation(): void
     {
-        $response = $this->postJson('/automations/api/templates/form_submission_to_webhook/install');
+        $response = $this->postJson('/cp/automations/api/templates/form_submission_to_webhook/install');
 
         $response->assertCreated();
         $response->assertJsonPath('data.name', 'Form Submission to Webhook');
         $this->assertDatabaseCount('automations', 1);
-    }
-}
-
-/**
- * Lightweight authenticatable used in tests — every permission is granted.
- */
-class TestUser implements Authenticatable
-{
-    public function getAuthIdentifierName(): string
-    {
-        return 'id';
-    }
-
-    public function getAuthIdentifier(): mixed
-    {
-        return 1;
-    }
-
-    public function getAuthPasswordName(): string
-    {
-        return 'password';
-    }
-
-    public function getAuthPassword(): string
-    {
-        return '';
-    }
-
-    public function getRememberToken(): string
-    {
-        return '';
-    }
-
-    public function setRememberToken($value): void
-    {
-    }
-
-    public function getRememberTokenName(): string
-    {
-        return 'remember_token';
-    }
-
-    public function can(string $permission): bool
-    {
-        return true;
     }
 }
