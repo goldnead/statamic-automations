@@ -17,11 +17,19 @@ class DatabaseAutomationRepository implements AutomationRepository
 {
     public function all(): Collection
     {
+        if (! Automation::schemaReady()) {
+            return collect();
+        }
+
         return Automation::query()->with(['nodes', 'edges'])->get();
     }
 
     public function enabled(): Collection
     {
+        if (! Automation::schemaReady()) {
+            return collect();
+        }
+
         return Automation::query()->where('enabled', true)->with(['nodes', 'edges'])->get();
     }
 

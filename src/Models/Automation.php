@@ -5,10 +5,23 @@ namespace Goldnead\StatamicAutomations\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Schema;
 
 class Automation extends Model
 {
     protected $table = 'automations';
+
+    /**
+     * Whether the automations schema has been migrated. Trigger listeners
+     * guard on this so publishing an entry / submitting a form never crashes
+     * when the addon is installed but its migrations haven't run yet (e.g.
+     * during deploy-before-migrate, or in a host test suite that doesn't load
+     * the addon migrations).
+     */
+    public static function schemaReady(): bool
+    {
+        return Schema::hasTable((new static)->getTable());
+    }
 
     protected $fillable = [
         'uuid',
