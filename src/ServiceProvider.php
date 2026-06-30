@@ -251,6 +251,9 @@ class ServiceProvider extends AddonServiceProvider
                 LH\AddLeadNoteAction::class,
                 LH\CreateFollowUpAction::class,
                 LH\CompleteFollowUpAction::class,
+                LH\CreateTaskAction::class,
+                LH\MoveStageAction::class,
+                LH\UpsertOpportunityAction::class,
             ] as $actionClass) {
                 $automations->registerBuiltIn($actionClass::handle());
                 $automations->action($actionClass::handle(), $actionClass);

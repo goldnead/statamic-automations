@@ -139,11 +139,40 @@ class LeadHubAdapter
     }
 
     /**
+     * @param  array<string, mixed>  $attributes
+     */
+    public function createTask(array $attributes, ?string $leadId = null): array
+    {
+        return $this->callMutation('createTask', [$attributes, $leadId]);
+    }
+
+    public function moveStage(string $opportunityId, string $stage, ?string $note = null): array
+    {
+        return $this->callMutation('moveStage', [$opportunityId, $stage, $note]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $attributes
+     */
+    public function upsertOpportunity(string $leadId, string $pipeline, array $attributes = []): array
+    {
+        return $this->callMutation('upsertOpportunity', [$leadId, $pipeline, $attributes]);
+    }
+
+    public function mergeContacts(string $loserId, string $winnerId): array
+    {
+        return $this->callMutation('merge', [$loserId, $winnerId]);
+    }
+
+    /**
      * @return class-string|null
      */
     protected function resolve(): ?string
     {
         $candidates = (array) config('automations.integrations.leadhub.facade', [
+            // The addon's PSR-4 namespace is Goldnead\Leadhub (lowercase "hub").
+            'Goldnead\\Leadhub\\Facades\\LeadHub',
+            'Goldnead\\Leadhub\\LeadHubManager',
             'Goldnead\\LeadHub\\Facades\\LeadHub',
         ]);
 
