@@ -19,6 +19,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Sub-automations
+    |--------------------------------------------------------------------------
+    | Maximum nesting depth for the "Call Automation" action, guarding
+    | against accidental infinite recursion between automations.
+    */
+
+    'max_call_depth' => env('STATAMIC_AUTOMATIONS_MAX_CALL_DEPTH', 3),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Failure Alerts
+    |--------------------------------------------------------------------------
+    | Notify someone when a run fails. Channels: "log" and/or "mail".
+    | Alerts are throttled per automation by throttle_minutes.
+    */
+
+    'alerts' => [
+        'enabled' => true,
+        'channels' => ['log'],
+        'mail_to' => env('STATAMIC_AUTOMATIONS_ALERT_MAIL_TO', null),
+        'throttle_minutes' => 15,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Run Storage
     |--------------------------------------------------------------------------
     */

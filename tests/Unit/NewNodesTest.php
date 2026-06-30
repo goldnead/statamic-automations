@@ -16,7 +16,7 @@ it('registers the new built-in nodes', function () {
     foreach (['entry_saved', 'entry_deleted', 'user_registered', 'scheduled'] as $h) {
         expect($registry->has($h))->toBeTrue("trigger {$h} missing");
     }
-    foreach (['switch', 'set_variable'] as $h) {
+    foreach (['switch', 'set_variable', 'wait_until', 'call_automation'] as $h) {
         expect($registry->has($h))->toBeTrue("logic {$h} missing");
     }
     foreach (['create_entry', 'update_entry', 'create_user'] as $h) {

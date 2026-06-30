@@ -36,6 +36,11 @@ class RunLogger
                 : null,
             'error_message' => $error,
         ])->save();
+
+        // Fire a throttled failure alert for failed, non-test runs.
+        if ($status === AutomationRun::STATUS_FAILED && ! $run->is_test) {
+            app(FailureAlerter::class)->notify($run, $error);
+        }
     }
 
     /**

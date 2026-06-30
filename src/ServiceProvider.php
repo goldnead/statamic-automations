@@ -191,7 +191,9 @@ class ServiceProvider extends AddonServiceProvider
             'switch' => \Goldnead\StatamicAutomations\Nodes\Logic\SwitchNode::class,
             'stop' => StopNode::class,
             'delay' => DelayNode::class,
+            'wait_until' => \Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilNode::class,
             'set_variable' => \Goldnead\StatamicAutomations\Nodes\Actions\SetVariableAction::class,
+            'call_automation' => \Goldnead\StatamicAutomations\Nodes\Actions\CallAutomationAction::class,
         ];
 
         $actions = [
