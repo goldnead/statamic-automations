@@ -78,6 +78,28 @@ return [
         'send_real_emails' => false,
         'persist_leadhub_changes' => false,
         'persist_statamic_changes' => false,
+        'call_real_ai' => false,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | AI
+    |--------------------------------------------------------------------------
+    |
+    | Credentials and defaults for the "Generate with AI" action, which calls
+    | the Anthropic Claude Messages API. Set the model id to whichever Claude
+    | model your plan grants you. Never hard-code the API key in an automation
+    | — keep it here (or in the secrets store) and reference it from config.
+    |
+    */
+
+    'ai' => [
+        'api_key' => env('ANTHROPIC_API_KEY', ''),
+        'model' => env('STATAMIC_AUTOMATIONS_AI_MODEL', 'claude-sonnet-4-5'),
+        'base_url' => env('ANTHROPIC_BASE_URL', 'https://api.anthropic.com'),
+        'version' => '2023-06-01',
+        'max_tokens' => 1024,
+        'timeout' => 30,
     ],
 
     /*
@@ -92,6 +114,7 @@ return [
         'delay_nodes' => true,
         'custom_actions' => true,
         'custom_actions_requires_pro' => true,
+        'ai_action_requires_pro' => true,
         'custom_triggers' => true,
         'templates' => true,
         'export_import' => true,
@@ -213,6 +236,7 @@ return [
         'send_email' => true,
         'send_webhook' => true,
         'add_log_entry' => true,
+        'ai_generate' => true,
     ],
 
 ];

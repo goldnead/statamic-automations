@@ -203,6 +203,7 @@ class ServiceProvider extends AddonServiceProvider
             'create_entry' => \Goldnead\StatamicAutomations\Nodes\Actions\CreateEntryAction::class,
             'update_entry' => \Goldnead\StatamicAutomations\Nodes\Actions\UpdateEntryAction::class,
             'create_user' => \Goldnead\StatamicAutomations\Nodes\Actions\CreateUserAction::class,
+            'ai_generate' => \Goldnead\StatamicAutomations\Nodes\Actions\AiGenerateAction::class,
         ];
 
         $automations = $this->app->make('automations');
