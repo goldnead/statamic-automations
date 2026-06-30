@@ -49,7 +49,7 @@ class TokenResolver
         // Single-token shortcut → preserve structured values when there are
         // no filters; otherwise apply the filter chain and return the result.
         if (preg_match('/^\s*\{\{\s*' . $token . '\}\}\s*$/', $value, $match)) {
-            $resolved = $context->get($match[1]);
+            $resolved = $this->resolveToken($match[1], $context);
             $filters = trim($match[2]);
 
             return $filters === '' ? $resolved : $this->applyFilters($resolved, $filters);
@@ -58,7 +58,7 @@ class TokenResolver
         return preg_replace_callback(
             '/\{\{\s*' . $token . '\}\}/',
             function ($match) use ($context) {
-                $resolved = $context->get($match[1]);
+                $resolved = $this->resolveToken($match[1], $context);
                 $filters = trim($match[2]);
 
                 if ($filters !== '') {
@@ -77,6 +77,22 @@ class TokenResolver
             },
             $value,
         );
+    }
+
+    /**
+     * Resolve a single token name to a value. Tokens beginning with
+     * "secret." are pulled from the SecretStore so credentials never need
+     * to live inside a node's stored config; everything else reads from the
+     * run context via dot notation.
+     */
+    protected function resolveToken(string $name, AutomationContext $context): mixed
+    {
+        if (str_starts_with($name, 'secret.')) {
+            return app(\Goldnead\StatamicAutomations\Support\SecretStore::class)
+                ->get(substr($name, strlen('secret.')));
+        }
+
+        return $context->get($name);
     }
 
     /**

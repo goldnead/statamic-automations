@@ -125,6 +125,15 @@ class ServiceProvider extends AddonServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
 
+        // Translations: PHP keys (backend) under the "statamic-automations"
+        // namespace, plus JSON strings consumed by the Vue CP via __().
+        $this->loadTranslationsFrom(__DIR__ . '/../resources/lang', 'statamic-automations');
+        $this->loadJsonTranslationsFrom(__DIR__ . '/../resources/lang');
+
+        $this->publishes([
+            __DIR__ . '/../resources/lang' => $this->app->langPath('vendor/statamic-automations'),
+        ], 'statamic-automations-translations');
+
         // CP routes are registered via the $routes property above, which mounts
         // them under Statamic's Control Panel route group automatically.
 

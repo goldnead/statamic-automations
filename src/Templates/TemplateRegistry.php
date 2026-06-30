@@ -25,6 +25,9 @@ class TemplateRegistry
             $this->followUpReminder(),
             $this->entryPublishedNotification(),
             $this->webhookFailureAlert(),
+            $this->scheduledDigest(),
+            $this->inboundWebhookToEntry(),
+            $this->aiTriageInquiry(),
         ];
     }
 
@@ -260,6 +263,86 @@ class TemplateRegistry
             ],
             'edges' => [
                 ['from_node_key' => 'trigger', 'to_node_key' => 'email'],
+            ],
+        ];
+    }
+
+    protected function scheduledDigest(): array
+    {
+        return [
+            'handle' => 'scheduled_digest',
+            'name' => 'Scheduled Daily Digest',
+            'description' => 'Run every morning and email a digest. Uses the Scheduled trigger.',
+            'requires' => [],
+            'nodes' => [
+                ['node_key' => 'trigger', 'type' => 'scheduled', 'position_x' => 0, 'position_y' => 0, 'config' => [
+                    'frequency' => 'daily',
+                    'time' => '08:00',
+                ]],
+                ['node_key' => 'email', 'type' => 'send_email', 'position_x' => 280, 'position_y' => 0, 'config' => [
+                    'to' => 'admin@example.com',
+                    'subject' => 'Your daily digest — {{ scheduled.frequency }}',
+                    'body' => "Good morning!\n\nThis is your scheduled digest.",
+                ]],
+            ],
+            'edges' => [
+                ['from_node_key' => 'trigger', 'to_node_key' => 'email'],
+            ],
+        ];
+    }
+
+    protected function inboundWebhookToEntry(): array
+    {
+        return [
+            'handle' => 'inbound_webhook_to_entry',
+            'name' => 'Inbound Webhook → Entry',
+            'description' => 'Receive a webhook (via Webhook Manager), de-duplicate it, and create an entry.',
+            'requires' => ['webhook_manager'],
+            'nodes' => [
+                ['node_key' => 'trigger', 'type' => 'webhook_received', 'position_x' => 0, 'position_y' => 0, 'config' => [
+                    'endpoint' => 'orders',
+                ]],
+                ['node_key' => 'dedupe', 'type' => 'throttle', 'position_x' => 260, 'position_y' => 0, 'config' => [
+                    'key' => '{{ webhook.payload.id }}',
+                    'window_minutes' => 60,
+                ]],
+                ['node_key' => 'entry', 'type' => 'create_entry', 'position_x' => 520, 'position_y' => 0, 'config' => [
+                    'collection' => 'orders',
+                    'data' => ['title' => 'Order {{ webhook.payload.id }}'],
+                ]],
+            ],
+            'edges' => [
+                ['from_node_key' => 'trigger', 'to_node_key' => 'dedupe'],
+                ['from_node_key' => 'dedupe', 'to_node_key' => 'entry'],
+            ],
+        ];
+    }
+
+    protected function aiTriageInquiry(): array
+    {
+        return [
+            'handle' => 'ai_triage_inquiry',
+            'name' => 'AI Triage of Inquiries',
+            'description' => 'Summarise an inbound form inquiry with AI and email the summary to the team.',
+            'requires' => [],
+            'nodes' => [
+                ['node_key' => 'trigger', 'type' => 'form_submitted', 'position_x' => 0, 'position_y' => 0, 'config' => [
+                    'form_handle' => 'contact',
+                ]],
+                ['node_key' => 'ai', 'type' => 'ai_generate', 'position_x' => 280, 'position_y' => 0, 'config' => [
+                    'system' => 'You are a concise assistant that triages customer inquiries.',
+                    'prompt' => "Summarise this inquiry in one sentence and suggest a priority (low/medium/high):\n\n{{ form.message }}",
+                    'store_as' => 'summary',
+                ]],
+                ['node_key' => 'email', 'type' => 'send_email', 'position_x' => 560, 'position_y' => 0, 'config' => [
+                    'to' => 'team@example.com',
+                    'subject' => 'New inquiry from {{ form.email }}',
+                    'body' => "AI summary:\n\n{{ vars.summary }}\n\n---\nOriginal:\n{{ form.message }}",
+                ]],
+            ],
+            'edges' => [
+                ['from_node_key' => 'trigger', 'to_node_key' => 'ai'],
+                ['from_node_key' => 'ai', 'to_node_key' => 'email'],
             ],
         ];
     }

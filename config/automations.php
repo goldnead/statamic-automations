@@ -199,6 +199,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Secrets
+    |--------------------------------------------------------------------------
+    |
+    | Named credentials that automations reference as {{ secret.<name> }}
+    | instead of embedding the value in a node config. Pull every value from
+    | the environment — never commit a real secret to this file.
+    |
+    */
+
+    'secrets' => [
+        // 'stripe_key' => env('STRIPE_KEY'),
+        // 'slack_webhook' => env('SLACK_WEBHOOK_URL'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Optional Integrations
     |--------------------------------------------------------------------------
     */

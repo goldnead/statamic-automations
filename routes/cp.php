@@ -88,6 +88,7 @@ Route::prefix('automations')
             Route::post('automations/{automation}/duplicate', [AutomationsController::class, 'duplicate'])->name('automations.duplicate');
             Route::post('automations/{automation}/validate', [AutomationsController::class, 'validateAutomation'])->name('automations.validate');
             Route::post('automations/{automation}/test', [AutomationsController::class, 'test'])->name('automations.test');
+            Route::post('automations/{automation}/test-node', [AutomationsController::class, 'testNode'])->name('automations.test-node');
             Route::post('automations/{automation}/enable', [AutomationsController::class, 'enable'])->name('automations.enable');
             Route::post('automations/{automation}/disable', [AutomationsController::class, 'disable'])->name('automations.disable');
 

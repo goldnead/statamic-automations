@@ -255,6 +255,39 @@ class AutomationsController extends Controller
     }
 
     /**
+     * Execute a single node in isolation against a supplied (or sample)
+     * context, in test mode, without persisting a run. Powers the
+     * builder's "test this node" affordance.
+     */
+    public function testNode(
+        Request $request,
+        Automation $automation,
+        \Goldnead\StatamicAutomations\Engine\NodeExecutor $executor,
+    ): JsonResponse {
+        $this->authorizeAction('run automation tests');
+
+        $nodeKey = (string) $request->input('node_key');
+        $node = $automation->nodes()->where('node_key', $nodeKey)->first();
+
+        if ($node === null) {
+            return response()->json(['ok' => false, 'message' => "Node '{$nodeKey}' not found."], 404);
+        }
+
+        $context = AutomationContext::make((array) $request->input('context', []), testMode: true);
+        $result = $executor->execute($node, $context);
+
+        return response()->json([
+            'ok' => ! $result->isFailed(),
+            'node_key' => $nodeKey,
+            'node_type' => $node->type,
+            'status' => $result->status,
+            'output' => $result->output,
+            'output_handle' => $result->outputHandle,
+            'error_message' => $result->error,
+        ]);
+    }
+
+    /**
      * Replace an automation's nodes and edges atomically.
      *
      * @param  array<int, array<string, mixed>>  $nodes
