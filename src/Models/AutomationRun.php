@@ -22,6 +22,7 @@ class AutomationRun extends Model
     protected $fillable = [
         'uuid',
         'automation_id',
+        'automation_uuid',
         'trigger_node_key',
         'trigger_type',
         'status',
@@ -53,6 +54,24 @@ class AutomationRun extends Model
     public function automation(): BelongsTo
     {
         return $this->belongsTo(Automation::class);
+    }
+
+    /**
+     * Resolve the run's automation through the active storage driver.
+     *
+     * In database mode this is the related row; in flat-file mode it loads
+     * the definition by uuid from the repository (the Eloquent relation is
+     * null there). Returns null if the definition no longer exists.
+     */
+    public function resolveAutomation(): ?Automation
+    {
+        $repository = app(\Goldnead\StatamicAutomations\Contracts\AutomationRepository::class);
+
+        if ($this->automation_uuid && ($found = $repository->find($this->automation_uuid))) {
+            return $found;
+        }
+
+        return $this->automation_id ? $repository->find($this->automation_id) : null;
     }
 
     public function nodeRuns(): HasMany

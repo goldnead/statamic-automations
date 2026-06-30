@@ -2,8 +2,10 @@
 
 namespace Goldnead\StatamicAutomations\Http\Controllers\Pages;
 
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Http\Controllers\Controller;
 use Goldnead\StatamicAutomations\Models\Automation;
+use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -22,19 +24,24 @@ class AutomationsPageController extends Controller
     {
         $this->authorizeAction('view automations');
 
-        $rows = Automation::query()
-            ->withCount('runs')
-            ->latest('updated_at')
-            ->get()
+        // Run counts keyed by automation uuid (set on every run in both
+        // storage modes), so the list works for database and flat-file alike.
+        $runCounts = AutomationRun::query()
+            ->selectRaw('automation_uuid, count(*) as c')
+            ->groupBy('automation_uuid')
+            ->pluck('c', 'automation_uuid');
+
+        $rows = app(AutomationRepository::class)->all()
+            ->sortByDesc(fn (Automation $a) => optional($a->updated_at)->timestamp ?? optional($a->last_run_at)->timestamp ?? 0)
             ->map(fn (Automation $a) => [
                 'id' => $a->id,
                 'name' => $a->name,
                 'handle' => $a->handle,
                 'enabled' => (bool) $a->enabled,
-                'runs_count' => (int) ($a->runs_count ?? 0),
+                'runs_count' => (int) ($runCounts[$a->uuid] ?? 0),
                 'last_run_at' => optional($a->last_run_at)->toIso8601String(),
                 'updated_at' => optional($a->updated_at)->toIso8601String(),
-                'edit_url' => cp_route('statamic-automations.automations.edit', $a),
+                'edit_url' => cp_route('statamic-automations.automations.edit', $a->id),
                 'can_edit' => $this->userCan('edit automations'),
                 'can_delete' => $this->userCan('delete automations'),
                 'can_enable' => $this->userCan('enable automations'),
@@ -75,7 +82,7 @@ class AutomationsPageController extends Controller
     {
         $this->authorizeAction('edit automations');
 
-        $automation->load(['nodes', 'edges']);
+        $automation->loadMissing(['nodes', 'edges']);
 
         return Inertia::render('statamic-automations::Automations/Edit', [
             'mode' => 'edit',

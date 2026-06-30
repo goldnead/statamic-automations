@@ -44,17 +44,26 @@ class TokenResolver
      */
     public function resolveString(string $value, AutomationContext $context): mixed
     {
-        // Single-token shortcut → preserve structured values.
-        if (preg_match('/^\s*\{\{\s*([\w\.\-]+)\s*\}\}\s*$/', $value, $match)) {
-            $resolved = $context->get($match[1]);
+        $token = '([\w\.\-]+)\s*((?:\|\s*\w+(?::[^|}]*)?\s*)*)';
 
-            return $resolved;
+        // Single-token shortcut → preserve structured values when there are
+        // no filters; otherwise apply the filter chain and return the result.
+        if (preg_match('/^\s*\{\{\s*' . $token . '\}\}\s*$/', $value, $match)) {
+            $resolved = $this->resolveToken($match[1], $context);
+            $filters = trim($match[2]);
+
+            return $filters === '' ? $resolved : $this->applyFilters($resolved, $filters);
         }
 
         return preg_replace_callback(
-            '/\{\{\s*([\w\.\-]+)\s*\}\}/',
+            '/\{\{\s*' . $token . '\}\}/',
             function ($match) use ($context) {
-                $resolved = $context->get($match[1]);
+                $resolved = $this->resolveToken($match[1], $context);
+                $filters = trim($match[2]);
+
+                if ($filters !== '') {
+                    $resolved = $this->applyFilters($resolved, $filters);
+                }
 
                 if ($resolved === null) {
                     return '';
@@ -68,6 +77,68 @@ class TokenResolver
             },
             $value,
         );
+    }
+
+    /**
+     * Resolve a single token name to a value. Tokens beginning with
+     * "secret." are pulled from the SecretStore so credentials never need
+     * to live inside a node's stored config; everything else reads from the
+     * run context via dot notation.
+     */
+    protected function resolveToken(string $name, AutomationContext $context): mixed
+    {
+        if (str_starts_with($name, 'secret.')) {
+            return app(\Goldnead\StatamicAutomations\Support\SecretStore::class)
+                ->get(substr($name, strlen('secret.')));
+        }
+
+        return $context->get($name);
+    }
+
+    /**
+     * Apply a pipe-separated filter chain to a value, e.g.
+     * "| lower | date:Y-m-d | default:N/A".
+     */
+    public function applyFilters(mixed $value, string $chain): mixed
+    {
+        $filters = array_filter(array_map('trim', explode('|', $chain)));
+
+        foreach ($filters as $filter) {
+            [$name, $arg] = array_pad(explode(':', $filter, 2), 2, null);
+            $value = $this->applyFilter(trim($name), $value, $arg !== null ? trim($arg) : null);
+        }
+
+        return $value;
+    }
+
+    protected function applyFilter(string $name, mixed $value, ?string $arg): mixed
+    {
+        return match ($name) {
+            'lower' => is_scalar($value) ? mb_strtolower((string) $value) : $value,
+            'upper' => is_scalar($value) ? mb_strtoupper((string) $value) : $value,
+            'ucfirst' => is_scalar($value) ? ucfirst((string) $value) : $value,
+            'title' => is_scalar($value) ? ucwords((string) $value) : $value,
+            'trim' => is_scalar($value) ? trim((string) $value) : $value,
+            'slug' => is_scalar($value) ? \Illuminate\Support\Str::slug((string) $value) : $value,
+            'length' => is_array($value) ? count($value) : mb_strlen((string) $value),
+            'json' => json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'default' => ($value === null || $value === '') ? $arg : $value,
+            'date' => $this->formatDate($value, $arg ?: 'Y-m-d'),
+            default => $value,
+        };
+    }
+
+    protected function formatDate(mixed $value, string $format): mixed
+    {
+        if ($value === null || $value === '') {
+            return $value;
+        }
+
+        try {
+            return \Illuminate\Support\Carbon::parse($value)->format($format);
+        } catch (\Throwable) {
+            return $value;
+        }
     }
 
     /**

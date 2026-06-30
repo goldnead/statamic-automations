@@ -99,6 +99,18 @@ class ServiceProvider extends AddonServiceProvider
         $this->app->singleton(NodeExecutor::class);
         $this->app->singleton(WorkflowRunner::class);
 
+        // Storage driver for automation definitions (database | flat_file).
+        $this->app->singleton(
+            \Goldnead\StatamicAutomations\Contracts\AutomationRepository::class,
+            function ($app) {
+                $driver = (string) config('automations.storage.driver', 'database');
+
+                return $driver === 'flat_file'
+                    ? $app->make(\Goldnead\StatamicAutomations\Repositories\FlatFileAutomationRepository::class)
+                    : $app->make(\Goldnead\StatamicAutomations\Repositories\DatabaseAutomationRepository::class);
+            },
+        );
+
         // Licensing.
         $this->app->singleton(LicenseManager::class);
 
@@ -124,6 +136,23 @@ class ServiceProvider extends AddonServiceProvider
     public function bootAddon(): void
     {
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+
+        // Resolve the {automation} route parameter through the active storage
+        // driver so flat-file definitions (which have no DB row) bind too.
+        \Illuminate\Support\Facades\Route::bind('automation', function ($value) {
+            return $this->app
+                ->make(\Goldnead\StatamicAutomations\Contracts\AutomationRepository::class)
+                ->find($value) ?? abort(404);
+        });
+
+        // Translations: PHP keys (backend) under the "statamic-automations"
+        // namespace, plus JSON strings consumed by the Vue CP via __().
+        $this->loadTranslationsFrom(__DIR__ . '/../resources/lang', 'statamic-automations');
+        $this->loadJsonTranslationsFrom(__DIR__ . '/../resources/lang');
+
+        $this->publishes([
+            __DIR__ . '/../resources/lang' => $this->app->langPath('vendor/statamic-automations'),
+        ], 'statamic-automations-translations');
 
         // CP routes are registered via the $routes property above, which mounts
         // them under Statamic's Control Panel route group automatically.
@@ -158,8 +187,14 @@ class ServiceProvider extends AddonServiceProvider
             $this->commands([
                 SyncAutomations::class,
                 PruneRuns::class,
+                \Goldnead\StatamicAutomations\Console\Commands\RunScheduledAutomations::class,
             ]);
         }
+
+        // Run due scheduled automations every minute via Laravel's scheduler.
+        $this->callAfterResolving(\Illuminate\Console\Scheduling\Schedule::class, function ($schedule) {
+            $schedule->command('automations:run-scheduled')->everyMinute()->withoutOverlapping();
+        });
     }
 
     /**
@@ -173,19 +208,34 @@ class ServiceProvider extends AddonServiceProvider
             'manual' => ManualTrigger::class,
             'form_submitted' => FormSubmittedTrigger::class,
             'entry_published' => EntryPublishedTrigger::class,
+            'entry_saved' => \Goldnead\StatamicAutomations\Nodes\Triggers\EntrySavedTrigger::class,
+            'entry_deleted' => \Goldnead\StatamicAutomations\Nodes\Triggers\EntryDeletedTrigger::class,
+            'user_registered' => \Goldnead\StatamicAutomations\Nodes\Triggers\UserRegisteredTrigger::class,
+            'scheduled' => \Goldnead\StatamicAutomations\Nodes\Triggers\ScheduledTrigger::class,
         ];
 
         $logic = [
             'filter' => FilterNode::class,
             'branch' => BranchNode::class,
+            'switch' => \Goldnead\StatamicAutomations\Nodes\Logic\SwitchNode::class,
             'stop' => StopNode::class,
             'delay' => DelayNode::class,
+            'wait_until' => \Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilNode::class,
+            'loop' => \Goldnead\StatamicAutomations\Nodes\Logic\LoopNode::class,
+            'parallel' => \Goldnead\StatamicAutomations\Nodes\Logic\ParallelNode::class,
+            'throttle' => \Goldnead\StatamicAutomations\Nodes\Logic\ThrottleNode::class,
+            'set_variable' => \Goldnead\StatamicAutomations\Nodes\Actions\SetVariableAction::class,
+            'call_automation' => \Goldnead\StatamicAutomations\Nodes\Actions\CallAutomationAction::class,
         ];
 
         $actions = [
             'send_email' => SendEmailAction::class,
             'send_webhook' => SimpleWebhookAction::class,
             'add_log_entry' => AddLogEntryAction::class,
+            'create_entry' => \Goldnead\StatamicAutomations\Nodes\Actions\CreateEntryAction::class,
+            'update_entry' => \Goldnead\StatamicAutomations\Nodes\Actions\UpdateEntryAction::class,
+            'create_user' => \Goldnead\StatamicAutomations\Nodes\Actions\CreateUserAction::class,
+            'ai_generate' => \Goldnead\StatamicAutomations\Nodes\Actions\AiGenerateAction::class,
         ];
 
         $automations = $this->app->make('automations');
@@ -227,6 +277,10 @@ class ServiceProvider extends AddonServiceProvider
         if ($detector->hasWebhookManager()) {
             $automations->registerBuiltIn(WebhookManagerSendAction::handle());
             $automations->action(WebhookManagerSendAction::handle(), WebhookManagerSendAction::class);
+
+            $webhookReceived = \Goldnead\StatamicAutomations\Nodes\Triggers\WebhookReceivedTrigger::class;
+            $automations->registerBuiltIn($webhookReceived::handle());
+            $automations->trigger($webhookReceived::handle(), $webhookReceived);
         }
 
         if ($detector->hasLeadHub()) {
@@ -285,6 +339,34 @@ class ServiceProvider extends AddonServiceProvider
                 Event::listen($event, $listener);
             }
         }
+
+        // Generic, registry-driven triggers — one closure per Statamic event
+        // mapped to a trigger handle. The TriggerDispatcher finds matching
+        // enabled automations, checks matches() and dispatches the run.
+        $dispatched = [
+            'Statamic\\Events\\EntrySaved' => 'entry_saved',
+            'Statamic\\Events\\EntryDeleted' => 'entry_deleted',
+            'Statamic\\Events\\UserRegistered' => 'user_registered',
+        ];
+
+        foreach ($dispatched as $event => $triggerHandle) {
+            if (class_exists($event)) {
+                Event::listen($event, function ($e) use ($triggerHandle) {
+                    $this->app->make(\Goldnead\StatamicAutomations\Engine\TriggerDispatcher::class)
+                        ->dispatch($triggerHandle, $e);
+                });
+            }
+        }
+
+        // Webhook Manager inbound bridge — listen to the configured inbound
+        // event class and fan it into the webhook_received trigger.
+        $inboundEvent = config('automations.integrations.webhook_manager.inbound_event');
+        if (is_string($inboundEvent) && $inboundEvent !== '' && class_exists($inboundEvent)) {
+            Event::listen($inboundEvent, function ($e) {
+                $this->app->make(\Goldnead\StatamicAutomations\Engine\TriggerDispatcher::class)
+                    ->dispatch('webhook_received', $e);
+            });
+        }
     }
 
     /**
@@ -325,8 +407,10 @@ class ServiceProvider extends AddonServiceProvider
                 ->icon('hammer')
                 ->can('view automations')
                 ->children([
+                    $nav->item(__('Dashboard'))->route('statamic-automations.dashboard'),
                     $nav->item(__('Automations'))->route('statamic-automations.automations.index'),
                     $nav->item(__('Runs'))->route('statamic-automations.runs.index'),
+                    $nav->item(__('Audit log'))->route('statamic-automations.audit'),
                     $nav->item(__('Templates'))->route('statamic-automations.templates.index'),
                     $nav->item(__('Import'))->route('statamic-automations.import'),
                     $nav->item(__('Settings'))->route('statamic-automations.settings'),

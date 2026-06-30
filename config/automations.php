@@ -19,6 +19,71 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Storage Driver (definitions)
+    |--------------------------------------------------------------------------
+    |
+    | Where automation *definitions* (the graph: nodes + edges) live:
+    |
+    |   - "database"  — Eloquent rows (default). Best for dynamic, CP-driven
+    |                   editing on a single environment.
+    |   - "flat_file" — one YAML file per automation under `flat_file.path`.
+    |                   Best for git-tracked, deploy-as-code workflows.
+    |
+    | Runtime data (runs, node runs, scheduled jobs, audit log) always lives
+    | in the database regardless of this setting. Versioning uses Statamic
+    | Revisions (flat files) in both modes.
+    |
+    */
+
+    'storage' => [
+        'driver' => env('STATAMIC_AUTOMATIONS_STORAGE', 'database'), // database | flat_file
+        'flat_file' => [
+            'path' => env('STATAMIC_AUTOMATIONS_DEFINITIONS_PATH', null), // defaults to resources/automations
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Sub-automations
+    |--------------------------------------------------------------------------
+    | Maximum nesting depth for the "Call Automation" action, guarding
+    | against accidental infinite recursion between automations.
+    */
+
+    'max_call_depth' => env('STATAMIC_AUTOMATIONS_MAX_CALL_DEPTH', 3),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Failure Alerts
+    |--------------------------------------------------------------------------
+    | Notify someone when a run fails. Channels: "log" and/or "mail".
+    | Alerts are throttled per automation by throttle_minutes.
+    */
+
+    'alerts' => [
+        'enabled' => true,
+        'channels' => ['log'],
+        'mail_to' => env('STATAMIC_AUTOMATIONS_ALERT_MAIL_TO', null),
+        'throttle_minutes' => 15,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Versioning
+    |--------------------------------------------------------------------------
+    | Every save snapshots the automation graph so changes can be rolled
+    | back. Snapshots are stored as Statamic Revisions (flat-file YAML under
+    | the revisions store), so automation history sits alongside content
+    | revisions. `keep` caps how many revisions are retained per automation.
+    */
+
+    'versioning' => [
+        'enabled' => true,
+        'keep' => 25,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Run Storage
     |--------------------------------------------------------------------------
     */
@@ -53,6 +118,28 @@ return [
         'send_real_emails' => false,
         'persist_leadhub_changes' => false,
         'persist_statamic_changes' => false,
+        'call_real_ai' => false,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | AI
+    |--------------------------------------------------------------------------
+    |
+    | Credentials and defaults for the "Generate with AI" action, which calls
+    | the Anthropic Claude Messages API. Set the model id to whichever Claude
+    | model your plan grants you. Never hard-code the API key in an automation
+    | — keep it here (or in the secrets store) and reference it from config.
+    |
+    */
+
+    'ai' => [
+        'api_key' => env('ANTHROPIC_API_KEY', ''),
+        'model' => env('STATAMIC_AUTOMATIONS_AI_MODEL', 'claude-sonnet-4-5'),
+        'base_url' => env('ANTHROPIC_BASE_URL', 'https://api.anthropic.com'),
+        'version' => '2023-06-01',
+        'max_tokens' => 1024,
+        'timeout' => 30,
     ],
 
     /*
@@ -67,6 +154,7 @@ return [
         'delay_nodes' => true,
         'custom_actions' => true,
         'custom_actions_requires_pro' => true,
+        'ai_action_requires_pro' => true,
         'custom_triggers' => true,
         'templates' => true,
         'export_import' => true,
@@ -138,6 +226,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Secrets
+    |--------------------------------------------------------------------------
+    |
+    | Named credentials that automations reference as {{ secret.<name> }}
+    | instead of embedding the value in a node config. Pull every value from
+    | the environment — never commit a real secret to this file.
+    |
+    */
+
+    'secrets' => [
+        // 'stripe_key' => env('STRIPE_KEY'),
+        // 'slack_webhook' => env('SLACK_WEBHOOK_URL'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Optional Integrations
     |--------------------------------------------------------------------------
     */
@@ -154,6 +258,11 @@ return [
             'facade' => [
                 'Goldnead\\WebhookManager\\Facades\\WebhookManager',
             ],
+            // Inbound bridge: the event Webhook Manager fires when it receives
+            // a validated inbound request. When this class exists, the
+            // "Webhook Received" trigger listens to it. Adjust to match the
+            // Webhook Manager version you run.
+            'inbound_event' => 'Goldnead\\WebhookManager\\Events\\WebhookReceived',
         ],
         'leadhub' => [
             'detect' => [
@@ -179,10 +288,14 @@ return [
         'branch' => true,
         'stop' => true,
         'delay' => true,
+        'loop' => true,
+        'parallel' => true,
+        'throttle' => true,
         // Actions
         'send_email' => true,
         'send_webhook' => true,
         'add_log_entry' => true,
+        'ai_generate' => true,
     ],
 
 ];

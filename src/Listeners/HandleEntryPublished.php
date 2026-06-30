@@ -2,9 +2,9 @@
 
 namespace Goldnead\StatamicAutomations\Listeners;
 
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
-use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
 
 class HandleEntryPublished
@@ -12,6 +12,7 @@ class HandleEntryPublished
     public function __construct(
         protected TriggerRegistry $triggers,
         protected WorkflowRunner $runner,
+        protected AutomationRepository $repository,
     ) {
     }
 
@@ -22,13 +23,8 @@ class HandleEntryPublished
             return;
         }
 
-        $automations = Automation::query()
-            ->where('enabled', true)
-            ->whereHas('nodes', function ($q) {
-                $q->where('type', 'entry_published');
-            })
-            ->with('nodes')
-            ->get();
+        $automations = $this->repository->enabled()
+            ->filter(fn ($automation) => $automation->nodes->contains(fn ($n) => $n->type === 'entry_published'));
 
         foreach ($automations as $automation) {
             $triggerNode = $automation->nodes->first(fn ($n) => $n->type === 'entry_published');

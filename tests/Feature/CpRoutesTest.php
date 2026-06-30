@@ -31,6 +31,14 @@ function inertiaComponent($response): ?string
     return json_decode($response->getContent(), true)['component'] ?? null;
 }
 
+it('renders the dashboard', function (): void {
+    $response = $this->withHeaders(['X-Inertia' => 'true'])
+        ->get(cp_route('statamic-automations.dashboard'));
+
+    $response->assertStatus(200);
+    expect(inertiaComponent($response))->toBe('statamic-automations::Dashboard');
+});
+
 it('renders the automations index', function (): void {
     $response = $this->withHeaders(['X-Inertia' => 'true'])
         ->get(cp_route('statamic-automations.automations.index'));
@@ -105,6 +113,14 @@ it('renders the settings page', function (): void {
 
     $response->assertStatus(200);
     expect(inertiaComponent($response))->toBe('statamic-automations::Settings/Show');
+});
+
+it('renders the audit log page', function (): void {
+    $response = $this->withHeaders(['X-Inertia' => 'true'])
+        ->get(cp_route('statamic-automations.audit'));
+
+    $response->assertStatus(200);
+    expect(inertiaComponent($response))->toBe('statamic-automations::Audit/Index');
 });
 
 it('blocks users without the view-automations permission', function (): void {

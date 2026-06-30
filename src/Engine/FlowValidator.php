@@ -26,8 +26,10 @@ class FlowValidator
     {
         $issues = [];
 
-        $nodes = $automation->nodes()->get();
-        $edges = $automation->edges()->get();
+        // Use loaded relations when present so flat-file (non-persisted)
+        // automations validate the same as database-backed ones.
+        $nodes = $automation->relationLoaded('nodes') ? $automation->nodes : $automation->nodes()->get();
+        $edges = $automation->relationLoaded('edges') ? $automation->edges : $automation->edges()->get();
 
         // 1) Trigger count and trigger isolation.
         $triggers = $nodes->filter(fn ($n) => ($this->nodes->kind($n->type) === 'trigger'));

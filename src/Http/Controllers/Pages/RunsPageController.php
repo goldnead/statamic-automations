@@ -30,10 +30,15 @@ class RunsPageController extends Controller
             $query->where('is_test', $request->boolean('is_test'));
         }
 
+        // Resolve names once (uuid → name) so the listing works for both
+        // database and flat-file definitions without N lookups.
+        $names = app(\Goldnead\StatamicAutomations\Contracts\AutomationRepository::class)
+            ->all()->keyBy('uuid')->map->name;
+
         $runs = $query->limit(200)->get()->map(fn (AutomationRun $r) => [
             'id' => $r->id,
             'automation_id' => $r->automation_id,
-            'automation_name' => optional($r->automation)->name,
+            'automation_name' => $names[$r->automation_uuid] ?? optional($r->automation)->name,
             'status' => $r->status,
             'trigger_type' => $r->trigger_type,
             'is_test' => (bool) $r->is_test,
@@ -77,7 +82,8 @@ class RunsPageController extends Controller
     {
         $this->authorizeAction('view automation runs');
 
-        $run->load(['automation:id,name,handle', 'nodeRuns']);
+        $run->load(['nodeRuns']);
+        $automation = $run->resolveAutomation();
 
         return Inertia::render('statamic-automations::Runs/Show', [
             'title' => __('Run #:id', ['id' => $run->id]),
@@ -93,11 +99,11 @@ class RunsPageController extends Controller
                 'finished_at' => optional($run->finished_at)->toIso8601String(),
                 'error_message' => $run->error_message,
                 'context' => $run->context,
-                'automation' => $run->automation ? [
-                    'id' => $run->automation->id,
-                    'name' => $run->automation->name,
-                    'handle' => $run->automation->handle,
-                    'edit_url' => cp_route('statamic-automations.automations.edit', $run->automation),
+                'automation' => $automation ? [
+                    'id' => $automation->id,
+                    'name' => $automation->name,
+                    'handle' => $automation->handle,
+                    'edit_url' => cp_route('statamic-automations.automations.edit', $automation->id),
                 ] : null,
                 'node_runs' => $run->nodeRuns->map(fn ($n) => [
                     'id' => $n->id,

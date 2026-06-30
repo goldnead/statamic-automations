@@ -12,6 +12,7 @@ class AutomationRunResource extends JsonResource
             'id' => $this->id,
             'uuid' => $this->uuid,
             'automation_id' => $this->automation_id,
+            'automation_uuid' => $this->automation_uuid,
             'automation' => $this->whenLoaded('automation', fn () => [
                 'id' => $this->automation->id,
                 'name' => $this->automation->name,

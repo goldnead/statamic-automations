@@ -50,6 +50,8 @@ class TemplateRegistryTest extends TestCase
                     || str_contains($node['type'], 'inbound')
                     || str_contains($node['type'], 'outbound')
                     || str_contains($node['type'], 'manual')
+                    || str_contains($node['type'], 'scheduled')
+                    || str_contains($node['type'], 'received')
                     || str_contains($node['type'], 'lead_')) {
                     $hasTrigger = true;
                     break;

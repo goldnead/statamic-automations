@@ -47,6 +47,9 @@ Route::prefix('automations')
         Route::get('/', [AutomationsPageController::class, 'index'])
             ->name('automations.index');
 
+        Route::get('dashboard', [\Goldnead\StatamicAutomations\Http\Controllers\Pages\DashboardPageController::class, 'index'])
+            ->name('dashboard');
+
         Route::get('automations/create', [AutomationsPageController::class, 'create'])
             ->name('automations.create');
 
@@ -68,6 +71,9 @@ Route::prefix('automations')
         Route::get('settings', [SettingsPageController::class, 'index'])
             ->name('settings');
 
+        Route::get('audit', [\Goldnead\StatamicAutomations\Http\Controllers\Pages\AuditPageController::class, 'index'])
+            ->name('audit');
+
         // ================================================================
         // JSON API (consumed by Vue Flow canvas + Listing AJAX)
         // ================================================================
@@ -85,6 +91,7 @@ Route::prefix('automations')
             Route::post('automations/{automation}/duplicate', [AutomationsController::class, 'duplicate'])->name('automations.duplicate');
             Route::post('automations/{automation}/validate', [AutomationsController::class, 'validateAutomation'])->name('automations.validate');
             Route::post('automations/{automation}/test', [AutomationsController::class, 'test'])->name('automations.test');
+            Route::post('automations/{automation}/test-node', [AutomationsController::class, 'testNode'])->name('automations.test-node');
             Route::post('automations/{automation}/enable', [AutomationsController::class, 'enable'])->name('automations.enable');
             Route::post('automations/{automation}/disable', [AutomationsController::class, 'disable'])->name('automations.disable');
 
@@ -101,6 +108,13 @@ Route::prefix('automations')
             Route::get('options/{source}', [NodesController::class, 'options'])
                 ->where('source', '[A-Za-z0-9_.-]+')
                 ->name('options');
+
+            // Versions + audit
+            Route::get('automations/{automation}/versions', [\Goldnead\StatamicAutomations\Http\Controllers\VersionsController::class, 'index'])->name('automations.versions');
+            Route::post('automations/{automation}/versions/{timestamp}/revert', [\Goldnead\StatamicAutomations\Http\Controllers\VersionsController::class, 'revert'])
+                ->where('timestamp', '[0-9]+')
+                ->name('automations.versions.revert');
+            Route::get('audit', [\Goldnead\StatamicAutomations\Http\Controllers\AuditController::class, 'index'])->name('audit.list');
 
             // Runs
             Route::get('runs', [RunsController::class, 'index'])->name('runs.list');
