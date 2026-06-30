@@ -89,7 +89,7 @@ class ParallelNode implements AutomationNode
         $failFast = (bool) ($config['fail_fast'] ?? false);
 
         foreach ($branches as $name => $ref) {
-            $target = Automation::query()->where('handle', $ref)->orWhere('id', $ref)->first();
+            $target = app(\Goldnead\StatamicAutomations\Contracts\AutomationRepository::class)->findByRef((string) $ref);
             if ($target === null) {
                 if ($failFast) {
                     return ActionResult::failed("Branch '{$name}': automation '{$ref}' not found.");

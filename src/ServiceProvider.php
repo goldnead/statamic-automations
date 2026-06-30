@@ -99,6 +99,18 @@ class ServiceProvider extends AddonServiceProvider
         $this->app->singleton(NodeExecutor::class);
         $this->app->singleton(WorkflowRunner::class);
 
+        // Storage driver for automation definitions (database | flat_file).
+        $this->app->singleton(
+            \Goldnead\StatamicAutomations\Contracts\AutomationRepository::class,
+            function ($app) {
+                $driver = (string) config('automations.storage.driver', 'database');
+
+                return $driver === 'flat_file'
+                    ? $app->make(\Goldnead\StatamicAutomations\Repositories\FlatFileAutomationRepository::class)
+                    : $app->make(\Goldnead\StatamicAutomations\Repositories\DatabaseAutomationRepository::class);
+            },
+        );
+
         // Licensing.
         $this->app->singleton(LicenseManager::class);
 
@@ -124,6 +136,14 @@ class ServiceProvider extends AddonServiceProvider
     public function bootAddon(): void
     {
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+
+        // Resolve the {automation} route parameter through the active storage
+        // driver so flat-file definitions (which have no DB row) bind too.
+        \Illuminate\Support\Facades\Route::bind('automation', function ($value) {
+            return $this->app
+                ->make(\Goldnead\StatamicAutomations\Contracts\AutomationRepository::class)
+                ->find($value) ?? abort(404);
+        });
 
         // Translations: PHP keys (backend) under the "statamic-automations"
         // namespace, plus JSON strings consumed by the Vue CP via __().

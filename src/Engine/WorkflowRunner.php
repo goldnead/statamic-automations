@@ -25,6 +25,7 @@ class WorkflowRunner
         protected NodeRegistry $registry,
         protected RunLogger $logger,
         protected FlowValidator $validator,
+        protected \Goldnead\StatamicAutomations\Contracts\AutomationRepository $repository,
     ) {
     }
 
@@ -37,7 +38,8 @@ class WorkflowRunner
         ?AutomationNode $triggerNode = null,
     ): AutomationRun {
         return AutomationRun::create([
-            'automation_id' => $automation->id,
+            'automation_id' => $automation->exists ? $automation->id : null,
+            'automation_uuid' => $automation->uuid,
             'trigger_node_key' => $triggerNode?->node_key,
             'trigger_type' => $triggerNode?->type,
             'status' => AutomationRun::STATUS_QUEUED,
@@ -55,7 +57,13 @@ class WorkflowRunner
      */
     public function execute(AutomationRun $run, AutomationContext $context): AutomationRun
     {
-        $automation = $run->automation;
+        $automation = $this->resolveAutomation($run);
+
+        if ($automation === null) {
+            $this->logger->finishRun($run, AutomationRun::STATUS_FAILED, 'Automation definition not found.');
+
+            return $run->fresh();
+        }
 
         // Bail out if the automation cannot be activated.
         $issues = $this->validator->validate($automation);
@@ -72,7 +80,7 @@ class WorkflowRunner
 
         $this->logger->startRun($run);
 
-        $startNode = $automation->nodes()->where('node_key', $run->trigger_node_key)->first();
+        $startNode = $automation->nodes->firstWhere('node_key', $run->trigger_node_key);
 
         // If the run's recorded trigger_node_key doesn't actually point to
         // a trigger (e.g. the caller passed the wrong node), fall back to
@@ -113,7 +121,7 @@ class WorkflowRunner
 
         $this->logger->finishRun($run, $finalStatus);
 
-        $automation->forceFill(['last_run_at' => now()])->save();
+        $this->touchLastRun($automation);
 
         return $run->fresh();
     }
@@ -133,8 +141,15 @@ class WorkflowRunner
         AutomationContext $context,
         string $nodeKey,
     ): AutomationRun {
-        $automation = $run->automation;
-        $startNode = $automation->nodes()->where('node_key', $nodeKey)->first();
+        $automation = $this->resolveAutomation($run);
+
+        if ($automation === null) {
+            $this->logger->finishRun($run, AutomationRun::STATUS_FAILED, 'Automation definition not found.');
+
+            return $run->fresh();
+        }
+
+        $startNode = $automation->nodes->firstWhere('node_key', $nodeKey);
 
         if ($startNode === null) {
             $this->logger->finishRun(
@@ -168,7 +183,7 @@ class WorkflowRunner
 
         $this->logger->finishRun($run, $finalStatus);
 
-        $automation->forceFill(['last_run_at' => now()])->save();
+        $this->touchLastRun($automation);
 
         return $run->fresh();
     }
@@ -190,8 +205,8 @@ class WorkflowRunner
         AutomationContext $context,
         bool $executeFirst = false,
     ): string {
-        $edges = $automation->edges()->get();
-        $nodes = $automation->nodes()->get()->keyBy('node_key');
+        $edges = $automation->edges;
+        $nodes = $automation->nodes->keyBy('node_key');
 
         $current = $executeFirst
             ? $startNode
@@ -294,6 +309,40 @@ class WorkflowRunner
         }
 
         return $nodes->get($edge->to_node_key);
+    }
+
+    /**
+     * Resolve a run's automation through the storage driver, with its graph
+     * loaded. Falls back to the legacy Eloquent relation for old rows that
+     * predate the uuid reference.
+     */
+    protected function resolveAutomation(AutomationRun $run): ?Automation
+    {
+        if ($automation = $run->resolveAutomation()) {
+            return $automation;
+        }
+
+        $automation = $run->automation;
+        $automation?->loadMissing(['nodes', 'edges']);
+
+        return $automation;
+    }
+
+    /**
+     * Persist the automation's last-run timestamp through whichever store
+     * owns it (DB row vs flat file).
+     */
+    protected function touchLastRun(Automation $automation): void
+    {
+        $automation->last_run_at = now();
+
+        if ($automation->exists) {
+            $automation->save();
+
+            return;
+        }
+
+        $this->repository->save($automation);
     }
 
     protected function findTriggerNode(Automation $automation): ?AutomationNode

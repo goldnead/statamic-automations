@@ -43,8 +43,8 @@ class DashboardPageController extends Controller
         return Inertia::render('statamic-automations::Dashboard', [
             'title' => __('Automations'),
             'stats' => [
-                'automations' => Automation::count(),
-                'enabled' => Automation::where('enabled', true)->count(),
+                'automations' => app(\Goldnead\StatamicAutomations\Contracts\AutomationRepository::class)->count(),
+                'enabled' => app(\Goldnead\StatamicAutomations\Contracts\AutomationRepository::class)->enabledCount(),
                 'runs_30d' => $total,
                 'success_rate' => $total > 0 ? (int) round(($succeeded / $total) * 100) : null,
                 'failed_30d' => $failed,

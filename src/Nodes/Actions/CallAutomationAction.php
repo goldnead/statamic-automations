@@ -87,7 +87,7 @@ class CallAutomationAction implements AutomationAction
             return ActionResult::failed("Maximum sub-automation depth ({$max}) reached.");
         }
 
-        $target = Automation::query()->where('handle', $ref)->orWhere('id', $ref)->first();
+        $target = app(\Goldnead\StatamicAutomations\Contracts\AutomationRepository::class)->findByRef((string) $ref);
         if ($target === null) {
             return ActionResult::failed("Automation '{$ref}' not found.");
         }

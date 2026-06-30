@@ -11,7 +11,11 @@ return new class extends Migration
         Schema::create('automation_runs', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid')->unique();
-            $table->foreignId('automation_id')->constrained('automations')->cascadeOnDelete();
+            // Nullable + null-on-delete so runs can also reference flat-file
+            // definitions (which have no database row). `automation_uuid` is
+            // the canonical reference in flat-file mode.
+            $table->foreignId('automation_id')->nullable()->constrained('automations')->nullOnDelete();
+            $table->string('automation_uuid')->nullable()->index();
             $table->string('trigger_node_key')->nullable();
             $table->string('trigger_type')->nullable()->index();
             $table->string('status')->default('queued')->index();

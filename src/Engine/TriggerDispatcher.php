@@ -2,8 +2,8 @@
 
 namespace Goldnead\StatamicAutomations\Engine;
 
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
-use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
 
 /**
@@ -22,6 +22,7 @@ class TriggerDispatcher
     public function __construct(
         protected TriggerRegistry $triggers,
         protected WorkflowRunner $runner,
+        protected AutomationRepository $repository,
     ) {
     }
 
@@ -32,11 +33,8 @@ class TriggerDispatcher
             return;
         }
 
-        $automations = Automation::query()
-            ->where('enabled', true)
-            ->whereHas('nodes', fn ($q) => $q->where('type', $triggerHandle))
-            ->with('nodes')
-            ->get();
+        $automations = $this->repository->enabled()
+            ->filter(fn ($automation) => $automation->nodes->contains(fn ($n) => $n->type === $triggerHandle));
 
         foreach ($automations as $automation) {
             $triggerNode = $automation->nodes->first(fn ($n) => $n->type === $triggerHandle);

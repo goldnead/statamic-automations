@@ -19,6 +19,31 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Storage Driver (definitions)
+    |--------------------------------------------------------------------------
+    |
+    | Where automation *definitions* (the graph: nodes + edges) live:
+    |
+    |   - "database"  — Eloquent rows (default). Best for dynamic, CP-driven
+    |                   editing on a single environment.
+    |   - "flat_file" — one YAML file per automation under `flat_file.path`.
+    |                   Best for git-tracked, deploy-as-code workflows.
+    |
+    | Runtime data (runs, node runs, scheduled jobs, audit log) always lives
+    | in the database regardless of this setting. Versioning uses Statamic
+    | Revisions (flat files) in both modes.
+    |
+    */
+
+    'storage' => [
+        'driver' => env('STATAMIC_AUTOMATIONS_STORAGE', 'database'), // database | flat_file
+        'flat_file' => [
+            'path' => env('STATAMIC_AUTOMATIONS_DEFINITIONS_PATH', null), // defaults to resources/automations
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Sub-automations
     |--------------------------------------------------------------------------
     | Maximum nesting depth for the "Call Automation" action, guarding

@@ -4,9 +4,9 @@ namespace Goldnead\StatamicAutomations\Console\Commands;
 
 use Cron\CronExpression;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
-use Goldnead\StatamicAutomations\Models\Automation;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
@@ -21,13 +21,10 @@ class RunScheduledAutomations extends Command
 
     protected $description = 'Dispatch automations whose schedule is due now.';
 
-    public function handle(WorkflowRunner $runner): int
+    public function handle(WorkflowRunner $runner, AutomationRepository $repository): int
     {
-        $automations = Automation::query()
-            ->where('enabled', true)
-            ->whereHas('nodes', fn ($q) => $q->where('type', 'scheduled'))
-            ->with('nodes')
-            ->get();
+        $automations = $repository->enabled()
+            ->filter(fn ($automation) => $automation->nodes->contains(fn ($n) => $n->type === 'scheduled'));
 
         $dispatched = 0;
 

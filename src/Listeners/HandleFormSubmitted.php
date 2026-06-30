@@ -2,9 +2,9 @@
 
 namespace Goldnead\StatamicAutomations\Listeners;
 
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
-use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
 
 class HandleFormSubmitted
@@ -12,6 +12,7 @@ class HandleFormSubmitted
     public function __construct(
         protected TriggerRegistry $triggers,
         protected WorkflowRunner $runner,
+        protected AutomationRepository $repository,
     ) {
     }
 
@@ -22,13 +23,8 @@ class HandleFormSubmitted
             return;
         }
 
-        $automations = Automation::query()
-            ->where('enabled', true)
-            ->whereHas('nodes', function ($q) {
-                $q->where('type', 'form_submitted');
-            })
-            ->with('nodes')
-            ->get();
+        $automations = $this->repository->enabled()
+            ->filter(fn ($automation) => $automation->nodes->contains(fn ($n) => $n->type === 'form_submitted'));
 
         foreach ($automations as $automation) {
             $triggerNode = $automation->nodes->first(fn ($n) => $n->type === 'form_submitted');

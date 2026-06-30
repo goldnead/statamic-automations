@@ -3,6 +3,7 @@
 namespace Goldnead\StatamicAutomations\Http\Controllers;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Engine\FlowValidator;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Http\Requests\StoreAutomationRequest;
@@ -60,26 +61,23 @@ class AutomationsController extends Controller
     {
         $data = $request->validated();
 
-        $automation = DB::transaction(function () use ($data) {
-            $automation = Automation::create([
-                'name' => $data['name'],
-                'handle' => $data['handle'] ?? Str::slug($data['name']) . '-' . Str::lower(Str::random(4)),
-                'description' => $data['description'] ?? null,
-                'enabled' => false,
-                'created_by' => optional(auth()->user())->id,
-            ]);
+        $automation = new Automation([
+            'name' => $data['name'],
+            'handle' => $data['handle'] ?? Str::slug($data['name']) . '-' . Str::lower(Str::random(4)),
+            'description' => $data['description'] ?? null,
+            'enabled' => false,
+            'created_by' => optional(auth()->user())->id,
+        ]);
 
-            $this->syncGraph($automation, $data['nodes'] ?? [], $data['edges'] ?? []);
-
-            return $automation;
-        });
+        $automation = app(AutomationRepository::class)
+            ->save($automation, $data['nodes'] ?? [], $data['edges'] ?? []);
 
         app(\Goldnead\StatamicAutomations\Engine\VersionManager::class)
-            ->snapshot($automation->fresh(['nodes', 'edges']), 'Initial version');
+            ->snapshot($automation, 'Initial version');
         app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)
             ->record('created', $automation, ['name' => $automation->name]);
 
-        return (new AutomationResource($automation->fresh(['nodes', 'edges'])))
+        return (new AutomationResource($automation))
             ->response()
             ->setStatusCode(201);
     }
@@ -89,31 +87,27 @@ class AutomationsController extends Controller
         $data = $request->validated();
 
         // Snapshot the pre-edit graph so this change can be rolled back.
-        app(\Goldnead\StatamicAutomations\Engine\VersionManager::class)
-            ->snapshot($automation->fresh(['nodes', 'edges']));
+        app(\Goldnead\StatamicAutomations\Engine\VersionManager::class)->snapshot($automation);
 
-        DB::transaction(function () use ($automation, $data) {
-            $automation->fill(array_filter([
-                'name' => $data['name'] ?? null,
-                'handle' => $data['handle'] ?? null,
-                'description' => array_key_exists('description', $data) ? $data['description'] : null,
-            ], fn ($v) => $v !== null));
-            $automation->version = (int) $automation->version + 1;
-            $automation->save();
+        $automation->fill(array_filter([
+            'name' => $data['name'] ?? null,
+            'handle' => $data['handle'] ?? null,
+            'description' => array_key_exists('description', $data) ? $data['description'] : null,
+        ], fn ($v) => $v !== null));
+        $automation->version = (int) $automation->version + 1;
 
-            if (isset($data['nodes']) || isset($data['edges'])) {
-                $this->syncGraph(
-                    $automation,
-                    $data['nodes'] ?? [],
-                    $data['edges'] ?? [],
-                );
-            }
-        });
+        $hasGraph = isset($data['nodes']) || isset($data['edges']);
+
+        $automation = app(AutomationRepository::class)->save(
+            $automation,
+            $hasGraph ? ($data['nodes'] ?? []) : null,
+            $hasGraph ? ($data['edges'] ?? []) : null,
+        );
 
         app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)
             ->record('updated', $automation, ['version' => $automation->version]);
 
-        return (new AutomationResource($automation->fresh(['nodes', 'edges'])))
+        return (new AutomationResource($automation))
             ->response()
             ->setStatusCode(200);
     }
@@ -123,9 +117,9 @@ class AutomationsController extends Controller
         $this->authorizeAction('delete automations');
 
         app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)
-            ->record('deleted', null, ['name' => $automation->name, 'handle' => $automation->handle]);
+            ->record('deleted', $automation->exists ? $automation : null, ['name' => $automation->name, 'handle' => $automation->handle]);
 
-        $automation->delete();
+        app(AutomationRepository::class)->delete($automation);
 
         return response()->json(['ok' => true]);
     }
@@ -134,42 +128,34 @@ class AutomationsController extends Controller
     {
         $this->authorizeAction('create automations');
 
-        $clone = DB::transaction(function () use ($automation) {
-            $clone = Automation::create([
-                'name' => $automation->name . ' (copy)',
-                'handle' => $automation->handle . '-copy-' . Str::lower(Str::random(4)),
-                'description' => $automation->description,
-                'enabled' => false,
-                'created_by' => optional(auth()->user())->id,
-            ]);
+        $clone = new Automation([
+            'name' => $automation->name . ' (copy)',
+            'handle' => $automation->handle . '-copy-' . Str::lower(Str::random(4)),
+            'description' => $automation->description,
+            'enabled' => false,
+            'created_by' => optional(auth()->user())->id,
+        ]);
 
-            foreach ($automation->nodes as $node) {
-                AutomationNode::create([
-                    'automation_id' => $clone->id,
-                    'node_key' => $node->node_key,
-                    'type' => $node->type,
-                    'label' => $node->label,
-                    'position_x' => $node->position_x,
-                    'position_y' => $node->position_y,
-                    'config' => $node->config,
-                    'disabled' => $node->disabled,
-                ]);
-            }
+        $nodes = $automation->nodes->map(fn ($node) => [
+            'node_key' => $node->node_key,
+            'type' => $node->type,
+            'label' => $node->label,
+            'position_x' => $node->position_x,
+            'position_y' => $node->position_y,
+            'config' => $node->config,
+            'disabled' => $node->disabled,
+        ])->all();
 
-            foreach ($automation->edges as $edge) {
-                AutomationEdge::create([
-                    'automation_id' => $clone->id,
-                    'from_node_key' => $edge->from_node_key,
-                    'from_output' => $edge->from_output,
-                    'to_node_key' => $edge->to_node_key,
-                    'to_input' => $edge->to_input,
-                ]);
-            }
+        $edges = $automation->edges->map(fn ($edge) => [
+            'from_node_key' => $edge->from_node_key,
+            'from_output' => $edge->from_output,
+            'to_node_key' => $edge->to_node_key,
+            'to_input' => $edge->to_input,
+        ])->all();
 
-            return $clone;
-        });
+        $clone = app(AutomationRepository::class)->save($clone, $nodes, $edges);
 
-        return (new AutomationResource($clone->fresh(['nodes', 'edges'])))
+        return (new AutomationResource($clone))
             ->response()
             ->setStatusCode(201);
     }
@@ -178,7 +164,7 @@ class AutomationsController extends Controller
     {
         $this->authorizeAction('view automations');
 
-        $automation->load(['nodes', 'edges']);
+        $automation->loadMissing(['nodes', 'edges']);
         $issues = $validator->validate($automation);
 
         return response()->json([
@@ -191,7 +177,7 @@ class AutomationsController extends Controller
     {
         $this->authorizeAction('enable automations');
 
-        $automation->load(['nodes', 'edges']);
+        $automation->loadMissing(['nodes', 'edges']);
         $issues = $validator->validate($automation);
         $errors = array_filter($issues, fn ($i) => ($i['level'] ?? 'error') === 'error');
 
@@ -203,7 +189,8 @@ class AutomationsController extends Controller
             ], 422);
         }
 
-        $automation->forceFill(['enabled' => true])->save();
+        $automation->enabled = true;
+        app(AutomationRepository::class)->save($automation);
 
         app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)->record('enabled', $automation);
 
@@ -214,7 +201,8 @@ class AutomationsController extends Controller
     {
         $this->authorizeAction('enable automations');
 
-        $automation->forceFill(['enabled' => false])->save();
+        $automation->enabled = false;
+        app(AutomationRepository::class)->save($automation);
 
         app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)->record('disabled', $automation);
 
@@ -225,7 +213,7 @@ class AutomationsController extends Controller
     {
         $this->authorizeAction('run automation tests');
 
-        $automation->load(['nodes', 'edges']);
+        $automation->loadMissing(['nodes', 'edges']);
         $contextData = (array) $request->input('context', []);
 
         $context = AutomationContext::make($contextData, testMode: true);

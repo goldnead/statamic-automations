@@ -67,6 +67,7 @@ class RunsController extends Controller
 
         $newRun = AutomationRun::create([
             'automation_id' => $run->automation_id,
+            'automation_uuid' => $run->automation_uuid,
             'trigger_node_key' => $run->trigger_node_key,
             'trigger_type' => $run->trigger_type,
             'status' => AutomationRun::STATUS_QUEUED,
@@ -96,6 +97,7 @@ class RunsController extends Controller
 
         $newRun = AutomationRun::create([
             'automation_id' => $run->automation_id,
+            'automation_uuid' => $run->automation_uuid,
             'trigger_node_key' => $run->trigger_node_key,
             'trigger_type' => $run->trigger_type,
             'status' => AutomationRun::STATUS_QUEUED,
