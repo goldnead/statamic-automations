@@ -1,11 +1,7 @@
 <script setup>
+import { computed } from 'vue';
 import { Head } from '@statamic/cms/inertia';
-import {
-    Header,
-    Panel,
-    Alert,
-    Badge,
-} from '@statamic/cms/ui';
+import { Header, Alert, Badge } from '@statamic/cms/ui';
 
 const props = defineProps({
     title: { type: String, required: true },
@@ -20,7 +16,6 @@ const props = defineProps({
     license: { type: Object, required: true },
 });
 
-// Human-readable label + description for the test-mode side-effect flags.
 const testModeMeta = {
     send_real_webhooks: {
         label: __('Send real webhooks'),
@@ -46,22 +41,68 @@ const integrationMeta = {
 };
 
 function humanize(key) {
-    return String(key)
-        .replace(/[_-]+/g, ' ')
-        .replace(/\b\w/g, (c) => c.toUpperCase());
+    return String(key).replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function testModeLabel(key) {
-    return testModeMeta[key]?.label ?? humanize(key);
-}
+// Build the settings as native publish-style sections of label/description rows.
+const sections = computed(() => {
+    const s = [];
 
-function testModeDescription(key) {
-    return testModeMeta[key]?.description ?? __('Controls whether this side effect runs for real during test runs.');
-}
+    s.push({
+        title: __('Queue'),
+        rows: [
+            { label: __('Queue name'), description: __('The queue automation jobs are dispatched onto.'), mono: props.queue ?? 'default' },
+            { label: __('Connection'), description: __('The queue connection used to dispatch runs.'), mono: props.queue_connection ?? __('default') },
+        ],
+    });
 
-function integrationLabel(key) {
-    return integrationMeta[key]?.label ?? humanize(key);
-}
+    s.push({
+        title: __('Runs'),
+        rows: [
+            { label: __('Retention'), description: __('How long completed runs are kept before they are pruned.'), text: `${props.runs.prune_after_days} ${__('days')}` },
+            { label: __('Failed runs kept for'), description: __('How long failed runs are retained for debugging.'), text: props.runs.keep_failed_runs_days ?? __('same as default') },
+            { label: __('Store full context'), description: __('Persist the full trigger context with each run.'), badge: { color: props.runs.store_full_context ? 'green' : 'gray', text: props.runs.store_full_context ? __('Yes') : __('No') } },
+            { label: __('Encrypt context'), description: __('Encrypt stored run context at rest.'), badge: { color: props.runs.encrypt_context ? 'green' : 'gray', text: props.runs.encrypt_context ? __('Encrypted') : __('Plaintext') } },
+        ],
+    });
+
+    s.push({
+        title: __('Test mode'),
+        rows: Object.entries(props.test_mode).map(([key, value]) => ({
+            label: testModeMeta[key]?.label ?? humanize(key),
+            description: testModeMeta[key]?.description ?? __('Controls whether this side effect runs for real during test runs.'),
+            badge: { color: value ? 'amber' : 'gray', text: value ? __('Allowed') : __('Blocked') },
+        })),
+    });
+
+    s.push({
+        title: __('Integrations'),
+        rows: Object.entries(props.integrations).map(([key, active]) => ({
+            label: integrationMeta[key]?.label ?? humanize(key),
+            description: __('Sister addon — its triggers and actions register automatically when installed.'),
+            badge: { color: active ? 'green' : 'gray', text: active ? __('Detected') : __('Not installed') },
+        })),
+    });
+
+    const licenseRows = [
+        { label: __('Mode'), description: __('How the license is verified (config or remote).'), mono: props.license.mode },
+        { label: __('Key set'), description: __('Whether a license key is configured.'), badge: { color: props.license.has_key ? 'green' : 'gray', text: props.license.has_key ? __('Yes') : __('No') } },
+        { label: __('Validation'), description: __('Current license validation status.'), badge: { color: props.license.is_valid ? 'green' : 'amber', text: props.license.is_valid ? __('Valid') : __('No active license') } },
+    ];
+    if (props.license.features && props.license.features.length) {
+        licenseRows.push({ label: __('Pro features'), description: __('Features unlocked by the active license.'), badges: props.license.features });
+    }
+    s.push({ title: __('License'), rows: licenseRows });
+
+    s.push({
+        title: __('Payload redaction'),
+        rows: [
+            { label: __('Redacted keys'), description: __('Run logs replace the values of these keys with [REDACTED] before storing.'), badges: props.redact_keys.length ? props.redact_keys : null, empty: __('None') },
+        ],
+    });
+
+    return s;
+});
 </script>
 
 <template>
@@ -75,141 +116,35 @@ function integrationLabel(key) {
             <code class="ml-1 px-1 rounded bg-gray-100 dark:bg-gray-800 text-xs">{{ config_path }}</code>
         </Alert>
 
-        <div class="space-y-6">
-            <Panel :heading="__('Queue')">
-                <div class="divide-y divide-content-border">
-                    <div class="flex items-start justify-between gap-4 px-4 py-3">
-                        <div class="min-w-0">
-                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('Queue name') }}</div>
-                            <div class="text-sm text-gray-500">{{ __('The queue automation jobs are dispatched onto.') }}</div>
-                        </div>
-                        <div class="shrink-0 text-sm"><code class="text-xs">{{ queue ?? 'default' }}</code></div>
-                    </div>
-                    <div class="flex items-start justify-between gap-4 px-4 py-3">
-                        <div class="min-w-0">
-                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('Connection') }}</div>
-                            <div class="text-sm text-gray-500">{{ __('The queue connection used to dispatch runs.') }}</div>
-                        </div>
-                        <div class="shrink-0 text-sm"><code class="text-xs">{{ queue_connection ?? __('default') }}</code></div>
-                    </div>
-                </div>
-            </Panel>
+        <div class="space-y-8">
+            <section v-for="section in sections" :key="section.title">
+                <h2 class="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2 px-1">
+                    {{ section.title }}
+                </h2>
 
-            <Panel :heading="__('Runs')">
-                <div class="divide-y divide-content-border">
-                    <div class="flex items-start justify-between gap-4 px-4 py-3">
+                <div class="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm divide-y divide-gray-200 dark:divide-gray-800">
+                    <div
+                        v-for="(row, i) in section.rows"
+                        :key="i"
+                        class="grid md:grid-cols-2 items-start gap-x-6 gap-y-1.5 px-5 py-4"
+                    >
                         <div class="min-w-0">
-                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('Retention') }}</div>
-                            <div class="text-sm text-gray-500">{{ __('How long completed runs are kept before they are pruned.') }}</div>
+                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ row.label }}</div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{{ row.description }}</div>
                         </div>
-                        <div class="shrink-0 text-sm">{{ runs.prune_after_days }} {{ __('days') }}</div>
-                    </div>
-                    <div class="flex items-start justify-between gap-4 px-4 py-3">
-                        <div class="min-w-0">
-                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('Failed runs kept for') }}</div>
-                            <div class="text-sm text-gray-500">{{ __('How long failed runs are retained for debugging.') }}</div>
-                        </div>
-                        <div class="shrink-0 text-sm">{{ runs.keep_failed_runs_days ?? __('same as default') }}</div>
-                    </div>
-                    <div class="flex items-start justify-between gap-4 px-4 py-3">
-                        <div class="min-w-0">
-                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('Store full context') }}</div>
-                            <div class="text-sm text-gray-500">{{ __('Persist the full trigger context with each run.') }}</div>
-                        </div>
-                        <div class="shrink-0">
-                            <Badge :color="runs.store_full_context ? 'green' : 'gray'" :text="runs.store_full_context ? __('Yes') : __('No')" />
-                        </div>
-                    </div>
-                    <div class="flex items-start justify-between gap-4 px-4 py-3">
-                        <div class="min-w-0">
-                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('Encrypt context') }}</div>
-                            <div class="text-sm text-gray-500">{{ __('Encrypt stored run context at rest.') }}</div>
-                        </div>
-                        <div class="shrink-0">
-                            <Badge :color="runs.encrypt_context ? 'green' : 'gray'" :text="runs.encrypt_context ? __('Encrypted') : __('Plaintext')" />
-                        </div>
-                    </div>
-                </div>
-            </Panel>
 
-            <Panel :heading="__('Test mode')">
-                <div class="divide-y divide-content-border">
-                    <div v-for="(value, key) in test_mode" :key="key" class="flex items-start justify-between gap-4 px-4 py-3">
-                        <div class="min-w-0">
-                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ testModeLabel(key) }}</div>
-                            <div class="text-sm text-gray-500">{{ testModeDescription(key) }}</div>
-                        </div>
-                        <div class="shrink-0">
-                            <Badge :color="value ? 'amber' : 'gray'" :text="value ? __('Allowed') : __('Blocked')" />
-                        </div>
-                    </div>
-                </div>
-            </Panel>
-
-            <Panel :heading="__('Integrations')">
-                <div class="divide-y divide-content-border">
-                    <div v-for="(active, key) in integrations" :key="key" class="flex items-start justify-between gap-4 px-4 py-3">
-                        <div class="min-w-0">
-                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ integrationLabel(key) }}</div>
-                            <div class="text-sm text-gray-500">{{ __('Sister addon — its triggers and actions register automatically when installed.') }}</div>
-                        </div>
-                        <div class="shrink-0">
-                            <Badge :color="active ? 'green' : 'gray'" :text="active ? __('Detected') : __('Not installed')" />
+                        <div class="text-sm md:pt-0.5">
+                            <code v-if="row.mono !== undefined" class="text-xs">{{ row.mono }}</code>
+                            <span v-else-if="row.text !== undefined">{{ row.text }}</span>
+                            <Badge v-else-if="row.badge" :color="row.badge.color" :text="row.badge.text" />
+                            <div v-else-if="row.badges" class="flex flex-wrap gap-1">
+                                <Badge v-for="b in row.badges" :key="b" color="gray" :text="b" />
+                            </div>
+                            <span v-else class="text-gray-400">{{ row.empty ?? '—' }}</span>
                         </div>
                     </div>
                 </div>
-            </Panel>
-
-            <Panel :heading="__('License')">
-                <div class="divide-y divide-content-border">
-                    <div class="flex items-start justify-between gap-4 px-4 py-3">
-                        <div class="min-w-0">
-                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('Mode') }}</div>
-                            <div class="text-sm text-gray-500">{{ __('How the license is verified (config or remote).') }}</div>
-                        </div>
-                        <div class="shrink-0 text-sm"><code class="text-xs">{{ license.mode }}</code></div>
-                    </div>
-                    <div class="flex items-start justify-between gap-4 px-4 py-3">
-                        <div class="min-w-0">
-                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('Key set') }}</div>
-                            <div class="text-sm text-gray-500">{{ __('Whether a license key is configured.') }}</div>
-                        </div>
-                        <div class="shrink-0">
-                            <Badge :color="license.has_key ? 'green' : 'gray'" :text="license.has_key ? __('Yes') : __('No')" />
-                        </div>
-                    </div>
-                    <div class="flex items-start justify-between gap-4 px-4 py-3">
-                        <div class="min-w-0">
-                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('Validation') }}</div>
-                            <div class="text-sm text-gray-500">{{ __('Current license validation status.') }}</div>
-                        </div>
-                        <div class="shrink-0">
-                            <Badge :color="license.is_valid ? 'green' : 'amber'" :text="license.is_valid ? __('Valid') : __('No active license')" />
-                        </div>
-                    </div>
-                    <div v-if="license.features && license.features.length" class="flex items-start justify-between gap-4 px-4 py-3">
-                        <div class="min-w-0">
-                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ __('Pro features') }}</div>
-                            <div class="text-sm text-gray-500">{{ __('Features unlocked by the active license.') }}</div>
-                        </div>
-                        <div class="shrink-0 flex flex-wrap justify-end gap-1">
-                            <Badge v-for="f in license.features" :key="f" color="blue" :text="f" />
-                        </div>
-                    </div>
-                </div>
-            </Panel>
-
-            <Panel :heading="__('Payload redaction')">
-                <div class="px-4 py-3">
-                    <p class="text-sm text-gray-500 mb-2">
-                        {{ __('Run logs replace the values of these keys with [REDACTED] before storing.') }}
-                    </p>
-                    <div class="flex flex-wrap gap-1">
-                        <Badge v-for="key in redact_keys" :key="key" color="gray" :text="key" />
-                        <span v-if="!redact_keys.length" class="text-sm text-gray-400">{{ __('None') }}</span>
-                    </div>
-                </div>
-            </Panel>
+            </section>
         </div>
     </div>
 </template>
