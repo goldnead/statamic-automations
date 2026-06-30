@@ -232,6 +232,9 @@ return [
         'branch' => true,
         'stop' => true,
         'delay' => true,
+        'loop' => true,
+        'parallel' => true,
+        'throttle' => true,
         // Actions
         'send_email' => true,
         'send_webhook' => true,

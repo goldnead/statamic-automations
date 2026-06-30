@@ -192,6 +192,9 @@ class ServiceProvider extends AddonServiceProvider
             'stop' => StopNode::class,
             'delay' => DelayNode::class,
             'wait_until' => \Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilNode::class,
+            'loop' => \Goldnead\StatamicAutomations\Nodes\Logic\LoopNode::class,
+            'parallel' => \Goldnead\StatamicAutomations\Nodes\Logic\ParallelNode::class,
+            'throttle' => \Goldnead\StatamicAutomations\Nodes\Logic\ThrottleNode::class,
             'set_variable' => \Goldnead\StatamicAutomations\Nodes\Actions\SetVariableAction::class,
             'call_automation' => \Goldnead\StatamicAutomations\Nodes\Actions\CallAutomationAction::class,
         ];
