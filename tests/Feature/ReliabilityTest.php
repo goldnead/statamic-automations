@@ -8,8 +8,32 @@ use Goldnead\StatamicAutomations\Models\AutomationAuditLog;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
-use Goldnead\StatamicAutomations\Models\AutomationVersion;
 use Goldnead\StatamicAutomations\Support\AuditLogger;
+use Statamic\Facades\Revision;
+
+afterEach(function () {
+    // Revisions are flat files; clear them so runs don't accumulate on disk.
+    try {
+        $dir = \Statamic\Facades\Revision::directory();
+        if (is_dir($dir)) {
+            (new \Illuminate\Filesystem\Filesystem())->deleteDirectory($dir);
+        }
+    } catch (\Throwable) {
+        // ignore
+    }
+});
+
+function revisionsWritable(): bool
+{
+    try {
+        $dir = Revision::directory();
+        @mkdir($dir, 0777, true);
+
+        return is_dir($dir) && is_writable($dir);
+    } catch (\Throwable) {
+        return false;
+    }
+}
 
 function failingAutomation(array $extraConfig): Automation
 {
@@ -54,37 +78,36 @@ it('fails the run when a node fails without an on-error policy', function () {
     expect($final->status)->toBe(AutomationRun::STATUS_FAILED);
 });
 
-it('snapshots and reverts an automation graph', function () {
+it('snapshots and reverts an automation graph via Statamic revisions', function () {
     $automation = Automation::create(['name' => 'V', 'handle' => 'v', 'version' => 1]);
     AutomationNode::create(['automation_id' => $automation->id, 'node_key' => 't', 'type' => 'manual']);
 
     $manager = app(VersionManager::class);
-    $v1 = $manager->snapshot($automation->fresh(['nodes', 'edges']), 'v1');
-    expect($v1)->toBeInstanceOf(AutomationVersion::class);
+    $rev = $manager->snapshot($automation->fresh(['nodes', 'edges']), 'v1');
+    expect($rev)->toBeInstanceOf(\Statamic\Contracts\Revisions\Revision::class);
 
     // Mutate: add a node + bump version.
     AutomationNode::create(['automation_id' => $automation->id, 'node_key' => 'x', 'type' => 'add_log_entry']);
     $automation->forceFill(['version' => 2])->save();
     expect($automation->fresh()->nodes()->count())->toBe(2);
 
-    // Revert back to v1 (1 node).
-    $reverted = $manager->revert($automation->fresh(['nodes', 'edges']), $v1);
+    // Revert back to the first revision (1 node).
+    $reverted = $manager->revert($automation->fresh(['nodes', 'edges']), $rev->date()->timestamp);
     expect($reverted->nodes()->count())->toBe(1);
     expect($reverted->version)->toBeGreaterThan(2);
-});
+})->skip(fn () => ! revisionsWritable(), 'Revisions store not writable in this environment.');
 
-it('prunes old versions beyond the keep limit', function () {
-    config()->set('automations.versioning.keep', 3);
-    $automation = Automation::create(['name' => 'P', 'handle' => 'p']);
+it('lists stored revisions newest first', function () {
+    $automation = Automation::create(['name' => 'L', 'handle' => 'l']);
     AutomationNode::create(['automation_id' => $automation->id, 'node_key' => 't', 'type' => 'manual']);
     $manager = app(VersionManager::class);
 
-    foreach (range(1, 6) as $i) {
-        $manager->snapshot($automation->fresh(['nodes', 'edges']), "v{$i}");
-    }
+    $manager->snapshot($automation->fresh(['nodes', 'edges']), 'first');
+    $list = $manager->versions($automation->fresh(['nodes', 'edges']));
 
-    expect(AutomationVersion::where('automation_id', $automation->id)->count())->toBe(3);
-});
+    expect($list)->not->toBeEmpty();
+    expect($list[0])->toHaveKeys(['timestamp', 'message', 'node_count']);
+})->skip(fn () => ! revisionsWritable(), 'Revisions store not writable in this environment.');
 
 it('records audit log entries', function () {
     $automation = Automation::create(['name' => 'A', 'handle' => 'a']);

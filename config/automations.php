@@ -47,7 +47,9 @@ return [
     | Versioning
     |--------------------------------------------------------------------------
     | Every save snapshots the automation graph so changes can be rolled
-    | back. `keep` caps how many versions are retained per automation.
+    | back. Snapshots are stored as Statamic Revisions (flat-file YAML under
+    | the revisions store), so automation history sits alongside content
+    | revisions. `keep` caps how many revisions are retained per automation.
     */
 
     'versioning' => [

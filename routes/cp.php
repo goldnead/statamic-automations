@@ -111,7 +111,9 @@ Route::prefix('automations')
 
             // Versions + audit
             Route::get('automations/{automation}/versions', [\Goldnead\StatamicAutomations\Http\Controllers\VersionsController::class, 'index'])->name('automations.versions');
-            Route::post('automations/{automation}/versions/{version}/revert', [\Goldnead\StatamicAutomations\Http\Controllers\VersionsController::class, 'revert'])->name('automations.versions.revert');
+            Route::post('automations/{automation}/versions/{timestamp}/revert', [\Goldnead\StatamicAutomations\Http\Controllers\VersionsController::class, 'revert'])
+                ->where('timestamp', '[0-9]+')
+                ->name('automations.versions.revert');
             Route::get('audit', [\Goldnead\StatamicAutomations\Http\Controllers\AuditController::class, 'index'])->name('audit.list');
 
             // Runs

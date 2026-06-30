@@ -5,23 +5,31 @@ namespace Goldnead\StatamicAutomations\Engine;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
-use Goldnead\StatamicAutomations\Models\AutomationVersion;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Statamic\Contracts\Revisions\Revision;
+use Statamic\Facades\Revision as Revisions;
 
 /**
- * Snapshots an automation's graph so changes are reversible.
+ * Versions an automation's graph using Statamic's native Revisions system.
  *
- * A snapshot is a self-contained representation of the automation meta plus
- * every node and edge. Reverting writes the snapshot back over the live
- * graph (and itself snapshots first, so a revert is also undoable).
+ * Each save writes a flat-file YAML revision (under Statamic's revisions
+ * store) whose attributes are a self-contained snapshot of the automation
+ * meta plus every node and edge. This reuses Statamic's own history format
+ * and storage rather than a bespoke database table, so automation history
+ * lives alongside content revisions and is portable with the rest of the
+ * site's flat files.
+ *
+ * Reverting writes a snapshot back over the live graph (and snapshots the
+ * current state first, so a revert is itself reversible).
  */
 class VersionManager
 {
     /**
-     * Capture the current graph as a new version. Returns the version row,
-     * or null if snapshotting is disabled.
+     * Capture the current graph as a new revision. Returns the revision,
+     * or null when versioning is disabled.
      */
-    public function snapshot(Automation $automation, ?string $label = null): ?AutomationVersion
+    public function snapshot(Automation $automation, ?string $message = null): ?Revision
     {
         if (! config('automations.versioning.enabled', true)) {
             return null;
@@ -29,35 +37,60 @@ class VersionManager
 
         $automation->loadMissing(['nodes', 'edges']);
 
-        // Snapshots use their own monotonic sequence per automation, so the
-        // history stays append-only even when several snapshots are taken at
-        // the same live automation version (e.g. an auto-save before revert).
-        $next = (int) AutomationVersion::where('automation_id', $automation->id)->max('version') + 1;
+        $revision = Revisions::make()
+            ->key($this->key($automation))
+            ->action('revision')
+            ->date(Carbon::now())
+            ->message($message)
+            ->attributes($this->buildSnapshot($automation));
 
-        $version = AutomationVersion::create([
-            'automation_id' => $automation->id,
-            'version' => $next,
-            'label' => $label,
-            'snapshot' => $this->buildSnapshot($automation),
-            'created_by' => optional(auth()->user())->id,
-        ]);
+        if ($userId = optional(auth()->user())->id) {
+            $revision->user($userId);
+        }
+
+        $revision->save();
 
         $this->prune($automation);
 
-        return $version;
+        return $revision;
     }
 
     /**
-     * Restore a previously captured version onto the live automation. The
-     * current state is snapshotted first so the revert can be undone.
+     * List the stored revisions, newest first.
+     *
+     * @return array<int, array<string, mixed>>
      */
-    public function revert(Automation $automation, AutomationVersion $version): Automation
+    public function versions(Automation $automation): array
     {
-        return DB::transaction(function () use ($automation, $version) {
-            // Snapshot current state before overwriting.
-            $this->snapshot($automation, 'Auto-saved before revert to v' . $version->version);
+        return Revisions::whereKey($this->key($automation))
+            ->sortByDesc(fn (Revision $r) => $r->date()->timestamp)
+            ->map(fn (Revision $r) => [
+                'timestamp' => $r->date()->timestamp,
+                'date' => $r->date()->toIso8601String(),
+                'message' => $r->message(),
+                'user' => optional($r->user())->email(),
+                'node_count' => count($r->attributes()['nodes'] ?? []),
+            ])
+            ->values()
+            ->all();
+    }
 
-            $snapshot = $version->snapshot;
+    /**
+     * Restore a revision (identified by its unix timestamp) onto the live
+     * automation. The current state is snapshotted first.
+     */
+    public function revert(Automation $automation, int $timestamp): Automation
+    {
+        $revision = Revisions::whereKey($this->key($automation))->get($timestamp);
+
+        if ($revision === null) {
+            throw new \RuntimeException("Revision '{$timestamp}' not found.");
+        }
+
+        return DB::transaction(function () use ($automation, $revision) {
+            $this->snapshot($automation, 'Auto-saved before revert');
+
+            $snapshot = $revision->attributes();
 
             $automation->fill([
                 'name' => $snapshot['name'] ?? $automation->name,
@@ -97,6 +130,15 @@ class VersionManager
     }
 
     /**
+     * The revision key namespaces automation history away from content
+     * revisions (entries/terms) in the same store.
+     */
+    public function key(Automation $automation): string
+    {
+        return 'automation::' . ($automation->uuid ?: $automation->id);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     protected function buildSnapshot(Automation $automation): array
@@ -130,14 +172,9 @@ class VersionManager
             return;
         }
 
-        $ids = AutomationVersion::where('automation_id', $automation->id)
-            ->orderByDesc('id')
-            ->skip($keep)
-            ->take(PHP_INT_MAX)
-            ->pluck('id');
-
-        if ($ids->isNotEmpty()) {
-            AutomationVersion::whereIn('id', $ids)->delete();
-        }
+        Revisions::whereKey($this->key($automation))
+            ->sortByDesc(fn (Revision $r) => $r->date()->timestamp)
+            ->slice($keep)
+            ->each(fn (Revision $r) => Revisions::delete($r));
     }
 }
