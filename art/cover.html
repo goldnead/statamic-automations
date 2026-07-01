@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1200px; height: 630px; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+    background: radial-gradient(1200px 700px at 78% 22%, #312E81 0%, #1E1B4B 55%, #14122E 100%);
+    color: #fff; overflow: hidden; position: relative;
+  }
+  .wrap { display: flex; height: 100%; align-items: center; padding: 0 92px; gap: 64px; }
+  .copy { max-width: 640px; }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-size: 22px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase;
+    color: #C7D2FE; margin-bottom: 26px;
+  }
+  .eyebrow .dot { width: 12px; height: 12px; border-radius: 50%; background: #818CF8; box-shadow: 0 0 18px #818CF8; }
+  h1 { font-size: 78px; line-height: 1.02; font-weight: 800; letter-spacing: -.02em; }
+  h1 .accent { background: linear-gradient(90deg,#A5B4FC,#C4B5FD); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  p.sub { margin-top: 28px; font-size: 30px; line-height: 1.35; color: #CBD5E1; font-weight: 400; }
+  .badges { margin-top: 40px; display: flex; gap: 14px; }
+  .badge { font-size: 22px; font-weight: 600; padding: 12px 22px; border-radius: 999px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.16); color: #E0E7FF; }
+  .art { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .glyph { width: 360px; height: 360px; filter: drop-shadow(0 30px 60px rgba(0,0,0,.45)); }
+  .corner { position: absolute; right: -120px; bottom: -160px; width: 520px; height: 520px; border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, rgba(139,92,246,.35), transparent 60%); }
+</style>
+</head>
+<body>
+  <div class="corner"></div>
+  <div class="wrap">
+    <div class="copy">
+      <span class="eyebrow"><span class="dot"></span>Statamic Addon</span>
+      <h1>Statamic<br><span class="accent">Automations</span></h1>
+      <p class="sub">A visual, node-based automation builder for forms, entries, leads &amp; webhooks — right inside the Control Panel.</p>
+      <div class="badges">
+        <span class="badge">Triggers</span>
+        <span class="badge">Logic</span>
+        <span class="badge">Actions</span>
+        <span class="badge">AI</span>
+      </div>
+    </div>
+    <div class="art">
+      <svg class="glyph" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#6366F1"/><stop offset="1" stop-color="#8B5CF6"/>
+          </linearGradient>
+        </defs>
+        <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+        <g stroke="#fff" stroke-width="14" stroke-linecap="round" opacity="0.95" fill="none">
+          <path d="M188 256 C 248 256, 248 176, 322 176"/>
+          <path d="M188 256 C 248 256, 248 336, 322 336"/>
+        </g>
+        <circle cx="168" cy="256" r="46" fill="#fff"/>
+        <circle cx="344" cy="176" r="34" fill="#fff"/>
+        <circle cx="344" cy="336" r="34" fill="#fff"/>
+        <circle cx="168" cy="256" r="18" fill="#6366F1"/>
+        <circle cx="344" cy="176" r="12" fill="#8B5CF6"/>
+        <circle cx="344" cy="336" r="12" fill="#8B5CF6"/>
+      </svg>
+    </div>
+  </div>
+</body>
+</html>

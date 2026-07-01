@@ -2,7 +2,7 @@
     "name": "goldnead/statamic-automations",
     "description": "A visual automation layer built specifically for Statamic websites. Build automations for Statamic forms, entries, leads and webhooks with a familiar visual flow builder inside the Control Panel.",
     "type": "statamic-addon",
-    "license": "MIT",
+    "license": "proprietary",
     "keywords": [
         "statamic",
         "statamic-addon",
@@ -48,6 +48,7 @@
         "statamic": {
             "name": "Statamic Automations",
             "description": "Visual automation builder for Statamic forms, entries, leads and webhooks.",
+            "editions": ["free", "pro"],
             "vite": {
                 "input": ["resources/js/cp.js", "resources/css/cp.css"],
                 "publicDirectory": "resources/dist"

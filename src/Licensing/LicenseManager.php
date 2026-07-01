@@ -14,8 +14,16 @@ use Illuminate\Support\Facades\Http;
  *   - "remote": the addon checks the configured key against a remote
  *     verification endpoint and caches the result for `cache_ttl` minutes.
  *
- * The default license file ships disabled — no network calls happen
- * unless you opt into "remote" mode and configure an endpoint.
+ * Licensing resolves in this order:
+ *   1. Statamic Marketplace edition — when the addon is licensed through the
+ *      Statamic Marketplace, the active edition is read natively via
+ *      Addon::edition(). The "pro" edition unlocks Pro features. This is the
+ *      supported path for marketplace customers — Statamic + the licensing
+ *      utility handle validation, no addon config required.
+ *   2. Local "config" mode — trusts a list of valid keys configured locally
+ *      (good for self-hosted forks and development).
+ *   3. Remote mode — checks the key against a verification endpoint, cached
+ *      for `cache_ttl` minutes.
  */
 class LicenseManager
 {
@@ -26,11 +34,37 @@ class LicenseManager
     public const STATUS_NO_KEY = 'no_key';
 
     /**
+     * This addon's Composer package name, used to read its Marketplace edition.
+     */
+    public const PACKAGE = 'goldnead/statamic-automations';
+
+    /**
      * Quick yes/no check used at code-gating sites.
      */
     public function isPro(): bool
     {
+        // Prefer Statamic's native Marketplace edition when available.
+        $edition = $this->marketplaceEdition();
+        if ($edition !== null) {
+            return $edition === 'pro';
+        }
+
         return $this->status()['status'] === self::STATUS_VALID;
+    }
+
+    /**
+     * The addon's active Statamic Marketplace edition (e.g. "free" | "pro"),
+     * or null when the addon isn't registered (e.g. in isolated unit tests).
+     */
+    public function marketplaceEdition(): ?string
+    {
+        try {
+            $addon = \Statamic\Facades\Addon::get(self::PACKAGE);
+
+            return $addon?->edition();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -38,6 +72,19 @@ class LicenseManager
      */
     public function status(): array
     {
+        // When licensed through the Marketplace, surface the edition directly.
+        $edition = $this->marketplaceEdition();
+        if ($edition !== null) {
+            return [
+                'status' => $edition === 'pro' ? self::STATUS_VALID : self::STATUS_NO_KEY,
+                'mode' => 'marketplace',
+                'features' => $edition === 'pro'
+                    ? (array) config('automations.license.features', ['custom_actions', 'custom_triggers'])
+                    : [],
+                'message' => 'Edition: ' . $edition,
+            ];
+        }
+
         $key = (string) config('automations.license.key', '');
         $mode = (string) config('automations.license.mode', 'config');
 
