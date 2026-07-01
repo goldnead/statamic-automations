@@ -71,6 +71,20 @@ it('does not call the API in test mode by default', function (): void {
     Http::assertNothingSent();
 });
 
+it('fails gracefully when no API key is configured', function (): void {
+    // Default config ships api_key => env('ANTHROPIC_API_KEY', '') — an
+    // unconfigured install must produce a clear run-log error, not an
+    // unhandled exception or an HTTP call with an empty key.
+    config()->set('automations.ai.api_key', '');
+    Http::fake();
+
+    $result = aiAction()->execute(AutomationContext::make([]), ['prompt' => 'hi']);
+
+    expect($result->isFailed())->toBeTrue();
+    expect($result->error)->toContain('automations.ai.api_key');
+    Http::assertNothingSent();
+});
+
 it('fails without a prompt', function (): void {
     expect(aiAction()->execute(AutomationContext::make([]), [])->isFailed())->toBeTrue();
 });
