@@ -42,6 +42,21 @@ class IntegrationDetectorTest extends TestCase
         $this->assertFalse($snapshot['leadhub']);
     }
 
+    public function test_leadhub_candidates_use_the_real_psr4_casing(): void
+    {
+        // The LeadHub addon's PSR-4 namespace is Goldnead\Leadhub
+        // (lowercase "hub"). Detection must probe exactly that casing —
+        // a wrong-cased FQCN would silently never match via the autoloader.
+        $method = new \ReflectionMethod(IntegrationDetector::class, 'leadHubClasses');
+        $candidates = $method->invoke(new IntegrationDetector());
+
+        $this->assertContains('Goldnead\\Leadhub\\Facades\\LeadHub', $candidates);
+        $this->assertContains('Goldnead\\Leadhub\\LeadHubManager', $candidates);
+        // Legacy casings must be gone — they point at classes that never existed.
+        $this->assertNotContains('Goldnead\\LeadHub\\Facades\\LeadHub', $candidates);
+        $this->assertNotContains('Goldnead\\LeadHub\\LeadHub', $candidates);
+    }
+
     public function test_detection_is_cached(): void
     {
         config()->set('automations.integrations.webhook_manager.detect', ['NotReal']);

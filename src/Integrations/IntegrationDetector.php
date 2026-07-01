@@ -91,9 +91,6 @@ class IntegrationDetector
             // The addon's PSR-4 namespace is Goldnead\Leadhub (lowercase "hub").
             'Goldnead\\Leadhub\\Facades\\LeadHub',
             'Goldnead\\Leadhub\\LeadHubManager',
-            // Legacy / alternative casings, kept for forward-compatibility.
-            'Goldnead\\LeadHub\\Facades\\LeadHub',
-            'Goldnead\\LeadHub\\LeadHub',
         ]));
     }
 }

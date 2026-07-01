@@ -270,12 +270,14 @@ return [
             'inbound_event' => 'Goldnead\\WebhookManager\\Events\\WebhookReceived',
         ],
         'leadhub' => [
+            // The LeadHub addon's PSR-4 namespace is Goldnead\Leadhub
+            // (lowercase "hub"), even though the brand is "LeadHub".
             'detect' => [
-                'Goldnead\\LeadHub\\Facades\\LeadHub',
-                'Goldnead\\LeadHub\\LeadHub',
+                'Goldnead\\Leadhub\\Facades\\LeadHub',
+                'Goldnead\\Leadhub\\LeadHubManager',
             ],
             'facade' => [
-                'Goldnead\\LeadHub\\Facades\\LeadHub',
+                'Goldnead\\Leadhub\\Facades\\LeadHub',
             ],
             // When true, write timeline entries on the lead whenever an
             // automation modifies it. Honored by the LeadHub addon.
