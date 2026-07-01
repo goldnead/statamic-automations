@@ -338,10 +338,12 @@ class ServiceProvider extends AddonServiceProvider
             // older versions used FormSubmitted. We listen to both.
             'Statamic\\Events\\SubmissionCreated' => HandleFormSubmitted::class,
             'Statamic\\Events\\FormSubmitted' => HandleFormSubmitted::class,
-            // Entry publish events. EntryPublished fires only on actual
-            // publish; EntrySaved fires on every save and is filtered
-            // inside the trigger when the user wants "only if published".
-            'Statamic\\Events\\EntryPublished' => HandleEntryPublished::class,
+            // Entry publish trigger. Statamic ships no EntryPublished
+            // event — publishing an entry fires EntrySaved. The listener
+            // gates on $entry->published(), so entry_published fires only
+            // for saves of published entries (same semantics as Webhook
+            // Manager's entry.published trigger). Plain draft saves only
+            // fire the generic entry_saved trigger below.
             'Statamic\\Events\\EntrySaved' => HandleEntryPublished::class,
         ];
 

@@ -18,6 +18,15 @@ class HandleEntryPublished
 
     public function handle(object $event): void
     {
+        // Statamic fires EntrySaved for both draft saves and publishes.
+        // Only fire the entry_published trigger when the saved entry is
+        // actually published — matching Webhook Manager's entry.published
+        // semantics. Plain draft saves are covered by the generic
+        // entry_saved trigger instead.
+        if (! $this->entryIsPublished($event)) {
+            return;
+        }
+
         $trigger = $this->triggers->instance('entry_published');
         if ($trigger === null) {
             return;
@@ -40,6 +49,21 @@ class HandleEntryPublished
             $run = $this->runner->createRun($automation, $context, $triggerNode);
 
             RunAutomation::dispatch($run->id, $context->all(), false);
+        }
+    }
+
+    protected function entryIsPublished(object $event): bool
+    {
+        $entry = $event->entry ?? null;
+
+        if (! is_object($entry) || ! method_exists($entry, 'published')) {
+            return false;
+        }
+
+        try {
+            return (bool) $entry->published();
+        } catch (\Throwable) {
+            return false;
         }
     }
 }
