@@ -166,6 +166,16 @@ Eight curated templates ship with the addon — each one is **copied** into a us
 - **Entry Published Notification** — webhook on collection publish (Slack-friendly)
 - **Webhook Failure Alert** — admin email when a destination keeps failing
 
+## Works with
+
+Automations is the **orchestration layer** in a small family of addons. Each one owns a different concern:
+
+- **statamic-automations** — orchestration: multi-step workflows (triggers → conditions → actions) built visually in the CP.
+- **[statamic-webhook-manager](https://github.com/goldnead/statamic-webhook-manager)** — transport: reliable HTTP in and out (delivery, retries, auth, signing, logging). Automations can delegate its webhook delivery to it.
+- **[statamic-leadhub](https://github.com/goldnead/statamic-leadhub)** — CRM: contacts, follow-ups and opportunities whose events become automation triggers.
+
+Note that both Automations and Webhook Manager can react to the same Statamic events (e.g. an entry save). Pick **one place per concern**: if a save should just fire a webhook, configure it in Webhook Manager; if it should run a multi-step workflow, build it here — don't wire the same event in both.
+
 ## Optional integrations
 
 Sister addons are detected automatically through `class_exists`. The package keeps working without them.
@@ -173,7 +183,7 @@ Sister addons are detected automatically through `class_exists`. The package kee
 | Integration | Class | Adds |
 |---|---|---|
 | Webhook Manager | `Goldnead\WebhookManager\Facades\WebhookManager` | "Send Webhook (via Webhook Manager)" action with Webhook Manager destinations |
-| LeadHub | `Goldnead\LeadHub\Facades\LeadHub` | 5 LeadHub triggers + 7 LeadHub actions |
+| LeadHub | `Goldnead\Leadhub\Facades\LeadHub` | 5 LeadHub triggers + 7 LeadHub actions |
 
 Class names are configurable in `config/automations.php` under `integrations`, so you can swap implementations or use a fork.
 

@@ -29,6 +29,10 @@
         "statamic/cms": "^6.0",
         "inertiajs/inertia-laravel": "^1.0|^2.0"
     },
+    "suggest": {
+        "goldnead/statamic-leadhub": "Trigger automations from LeadHub CRM events (contacts, follow-ups, opportunities)",
+        "goldnead/statamic-webhook-manager": "Delegate webhook delivery (retries, auth, logging) to Webhook Manager"
+    },
     "require-dev": {
         "orchestra/testbench": "^9.0|^10.0|^11.0",
         "pestphp/pest": "^2.0|^3.0",
