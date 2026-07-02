@@ -12,9 +12,49 @@ namespace Goldnead\StatamicAutomations\Templates;
 class TemplateRegistry
 {
     /**
+     * Templates registered by other packages (e.g. goldnead/statamic-marketing)
+     * or the host app, keyed by handle. The registry is bound as a singleton
+     * so boot-time registrations survive until the CP requests the catalog.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    protected array $custom = [];
+
+    /**
+     * Register an additional template. Same array shape as the built-ins:
+     * handle, name, description, requires[], nodes[], edges[]. A handle that
+     * collides with a built-in replaces it.
+     *
+     * @param  array<string, mixed>  $template
+     */
+    public function register(array $template): self
+    {
+        if (empty($template['handle']) || empty($template['nodes'])) {
+            throw new \InvalidArgumentException('Automation templates require at least a handle and nodes.');
+        }
+
+        $this->custom[$template['handle']] = $template;
+
+        return $this;
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     public function all(): array
+    {
+        $builtIn = array_values(array_filter(
+            $this->builtIn(),
+            fn (array $template) => ! isset($this->custom[$template['handle']]),
+        ));
+
+        return array_merge($builtIn, array_values($this->custom));
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    protected function builtIn(): array
     {
         return [
             $this->newLeadNotification(),

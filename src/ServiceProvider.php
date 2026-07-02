@@ -116,6 +116,9 @@ class ServiceProvider extends AddonServiceProvider
 
         // Export / import services.
         $this->app->singleton(AutomationExporter::class);
+        // Singleton so templates registered by other addons (e.g.
+        // goldnead/statamic-marketing) survive until the CP reads the catalog.
+        $this->app->singleton(\Goldnead\StatamicAutomations\Templates\TemplateRegistry::class);
         $this->app->singleton(AutomationImporter::class);
         $this->app->singleton(AutomationFileSync::class);
 
@@ -318,6 +321,33 @@ class ServiceProvider extends AddonServiceProvider
             foreach (array_keys(\Goldnead\StatamicAutomations\Listeners\HandleLeadHubEvent::EVENT_TRIGGERS) as $eventClass) {
                 if (class_exists($eventClass)) {
                     Event::listen($eventClass, \Goldnead\StatamicAutomations\Listeners\HandleLeadHubEvent::class);
+                }
+            }
+        }
+
+        if ($detector->hasMarketing()) {
+            foreach ([
+                \Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\SubscriberConfirmedTrigger::class,
+                \Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\SubscriberUnsubscribedTrigger::class,
+                \Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\CampaignSentTrigger::class,
+            ] as $triggerClass) {
+                $automations->registerBuiltIn($triggerClass::handle());
+                $automations->trigger($triggerClass::handle(), $triggerClass);
+            }
+
+            foreach ([
+                \Goldnead\StatamicAutomations\Integrations\Marketing\Actions\SubscribeToListAction::class,
+                \Goldnead\StatamicAutomations\Integrations\Marketing\Actions\UnsubscribeFromListAction::class,
+                \Goldnead\StatamicAutomations\Integrations\Marketing\Actions\SendCampaignAction::class,
+            ] as $actionClass) {
+                $automations->registerBuiltIn($actionClass::handle());
+                $automations->action($actionClass::handle(), $actionClass);
+            }
+
+            // Fire marketing triggers from the addon's domain events.
+            foreach (array_keys(\Goldnead\StatamicAutomations\Listeners\HandleMarketingEvent::EVENT_TRIGGERS) as $eventClass) {
+                if (class_exists($eventClass)) {
+                    Event::listen($eventClass, \Goldnead\StatamicAutomations\Listeners\HandleMarketingEvent::class);
                 }
             }
         }
