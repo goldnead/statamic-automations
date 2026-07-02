@@ -6,6 +6,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-07-02
+
+### Fixed
+- **LeadHub and Webhook Manager action nodes failed against real facades.**
+  The adapters guarded every call with `method_exists()` on the configured
+  facade class and then called it statically. Real Laravel facades (like
+  `Goldnead\Leadhub\Facades\LeadHub`) proxy all calls through
+  `__callStatic`, so `method_exists()` was always false and every action
+  failed with e.g. "LeadHub facade does not implement createTask()" on real
+  installs. The adapters now resolve the facade root instance via
+  `getFacadeRoot()` when the configured class is a Laravel facade, and probe
+  and call methods on that instance. Plain classes with real static methods
+  and pre-built service objects keep working unchanged.
+
+### Added
+- Regression tests that exercise both adapters through a real
+  `Illuminate\Support\Facades\Facade` subclass backed by a container-bound
+  manager instance, alongside the historic plain-static-class fakes.
+
 ## [1.0.2] - 2026-07-02
 
 ### Fixed

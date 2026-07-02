@@ -27,7 +27,7 @@ class WebhookManagerAdapter
         }
 
         if (method_exists($service, 'destinations')) {
-            $raw = $service::destinations();
+            $raw = $this->invoke($service, 'destinations');
 
             return $this->normalizeOptions(is_iterable($raw) ? $raw : []);
         }
@@ -51,7 +51,7 @@ class WebhookManagerAdapter
 
         if (method_exists($service, 'dispatch')) {
             try {
-                $result = $service::dispatch($destinationHandle, $payload, $options);
+                $result = $this->invoke($service, 'dispatch', [$destinationHandle, $payload, $options]);
 
                 return $this->normalizeDispatchResult($result);
             } catch (\Throwable $e) {
@@ -63,23 +63,60 @@ class WebhookManagerAdapter
     }
 
     /**
-     * Resolve the configured Webhook Manager service / facade FQCN.
+     * Resolve the configured Webhook Manager service. Real Laravel
+     * facades proxy everything through __callStatic, so method_exists()
+     * on the facade class is always false — for those we resolve the
+     * facade root instance instead. Plain classes (or pre-built objects)
+     * with real methods are returned as-is.
      *
-     * @return class-string|null
+     * @return object|class-string|null
      */
-    protected function resolve(): ?string
+    protected function resolve(): object|string|null
     {
         $candidates = (array) config('automations.integrations.webhook_manager.facade', [
             'Goldnead\\WebhookManager\\Facades\\WebhookManager',
         ]);
 
         foreach ($candidates as $class) {
-            if (is_string($class) && class_exists($class)) {
+            if (is_object($class)) {
                 return $class;
             }
+
+            if (! is_string($class) || ! class_exists($class)) {
+                continue;
+            }
+
+            if (is_subclass_of($class, \Illuminate\Support\Facades\Facade::class)) {
+                try {
+                    $root = $class::getFacadeRoot();
+                    if (is_object($root)) {
+                        return $root;
+                    }
+                } catch (\Throwable) {
+                    // Accessor not bound — treat as unavailable.
+                }
+
+                continue;
+            }
+
+            return $class;
         }
 
         return null;
+    }
+
+    /**
+     * Invoke a method on the resolved service — instance call for
+     * objects (facade roots), static call for plain class strings.
+     *
+     * @param  object|class-string  $service
+     * @param  array<int, mixed>  $args
+     */
+    protected function invoke(object|string $service, string $method, array $args = []): mixed
+    {
+        return is_object($service)
+            ? $service->{$method}(...$args)
+            : $service::$method(...$args);
     }
 
     /**

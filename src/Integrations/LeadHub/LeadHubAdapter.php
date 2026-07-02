@@ -46,7 +46,7 @@ class LeadHubAdapter
         }
 
         try {
-            $lead = $service::findByEmail($email);
+            $lead = $this->invoke($service, 'findByEmail', [$email]);
 
             return $lead !== null ? $this->normalizeLead($lead) : null;
         } catch (\Throwable) {
@@ -62,7 +62,7 @@ class LeadHubAdapter
         }
 
         try {
-            $lead = $service::find($id);
+            $lead = $this->invoke($service, 'find', [$id]);
 
             return $lead !== null ? $this->normalizeLead($lead) : null;
         } catch (\Throwable) {
@@ -88,13 +88,13 @@ class LeadHubAdapter
                 : null;
 
             if ($existing && method_exists($service, 'update')) {
-                $updated = $service::update($existing['id'], $attributes);
+                $updated = $this->invoke($service, 'update', [$existing['id'], $attributes]);
 
                 return ['ok' => true, 'lead' => $this->normalizeLead($updated), 'created' => false];
             }
 
             if (method_exists($service, 'create')) {
-                $created = $service::create($attributes);
+                $created = $this->invoke($service, 'create', [$attributes]);
 
                 return ['ok' => true, 'lead' => $this->normalizeLead($created), 'created' => true];
             }
@@ -165,9 +165,15 @@ class LeadHubAdapter
     }
 
     /**
-     * @return class-string|null
+     * Resolve the configured LeadHub service. Real Laravel facades proxy
+     * everything through __callStatic, so method_exists() on the facade
+     * class is always false — for those we resolve the facade root
+     * instance instead. Plain classes (or pre-built objects) with real
+     * methods are returned as-is.
+     *
+     * @return object|class-string|null
      */
-    protected function resolve(): ?string
+    protected function resolve(): object|string|null
     {
         $candidates = (array) config('automations.integrations.leadhub.facade', [
             // The addon's PSR-4 namespace is Goldnead\Leadhub (lowercase "hub").
@@ -176,12 +182,45 @@ class LeadHubAdapter
         ]);
 
         foreach ($candidates as $class) {
-            if (is_string($class) && class_exists($class)) {
+            if (is_object($class)) {
                 return $class;
             }
+
+            if (! is_string($class) || ! class_exists($class)) {
+                continue;
+            }
+
+            if (is_subclass_of($class, \Illuminate\Support\Facades\Facade::class)) {
+                try {
+                    $root = $class::getFacadeRoot();
+                    if (is_object($root)) {
+                        return $root;
+                    }
+                } catch (\Throwable) {
+                    // Accessor not bound — treat as unavailable.
+                }
+
+                continue;
+            }
+
+            return $class;
         }
 
         return null;
+    }
+
+    /**
+     * Invoke a method on the resolved service — instance call for
+     * objects (facade roots), static call for plain class strings.
+     *
+     * @param  object|class-string  $service
+     * @param  array<int, mixed>  $args
+     */
+    protected function invoke(object|string $service, string $method, array $args = []): mixed
+    {
+        return is_object($service)
+            ? $service->{$method}(...$args)
+            : $service::$method(...$args);
     }
 
     /**
@@ -195,7 +234,7 @@ class LeadHubAdapter
         }
 
         try {
-            $raw = $service::$method();
+            $raw = $this->invoke($service, $method);
             $items = is_iterable($raw) ? $raw : [];
             $out = [];
 
@@ -238,7 +277,7 @@ class LeadHubAdapter
         }
 
         try {
-            $result = $service::$method(...$args);
+            $result = $this->invoke($service, $method, $args);
 
             return ['ok' => true, 'result' => $result];
         } catch (\Throwable $e) {
