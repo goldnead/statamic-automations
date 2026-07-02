@@ -97,6 +97,21 @@ class Automations
         return $this;
     }
 
+    /**
+     * Register an automation template in the CP template catalog. Same array
+     * shape as the built-ins: handle, name, description, requires[], nodes[],
+     * edges[]. Templates are not license-gated — they only materialize nodes
+     * the user could also build by hand.
+     *
+     * @param  array<string, mixed>  $template
+     */
+    public function template(array $template): self
+    {
+        app(\Goldnead\StatamicAutomations\Templates\TemplateRegistry::class)->register($template);
+
+        return $this;
+    }
+
     public function triggers(): TriggerRegistry
     {
         return $this->triggers;

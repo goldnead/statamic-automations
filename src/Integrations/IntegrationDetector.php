@@ -28,6 +28,11 @@ class IntegrationDetector
         return $this->detect('leadhub', $this->leadHubClasses());
     }
 
+    public function hasMarketing(): bool
+    {
+        return $this->detect('marketing', $this->marketingClasses());
+    }
+
     /**
      * Reset the cache — primarily used by tests.
      */
@@ -46,6 +51,7 @@ class IntegrationDetector
         return [
             'webhook_manager' => $this->hasWebhookManager(),
             'leadhub' => $this->hasLeadHub(),
+            'marketing' => $this->hasMarketing(),
         ];
     }
 
@@ -91,6 +97,19 @@ class IntegrationDetector
             // The addon's PSR-4 namespace is Goldnead\Leadhub (lowercase "hub").
             'Goldnead\\Leadhub\\Facades\\LeadHub',
             'Goldnead\\Leadhub\\LeadHubManager',
+        ]));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function marketingClasses(): array
+    {
+        $configured = config('automations.integrations.marketing.detect', []);
+
+        return array_filter(array_merge((array) $configured, [
+            'Goldnead\\Marketing\\Services\\SubscriptionService',
+            'Goldnead\\Marketing\\ServiceProvider',
         ]));
     }
 }
