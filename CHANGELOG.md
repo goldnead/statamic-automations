@@ -6,6 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-07-02
+
+### Fixed
+- **CP list page row actions 404ed** (delete, enable/disable, duplicate,
+  export JSON). The Automations index page passed the `…/api/automations`
+  listing URL as `apiBase`, while the Vue page appends `/automations/{id}/…`
+  itself — every row action therefore hit
+  `…/api/automations/automations/{id}` and returned HTTP 404. The page now
+  passes the API root (`…/api`), matching the builder (Edit) page. Affected
+  both storage drivers; the `{automation}` route binding itself was fine and
+  accepts ids and uuids for either driver.
+
+### Added
+- Regression tests that drive the index-page row actions exactly like the
+  frontend does (render the Inertia page, build the URL from its real
+  `apiBase`/`rows` props, send with XHR headers) for delete, enable/disable,
+  duplicate and export, in both database and flat-file storage modes.
+
 ## [1.0.0] - 2026-06-30
 
 First public release on the Statamic Marketplace.

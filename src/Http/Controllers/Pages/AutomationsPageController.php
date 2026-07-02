@@ -59,7 +59,10 @@ class AutomationsPageController extends Controller
                 Column::make('updated_at')->label(__('Updated')),
             ])->map->toArray()->all(),
             'createUrl' => cp_route('statamic-automations.automations.create'),
-            'apiBase' => cp_route('statamic-automations.api.automations.index'),
+            // The API root (…/api). Index.vue appends '/automations/{id}/…'
+            // itself, so this must NOT be the …/api/automations listing route —
+            // that doubled the segment and 404ed every row action.
+            'apiBase' => cp_route('statamic-automations.api.index'),
             'canCreate' => $this->userCan('create automations'),
         ]);
     }
