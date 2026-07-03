@@ -31,10 +31,10 @@ function statusColor(s) {
         failed: 'red',
         stopped: 'amber',
         running: 'blue',
-        queued: 'gray',
+        queued: 'default',
         waiting: 'blue',
-        cancelled: 'gray',
-    }[s] ?? 'gray';
+        cancelled: 'default',
+    }[s] ?? 'default';
 }
 
 function applyFilters() {
@@ -78,6 +78,7 @@ function applyFilters() {
             v-else
             :items="rows"
             :columns="columns"
+            :allow-search="false"
             preferences-prefix="statamic-automations.runs"
         >
             <template #cell-id="{ row }">

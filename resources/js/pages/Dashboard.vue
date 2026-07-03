@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Head, Link } from '@statamic/cms/inertia';
-import { Header, Button, Listing, Badge } from '@statamic/cms/ui';
+import { Header, Button, Listing, Widget, Panel } from '@statamic/cms/ui';
 
 const props = defineProps({
     title: { type: String, required: true },
@@ -44,55 +44,49 @@ function barHeight(value) {
         <!-- KPI cards -->
         <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
             <component
-                :is="card.href ? 'a' : 'div'"
+                :is="card.href ? Link : 'div'"
                 v-for="card in cards"
                 :key="card.label"
                 :href="card.href"
-                class="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm p-4 block"
-                :class="card.href ? 'hover:border-blue-400 transition-colors' : ''"
+                class="block"
             >
-                <div
-                    class="text-2xl font-semibold"
-                    :class="card.tone === 'danger' && card.value ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'"
-                >
-                    {{ card.value }}
-                </div>
-                <div class="text-sm text-gray-500 dark:text-gray-400 mt-1">{{ card.label }}</div>
+                <Widget :title="card.label" class="h-full">
+                    <div
+                        class="text-2xl font-semibold tabular-nums"
+                        :class="card.tone === 'danger' && card.value ? 'text-red-600 dark:text-red-400' : ''"
+                    >
+                        {{ card.value }}
+                    </div>
+                </Widget>
             </component>
         </div>
 
         <!-- 14-day trend -->
-        <section class="mb-6">
-            <h2 class="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2 px-1">
-                {{ __('Runs — last 14 days') }}
-            </h2>
-            <div class="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm p-4">
+        <Panel :heading="__('Runs — last 14 days')" class="mb-6">
+            <div class="p-4">
                 <div class="flex items-end gap-1">
                     <div v-for="day in trend" :key="day.date" class="flex-1 flex flex-col items-center gap-1" :title="`${day.date}: ${day.total} run(s)`">
                         <div class="w-full h-32 flex flex-col justify-end overflow-hidden rounded-t-sm bg-gray-100 dark:bg-gray-800">
-                            <div class="w-full bg-red-400/80" :style="{ height: barHeight(day.failed) }"></div>
-                            <div class="w-full bg-blue-500/80" :style="{ height: barHeight(day.success) }"></div>
+                            <div class="w-full bg-red-400 dark:bg-red-500" :style="{ height: barHeight(day.failed) }"></div>
+                            <div class="w-full bg-green-500" :style="{ height: barHeight(day.success) }"></div>
                         </div>
                         <div class="text-[10px] text-gray-400">{{ day.date.slice(5) }}</div>
                     </div>
                 </div>
-                <div class="flex items-center gap-4 mt-3 text-xs text-gray-500">
-                    <span class="flex items-center gap-1"><span class="size-2.5 rounded-sm bg-blue-500/70"></span>{{ __('Success') }}</span>
-                    <span class="flex items-center gap-1"><span class="size-2.5 rounded-sm bg-red-400/70"></span>{{ __('Failed') }}</span>
+                <div class="flex items-center gap-4 mt-3 text-xs text-gray-500 dark:text-gray-400">
+                    <span class="flex items-center gap-1.5"><span class="size-2.5 rounded-sm bg-green-500"></span>{{ __('Success') }}</span>
+                    <span class="flex items-center gap-1.5"><span class="size-2.5 rounded-sm bg-red-400 dark:bg-red-500"></span>{{ __('Failed') }}</span>
                 </div>
             </div>
-        </section>
+        </Panel>
 
         <!-- Recent failures -->
-        <section>
-            <h2 class="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2 px-1">
-                {{ __('Recent failures') }}
-            </h2>
+        <Panel :heading="__('Recent failures')">
             <div
                 v-if="recentFailures.length === 0"
-                class="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm p-6 text-center text-sm text-gray-500"
+                class="p-6 text-center text-sm text-gray-500 dark:text-gray-400"
             >
-                {{ __('No failed runs. ') }}
+                {{ __('No failed runs.') }}
             </div>
             <Listing
                 v-else
@@ -110,6 +104,6 @@ function barHeight(value) {
                     <span class="text-2xs text-gray-500">{{ row.failed_at ? new Date(row.failed_at).toLocaleString() : '—' }}</span>
                 </template>
             </Listing>
-        </section>
+        </Panel>
     </div>
 </template>

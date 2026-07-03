@@ -51,8 +51,8 @@ function statusColor(s) {
         failed: 'red',
         stopped: 'amber',
         running: 'blue',
-        skipped: 'gray',
-    }[s] ?? 'gray';
+        skipped: 'default',
+    }[s] ?? 'default';
 }
 
 function stringify(value) {

@@ -61,8 +61,8 @@ const sections = computed(() => {
         rows: [
             { label: __('Retention'), description: __('How long completed runs are kept before they are pruned.'), text: `${props.runs.prune_after_days} ${__('days')}` },
             { label: __('Failed runs kept for'), description: __('How long failed runs are retained for debugging.'), text: props.runs.keep_failed_runs_days ?? __('same as default') },
-            { label: __('Store full context'), description: __('Persist the full trigger context with each run.'), badge: { color: props.runs.store_full_context ? 'green' : 'gray', text: props.runs.store_full_context ? __('Yes') : __('No') } },
-            { label: __('Encrypt context'), description: __('Encrypt stored run context at rest.'), badge: { color: props.runs.encrypt_context ? 'green' : 'gray', text: props.runs.encrypt_context ? __('Encrypted') : __('Plaintext') } },
+            { label: __('Store full context'), description: __('Persist the full trigger context with each run.'), badge: { color: props.runs.store_full_context ? 'green' : 'default', text: props.runs.store_full_context ? __('Yes') : __('No') } },
+            { label: __('Encrypt context'), description: __('Encrypt stored run context at rest.'), badge: { color: props.runs.encrypt_context ? 'green' : 'default', text: props.runs.encrypt_context ? __('Encrypted') : __('Plaintext') } },
         ],
     });
 
@@ -71,7 +71,7 @@ const sections = computed(() => {
         rows: Object.entries(props.test_mode).map(([key, value]) => ({
             label: testModeMeta[key]?.label ?? humanize(key),
             description: testModeMeta[key]?.description ?? __('Controls whether this side effect runs for real during test runs.'),
-            badge: { color: value ? 'amber' : 'gray', text: value ? __('Allowed') : __('Blocked') },
+            badge: { color: value ? 'amber' : 'default', text: value ? __('Allowed') : __('Blocked') },
         })),
     });
 
@@ -80,13 +80,13 @@ const sections = computed(() => {
         rows: Object.entries(props.integrations).map(([key, active]) => ({
             label: integrationMeta[key]?.label ?? humanize(key),
             description: __('Sister addon — its triggers and actions register automatically when installed.'),
-            badge: { color: active ? 'green' : 'gray', text: active ? __('Detected') : __('Not installed') },
+            badge: { color: active ? 'green' : 'default', text: active ? __('Detected') : __('Not installed') },
         })),
     });
 
     const licenseRows = [
         { label: __('Mode'), description: __('How the license is verified (config or remote).'), mono: props.license.mode },
-        { label: __('Key set'), description: __('Whether a license key is configured.'), badge: { color: props.license.has_key ? 'green' : 'gray', text: props.license.has_key ? __('Yes') : __('No') } },
+        { label: __('Key set'), description: __('Whether a license key is configured.'), badge: { color: props.license.has_key ? 'green' : 'default', text: props.license.has_key ? __('Yes') : __('No') } },
         { label: __('Validation'), description: __('Current license validation status.'), badge: { color: props.license.is_valid ? 'green' : 'amber', text: props.license.is_valid ? __('Valid') : __('No active license') } },
     ];
     if (props.license.features && props.license.features.length) {
@@ -111,7 +111,7 @@ const sections = computed(() => {
     <div class="max-w-page mx-auto" data-max-width-wrapper>
         <Header :title="title" icon="settings-horizontal" />
 
-        <Alert variant="info" class="mb-6">
+        <Alert variant="default" class="mb-6">
             {{ __('These settings are read-only here. Edit them in your application config file:') }}
             <code class="ml-1 px-1 rounded bg-gray-100 dark:bg-gray-800 text-xs">{{ config_path }}</code>
         </Alert>
@@ -138,7 +138,7 @@ const sections = computed(() => {
                             <span v-else-if="row.text !== undefined">{{ row.text }}</span>
                             <Badge v-else-if="row.badge" :color="row.badge.color" :text="row.badge.text" />
                             <div v-else-if="row.badges" class="flex flex-wrap gap-1">
-                                <Badge v-for="b in row.badges" :key="b" color="gray" :text="b" />
+                                <Badge v-for="b in row.badges" :key="b" color="default" :text="b" />
                             </div>
                             <span v-else class="text-gray-400">{{ row.empty ?? '—' }}</span>
                         </div>
