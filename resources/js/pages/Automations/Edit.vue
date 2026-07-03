@@ -300,7 +300,7 @@ function updateNodeConfig(config) {
     <!-- The builder is a canvas tool, so it breaks out of the CP content
          card's horizontal padding (px-12 at lg) to use the full width. -->
     <div class="lg:-mx-12" data-max-width-wrapper>
-        <Header :title="title" icon="hammer">
+        <Header :title="title">
             <template #title>
                 <div class="flex items-center gap-2">
                     <Icon name="hammer" class="size-5 text-gray-500" />

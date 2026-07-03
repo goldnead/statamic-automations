@@ -28,10 +28,10 @@ function statusColor(s) {
         failed: 'red',
         stopped: 'amber',
         running: 'blue',
-        queued: 'gray',
+        queued: 'default',
         waiting: 'blue',
-        skipped: 'gray',
-    }[s] ?? 'gray';
+        skipped: 'default',
+    }[s] ?? 'default';
 }
 
 function formatDate(value) {

@@ -26,7 +26,7 @@ const props = defineProps({
 const isEmpty = computed(() => props.rows.length === 0);
 
 function statusColor(enabled) {
-    return enabled ? 'green' : 'gray';
+    return enabled ? 'green' : 'default';
 }
 
 function reloadPage() {

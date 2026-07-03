@@ -13,7 +13,7 @@ const tone = {
     created: 'green',
     updated: 'blue',
     enabled: 'green',
-    disabled: 'gray',
+    disabled: 'default',
     deleted: 'red',
     reverted: 'orange',
 };
@@ -39,7 +39,7 @@ const tone = {
             preferences-prefix="statamic-automations.audit"
         >
             <template #cell-action="{ row }">
-                <Badge :color="tone[row.action] || 'gray'" :text="row.action" />
+                <Badge :color="tone[row.action] || 'default'" :text="row.action" />
             </template>
             <template #cell-created_at="{ row }">
                 <span class="text-2xs text-gray-500">{{ row.created_at ? new Date(row.created_at).toLocaleString() : '—' }}</span>

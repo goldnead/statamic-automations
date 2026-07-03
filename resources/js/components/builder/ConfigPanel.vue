@@ -16,7 +16,7 @@
                 v-for="field in fields"
                 :key="field.handle"
                 :label="field.label"
-                :description="field.help"
+                :instructions="field.help"
                 class="mb-4"
             >
                 <component
