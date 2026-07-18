@@ -69,12 +69,16 @@
             </span>
         </div>
 
-        <Handle v-if="kind !== 'trigger'" type="target" :position="Position.Left" />
+        <!-- Vertical flow: nodes connect top → bottom. Target sits on the top
+             edge, source(s) on the bottom edge. Branch outputs split into two
+             bottom handles offset left/right, so "If true"/"If false" edges
+             fan out downward (see inspiration screenshots 5–10). -->
+        <Handle v-if="kind !== 'trigger'" type="target" :position="Position.Top" />
         <template v-if="hasBranchOutputs">
-            <Handle id="true" type="source" :position="Position.Right" :style="{ top: '38%' }" />
-            <Handle id="false" type="source" :position="Position.Right" :style="{ top: '68%' }" />
+            <Handle id="true" type="source" :position="Position.Bottom" :style="{ left: '32%' }" />
+            <Handle id="false" type="source" :position="Position.Bottom" :style="{ left: '68%' }" />
         </template>
-        <Handle v-else type="source" :position="Position.Right" />
+        <Handle v-else type="source" :position="Position.Bottom" />
     </div>
 </template>
 

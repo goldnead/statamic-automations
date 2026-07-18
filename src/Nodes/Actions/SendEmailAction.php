@@ -180,7 +180,7 @@ class SendEmailAction implements AutomationAction
         }
 
         try {
-            return collect(\Statamic\Facades\Entry::query()->where('collection', 'email_templates')->get())
+            return collect(\Statamic\Facades\Entry::query()->where('collection', 'et_templates')->get())
                 ->map(fn ($entry) => [
                     'value' => (string) $entry->slug(),
                     'label' => (string) ($entry->value('title') ?? $entry->slug()),

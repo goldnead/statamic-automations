@@ -252,14 +252,27 @@ function addNode(handle) {
     if (!meta) return;
 
     const nodeKey = `${meta.handle.replace(/\W/g, '_')}_${Math.random().toString(36).slice(2, 6)}`;
+
+    // Vertical flow (top → bottom): stack each new node directly beneath the
+    // lowest existing one, aligned to its column, so the graph grows downward
+    // instead of scattering. Saved positions of existing nodes stay untouched.
+    const VERTICAL_GAP = 160;
+    const existing = automation.value.nodes;
+    const anchor = existing.reduce(
+        (acc, n) => ((n.position_y ?? 0) >= acc.position_y
+            ? { position_x: n.position_x ?? 0, position_y: n.position_y ?? 0 }
+            : acc),
+        { position_x: 200, position_y: -VERTICAL_GAP },
+    );
+
     automation.value.nodes = [
-        ...automation.value.nodes,
+        ...existing,
         {
             node_key: nodeKey,
             type: meta.handle,
             label: meta.label,
-            position_x: 100 + Math.random() * 250,
-            position_y: 100 + Math.random() * 250,
+            position_x: anchor.position_x,
+            position_y: anchor.position_y + VERTICAL_GAP,
             config: {},
             disabled: false,
         },

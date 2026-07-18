@@ -173,7 +173,7 @@ class NodesController extends Controller
         }
 
         try {
-            return collect(\Statamic\Facades\Entry::query()->where('collection', 'email_templates')->get())
+            return collect(\Statamic\Facades\Entry::query()->where('collection', 'et_templates')->get())
                 ->map(fn ($entry) => [
                     'value' => method_exists($entry, 'slug') ? (string) $entry->slug() : '',
                     'label' => method_exists($entry, 'value')
