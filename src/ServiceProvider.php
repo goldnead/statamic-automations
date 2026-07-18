@@ -191,12 +191,15 @@ class ServiceProvider extends AddonServiceProvider
                 SyncAutomations::class,
                 PruneRuns::class,
                 \Goldnead\StatamicAutomations\Console\Commands\RunScheduledAutomations::class,
+                \Goldnead\StatamicAutomations\Console\Commands\RunDueScheduledJobs::class,
             ]);
         }
 
         // Run due scheduled automations every minute via Laravel's scheduler.
         $this->callAfterResolving(\Illuminate\Console\Scheduling\Schedule::class, function ($schedule) {
             $schedule->command('automations:run-scheduled')->everyMinute()->withoutOverlapping();
+            // Resume runs whose delay/wait window has elapsed.
+            $schedule->command('automations:run-due')->everyMinute()->withoutOverlapping();
         });
     }
 

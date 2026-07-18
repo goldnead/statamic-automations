@@ -189,6 +189,69 @@ class WorkflowRunner
     }
 
     /**
+     * Resume a run that was paused by a Delay/Wait node. Unlike
+     * {@see executeFromNode()}, the given node is NOT re-executed — it is
+     * the delay node that already fired, so the walk continues from the
+     * node AFTER it (via its default outgoing edge).
+     *
+     * Returns the refreshed run model.
+     */
+    public function resumeAfterNode(
+        AutomationRun $run,
+        AutomationContext $context,
+        string $nodeKey,
+    ): AutomationRun {
+        $automation = $this->resolveAutomation($run);
+
+        if ($automation === null) {
+            $this->logger->finishRun($run, AutomationRun::STATUS_FAILED, 'Automation definition not found.');
+
+            return $run->fresh();
+        }
+
+        $startNode = $automation->nodes->firstWhere('node_key', $nodeKey);
+
+        if ($startNode === null) {
+            $this->logger->finishRun(
+                $run,
+                AutomationRun::STATUS_FAILED,
+                "Cannot resume — node '{$nodeKey}' not found in automation.",
+            );
+
+            return $run->fresh();
+        }
+
+        $this->logger->startRun($run);
+
+        try {
+            // executeFirst: false → skip the delay node itself and walk
+            // forward from its default outgoing edge.
+            $finalStatus = $this->walk(
+                $run,
+                $automation,
+                $startNode,
+                $context,
+                executeFirst: false,
+            );
+        } catch (\Throwable $e) {
+            $this->logger->finishRun($run, AutomationRun::STATUS_FAILED, $e->getMessage());
+
+            return $run->fresh();
+        }
+
+        // A chained delay pauses the run again — leave it waiting.
+        if ($finalStatus === AutomationRun::STATUS_WAITING) {
+            return $run->fresh();
+        }
+
+        $this->logger->finishRun($run, $finalStatus);
+
+        $this->touchLastRun($automation);
+
+        return $run->fresh();
+    }
+
+    /**
      * Walk the graph from $startNode using DFS along outgoing edges.
      *
      * Returns the run's terminal status string.
@@ -251,7 +314,7 @@ class WorkflowRunner
             }
 
             if ($result->isWaiting()) {
-                $this->scheduleWait($run, $automation, $current, $result);
+                $this->scheduleWait($run, $automation, $current, $result, $context);
 
                 $run->forceFill(['status' => AutomationRun::STATUS_WAITING])->save();
 
@@ -357,6 +420,7 @@ class WorkflowRunner
         Automation $automation,
         AutomationNode $node,
         ActionResult $result,
+        AutomationContext $context,
     ): void {
         $waitUntil = $result->waitUntil ?? [];
         $dueAt = isset($waitUntil['due_at'])
@@ -369,7 +433,10 @@ class WorkflowRunner
             'node_key' => $node->node_key,
             'due_at' => $dueAt,
             'status' => AutomationScheduledJob::STATUS_PENDING,
-            'payload' => $result->output,
+            // Persist BOTH the node output and the live operational context
+            // so the resumer can rebuild the full context (incl. nodes.*
+            // tokens) instead of the redacted audit copy on the run row.
+            'payload' => ['output' => $result->output, 'context' => $context->all()],
         ]);
     }
 
