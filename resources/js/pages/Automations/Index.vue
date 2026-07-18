@@ -81,7 +81,7 @@ function exportJson(row) {
     <div v-if="isEmpty" class="max-w-page mx-auto">
         <header class="py-8 pt-16 text-center">
             <h1 class="text-[25px] font-medium antialiased flex justify-center items-center gap-3">
-                <Icon name="hammer" class="size-5 text-gray-500" />
+                <Icon name="workflow" class="size-5 text-gray-500" />
                 {{ title }}
             </h1>
         </header>
@@ -89,13 +89,13 @@ function exportJson(row) {
             <EmptyStateItem
                 v-if="canCreate"
                 :href="createUrl"
-                icon="hammer"
+                icon="workflow"
                 :heading="__('Create automation')"
                 :description="__('Drag triggers, conditions and actions onto a visual canvas.')"
             />
             <EmptyStateItem
                 :href="createUrl.replace('/create', '/templates')"
-                icon="copy"
+                icon="duplicate"
                 :heading="__('Start from a template')"
                 :description="__('Pick from eight built-in patterns and customize.')"
             />
@@ -104,7 +104,7 @@ function exportJson(row) {
     </div>
 
     <div v-else class="max-w-page mx-auto">
-        <Header :title="title" icon="hammer">
+        <Header :title="title" icon="workflow">
             <Button
                 v-if="canCreate"
                 :href="createUrl"
@@ -146,13 +146,13 @@ function exportJson(row) {
                 <DropdownItem
                     v-if="row.can_enable"
                     :text="row.enabled ? __('Disable') : __('Enable')"
-                    icon="toggle"
+                    icon="fieldtype-toggle"
                     @click="toggleEnabled(row)"
                 />
                 <DropdownItem
                     v-if="row.can_edit"
                     :text="__('Duplicate')"
-                    icon="copy"
+                    icon="duplicate"
                     @click="duplicate(row)"
                 />
                 <DropdownItem

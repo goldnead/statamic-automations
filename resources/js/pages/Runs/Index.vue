@@ -49,7 +49,7 @@ function applyFilters() {
     <Head :title="[title, __('Statamic Automations')]" />
 
     <div class="max-w-page mx-auto">
-        <Header :title="title" icon="paper-airplane" />
+        <Header :title="title" icon="history" />
 
         <div class="flex items-center gap-3 mb-3 px-1">
             <Select
@@ -68,7 +68,7 @@ function applyFilters() {
         <EmptyStateMenu v-if="rows.length === 0" :heading="__('No runs yet')">
             <EmptyStateItem
                 href="../automations"
-                icon="hammer"
+                icon="workflow"
                 :heading="__('Browse automations')"
                 :description="__('Trigger an automation or run a test to see runs here.')"
             />

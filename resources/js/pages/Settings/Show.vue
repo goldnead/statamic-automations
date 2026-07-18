@@ -109,7 +109,7 @@ const sections = computed(() => {
     <Head :title="[title, __('Statamic Automations')]" />
 
     <div class="max-w-page mx-auto" data-max-width-wrapper>
-        <Header :title="title" icon="settings-horizontal" />
+        <Header :title="title" icon="sliders-horizontal" />
 
         <Alert variant="default" class="mb-6">
             {{ __('These settings are read-only here. Edit them in your application config file:') }}

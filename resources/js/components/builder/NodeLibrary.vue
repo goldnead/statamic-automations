@@ -10,30 +10,52 @@
             class="mb-3"
         />
 
-        <section v-for="group in groups" :key="group.label" class="mb-3">
-            <header class="text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">
-                {{ group.label }}
-            </header>
-            <ul class="flex flex-col gap-1">
+        <section v-for="group in visibleGroups" :key="group.key" class="mb-2">
+            <button
+                type="button"
+                class="sa-section-header mb-1 py-1"
+                @click="toggle(group.key)"
+            >
+                <span class="flex items-center gap-1.5">
+                    <Icon
+                        :name="open[group.key] ? 'chevron-down' : 'chevron-right'"
+                        class="size-3 text-gray-400"
+                    />
+                    {{ group.label }}
+                </span>
+                <Badge :text="String(group.items.length)" size="sm" color="default" pill />
+            </button>
+
+            <ul v-show="open[group.key]" class="flex flex-col gap-1">
                 <li
-                    v-for="item in filtered(group.items)"
+                    v-for="item in group.items"
                     :key="item.handle"
-                    class="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2 cursor-pointer hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    class="group flex items-start gap-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2 cursor-pointer hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                     @click="$emit('add', item.handle)"
                 >
-                    <div class="text-sm font-medium">{{ item.label }}</div>
-                    <div v-if="item.description" class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        {{ item.description }}
+                    <span class="sa-icon-chip sa-icon-chip--sm" :class="`sa-icon-chip--${group.kind}`">
+                        <Icon :name="nodeIcon(item.handle, group.kind)" class="size-3.5" />
+                    </span>
+                    <div class="min-w-0">
+                        <div class="text-sm font-medium leading-tight truncate">{{ item.label }}</div>
+                        <div v-if="item.description" class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-snug">
+                            {{ item.description }}
+                        </div>
                     </div>
                 </li>
             </ul>
         </section>
+
+        <p v-if="!hasResults" class="text-xs text-gray-500 dark:text-gray-400 text-center py-6">
+            {{ __('No nodes match your search.') }}
+        </p>
     </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
-import { Input } from '@statamic/cms/ui';
+import { computed, reactive, ref } from 'vue';
+import { Badge, Icon, Input } from '@statamic/cms/ui';
+import { nodeIcon } from '../../composables/useNodeIcon.js';
 
 const props = defineProps({
     library: { type: Object, required: true },
@@ -43,13 +65,20 @@ defineEmits(['add']);
 
 const search = ref('');
 
+// Collapsible state per group (all open by default).
+const open = reactive({ triggers: true, logic: true, actions: true });
+
+function toggle(key) {
+    open[key] = !open[key];
+}
+
 const groups = computed(() => [
-    { label: __('Triggers'), items: props.library.triggers ?? [] },
-    { label: __('Logic'), items: props.library.logic ?? [] },
-    { label: __('Actions'), items: props.library.actions ?? [] },
+    { key: 'triggers', kind: 'trigger', label: __('Triggers'), items: props.library.triggers ?? [] },
+    { key: 'logic', kind: 'logic', label: __('Logic'), items: props.library.logic ?? [] },
+    { key: 'actions', kind: 'action', label: __('Actions'), items: props.library.actions ?? [] },
 ]);
 
-function filtered(items) {
+function filterItems(items) {
     if (!search.value) return items;
     const needle = search.value.toLowerCase();
     return items.filter(
@@ -58,4 +87,12 @@ function filtered(items) {
             item.handle.toLowerCase().includes(needle),
     );
 }
+
+const visibleGroups = computed(() =>
+    groups.value
+        .map((g) => ({ ...g, items: filterItems(g.items) }))
+        .filter((g) => g.items.length > 0),
+);
+
+const hasResults = computed(() => visibleGroups.value.length > 0);
 </script>

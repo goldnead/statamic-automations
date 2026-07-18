@@ -102,6 +102,7 @@ class NodesController extends Controller
             'statamic.forms' => $this->statamicForms(),
             'statamic.collections' => $this->statamicCollections(),
             'statamic.sites' => $this->statamicSites(),
+            'email_templates.templates' => $this->emailTemplates(),
             default => [],
         };
 
@@ -148,6 +149,36 @@ class NodesController extends Controller
                 ->map(fn ($c) => [
                     'value' => method_exists($c, 'handle') ? $c->handle() : (string) $c,
                     'label' => method_exists($c, 'title') ? $c->title() : (string) $c,
+                ])
+                ->values()
+                ->all();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Slug/title options from the managed `email_templates` collection owned by
+     * the optional email-templates addon. Guarded by the sibling's public
+     * facade so the source resolves to an empty list (and the picker stays
+     * hidden) when the addon is not installed — no hard dependency.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    protected function emailTemplates(): array
+    {
+        if (! class_exists(\Goldnead\EmailTemplates\Facades\EmailTemplates::class)
+            || ! class_exists(\Statamic\Facades\Entry::class)) {
+            return [];
+        }
+
+        try {
+            return collect(\Statamic\Facades\Entry::query()->where('collection', 'email_templates')->get())
+                ->map(fn ($entry) => [
+                    'value' => method_exists($entry, 'slug') ? (string) $entry->slug() : '',
+                    'label' => method_exists($entry, 'value')
+                        ? (string) ($entry->value('title') ?? $entry->slug())
+                        : (string) $entry,
                 ])
                 ->values()
                 ->all();

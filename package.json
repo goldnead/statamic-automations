@@ -7,7 +7,9 @@
     "scripts": {
         "dev": "vite",
         "build": "vite build",
-        "watch": "vite build --watch"
+        "build:check": "bash scripts/check-dist-fresh.sh",
+        "watch": "vite build --watch",
+        "test:js": "node --test tests/js/*.test.mjs"
     },
     "dependencies": {
         "@statamic/cms": "file:./vendor/statamic/cms/resources/dist-package",
@@ -19,6 +21,7 @@
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",
+        "jsdom": "^29.0.0",
         "laravel-vite-plugin": "^2.0.0 || ^3.0.0",
         "tailwindcss": "^4.0.0",
         "vite": "^7.0.0 || ^8.0.0",

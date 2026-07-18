@@ -37,7 +37,7 @@ function barHeight(value) {
     <Head :title="[title, __('Statamic Automations')]" />
 
     <div class="max-w-page mx-auto" data-max-width-wrapper>
-        <Header :title="title" icon="hammer">
+        <Header :title="title" icon="workflow">
             <Button v-if="canCreate" :href="createUrl" :text="__('Create automation')" variant="primary" />
         </Header>
 

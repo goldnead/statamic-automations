@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { Head, Link, router } from '@statamic/cms/inertia';
 import {
     Header,
@@ -21,6 +21,7 @@ import NodeLibrary from '../../components/builder/NodeLibrary.vue';
 import ConfigPanel from '../../components/builder/ConfigPanel.vue';
 import RunLogPanel from '../../components/builder/RunLogPanel.vue';
 import { useAutosave } from '../../composables/useAutosave.js';
+import { useHistory } from '../../composables/useHistory.js';
 
 const props = defineProps({
     mode: { type: String, required: true },           // 'create' | 'edit'
@@ -43,6 +44,37 @@ const saving = ref(false);
 const drawerOpen = ref(false);
 const lastRun = ref(null);
 const selectedNodeKey = ref(null);
+
+// Undo/redo over the graph (nodes + edges). Each mutation below calls
+// `history.record()` after applying its change; drags commit once on drop.
+const history = useHistory({
+    getState: () => ({
+        nodes: automation.value.nodes,
+        edges: automation.value.edges,
+    }),
+    setState: (state) => {
+        automation.value = {
+            ...automation.value,
+            nodes: state.nodes,
+            edges: state.edges,
+        };
+        // Drop a selection that no longer exists after the restore.
+        if (
+            selectedNodeKey.value &&
+            !state.nodes.some((n) => n.node_key === selectedNodeKey.value)
+        ) {
+            selectedNodeKey.value = null;
+        }
+    },
+});
+
+function undo() {
+    history.undo();
+}
+
+function redo() {
+    history.redo();
+}
 
 const selectedNode = computed(() =>
     automation.value.nodes.find((n) => n.node_key === selectedNodeKey.value) ?? null,
@@ -233,6 +265,12 @@ function addNode(handle) {
         },
     ];
     selectedNodeKey.value = nodeKey;
+    history.record();
+}
+
+// Records positions after a drag ends (Canvas emits `positions-committed`).
+function commitPositions() {
+    history.record();
 }
 
 function findHandleMeta(handle) {
@@ -256,6 +294,7 @@ function removeNode(nodeKey) {
         (e) => e.from_node_key !== nodeKey && e.to_node_key !== nodeKey,
     );
     if (selectedNodeKey.value === nodeKey) selectedNodeKey.value = null;
+    history.record();
 }
 
 function connect(edge) {
@@ -273,6 +312,7 @@ function connect(edge) {
         ...automation.value.edges,
         { from_output: 'default', to_input: 'default', ...edge },
     ];
+    history.record();
 }
 
 function removeEdge(edge) {
@@ -284,6 +324,7 @@ function removeEdge(edge) {
                 e.to_node_key === edge.to_node_key
             ),
     );
+    history.record();
 }
 
 function updateNodeConfig(config) {
@@ -291,27 +332,139 @@ function updateNodeConfig(config) {
     automation.value.nodes = automation.value.nodes.map((n) =>
         n.node_key === selectedNodeKey.value ? { ...n, config } : n,
     );
+    history.record();
 }
+
+function updateNodeLabel(label) {
+    if (!selectedNodeKey.value) return;
+    automation.value.nodes = automation.value.nodes.map((n) =>
+        n.node_key === selectedNodeKey.value ? { ...n, label } : n,
+    );
+    history.record();
+}
+
+function duplicateNode(nodeKey) {
+    const src = automation.value.nodes.find((n) => n.node_key === nodeKey);
+    if (!src) return;
+    const newKey = `${src.type.replace(/\W/g, '_')}_${Math.random().toString(36).slice(2, 6)}`;
+    automation.value.nodes = [
+        ...automation.value.nodes,
+        {
+            ...src,
+            node_key: newKey,
+            label: src.label ? `${src.label} (${__('copy')})` : src.label,
+            position_x: (src.position_x ?? 0) + 40,
+            position_y: (src.position_y ?? 0) + 40,
+            config: JSON.parse(JSON.stringify(src.config ?? {})),
+        },
+    ];
+    selectedNodeKey.value = newKey;
+    history.record();
+}
+
+function toggleNodeDisabled(nodeKey) {
+    automation.value.nodes = automation.value.nodes.map((n) =>
+        n.node_key === nodeKey ? { ...n, disabled: !n.disabled } : n,
+    );
+    history.record();
+}
+
+// "Rename" from a node's context menu just focuses it — the editable Name lives
+// in the Properties panel's Detail section (no native prompt dialogs).
+function renameNode(nodeKey) {
+    selectedNodeKey.value = nodeKey;
+}
+
+// ---------- Keyboard shortcuts ----------
+// Cmd/Ctrl+Z → undo, Cmd/Ctrl+Shift+Z (or Ctrl+Y) → redo. Skip when the user is
+// typing in a field so native text undo keeps working there.
+function onKeydown(e) {
+    const mod = e.metaKey || e.ctrlKey;
+    if (!mod) return;
+
+    const el = e.target;
+    const tag = el?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) {
+        return;
+    }
+
+    const key = e.key.toLowerCase();
+    if (key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+    } else if ((key === 'z' && e.shiftKey) || key === 'y') {
+        e.preventDefault();
+        redo();
+    }
+}
+
+onMounted(() => window.addEventListener('keydown', onKeydown));
+onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 </script>
 
 <template>
-    <Head :title="[title, __('Statamic Automations')]" />
+    <!-- Single-root builder page.
+     *
+     * Statamic's CP is an Inertia SPA with a *persistent* layout: every page is
+     * rendered into one shared `<slot>` inside `#content-card`. When a page is a
+     * multi-root fragment (`<Head>` + wrapper + `<Stack>`), the leaving page and
+     * the entering page briefly share that slot, and because the builder breaks
+     * out of the card and mounts an absolutely-positioned Vue Flow canvas, the
+     * outgoing overview listing could stay painted over the canvas until a reload.
+     *
+     * Fixes:
+     *  - ONE root element, so the slot has an unambiguous node to swap on nav.
+     *  - `relative isolate` + an opaque `bg-body-bg`, so the builder is its own
+     *    stacking context and opaque layer inside the content card — no stale
+     *    layer from the previous page can composite over it.
+     *  - `<Head>` and the run-log `<Stack>` are nested here; both render
+     *    out-of-flow (head manager / teleport) so nesting is safe.
+     *
+     * The builder is a canvas tool, so it still breaks out of the CP content
+     * card's horizontal padding (px-12 at lg) to use the full width. -->
+    <div class="relative isolate lg:-mx-12 bg-body-bg" data-max-width-wrapper>
+        <Head :title="[title, __('Statamic Automations')]" />
 
-    <!-- The builder is a canvas tool, so it breaks out of the CP content
-         card's horizontal padding (px-12 at lg) to use the full width. -->
-    <div class="lg:-mx-12" data-max-width-wrapper>
         <Header :title="title">
             <template #title>
                 <div class="flex items-center gap-2">
-                    <Icon name="hammer" class="size-5 text-gray-500" />
+                    <Icon name="workflow" class="size-5 text-gray-500" />
+                    <span class="text-[15px] text-gray-400 dark:text-gray-500 font-medium">{{ __('Automations') }}</span>
+                    <span class="text-gray-300 dark:text-gray-600">/</span>
                     <input
                         v-model="automation.name"
                         type="text"
-                        class="bg-transparent border-none focus:outline-none focus:ring-0 text-[25px] font-medium antialiased min-w-[280px] text-gray-900 dark:text-gray-100"
+                        class="bg-transparent border-none focus:outline-none focus:ring-0 text-[25px] font-medium antialiased min-w-[240px] text-gray-900 dark:text-gray-100"
                         :placeholder="__('Untitled automation')"
+                    />
+                    <Badge
+                        :color="automation.enabled ? 'green' : 'amber'"
+                        :text="automation.enabled ? __('Active') : __('Draft')"
+                        pill
                     />
                 </div>
             </template>
+
+            <div class="flex items-center gap-1 pr-2 border-r border-gray-200 dark:border-gray-700 mr-1">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    icon-only
+                    icon="arrow-left"
+                    :aria-label="__('Undo')"
+                    :disabled="!history.canUndo.value || !canEdit"
+                    @click="undo"
+                />
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    icon-only
+                    icon="arrow-right"
+                    :aria-label="__('Redo')"
+                    :disabled="!history.canRedo.value || !canEdit"
+                    @click="redo"
+                />
+            </div>
 
             <Button :text="__('Validate')" variant="ghost" @click="validate" />
             <Button :text="__('Test')" variant="ghost" :disabled="!canTest" @click="testRun" />
@@ -355,28 +508,35 @@ function updateNodeConfig(config) {
                     :library="library"
                     @select="selectedNodeKey = $event"
                     @update-positions="updateNodePositions"
+                    @positions-committed="commitPositions"
                     @connect="connect"
                     @remove-edge="removeEdge"
                     @remove-node="removeNode"
+                    @rename-node="renameNode"
+                    @duplicate-node="duplicateNode"
+                    @toggle-node-disabled="toggleNodeDisabled"
                 />
             </div>
 
-            <div class="overflow-y-auto border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+            <div class="overflow-hidden border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
                 <ConfigPanel
                     :node="selectedNode"
                     :library="library"
                     :trigger-output-schema="triggerOutputSchema"
                     :api-base="apiBase"
                     @update:config="updateNodeConfig"
+                    @update:label="updateNodeLabel"
+                    @duplicate="duplicateNode(selectedNodeKey)"
+                    @delete="removeNode(selectedNodeKey)"
                 />
             </div>
         </div>
-    </div>
 
-    <Stack v-if="drawerOpen" :name="'sa-runlog'" @closed="drawerOpen = false">
-        <StackHeader :heading="__('Run log')" />
-        <StackContent>
-            <RunLogPanel :run="lastRun" />
-        </StackContent>
-    </Stack>
+        <Stack v-if="drawerOpen" :name="'sa-runlog'" @closed="drawerOpen = false">
+            <StackHeader :heading="__('Run log')" />
+            <StackContent>
+                <RunLogPanel :run="lastRun" />
+            </StackContent>
+        </Stack>
+    </div>
 </template>

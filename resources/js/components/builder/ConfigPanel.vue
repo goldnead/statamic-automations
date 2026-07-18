@@ -1,40 +1,108 @@
 <template>
-    <div class="p-4">
-        <div v-if="!node" class="text-sm text-gray-500 dark:text-gray-400 text-center py-12">
+    <div class="flex flex-col h-full">
+        <div v-if="!node" class="text-sm text-gray-500 dark:text-gray-400 text-center py-12 px-4">
             {{ __('Select a node to configure it.') }}
         </div>
 
         <template v-else>
-            <header class="mb-3">
-                <h3 class="text-base font-semibold m-0">{{ schema?.label ?? node.type }}</h3>
-                <p v-if="schema?.description" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {{ schema.description }}
-                </p>
+            <!-- Card header: icon chip + node title -->
+            <header class="flex items-center gap-2.5 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+                <span class="sa-icon-chip size-8" :class="`sa-icon-chip--${kind}`">
+                    <Icon :name="icon" class="size-4" />
+                </span>
+                <div class="min-w-0">
+                    <h3 class="text-sm font-semibold m-0 truncate">{{ node.label || schema?.label || node.type }}</h3>
+                    <p class="text-[11px] text-gray-500 dark:text-gray-400 font-mono truncate m-0">{{ node.type }}</p>
+                </div>
             </header>
 
-            <Field
-                v-for="field in fields"
-                :key="field.handle"
-                :label="field.label"
-                :instructions="field.help"
-                class="mb-4"
-            >
-                <component
-                    :is="fieldComponent(field)"
-                    v-bind="fieldProps(field)"
-                    :model-value="config[field.handle] ?? field.default ?? null"
-                    @update:model-value="setField(field.handle, $event)"
-                />
-            </Field>
+            <div class="flex-1 overflow-y-auto">
+                <!-- 1 · Detail information (editable name; node has no description field) -->
+                <PropertiesSection :title="__('Detail information')">
+                    <Field :label="__('Name')">
+                        <Input
+                            :model-value="node.label ?? ''"
+                            :placeholder="schema?.label ?? node.type"
+                            @update:model-value="$emit('update:label', $event)"
+                        />
+                    </Field>
+                    <p v-if="schema?.description" class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                        {{ schema.description }}
+                    </p>
+                </PropertiesSection>
 
-            <ConditionBuilder
-                v-if="hasConditions"
-                :model-value="config.conditions ?? []"
-                :mode="config.mode ?? 'all'"
-                :trigger-output-schema="triggerOutputSchema"
-                @update:model-value="setField('conditions', $event)"
-                @update:mode="setField('mode', $event)"
-            />
+                <!-- 2 · Configuration (the existing dynamic form — logic unchanged) -->
+                <PropertiesSection v-if="fields.length || hasConditions" :title="__('Configuration')">
+                    <Field
+                        v-for="field in fields"
+                        :key="field.handle"
+                        :label="field.label"
+                        :instructions="field.help"
+                        class="mb-4"
+                    >
+                        <component
+                            :is="fieldComponent(field)"
+                            v-bind="fieldProps(field)"
+                            :model-value="config[field.handle] ?? field.default ?? null"
+                            @update:model-value="setField(field.handle, $event)"
+                        />
+                    </Field>
+
+                    <ConditionBuilder
+                        v-if="hasConditions"
+                        :model-value="config.conditions ?? []"
+                        :mode="config.mode ?? 'all'"
+                        :trigger-output-schema="triggerOutputSchema"
+                        @update:model-value="setField('conditions', $event)"
+                        @update:mode="setField('mode', $event)"
+                    />
+                </PropertiesSection>
+
+                <!-- 3 · Properties (read-only; only fields the backend actually provides) -->
+                <PropertiesSection :title="__('Properties')" :default-open="false">
+                    <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-xs">
+                        <dt class="text-gray-500 dark:text-gray-400">{{ __('Type') }}</dt>
+                        <dd class="font-mono text-gray-700 dark:text-gray-300 text-right truncate">{{ node.type }}</dd>
+
+                        <dt class="text-gray-500 dark:text-gray-400">{{ __('Category') }}</dt>
+                        <dd class="text-right">
+                            <Badge :color="kindColor" :text="kindLabel" size="sm" pill />
+                        </dd>
+
+                        <dt class="text-gray-500 dark:text-gray-400">{{ __('Node key') }}</dt>
+                        <dd class="font-mono text-gray-700 dark:text-gray-300 text-right truncate">{{ node.node_key }}</dd>
+
+                        <dt class="text-gray-500 dark:text-gray-400">{{ __('Status') }}</dt>
+                        <dd class="text-right">
+                            <Badge
+                                :color="node.disabled ? 'default' : 'emerald'"
+                                :text="node.disabled ? __('Disabled') : __('Active')"
+                                size="sm"
+                                pill
+                            />
+                        </dd>
+                    </dl>
+                </PropertiesSection>
+            </div>
+
+            <!-- Sticky footer actions -->
+            <footer class="flex items-center gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+                <Button
+                    :text="__('Duplicate')"
+                    icon="duplicate"
+                    variant="ghost"
+                    size="sm"
+                    @click="$emit('duplicate')"
+                />
+                <Button
+                    :text="__('Delete node')"
+                    icon="trash"
+                    variant="danger"
+                    size="sm"
+                    class="ml-auto"
+                    @click="$emit('delete')"
+                />
+            </footer>
         </template>
     </div>
 </template>
@@ -42,6 +110,8 @@
 <script setup>
 import { computed } from 'vue';
 import {
+    Badge,
+    Button,
     Field,
     Input,
     Textarea,
@@ -49,8 +119,11 @@ import {
     Combobox,
     Switch,
     CodeEditor,
+    Icon,
 } from '@statamic/cms/ui';
 import ConditionBuilder from './ConditionBuilder.vue';
+import PropertiesSection from './PropertiesSection.vue';
+import { nodeIcon } from '../../composables/useNodeIcon.js';
 
 const props = defineProps({
     node: { type: Object, default: null },
@@ -59,7 +132,7 @@ const props = defineProps({
     apiBase: { type: String, required: true },
 });
 
-const emit = defineEmits(['update:config']);
+const emit = defineEmits(['update:config', 'update:label', 'delete', 'duplicate']);
 
 const schema = computed(() => {
     if (!props.node) return null;
@@ -70,6 +143,28 @@ const schema = computed(() => {
     ];
     return all.find((m) => m.handle === props.node.type) ?? null;
 });
+
+const kind = computed(() => {
+    if (!props.node) return 'action';
+    const inGroup = (group) => (props.library[group] ?? []).some((m) => m.handle === props.node.type);
+    if (inGroup('triggers')) return 'trigger';
+    if (inGroup('logic')) return 'logic';
+    return 'action';
+});
+
+const kindLabel = computed(() => ({
+    trigger: __('Trigger'),
+    logic: __('Logic'),
+    action: __('Action'),
+}[kind.value] ?? kind.value));
+
+const kindColor = computed(() => ({
+    trigger: 'blue',
+    logic: 'amber',
+    action: 'emerald',
+}[kind.value] ?? 'default'));
+
+const icon = computed(() => nodeIcon(props.node?.type, kind.value));
 
 const fields = computed(() => {
     const raw = schema.value?.schema ?? [];
