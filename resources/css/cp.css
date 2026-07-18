@@ -35,10 +35,14 @@
         --sa-color-skipped: var(--color-gray-400, #9ca3af);
     }
 
+    /* Background fill for the SVG branch-label pills on canvas edges. */
+    :root { --sa-edge-label-bg: var(--color-white, #ffffff); }
+
     .dark {
         --sa-color-trigger: var(--color-blue-400, #60a5fa);
         --sa-color-action: var(--color-emerald-400, #34d399);
         --sa-color-logic: var(--color-amber-400, #fbbf24);
+        --sa-edge-label-bg: var(--color-gray-900, #111827);
     }
 }
 
@@ -48,37 +52,141 @@
         @apply relative size-full overflow-hidden bg-gray-50 dark:bg-gray-900;
     }
 
-    /* Custom Vue Flow node card — base style applied to every node kind.
-     * Status accents come from CSS vars set above. */
+    /* -------------------------------------------------------------------
+     * Node card (canvas). Layout/IA follows the inspiration references, but
+     * every colour is a Statamic CP token — no custom hues.
+     * ------------------------------------------------------------------- */
     .sa-node {
-        @apply rounded-md border bg-white dark:bg-gray-800
+        @apply rounded-xl border bg-white dark:bg-gray-900
                border-gray-200 dark:border-gray-700
-               shadow-sm min-w-[180px] px-3 py-2 text-sm
-               transition-colors;
+               shadow-sm w-[240px] text-sm transition-shadow;
     }
-    .sa-node--trigger { border-left: 3px solid var(--sa-color-trigger); }
-    .sa-node--action  { border-left: 3px solid var(--sa-color-action); }
-    .sa-node--logic   { border-left: 3px solid var(--sa-color-logic); }
+    .sa-node:hover { @apply shadow-md; }
 
-    .sa-node--invalid    { @apply border-red-500 dark:border-red-400; }
-    .sa-node--incomplete { @apply border-amber-500 dark:border-amber-400; }
-
-    .sa-node__badge {
-        @apply inline-block text-[10px] font-semibold uppercase tracking-wider
-               text-gray-500 dark:text-gray-400 mb-0.5;
+    /* Selected state = Statamic-blue ring (not a colour swap on the border). */
+    .sa-node--selected {
+        @apply ring-2 ring-blue-500/60 border-blue-400 dark:border-blue-500;
     }
+    .sa-node--invalid    { @apply border-red-400 dark:border-red-500; }
+    .sa-node--incomplete { @apply border-amber-400 dark:border-amber-500; }
+
+    .sa-node__header {
+        @apply flex items-start gap-2.5 px-3 pt-3 pb-2;
+    }
+
+    /* Rounded-square icon chip; tint comes from the kind accent token at a
+     * low opacity, so it reads as an accent, never a full-colour block. */
+    .sa-icon-chip {
+        @apply flex items-center justify-center size-8 rounded-lg shrink-0
+               text-gray-700 dark:text-gray-200;
+        background-color: color-mix(in srgb, var(--sa-chip-color, var(--sa-color-action)) 14%, transparent);
+        color: var(--sa-chip-color, var(--sa-color-action));
+    }
+    .sa-node--trigger { --sa-chip-color: var(--sa-color-trigger); }
+    .sa-node--action  { --sa-chip-color: var(--sa-color-action); }
+    .sa-node--logic   { --sa-chip-color: var(--sa-color-logic); }
+
+    /* Icon-chip kind tints + a smaller variant for the node library rows. */
+    .sa-icon-chip--trigger { --sa-chip-color: var(--sa-color-trigger); }
+    .sa-icon-chip--action  { --sa-chip-color: var(--sa-color-action); }
+    .sa-icon-chip--logic   { --sa-chip-color: var(--sa-color-logic); }
+    .sa-icon-chip--sm { @apply size-7 rounded-md; }
+
+    .sa-node__heading { @apply min-w-0 flex-1; }
     .sa-node__title {
-        @apply text-sm font-medium text-gray-900 dark:text-gray-100;
+        @apply text-sm font-semibold leading-tight text-gray-900 dark:text-gray-100 truncate;
     }
-    .sa-node__type {
-        @apply text-[11px] text-gray-500 dark:text-gray-400 font-mono;
+    .sa-node__subtitle {
+        @apply text-[11px] leading-tight text-gray-500 dark:text-gray-400 font-mono truncate mt-0.5;
+    }
+
+    .sa-node__body {
+        @apply px-3 pb-2 flex flex-col gap-1;
     }
     .sa-node__summary {
-        @apply text-xs text-gray-700 dark:text-gray-300 mt-1 pt-1
-               border-t border-dashed border-gray-200 dark:border-gray-700;
+        @apply text-xs text-gray-600 dark:text-gray-300 truncate;
     }
 
-    /* Edge-handle labels rendered inside Vue Flow */
+    /* Variable pill, e.g. {{ service_name }} */
+    .sa-chip {
+        @apply inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-mono
+               bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300
+               border border-gray-200 dark:border-gray-700;
+    }
+    .sa-node__chips { @apply flex flex-wrap gap-1; }
+
+    .sa-node__footer {
+        @apply flex items-center gap-1.5 px-3 py-1.5
+               border-t border-gray-100 dark:border-gray-800;
+    }
+    .sa-status-dot { @apply inline-block size-1.5 rounded-full; }
+    .sa-status-dot--ok       { background-color: var(--sa-color-success); }
+    .sa-status-dot--warning  { background-color: var(--sa-color-stopped); }
+    .sa-status-dot--error    { background-color: var(--sa-color-failed); }
+    .sa-node__kind-label {
+        @apply text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500;
+    }
+
+    /* Branch-output handle labels rendered inside the card. */
     .sa-handle-label--true  { @apply text-emerald-600 dark:text-emerald-400; }
     .sa-handle-label--false { @apply text-red-600 dark:text-red-400; }
+
+    /* Edge branch pills ("If true"/"If false") are drawn by Vue Flow as SVG
+     * text (labelStyle) over a rounded background rect (labelBgStyle); both are
+     * token-styled inline in Canvas.vue, so no extra class is needed here. */
+
+    /* -------------------------------------------------------------------
+     * Properties-panel section headers.
+     * ------------------------------------------------------------------- */
+    .sa-section-header {
+        @apply flex items-center justify-between w-full text-[10px] font-semibold uppercase
+               tracking-wider text-gray-500 dark:text-gray-400 select-none;
+    }
+
+    /* -------------------------------------------------------------------
+     * Floating canvas control bar (bottom-left).
+     * ------------------------------------------------------------------- */
+    .sa-control-bar {
+        @apply inline-flex items-center gap-0.5 rounded-xl px-1 py-1
+               border border-gray-200 dark:border-gray-700
+               bg-white/90 dark:bg-gray-900/90 shadow-md backdrop-blur;
+    }
+    .sa-control-bar__zoom {
+        @apply px-1.5 text-[10px] font-medium tabular-nums text-gray-500 dark:text-gray-400 select-none;
+    }
+
+    /* -------------------------------------------------------------------
+     * Vue Flow overrides → CP tokens. The Vue Flow theme CSS is imported
+     * unscoped inside Canvas.vue; these rules re-tint handles, edges and the
+     * (hidden) default controls so nothing ships Vue Flow's stock blue.
+     * ------------------------------------------------------------------- */
+    .vue-flow__handle {
+        @apply border-white dark:border-gray-900;
+        background: var(--color-gray-400, #9ca3af);
+        width: 9px;
+        height: 9px;
+    }
+    .vue-flow__edge-path {
+        stroke: var(--color-gray-400, #9ca3af);
+    }
+    /* Re-tint the dot grid on CP gray tokens (CSS resolves var(); the SVG
+     * fill attribute passed from Canvas.vue cannot). */
+    .vue-flow__background circle { fill: var(--color-gray-300, #d1d5db); }
+    .dark .vue-flow__background circle { fill: var(--color-gray-700, #374151); }
+    .vue-flow__edge.selected .vue-flow__edge-path,
+    .vue-flow__edge:hover .vue-flow__edge-path {
+        stroke: var(--sa-color-trigger);
+    }
+    /* Hide Vue Flow's default control bar — replaced by .sa-control-bar. */
+    .vue-flow__controls { display: none; }
+    /* The MiniMap is hidden on an empty canvas (see Canvas.vue). When shown,
+     * keep its backing panel on CP surface tokens so it never reads as a hard
+     * white box, especially in dark mode. */
+    .vue-flow__minimap {
+        @apply rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden
+               bg-white dark:bg-gray-900;
+    }
+    .vue-flow__minimap svg {
+        background: transparent;
+    }
 }

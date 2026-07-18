@@ -36,7 +36,7 @@ async function install(template) {
     <Head :title="[title, __('Statamic Automations')]" />
 
     <div class="max-w-page mx-auto">
-        <Header :title="title" icon="copy" />
+        <Header :title="title" icon="duplicate" />
 
         <p class="text-sm text-gray-600 dark:text-gray-400 mb-6 max-w-2xl">
             {{ __('Templates are pre-built automations you can install with one click. Each template is copied into a new automation that you can freely edit afterwards — addon updates do not silently change your installed copies.') }}

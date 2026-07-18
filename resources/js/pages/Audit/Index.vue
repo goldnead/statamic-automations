@@ -23,7 +23,7 @@ const tone = {
     <Head :title="[title, __('Statamic Automations')]" />
 
     <div class="max-w-page mx-auto" data-max-width-wrapper>
-        <Header :title="title" icon="list" />
+        <Header :title="title" icon="list-ul" />
 
         <div
             v-if="logs.length === 0"

@@ -75,7 +75,7 @@ function stringify(value) {
     <Head :title="[title, __('Runs'), __('Statamic Automations')]" />
 
     <div class="max-w-5xl 3xl:max-w-6xl mx-auto" data-max-width-wrapper>
-        <Header :title="title" icon="paper-airplane">
+        <Header :title="title" icon="history">
             <Link :href="indexUrl" class="text-sm text-gray-500 hover:text-blue-500 mr-2">
                 ← {{ __('All runs') }}
             </Link>

@@ -1,0 +1,43 @@
+name: build-check
+
+# Fails the build if the committed resources/dist bundle is stale.
+# resources/dist is shipped via Composer (no npm at install time), so it must
+# always match current source. See scripts/check-dist-fresh.sh.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  dist-fresh:
+    runs-on: ubuntu-latest
+    name: Committed dist is fresh (npm ci + build diff)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          coverage: none
+
+      # @statamic/cms is a `file:` npm dependency resolved from the installed
+      # Composer package, so Composer must run before npm.
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install Node dependencies (reproducible)
+        run: npm ci
+
+      - name: Verify committed resources/dist is fresh
+        run: npm run build:check
