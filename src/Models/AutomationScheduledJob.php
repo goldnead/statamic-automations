@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class AutomationScheduledJob extends Model
 {
     public const STATUS_PENDING = 'pending';
+    public const STATUS_QUEUED = 'queued';
     public const STATUS_DISPATCHED = 'dispatched';
     public const STATUS_CANCELLED = 'cancelled';
 
