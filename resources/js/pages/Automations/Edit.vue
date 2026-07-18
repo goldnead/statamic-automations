@@ -247,43 +247,131 @@ async function exportJson() {
 
 // ---------- Canvas mutations ----------
 
-function addNode(handle) {
+// Node positions are DERIVED from the graph (see useAutoLayout) — never stored
+// or dragged. Every mutation below therefore only touches nodes + edges; the
+// canvas recomputes the vertical layout on its own. `position_x/y` are written
+// as 0 purely to keep the backend payload well-formed.
+
+const BRANCH_TYPES = ['branch'];
+const TERMINAL_TYPES = ['stop'];
+
+function newNodeKey(handle) {
+    return `${handle.replace(/\W/g, '_')}_${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function makeNode(handle) {
     const meta = findHandleMeta(handle);
-    if (!meta) return;
+    return {
+        node_key: newNodeKey(handle),
+        type: handle,
+        label: meta?.label ?? handle,
+        position_x: 0,
+        position_y: 0,
+        config: {},
+        disabled: false,
+    };
+}
 
-    const nodeKey = `${meta.handle.replace(/\W/g, '_')}_${Math.random().toString(36).slice(2, 6)}`;
+function outputsFor(node) {
+    if (TERMINAL_TYPES.includes(node.type)) return [];
+    if (BRANCH_TYPES.includes(node.type)) return ['true', 'false'];
+    return ['default'];
+}
 
-    // Vertical flow (top → bottom): stack each new node directly beneath the
-    // lowest existing one, aligned to its column, so the graph grows downward
-    // instead of scattering. Saved positions of existing nodes stay untouched.
-    const VERTICAL_GAP = 160;
-    const existing = automation.value.nodes;
-    const anchor = existing.reduce(
-        (acc, n) => ((n.position_y ?? 0) >= acc.position_y
-            ? { position_x: n.position_x ?? 0, position_y: n.position_y ?? 0 }
-            : acc),
-        { position_x: 200, position_y: -VERTICAL_GAP },
+function sameEdge(a, b) {
+    return (
+        a.from_node_key === b.from_node_key &&
+        (a.from_output ?? 'default') === (b.from_output ?? 'default') &&
+        a.to_node_key === b.to_node_key
     );
+}
 
-    automation.value.nodes = [
-        ...existing,
-        {
-            node_key: nodeKey,
-            type: meta.handle,
-            label: meta.label,
-            position_x: anchor.position_x,
-            position_y: anchor.position_y + VERTICAL_GAP,
-            config: {},
-            disabled: false,
-        },
-    ];
-    selectedNodeKey.value = nodeKey;
+// First output anywhere in the graph that has no edge yet — the default target
+// for the left library ("add to the end of the flow").
+function firstOpenOutput() {
+    const taken = new Set(
+        automation.value.edges.map((e) => `${e.from_node_key}::${e.from_output ?? 'default'}`),
+    );
+    for (const n of automation.value.nodes) {
+        for (const out of outputsFor(n)) {
+            if (!taken.has(`${n.node_key}::${out}`)) {
+                return { fromNodeKey: n.node_key, output: out };
+            }
+        }
+    }
+    return null;
+}
+
+// Append `node` after (fromNodeKey, output). A null fromNodeKey creates a root.
+function appendNode(fromNodeKey, output, node) {
+    const edges = fromNodeKey
+        ? [
+            ...automation.value.edges,
+            {
+                from_node_key: fromNodeKey,
+                from_output: output || 'default',
+                to_node_key: node.node_key,
+                to_input: 'default',
+            },
+        ]
+        : automation.value.edges;
+    automation.value = {
+        ...automation.value,
+        nodes: [...automation.value.nodes, node],
+        edges,
+    };
+    selectedNodeKey.value = node.node_key;
     history.record();
 }
 
-// Records positions after a drag ends (Canvas emits `positions-committed`).
-function commitPositions() {
+// Split an existing A→B edge by dropping `node` between them: A→node, node→B.
+function insertOnEdge(edge, node) {
+    const rest = automation.value.edges.filter((e) => !sameEdge(e, edge));
+    automation.value = {
+        ...automation.value,
+        nodes: [...automation.value.nodes, node],
+        edges: [
+            ...rest,
+            {
+                from_node_key: edge.from_node_key,
+                from_output: edge.from_output ?? 'default',
+                to_node_key: node.node_key,
+                to_input: 'default',
+            },
+            {
+                from_node_key: node.node_key,
+                from_output: 'default',
+                to_node_key: edge.to_node_key,
+                to_input: 'default',
+            },
+        ],
+    };
+    selectedNodeKey.value = node.node_key;
     history.record();
+}
+
+// Left-library click: drop the node at the end of the current flow.
+function addNode(handle) {
+    if (!findHandleMeta(handle)) return;
+    const node = makeNode(handle);
+    if (!automation.value.nodes.length) {
+        appendNode(null, 'default', node);
+        return;
+    }
+    const open = firstOpenOutput();
+    appendNode(open?.fromNodeKey ?? null, open?.output ?? 'default', node);
+}
+
+// Canvas "+" adder → append at that open output (or create the root trigger).
+function onAppend({ fromNodeKey, output, handle }) {
+    if (!findHandleMeta(handle)) return;
+    appendNode(fromNodeKey ?? null, output ?? 'default', makeNode(handle));
+}
+
+// Canvas edge "+" → insert into that connection.
+function onInsert({ edge, handle }) {
+    if (!findHandleMeta(handle)) return;
+    insertOnEdge(edge, makeNode(handle));
 }
 
 function findHandleMeta(handle) {
@@ -294,49 +382,37 @@ function findHandleMeta(handle) {
     ].find((m) => m.handle === handle);
 }
 
-function updateNodePositions(positions) {
-    automation.value.nodes = automation.value.nodes.map((n) => {
-        const next = positions.find((p) => p.node_key === n.node_key);
-        return next ? { ...n, position_x: next.position_x, position_y: next.position_y } : n;
-    });
-}
-
+// Delete a node and heal the sequence: if it sat linearly between a parent and
+// a single child, reconnect parent → child so the flow stays unbroken. Deleting
+// a branch (two children) strands its subtrees as new roots — acceptable for now.
 function removeNode(nodeKey) {
-    automation.value.nodes = automation.value.nodes.filter((n) => n.node_key !== nodeKey);
-    automation.value.edges = automation.value.edges.filter(
+    const incoming = automation.value.edges.filter((e) => e.to_node_key === nodeKey);
+    const outgoing = automation.value.edges.filter((e) => e.from_node_key === nodeKey);
+    let edges = automation.value.edges.filter(
         (e) => e.from_node_key !== nodeKey && e.to_node_key !== nodeKey,
     );
-    if (selectedNodeKey.value === nodeKey) selectedNodeKey.value = null;
-    history.record();
-}
 
-function connect(edge) {
-    if (
-        automation.value.edges.some(
-            (e) =>
-                e.from_node_key === edge.from_node_key &&
-                e.from_output === (edge.from_output ?? 'default') &&
-                e.to_node_key === edge.to_node_key,
-        )
-    ) {
-        return;
+    if (incoming.length === 1 && outgoing.length === 1) {
+        const parent = incoming[0];
+        const child = outgoing[0];
+        const healed = {
+            from_node_key: parent.from_node_key,
+            from_output: parent.from_output ?? 'default',
+            to_node_key: child.to_node_key,
+            to_input: 'default',
+        };
+        const dup = edges.some((e) => sameEdge(e, healed));
+        if (!dup && healed.from_node_key !== healed.to_node_key) {
+            edges = [...edges, healed];
+        }
     }
-    automation.value.edges = [
-        ...automation.value.edges,
-        { from_output: 'default', to_input: 'default', ...edge },
-    ];
-    history.record();
-}
 
-function removeEdge(edge) {
-    automation.value.edges = automation.value.edges.filter(
-        (e) =>
-            !(
-                e.from_node_key === edge.from_node_key &&
-                e.from_output === edge.from_output &&
-                e.to_node_key === edge.to_node_key
-            ),
-    );
+    automation.value = {
+        ...automation.value,
+        nodes: automation.value.nodes.filter((n) => n.node_key !== nodeKey),
+        edges,
+    };
+    if (selectedNodeKey.value === nodeKey) selectedNodeKey.value = null;
     history.record();
 }
 
@@ -356,23 +432,30 @@ function updateNodeLabel(label) {
     history.record();
 }
 
+// Duplicate a node right after itself in the sequence (insert on its default
+// output when it has a continuation, otherwise append to it).
 function duplicateNode(nodeKey) {
     const src = automation.value.nodes.find((n) => n.node_key === nodeKey);
     if (!src) return;
-    const newKey = `${src.type.replace(/\W/g, '_')}_${Math.random().toString(36).slice(2, 6)}`;
-    automation.value.nodes = [
-        ...automation.value.nodes,
-        {
-            ...src,
-            node_key: newKey,
-            label: src.label ? `${src.label} (${__('copy')})` : src.label,
-            position_x: (src.position_x ?? 0) + 40,
-            position_y: (src.position_y ?? 0) + 40,
-            config: JSON.parse(JSON.stringify(src.config ?? {})),
-        },
-    ];
-    selectedNodeKey.value = newKey;
-    history.record();
+    const copy = {
+        ...src,
+        node_key: newNodeKey(src.type),
+        label: src.label ? `${src.label} (${__('copy')})` : src.label,
+        position_x: 0,
+        position_y: 0,
+        config: JSON.parse(JSON.stringify(src.config ?? {})),
+    };
+    const cont = automation.value.edges.find(
+        (e) => e.from_node_key === nodeKey && (e.from_output ?? 'default') === 'default',
+    );
+    if (cont) {
+        insertOnEdge(
+            { from_node_key: nodeKey, from_output: 'default', to_node_key: cont.to_node_key },
+            copy,
+        );
+    } else {
+        appendNode(nodeKey, 'default', copy);
+    }
 }
 
 function toggleNodeDisabled(nodeKey) {
@@ -520,10 +603,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
                     :validation="validationByNode"
                     :library="library"
                     @select="selectedNodeKey = $event"
-                    @update-positions="updateNodePositions"
-                    @positions-committed="commitPositions"
-                    @connect="connect"
-                    @remove-edge="removeEdge"
+                    @append="onAppend"
+                    @insert="onInsert"
                     @remove-node="removeNode"
                     @rename-node="renameNode"
                     @duplicate-node="duplicateNode"

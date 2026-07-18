@@ -136,6 +136,71 @@
      * token-styled inline in Canvas.vue, so no extra class is needed here. */
 
     /* -------------------------------------------------------------------
+     * Insert / append "+" controls (Zapier-style fixed layout).
+     * The canvas positions nodes automatically; new nodes enter the flow
+     * through these buttons, never by dropping onto a free canvas.
+     * ------------------------------------------------------------------- */
+
+    /* Append adder — a synthetic node under each open output. */
+    .sa-adder {
+        @apply flex flex-col items-center gap-1;
+    }
+    .sa-adder__handle {
+        @apply opacity-0;
+    }
+    .sa-adder__btn,
+    .sa-edge-insert__btn {
+        @apply flex items-center justify-center rounded-full
+               border border-dashed border-gray-300 dark:border-gray-600
+               bg-white dark:bg-gray-900 text-gray-400 dark:text-gray-500
+               shadow-sm transition-colors cursor-pointer;
+    }
+    .sa-adder__btn {
+        @apply size-9;
+    }
+    .sa-edge-insert__btn {
+        @apply size-6;
+    }
+    .sa-adder__btn:hover,
+    .sa-edge-insert__btn:hover {
+        @apply border-blue-400 border-solid text-blue-600 dark:text-blue-400
+               bg-blue-50 dark:bg-blue-500/10;
+    }
+    .sa-adder__hint {
+        @apply text-[11px] font-medium text-gray-400 dark:text-gray-500 select-none;
+    }
+
+    /* Insert "+" hangs on an edge; must sit above the SVG edge path. */
+    .sa-edge-insert {
+        @apply absolute pointer-events-auto;
+        z-index: 10;
+    }
+
+    /* Branch pill drawn by the custom edge (open-output pills are still drawn by
+     * Vue Flow's built-in label on the dashed stub edges). */
+    .sa-edge-branch {
+        @apply absolute pointer-events-none rounded-lg px-1.5 py-0.5
+               text-[11px] font-semibold leading-none
+               bg-white dark:bg-gray-900 border;
+        z-index: 9;
+    }
+    .sa-edge-branch--true {
+        @apply text-emerald-600 dark:text-emerald-400 border-emerald-400/70;
+    }
+    .sa-edge-branch--false {
+        @apply text-red-600 dark:text-red-400 border-red-400/70;
+    }
+
+    /* Node picker popover body (grouped library inside a Dropdown). */
+    .sa-picker {
+        @apply min-w-[220px] max-h-[340px] overflow-y-auto py-1;
+    }
+    .sa-picker__label {
+        @apply px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider
+               text-gray-400 dark:text-gray-500 select-none;
+    }
+
+    /* -------------------------------------------------------------------
      * Properties-panel section headers.
      * ------------------------------------------------------------------- */
     .sa-section-header {

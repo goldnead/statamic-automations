@@ -30,22 +30,13 @@
             inset
             icon="fit-screen"
             :aria-label="__('Fit to view')"
-            @click="fitView({ duration: 300, padding: 0.2 })"
-        />
-
-        <Button
-            variant="ghost"
-            size="sm"
-            inset
-            :icon="interactive ? 'handles' : 'padlock-locked'"
-            :aria-label="interactive ? __('Lock canvas') : __('Unlock canvas')"
-            @click="toggleInteractive"
+            @click="fitView({ duration: 300, padding: 0.25, maxZoom: 1 })"
         />
     </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import { useVueFlow } from '@vue-flow/core';
 import { Button } from '@statamic/cms/ui';
 
@@ -53,14 +44,9 @@ const props = defineProps({
     flowId: { type: String, required: true },
 });
 
-const { zoomIn, zoomOut, fitView, setInteractive, viewport } = useVueFlow(props.flowId);
-
-const interactive = ref(true);
+// Nodes are never draggable in the fixed-layout model, so there is no lock
+// toggle — only zoom + fit controls remain.
+const { zoomIn, zoomOut, fitView, viewport } = useVueFlow(props.flowId);
 
 const zoomPercent = computed(() => Math.round((viewport.value?.zoom ?? 1) * 100));
-
-function toggleInteractive() {
-    interactive.value = !interactive.value;
-    setInteractive(interactive.value);
-}
 </script>

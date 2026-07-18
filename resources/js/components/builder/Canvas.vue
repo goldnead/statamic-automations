@@ -3,12 +3,15 @@
         :id="flowId"
         v-model:nodes="vfNodes"
         v-model:edges="vfEdges"
-        :default-edge-options="defaultEdgeOptions"
+        :nodes-draggable="false"
+        :nodes-connectable="false"
+        :edges-updatable="false"
+        :elements-selectable="true"
+        :delete-key-code="null"
+        :min-zoom="0.3"
+        :max-zoom="1.5"
         class="size-full"
         @node-click="onNodeClick"
-        @edge-click="onEdgeClick"
-        @nodes-change="onNodesChange"
-        @connect="onConnect"
     >
         <template #node-trigger="slotProps">
             <NodeCard kind="trigger" v-bind="cardProps(slotProps)" v-on="cardHandlers(slotProps.id)" />
@@ -19,12 +22,17 @@
         <template #node-logic="slotProps">
             <NodeCard kind="logic" v-bind="cardProps(slotProps)" v-on="cardHandlers(slotProps.id)" />
         </template>
+        <template #node-adder="slotProps">
+            <AdderNode :data="slotProps.data" />
+        </template>
+
+        <template #edge-insertable="edgeProps">
+            <InsertableEdge v-bind="edgeProps" />
+        </template>
 
         <Background :pattern-color="dotColor" :gap="18" :size="1.4" />
         <Controls />
-        <!-- Hide the MiniMap on an empty canvas so it doesn't render as a bare
-             white rectangle; it only carries meaning once there are nodes. -->
-        <MiniMap v-if="vfNodes.length" pannable zoomable />
+        <MiniMap v-if="realNodeCount" pannable zoomable />
 
         <Panel position="bottom-left">
             <ControlBar :flow-id="flowId" />
@@ -33,13 +41,16 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
-import { VueFlow, Panel } from '@vue-flow/core';
+import { computed, nextTick, provide, ref, watch } from 'vue';
+import { VueFlow, Panel, useVueFlow } from '@vue-flow/core';
 import { Background } from '@vue-flow/background';
 import { Controls } from '@vue-flow/controls';
 import { MiniMap } from '@vue-flow/minimap';
 import NodeCard from './NodeCard.vue';
 import ControlBar from './ControlBar.vue';
+import AdderNode from './AdderNode.vue';
+import InsertableEdge from './InsertableEdge.vue';
+import { computeLayout, LAYOUT } from '../../composables/useAutoLayout.js';
 
 const props = defineProps({
     nodes: { type: Array, required: true },
@@ -51,20 +62,25 @@ const props = defineProps({
 
 const emit = defineEmits([
     'select',
-    'update-positions',
-    'positions-committed',
-    'connect',
-    'remove-edge',
+    'append',
+    'insert',
     'remove-node',
     'rename-node',
     'duplicate-node',
     'toggle-node-disabled',
 ]);
 
-// Vue Flow paints the dots via an SVG `fill` presentation attribute, which does
-// not resolve CSS `var()`. So we pass a neutral literal here and re-tint the
-// dots theme-aware from cp.css (`.vue-flow__background circle`), where CSS custom
-// properties DO resolve. Keeps the canvas grid on CP gray tokens in both modes.
+// The picker components (adder nodes + insertable edges) are rendered deep
+// inside Vue Flow's slot templates. Provide the library and the append/insert
+// callbacks so they can reach back up to the page without prop drilling.
+provide('saLibrary', props.library);
+provide('saAppend', (fromNodeKey, output, handle) =>
+    emit('append', { fromNodeKey, output, handle }),
+);
+provide('saInsert', (edge, handle) => emit('insert', { edge, handle }));
+
+// Vue Flow paints the dots via an SVG `fill` attribute, which does not resolve
+// CSS `var()`. Pass a neutral literal here and re-tint theme-aware from cp.css.
 const dotColor = '#d1d5db';
 
 function cardProps(slotProps) {
@@ -84,39 +100,28 @@ function cardHandlers(id) {
     };
 }
 
-
-// Scope this Vue Flow instance to a unique id. Vue Flow keeps a module-level
-// store keyed by id; a stable per-mount id keeps each builder session isolated
-// and lets Vue Flow dispose its store + global listeners cleanly when the CP
-// navigates away from the editor (avoids leaking state across route changes).
+// Scope this Vue Flow instance to a unique id so each builder session isolates
+// its store and disposes cleanly on CP navigation.
 const flowId = `sa-flow-${Math.random().toString(36).slice(2, 10)}`;
 
 const vfNodes = ref([]);
 const vfEdges = ref([]);
+const realNodeCount = computed(() => props.nodes.length);
 
-const defaultEdgeOptions = {
-    type: 'smoothstep',
-    animated: false,
-};
+const { fitView, onNodesInitialized } = useVueFlow(flowId);
 
-watch(
-    () => props.nodes,
-    (next) => { vfNodes.value = next.map(toVueFlowNode); },
-    { immediate: true, deep: true },
-);
+// Where each output's handle sits across the node width (see NodeCard: branch
+// handles at 32% / 68%, single output centred).
+const HANDLE_FRACTION = { default: 0.5, true: 0.32, false: 0.68 };
+const ADDER_HALF = 18; // half the "+" button, to centre it under the handle
+const ADDER_DROP = 150; // vertical offset from the node top to its adder
 
-watch(
-    () => props.edges,
-    (next) => { vfEdges.value = next.map(toVueFlowEdge); },
-    { immediate: true, deep: true },
-);
+const ADDER_PREFIX = '__adder__';
+const STUB_PREFIX = '__stub__';
 
-watch(
-    () => props.selectedKey,
-    (next) => {
-        vfNodes.value = vfNodes.value.map((n) => ({ ...n, selected: n.id === next }));
-    },
-);
+function isSynthetic(id) {
+    return id.startsWith(ADDER_PREFIX) || id.startsWith(STUB_PREFIX);
+}
 
 function nodeKind(type) {
     const inGroup = (group) => (props.library[group] ?? []).some((m) => m.handle === type);
@@ -126,20 +131,6 @@ function nodeKind(type) {
     return 'action';
 }
 
-function toVueFlowNode(n) {
-    return {
-        id: n.node_key,
-        type: nodeKind(n.type),
-        position: { x: n.position_x ?? 0, y: n.position_y ?? 0 },
-        selected: n.node_key === props.selectedKey,
-        data: {
-            label: n.label || labelFor(n.type),
-            type: n.type,
-            config: n.config ?? {},
-        },
-    };
-}
-
 function labelFor(handle) {
     const lib = props.library;
     return [
@@ -147,6 +138,54 @@ function labelFor(handle) {
         ...(lib.logic ?? []),
         ...(lib.actions ?? []),
     ].find((m) => m.handle === handle)?.label ?? handle;
+}
+
+function toVueFlowNode(n, position) {
+    return {
+        id: n.node_key,
+        type: nodeKind(n.type),
+        position: position ?? { x: 0, y: 0 },
+        draggable: false,
+        selected: n.node_key === props.selectedKey,
+        data: {
+            label: n.label || labelFor(n.type),
+            type: n.type,
+            config: n.config ?? {},
+            disabled: n.disabled ?? false,
+        },
+    };
+}
+
+function adderNode(open, srcPos) {
+    const frac = HANDLE_FRACTION[open.from_output] ?? 0.5;
+    return {
+        id: `${ADDER_PREFIX}${open.from_node_key}__${open.from_output}`,
+        type: 'adder',
+        draggable: false,
+        selectable: false,
+        connectable: false,
+        deletable: false,
+        focusable: false,
+        position: {
+            x: Math.round(srcPos.x + frac * LAYOUT.NODE_WIDTH - ADDER_HALF),
+            y: srcPos.y + ADDER_DROP,
+        },
+        data: { fromNodeKey: open.from_node_key, output: open.from_output, mode: 'step' },
+    };
+}
+
+function rootAdder() {
+    return {
+        id: `${ADDER_PREFIX}root`,
+        type: 'adder',
+        draggable: false,
+        selectable: false,
+        connectable: false,
+        deletable: false,
+        focusable: false,
+        position: { x: -ADDER_HALF, y: 40 },
+        data: { fromNodeKey: null, output: 'default', mode: 'trigger' },
+    };
 }
 
 function toVueFlowEdge(e) {
@@ -161,11 +200,31 @@ function toVueFlowEdge(e) {
         source: e.from_node_key,
         target: e.to_node_key,
         sourceHandle: out === 'default' ? null : out,
-        // Branch outputs get a token-coloured pill label ("If true"/"If false");
-        // Vue Flow renders label + labelBg* as a rounded, padded SVG badge.
-        label: branch ? (out === 'true' ? __('If true') : __('If false')) : '',
-        type: 'smoothstep',
+        type: 'insertable',
+        data: { branch: branch ? out : null },
         style: accent ? { stroke: accent } : undefined,
+    };
+}
+
+// A short dashed stub from an open output down to its "+" adder.
+function stubEdge(open) {
+    const out = open.from_output;
+    const branch = out === 'true' || out === 'false';
+    const accent = out === 'true'
+        ? 'var(--sa-color-success)'
+        : out === 'false' ? 'var(--sa-color-failed)' : null;
+
+    return {
+        id: `${STUB_PREFIX}${open.from_node_key}__${out}`,
+        source: open.from_node_key,
+        sourceHandle: out === 'default' ? null : out,
+        target: `${ADDER_PREFIX}${open.from_node_key}__${out}`,
+        type: 'smoothstep',
+        selectable: false,
+        deletable: false,
+        focusable: false,
+        style: { stroke: accent ?? 'var(--color-gray-300, #d1d5db)', strokeDasharray: '4 4' },
+        label: branch ? (out === 'true' ? __('If true') : __('If false')) : '',
         labelBgBorderRadius: 8,
         labelBgPadding: branch ? [7, 4] : undefined,
         labelStyle: branch ? { fill: accent, fontSize: 11, fontWeight: 600 } : undefined,
@@ -175,53 +234,48 @@ function toVueFlowEdge(e) {
     };
 }
 
+function rebuild() {
+    const layout = computeLayout(props.nodes, props.edges);
+
+    const nodes = props.nodes.map((n) => toVueFlowNode(n, layout.positions[n.node_key]));
+    if (!props.nodes.length) {
+        nodes.push(rootAdder());
+    } else {
+        for (const open of layout.openOutputs) {
+            const srcPos = layout.positions[open.from_node_key];
+            if (srcPos) nodes.push(adderNode(open, srcPos));
+        }
+    }
+    vfNodes.value = nodes;
+
+    const edges = props.edges.map(toVueFlowEdge);
+    if (props.nodes.length) {
+        for (const open of layout.openOutputs) edges.push(stubEdge(open));
+    }
+    vfEdges.value = edges;
+}
+
+watch([() => props.nodes, () => props.edges], rebuild, { immediate: true, deep: true });
+
+watch(
+    () => props.selectedKey,
+    (next) => {
+        vfNodes.value = vfNodes.value.map((n) => ({ ...n, selected: n.id === next }));
+    },
+);
+
+// Keep the whole flow framed after structural changes (add / insert / delete).
+onNodesInitialized(() => {
+    nextTick(() => fitView({ padding: 0.25, duration: 200, maxZoom: 1 }));
+});
+
 function statusFor(id) {
     return props.validation[id] || null;
 }
 
 function onNodeClick({ node }) {
+    if (isSynthetic(node.id)) return;
     emit('select', node.id);
-}
-
-function onEdgeClick({ edge }) {
-    if (window.confirm(window.__ ? __('Delete this connection?') : 'Delete this connection?')) {
-        emit('remove-edge', {
-            from_node_key: edge.source,
-            from_output: edge.sourceHandle ?? 'default',
-            to_node_key: edge.target,
-        });
-    }
-}
-
-function onNodesChange(changes) {
-    const positions = [];
-    // Vue Flow streams position changes throughout a drag; `dragging === false`
-    // marks the drop. We apply positions live but only commit ONE history entry
-    // per drag (on drop), so undo restores the pre-drag layout atomically.
-    let dragEnded = false;
-    for (const change of changes) {
-        if (change.type === 'position' && change.position) {
-            positions.push({
-                node_key: change.id,
-                position_x: Math.round(change.position.x),
-                position_y: Math.round(change.position.y),
-            });
-            if (change.dragging === false) dragEnded = true;
-        }
-        if (change.type === 'remove') {
-            emit('remove-node', change.id);
-        }
-    }
-    if (positions.length) emit('update-positions', positions);
-    if (dragEnded) emit('positions-committed');
-}
-
-function onConnect(connection) {
-    emit('connect', {
-        from_node_key: connection.source,
-        from_output: connection.sourceHandle ?? 'default',
-        to_node_key: connection.target,
-    });
 }
 </script>
 
