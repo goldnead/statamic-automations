@@ -19,9 +19,10 @@ use Goldnead\StatamicAutomations\Support\ActionResult;
  *   signals which output to take. The actual per-item iteration is driven
  *   by {@see \Goldnead\StatamicAutomations\Engine\WorkflowRunner}, which
  *   re-walks the subgraph reachable from the "loop" output once per item
- *   (injecting {{ item }} / {{ loop.* }} into the run context for the
- *   duration of that pass), then continues via the "done" output once all
- *   items are exhausted (or immediately if there are none).
+ *   (injecting {{ item }} / {{ index }} / {{ loop.* }} into the run
+ *   context for the duration of that pass), then continues via the "done"
+ *   output once all items are exhausted (or immediately if there are
+ *   none).
  * - "automation" (legacy): runs a separate target automation once per
  *   item as a sub-run, exactly as this node originally worked. Kept for
  *   backwards compatibility with existing wiring.

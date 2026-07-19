@@ -382,12 +382,14 @@ class WorkflowRunner
 
     /**
      * Run the subgraph wired to a Loop node's "loop" output once per
-     * resolved item, exposing `item` (or the configured item key) and
-     * `loop.count` / `loop.index` / `loop.first` / `loop.last` in the run
-     * scope for the duration of each pass.
+     * resolved item, exposing `item` (or the configured item key), a bare
+     * `index`, and `loop.count` / `loop.index` / `loop.first` / `loop.last`
+     * in the run scope for the duration of each pass.
      *
      * The loop context is pushed/popped around each pass so nested loops
-     * correctly shadow an outer loop's variables and restore them on exit.
+     * correctly shadow an outer loop's variables and restore them on exit
+     * — the pop always runs (even if a body node throws) so the scope
+     * never leaks past the loop.
      *
      * Returns null when all items were processed normally (the caller
      * should continue via the "done" output), or a terminal run status
@@ -414,46 +416,62 @@ class WorkflowRunner
         $count = count($items);
 
         // Push: remember whatever this scope key held before the loop
-        // (e.g. an outer loop's own `item` / `loop`) so it can be restored
-        // once this loop finishes — this is the shadow/restore stack.
+        // (e.g. an outer loop's own `item` / `loop` / `index`) so it can be
+        // restored once this loop finishes — this is the shadow/restore
+        // stack.
         $hadItem = $context->has($itemKey);
         $previousItem = $hadItem ? $context->get($itemKey) : null;
         $hadLoopVar = $context->has('loop');
         $previousLoopVar = $hadLoopVar ? $context->get('loop') : null;
+        $hadIndexVar = $context->has('index');
+        $previousIndexVar = $hadIndexVar ? $context->get('index') : null;
 
         $bubbled = null;
 
-        foreach ($items as $index => $item) {
-            $context->set($itemKey, $item);
-            $context->set('loop', [
-                'count' => $count,
-                'index' => $index,
-                'first' => $index === 0,
-                'last' => $index === $count - 1,
-            ]);
+        try {
+            foreach ($items as $index => $item) {
+                $context->set($itemKey, $item);
+                // Bare `index` alongside the nested `loop.*` keys — the
+                // interface contract requires both to be resolvable inside
+                // the loop body (e.g. {{ index }} and {{ loop.index }}).
+                $context->set('index', $index);
+                $context->set('loop', [
+                    'count' => $count,
+                    'index' => $index,
+                    'first' => $index === 0,
+                    'last' => $index === $count - 1,
+                ]);
 
-            $status = $this->runFrom($run, $automation, $bodyStart, $context, $edges, $nodes, $visited);
+                $status = $this->runFrom($run, $automation, $bodyStart, $context, $edges, $nodes, $visited);
 
-            if ($status === AutomationRun::STATUS_STOPPED || $status === AutomationRun::STATUS_WAITING) {
-                $bubbled = $status;
+                if ($status === AutomationRun::STATUS_STOPPED || $status === AutomationRun::STATUS_WAITING) {
+                    $bubbled = $status;
 
-                break;
+                    break;
+                }
             }
-        }
+        } finally {
+            // Pop: restore whatever the outer scope held (or clear it if
+            // this was the outermost loop) so sibling/parent nodes never
+            // see this loop's variables leak past its "done" output — even
+            // if a body node threw (e.g. `_on_error` not "continue").
+            if ($hadItem) {
+                $context->set($itemKey, $previousItem);
+            } else {
+                unset($context[$itemKey]);
+            }
 
-        // Pop: restore whatever the outer scope held (or clear it if this
-        // was the outermost loop) so sibling/parent nodes never see this
-        // loop's variables leak past its "done" output.
-        if ($hadItem) {
-            $context->set($itemKey, $previousItem);
-        } else {
-            unset($context[$itemKey]);
-        }
+            if ($hadLoopVar) {
+                $context->set('loop', $previousLoopVar);
+            } else {
+                unset($context['loop']);
+            }
 
-        if ($hadLoopVar) {
-            $context->set('loop', $previousLoopVar);
-        } else {
-            unset($context['loop']);
+            if ($hadIndexVar) {
+                $context->set('index', $previousIndexVar);
+            } else {
+                unset($context['index']);
+            }
         }
 
         return $bubbled;
