@@ -56,7 +56,7 @@ class ParallelNode implements AutomationNode
      */
     public static function outputs(array $config = []): array
     {
-        $mode = (string) ($config['mode'] ?? 'automation') ?: 'automation';
+        $mode = (string) ($config['mode'] ?? 'inline') ?: 'inline';
 
         if ($mode !== 'inline') {
             return ['default'];
@@ -79,7 +79,7 @@ class ParallelNode implements AutomationNode
 
     public static function description(): ?string
     {
-        return 'Runs several branch automations and joins their results before continuing.';
+        return 'Fans out to every connected branch in this graph and joins their results before continuing (or, in legacy mode, runs a separate automation per branch).';
     }
 
     public static function group(): string
@@ -100,10 +100,10 @@ class ParallelNode implements AutomationNode
                 'label' => 'Mode',
                 'type' => 'select',
                 'options' => [
-                    ['value' => 'automation', 'label' => 'Run a separate automation per branch (legacy)'],
                     ['value' => 'inline', 'label' => 'Run the connected nodes for each branch'],
+                    ['value' => 'automation', 'label' => 'Run a separate automation per branch (legacy)'],
                 ],
-                'default' => 'automation',
+                'default' => 'inline',
             ],
             [
                 'handle' => 'branches',
@@ -124,7 +124,7 @@ class ParallelNode implements AutomationNode
 
     public function execute(AutomationContext $context, array $config): ActionResult
     {
-        $mode = (string) ($config['mode'] ?? 'automation') ?: 'automation';
+        $mode = (string) ($config['mode'] ?? 'inline') ?: 'inline';
 
         return $mode === 'inline'
             ? $this->executeInlineMode($config)

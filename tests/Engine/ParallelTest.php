@@ -63,6 +63,51 @@ class ParallelTest extends TestCase
     }
 
     /**
+     * Regression guard: the editor builds parallel nodes with no `mode`
+     * key at all (`config: {}` plus `branches`). Fan-out must default to
+     * "inline" — mirroring Loop's default — so editor-built parallel
+     * nodes actually fan out instead of silently taking the legacy
+     * "automation" path and doing nothing (no target automation is
+     * configured).
+     */
+    public function test_parallel_with_no_mode_key_defaults_to_inline_fan_out(): void
+    {
+        $automation = $this->buildAutomation([
+            ['key' => 't', 'type' => 'manual'],
+            [
+                'key' => 'par',
+                'type' => 'parallel',
+                'config' => [
+                    // No 'mode' key — exactly what the editor emits.
+                    'branches' => [
+                        'branch_1' => 'First',
+                        'branch_2' => 'Second',
+                    ],
+                ],
+            ],
+            ['key' => 'log_1', 'type' => 'add_log_entry', 'config' => ['level' => 'info', 'message' => 'one']],
+            ['key' => 'log_2', 'type' => 'add_log_entry', 'config' => ['level' => 'info', 'message' => 'two']],
+        ], [
+            ['t', 'par'],
+            ['par', 'log_1', 'branch_1'],
+            ['par', 'log_2', 'branch_2'],
+        ]);
+
+        $context = AutomationContext::make([], testMode: true);
+
+        $runner = app(WorkflowRunner::class);
+        $run = $runner->createRun($automation, $context, $automation->nodes->firstWhere('node_key', 't'));
+        $finalRun = $runner->execute($run, $context);
+
+        $this->assertSame(AutomationRun::STATUS_SUCCESS, $finalRun->status);
+
+        $nodeRuns = $finalRun->nodeRuns()->orderBy('id')->get();
+
+        $this->assertCount(1, $nodeRuns->where('node_key', 'log_1'), 'Branch 1 must run even with no mode key configured.');
+        $this->assertCount(1, $nodeRuns->where('node_key', 'log_2'), 'Branch 2 must run even with no mode key configured.');
+    }
+
+    /**
      * A branch output with no wired edge is simply skipped — fan-out
      * still runs every branch that IS connected.
      */

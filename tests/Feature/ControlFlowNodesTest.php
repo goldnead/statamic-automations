@@ -81,7 +81,7 @@ it('parallel fans out to named branches and joins results', function () {
 
     $result = app(ParallelNode::class)->execute(
         AutomationContext::make([]),
-        ['branches' => ['a' => 'alpha', 'b' => 'beta']]
+        ['branches' => ['a' => 'alpha', 'b' => 'beta'], 'mode' => 'automation']
     );
 
     expect($result->isSuccess())->toBeTrue();
@@ -92,7 +92,7 @@ it('parallel fans out to named branches and joins results', function () {
 it('parallel fails fast when a branch is missing and fail_fast is on', function () {
     $result = app(ParallelNode::class)->execute(
         AutomationContext::make([]),
-        ['branches' => ['a' => 'nope'], 'fail_fast' => true]
+        ['branches' => ['a' => 'nope'], 'fail_fast' => true, 'mode' => 'automation']
     );
 
     expect($result->isFailed())->toBeTrue();
