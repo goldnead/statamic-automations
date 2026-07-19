@@ -4,8 +4,10 @@ namespace Goldnead\StatamicAutomations\Nodes\Actions;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationAction;
+use Goldnead\StatamicAutomations\Engine\TokenResolver;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
 use Goldnead\StatamicAutomations\Support\ActionResult;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
 
 class SendEmailAction implements AutomationAction
@@ -72,6 +74,14 @@ class SendEmailAction implements AutomationAction
         ];
         $schema[] = ['handle' => 'reply_to', 'label' => 'Reply-to', 'type' => 'text', 'required' => false, 'tokenable' => true];
         $schema[] = ['handle' => 'from', 'label' => 'From', 'type' => 'text', 'required' => false, 'tokenable' => true];
+        $schema[] = [
+            'handle' => 'dedupe',
+            'label' => 'Dedupe key',
+            'type' => 'text',
+            'required' => false,
+            'tokenable' => true,
+            'help' => "Optional key to send this email at most once per recipient (e.g. 'welcome'). Prevents duplicate sends if the flow re-fires.",
+        ];
 
         // Opt-in link-click tracking. Only surfaced when the LeadHub addon (with
         // click tracking) is installed. Off by default so tracking is never
@@ -134,9 +144,26 @@ class SendEmailAction implements AutomationAction
 
             if ($resolved !== null && $resolved->body !== '') {
                 $html = $resolved->body;
+                $subjectFromTemplate = false;
 
                 if (($subject === '' || $subject === '(no subject)') && ! empty($resolved->subject)) {
                     $subject = $resolved->subject;
+                    $subjectFromTemplate = true;
+                }
+
+                // The template body (and any template-derived subject) is fetched
+                // INSIDE execute() and therefore bypasses NodeExecutor's up-front
+                // config resolution. Resolve its {{ tokens }} against the flow
+                // context here so personalised templates (e.g. a body containing
+                // {{ subscriber.first_name }}) actually render.
+                $resolver = app(TokenResolver::class);
+
+                if (is_string($html) && $html !== '') {
+                    $html = $resolver->resolveString($html, $context);
+                }
+
+                if ($subjectFromTemplate && is_string($subject) && $subject !== '') {
+                    $subject = $resolver->resolveString($subject, $context);
                 }
             }
         }
@@ -174,6 +201,23 @@ class SendEmailAction implements AutomationAction
             ]);
         }
 
+        // Send-once-per-recipient guard. When a `dedupe` key is set, a
+        // (dedupe|recipient) fingerprint is cached on first send; a later
+        // re-fire of the same flow skips the duplicate instead of re-sending.
+        $dedupe = $config['dedupe'] ?? null;
+        $dedupeKey = null;
+
+        if (is_string($dedupe) && $dedupe !== '') {
+            $dedupeKey = 'automations:send_email:dedupe:'.sha1($dedupe.'|'.$to);
+
+            if (Cache::has($dedupeKey)) {
+                return ActionResult::success([
+                    'skipped' => true,
+                    'reason' => 'dedupe',
+                ]);
+            }
+        }
+
         try {
             $build = function ($message) use ($to, $subject, $replyTo, $from) {
                 $message->to($to)->subject($subject);
@@ -191,6 +235,10 @@ class SendEmailAction implements AutomationAction
                 Mail::html($html, $build);
             } else {
                 Mail::raw($body, $build);
+            }
+
+            if ($dedupeKey !== null) {
+                Cache::put($dedupeKey, true, now()->addYear());
             }
 
             return ActionResult::success([
