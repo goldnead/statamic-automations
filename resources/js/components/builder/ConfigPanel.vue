@@ -41,7 +41,18 @@
                         class="mb-4"
                     >
                         <component
+                            :is="OptionsSelect"
+                            v-if="field.options_source"
+                            :source="field.options_source"
+                            :params="dependsOnParams(field)"
+                            :api-base="apiBase"
+                            :placeholder="field.placeholder ?? null"
+                            :model-value="config[field.handle] ?? field.default ?? null"
+                            @update:model-value="setField(field.handle, $event)"
+                        />
+                        <component
                             :is="fieldComponent(field)"
+                            v-else
                             v-bind="fieldProps(field)"
                             :model-value="config[field.handle] ?? field.default ?? null"
                             @update:model-value="setField(field.handle, $event)"
@@ -108,7 +119,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, defineComponent, h } from 'vue';
 import {
     Badge,
     Button,
@@ -124,6 +135,62 @@ import {
 import ConditionBuilder from './ConditionBuilder.vue';
 import PropertiesSection from './PropertiesSection.vue';
 import { nodeIcon } from '../../composables/useNodeIcon.js';
+import { useNodeOptions } from '../../composables/useNodeOptions.js';
+
+/**
+ * Async, cascading `<select>` for fields declaring `options_source`.
+ * Wraps `@statamic/cms/ui` Select + `useNodeOptions`, defined inline here
+ * (rather than as a separate SFC) since it's only ever used from the field
+ * loop below. Shows a loading placeholder while fetching and a hint in the
+ * dropdown's empty state instead of a blank list.
+ */
+const OptionsSelect = defineComponent({
+    name: 'OptionsSelect',
+    props: {
+        modelValue: { type: [String, Number, null], default: null },
+        source: { type: String, required: true },
+        params: { type: Object, default: () => ({}) },
+        apiBase: { type: String, required: true },
+        placeholder: { type: String, default: null },
+    },
+    emits: ['update:modelValue'],
+    setup(props, { emit }) {
+        const { options, loading, error } = useNodeOptions(
+            computed(() => props.source),
+            computed(() => props.params),
+            props.apiBase,
+        );
+
+        const emptyHint = computed(() => {
+            if (loading.value) return __('Loading…');
+            if (error.value) return __('Could not load options.');
+            if (/webhook_manager|^webhooks$/.test(props.source)) {
+                return __('Install Webhook Manager to use this option.');
+            }
+            return __('No options');
+        });
+
+        return () =>
+            h(
+                Select,
+                {
+                    modelValue: props.modelValue,
+                    'onUpdate:modelValue': (value) => emit('update:modelValue', value),
+                    options: options.value,
+                    disabled: loading.value,
+                    placeholder: loading.value ? __('Loading…') : (props.placeholder ?? __('Select an option')),
+                },
+                {
+                    'no-options': () =>
+                        h(
+                            'div',
+                            { class: 'text-xs text-gray-500 dark:text-gray-400 px-2 py-1.5' },
+                            emptyHint.value,
+                        ),
+                },
+            );
+    },
+});
 
 const props = defineProps({
     node: { type: Object, default: null },
@@ -179,6 +246,23 @@ const config = computed(() => props.node?.config ?? {});
 
 function setField(handle, value) {
     emit('update:config', { ...config.value, [handle]: value });
+}
+
+/**
+ * Resolves the query params to send with an `options_source` fetch.
+ * A field declaring `depends_on: '<otherFieldHandle>'` passes that other
+ * field's current config value as a param named after the target handle
+ * (e.g. `entry` field with `depends_on: 'collection'` → `{ collection }`,
+ * matching `NodesController::options()`'s `$request->query('collection')`).
+ * Returns `{}` (no params, i.e. unscoped fetch) until the dependency has a
+ * value, so cascading pickers stay empty/hinted rather than fetching an
+ * unscoped list.
+ */
+function dependsOnParams(field) {
+    if (!field.depends_on) return {};
+    const value = config.value[field.depends_on];
+    if (value === null || value === undefined || value === '') return {};
+    return { [field.depends_on]: value };
 }
 
 function fieldComponent(field) {
