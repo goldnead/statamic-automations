@@ -215,8 +215,19 @@ class ServiceProvider extends AddonServiceProvider
             'form_submitted' => FormSubmittedTrigger::class,
             'entry_published' => EntryPublishedTrigger::class,
             'entry_saved' => \Goldnead\StatamicAutomations\Nodes\Triggers\EntrySavedTrigger::class,
+            'entry_created' => \Goldnead\StatamicAutomations\Nodes\Triggers\EntryCreatedTrigger::class,
+            'entry_saving' => \Goldnead\StatamicAutomations\Nodes\Triggers\EntrySavingTrigger::class,
             'entry_deleted' => \Goldnead\StatamicAutomations\Nodes\Triggers\EntryDeletedTrigger::class,
+            'term_saved' => \Goldnead\StatamicAutomations\Nodes\Triggers\TermSavedTrigger::class,
+            'term_deleted' => \Goldnead\StatamicAutomations\Nodes\Triggers\TermDeletedTrigger::class,
             'user_registered' => \Goldnead\StatamicAutomations\Nodes\Triggers\UserRegisteredTrigger::class,
+            'user_saved' => \Goldnead\StatamicAutomations\Nodes\Triggers\UserSavedTrigger::class,
+            'user_deleted' => \Goldnead\StatamicAutomations\Nodes\Triggers\UserDeletedTrigger::class,
+            'asset_uploaded' => \Goldnead\StatamicAutomations\Nodes\Triggers\AssetUploadedTrigger::class,
+            'asset_saved' => \Goldnead\StatamicAutomations\Nodes\Triggers\AssetSavedTrigger::class,
+            'asset_deleted' => \Goldnead\StatamicAutomations\Nodes\Triggers\AssetDeletedTrigger::class,
+            'global_set_saved' => \Goldnead\StatamicAutomations\Nodes\Triggers\GlobalSetSavedTrigger::class,
+            'nav_saved' => \Goldnead\StatamicAutomations\Nodes\Triggers\NavSavedTrigger::class,
             'scheduled' => \Goldnead\StatamicAutomations\Nodes\Triggers\ScheduledTrigger::class,
         ];
 
@@ -363,6 +374,16 @@ class ServiceProvider extends AddonServiceProvider
      * working even when a particular Statamic version does not ship a
      * given event class. The list below is verified against Statamic
      * v5/v6 (https://statamic.dev/extending/events).
+     *
+     * Deliberately NOT wired (Task 3, broader event coverage):
+     * - entry_unpublished: Statamic ships no EntryUnpublished event (verified
+     *   against vendor/statamic/cms/src/Events/ — only EntryCreated/Saving/
+     *   Saved/Deleting/Deleted exist). Unpublishing an entry fires EntrySaved
+     *   like any other save, same as the existing entry_published semantics.
+     * - submission_created: SubmissionCreated exists, but it wraps the same
+     *   `submission` payload as FormSubmitted and both already map to the
+     *   same HandleFormSubmitted listener / form_submitted trigger handle
+     *   above — a separate trigger would just be a duplicate.
      */
     protected function registerEventListeners(): void
     {
@@ -391,8 +412,19 @@ class ServiceProvider extends AddonServiceProvider
         // enabled automations, checks matches() and dispatches the run.
         $dispatched = [
             'Statamic\\Events\\EntrySaved' => 'entry_saved',
+            'Statamic\\Events\\EntryCreated' => 'entry_created',
+            'Statamic\\Events\\EntrySaving' => 'entry_saving',
             'Statamic\\Events\\EntryDeleted' => 'entry_deleted',
+            'Statamic\\Events\\TermSaved' => 'term_saved',
+            'Statamic\\Events\\TermDeleted' => 'term_deleted',
             'Statamic\\Events\\UserRegistered' => 'user_registered',
+            'Statamic\\Events\\UserSaved' => 'user_saved',
+            'Statamic\\Events\\UserDeleted' => 'user_deleted',
+            'Statamic\\Events\\AssetUploaded' => 'asset_uploaded',
+            'Statamic\\Events\\AssetSaved' => 'asset_saved',
+            'Statamic\\Events\\AssetDeleted' => 'asset_deleted',
+            'Statamic\\Events\\GlobalSetSaved' => 'global_set_saved',
+            'Statamic\\Events\\NavSaved' => 'nav_saved',
         ];
 
         foreach ($dispatched as $event => $triggerHandle) {
