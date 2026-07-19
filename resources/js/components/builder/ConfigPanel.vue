@@ -40,6 +40,15 @@
                         :instructions="field.help"
                         class="mb-4"
                     >
+                        <template v-if="isTokenable(field)" #actions>
+                            <TokenInserter
+                                :variables="nodeVariables"
+                                :model-value="config[field.handle] ?? field.default ?? ''"
+                                :target-id="fieldDomId(field)"
+                                @update:model-value="setField(field.handle, $event)"
+                            />
+                        </template>
+
                         <component
                             :is="OptionsSelect"
                             v-if="field.options_source"
@@ -134,8 +143,10 @@ import {
 } from '@statamic/cms/ui';
 import ConditionBuilder from './ConditionBuilder.vue';
 import PropertiesSection from './PropertiesSection.vue';
+import TokenInserter from './TokenInserter.vue';
 import { nodeIcon } from '../../composables/useNodeIcon.js';
 import { useNodeOptions } from '../../composables/useNodeOptions.js';
+import { useNodeVariables } from '../../composables/useNodeVariables.js';
 
 /**
  * Async, cascading `<select>` for fields declaring `options_source`.
@@ -197,6 +208,10 @@ const props = defineProps({
     library: { type: Object, required: true },
     triggerOutputSchema: { type: Object, default: null },
     apiBase: { type: String, required: true },
+    // Full graph — `{ nodes: [...], edges: [...] }` — used by
+    // `useNodeVariables` to walk upstream from the selected node and
+    // collect the variables `TokenInserter` offers on `tokenable` fields.
+    automation: { type: Object, default: () => ({ nodes: [], edges: [] }) },
 });
 
 const emit = defineEmits(['update:config', 'update:label', 'delete', 'duplicate']);
@@ -244,6 +259,33 @@ const hasConditions = computed(() =>
 
 const config = computed(() => props.node?.config ?? {});
 
+// Upstream token variables for the selected node (Task 2.3). Computed once
+// per node selection and shared by every `TokenInserter` on this panel —
+// the field loop below only needs to know *which* fields are tokenable.
+const nodeVariables = useNodeVariables(
+    () => props.node?.node_key ?? null,
+    () => props.automation,
+    () => props.library,
+);
+
+// Only text/textarea-rendered fields get a TokenInserter — a `tokenable`
+// `select` (e.g. UpdateEntryAction's `entry_id`, "pick an entry, or use a
+// token") has no caret to insert into; its help text already documents the
+// token fallback.
+const TOKENABLE_FIELD_TYPES = ['text', 'textarea', 'key_value'];
+
+function isTokenable(field) {
+    return field.tokenable === true && TOKENABLE_FIELD_TYPES.includes(field.type);
+}
+
+// Stable per-node-per-field DOM id so `TokenInserter` can look up the
+// native input/textarea element (via `document.getElementById`) to read
+// and set caret position — see `TokenInserter.vue` for why `id` rather
+// than a template ref.
+function fieldDomId(field) {
+    return `sa-field-${props.node?.node_key ?? 'none'}-${field.handle}`;
+}
+
 function setField(handle, value) {
     emit('update:config', { ...config.value, [handle]: value });
 }
@@ -283,6 +325,7 @@ function fieldComponent(field) {
 
 function fieldProps(field) {
     const base = {};
+    if (isTokenable(field)) base.id = fieldDomId(field);
     if (field.type === 'number') base.type = 'number';
     if (field.type === 'select') {
         base.options = (field.options ?? []).map((o) =>

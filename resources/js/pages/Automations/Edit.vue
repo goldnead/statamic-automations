@@ -610,6 +610,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
                     :library="library"
                     :trigger-output-schema="triggerOutputSchema"
                     :api-base="apiBase"
+                    :automation="automation"
                     @update:config="updateNodeConfig"
                     @update:label="updateNodeLabel"
                     @duplicate="duplicateNode(selectedNodeKey)"

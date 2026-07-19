@@ -1,0 +1,120 @@
+<template>
+    <Dropdown v-if="hasVariables" align="end" side="bottom">
+        <template #trigger>
+            <Button
+                variant="ghost"
+                size="xs"
+                text="{{ }}"
+                :aria-label="__('Insert variable')"
+                :title="__('Insert a variable from an upstream step')"
+            />
+        </template>
+
+        <div class="sa-token-inserter max-h-72 overflow-y-auto">
+            <template v-for="group in groupedVariables" :key="group.source">
+                <DropdownLabel :text="group.source" />
+                <DropdownItem
+                    v-for="variable in group.items"
+                    :key="variable.token"
+                    :text="variable.label"
+                    @click="insert(variable.token)"
+                />
+            </template>
+        </div>
+    </Dropdown>
+
+    <!-- No upstream variables yet — disabled placeholder, never a crash. -->
+    <Button
+        v-else
+        variant="ghost"
+        size="xs"
+        text="{{ }}"
+        disabled
+        :aria-label="__('No upstream variables available')"
+        :title="__('No upstream variables available')"
+    />
+</template>
+
+<script setup>
+import { computed, nextTick } from 'vue';
+import { Button, Dropdown, DropdownItem, DropdownLabel } from '@statamic/cms/ui';
+
+/**
+ * Small "{{ }}" button/dropdown that lists the upstream variables a node's
+ * `tokenable` field can reference (from `useNodeVariables`) and inserts the
+ * chosen token string at the caret position of the bound input/textarea.
+ *
+ * The target field is identified by DOM `id` (`targetId`) rather than a
+ * template ref, because this component is mounted as a SIBLING of the
+ * actual `<Input>`/`<Textarea>` (in `ConfigPanel.vue`'s `Field` `#actions`
+ * slot), not its parent — `document.getElementById` is the simplest way to
+ * reach the underlying native element both `@statamic/cms/ui` field
+ * components render their `id` prop onto, without depending on their
+ * internal ref-forwarding. If the element can't be found (or doesn't
+ * support text selection), the token is appended to the end of the value
+ * instead — insertion always degrades gracefully, never throws, never
+ * corrupts existing content.
+ */
+const props = defineProps({
+    /** `{ token, label, source }[]` from `useNodeVariables`. */
+    variables: { type: Array, default: () => [] },
+    /** Current field value (coerced to a string before splicing). */
+    modelValue: { type: [String, Number, Object, Array, null], default: '' },
+    /** `id` of the native input/textarea element to insert into. */
+    targetId: { type: String, default: null },
+});
+
+const emit = defineEmits(['update:modelValue']);
+
+const hasVariables = computed(() => props.variables.length > 0);
+
+// Group by source node so the dropdown reads "Entry Published: entry.id"
+// rather than a flat, ambiguous list — while keeping the overall list in
+// the nearest-upstream-first order `useNodeVariables` already produced.
+const groupedVariables = computed(() => {
+    const groups = [];
+    const bySource = new Map();
+    for (const variable of props.variables) {
+        let group = bySource.get(variable.source);
+        if (!group) {
+            group = { source: variable.source, items: [] };
+            bySource.set(variable.source, group);
+            groups.push(group);
+        }
+        group.items.push(variable);
+    }
+    return groups;
+});
+
+function currentValueAsString() {
+    const value = props.modelValue;
+    if (value === null || value === undefined) return '';
+    return typeof value === 'string' ? value : String(value);
+}
+
+function insert(token) {
+    const el = props.targetId ? document.getElementById(props.targetId) : null;
+    const current = currentValueAsString();
+
+    let start = current.length;
+    let end = current.length;
+    if (el && typeof el.selectionStart === 'number' && typeof el.selectionEnd === 'number') {
+        start = el.selectionStart;
+        end = el.selectionEnd;
+    }
+
+    const next = current.slice(0, start) + token + current.slice(end);
+    emit('update:modelValue', next);
+
+    // Restore focus + caret just after the inserted token, once the DOM has
+    // picked up the new value from the v-model round trip.
+    nextTick(() => {
+        if (!el || typeof el.focus !== 'function') return;
+        el.focus();
+        const pos = start + token.length;
+        if (typeof el.setSelectionRange === 'function') {
+            el.setSelectionRange(pos, pos);
+        }
+    });
+}
+</script>
