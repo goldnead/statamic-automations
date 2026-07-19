@@ -26,7 +26,7 @@ test('a lone node is a root with one open default output', () => {
     const { positions, openOutputs, roots } = computeLayout([trigger], []);
     assert.deepEqual(roots, ['t']);
     assert.equal(positions.t.y, LAYOUT.ORIGIN_Y);
-    assert.deepEqual(openOutputs, [{ from_node_key: 't', from_output: 'default' }]);
+    assert.deepEqual(openOutputs, [{ from_node_key: 't', from_output: 'default', label: '' }]);
 });
 
 test('linear chain stacks vertically in one centred column', () => {
@@ -41,7 +41,7 @@ test('linear chain stacks vertically in one centred column', () => {
     assert.equal(positions.a.y - positions.t.y, LAYOUT.ROW_HEIGHT);
     assert.equal(positions.b.y - positions.a.y, LAYOUT.ROW_HEIGHT);
     // Only the tail leaf has an open output.
-    assert.deepEqual(openOutputs, [{ from_node_key: 'b', from_output: 'default' }]);
+    assert.deepEqual(openOutputs, [{ from_node_key: 'b', from_output: 'default', label: '' }]);
 });
 
 test('branch node fans true/false into two columns and is centred', () => {
@@ -68,13 +68,17 @@ test('an unconnected branch side is reported as an open output', () => {
     const edges = [edge('br', 'yes', 'true')];
     const { openOutputs } = computeLayout(nodes, edges);
     const branchOpen = openOutputs.filter((o) => o.from_node_key === 'br');
-    assert.deepEqual(branchOpen, [{ from_node_key: 'br', from_output: 'false' }]);
+    assert.deepEqual(branchOpen, [{ from_node_key: 'br', from_output: 'false', label: 'False' }]);
 });
 
 test('terminal (stop) node exposes no output', () => {
+    // outputsFor returns { handle, label } objects (labels drive the handle pills).
     assert.deepEqual(outputsFor({ type: 'stop' }), []);
-    assert.deepEqual(outputsFor({ type: 'branch' }), ['true', 'false']);
-    assert.deepEqual(outputsFor({ type: 'send_email' }), ['default']);
+    assert.deepEqual(outputsFor({ type: 'branch' }), [
+        { handle: 'true', label: 'True' },
+        { handle: 'false', label: 'False' },
+    ]);
+    assert.deepEqual(outputsFor({ type: 'send_email' }), [{ handle: 'default', label: '' }]);
 });
 
 test('cyclic data does not hang and still places every node', () => {
