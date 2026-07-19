@@ -36,6 +36,8 @@ FUNCTIONAL DEBUG (Adrian tested on testbench, found real bugs; commit 5a3bede):
 - ROOT CAUSE of "how do I close the loop / loop+done both additive": inline-loop model = body hangs off "loop" output, runs per item + dead-ends, "done" continues after. No loop-back needed. Fix C: labels "Loop/Done" → "For each item"/"After loop" + clearer help. NOTE: if Adrian wants an EXPLICIT loop-back/close UX (n8n-style), that's a follow-up engine+editor design decision.
 - ALL THREE browser-verified end-to-end by actually SAVING flows (manual→switch[paid]→loop→parallel[notify] persists clean). Build + 22 JS + 269 PHP tests green. Fix review dispatched.
 - LESSON: prior "browser verification" only checked rendering presence, never actually saved a flow. Real functional verification requires exercising save/persist, not snapshots.
+- Fix review Spec✅/Quality Approved (37 JS + 269 PHP green). Important finding fixed (commit 42efa51): KeyValueField silently dropped duplicate keys; now shows invalid state + German hint "Doppelte Schlüssel werden zusammengeführt, nur der letzte zählt." + extracted pure useKeyValueRows.js with 16 unit tests + stripped dead tokenable from key_value schemas. Browser-verified duplicate-key hint appears.
+- Testbench has 2 demo automations (1 Debug Test Flow, 2 Loop Switch Test) left for Adrian to inspect. Functional debug commits on branch: 5a3bede + 42efa51.
 
 ## FOLLOW-UP / decisions for Adrian (not blocking)
 - webhook_received trigger uses source `webhook_manager.inbound_endpoints` which has NO arm in options endpoint (Task 2.1) → its endpoint picker is empty. Add the arm in a follow-up (needs webhook-manager installed).

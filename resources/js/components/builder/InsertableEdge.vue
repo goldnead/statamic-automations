@@ -16,11 +16,16 @@
         </div>
 
         <div class="sa-edge-insert nodrag nopan" :style="insertTransform">
-            <NodePicker :library="library" mode="step" @select="onSelect">
-                <button type="button" class="sa-edge-insert__btn" :aria-label="__('Insert step')">
-                    <Icon name="plus" class="size-3" />
-                </button>
-            </NodePicker>
+            <button
+                type="button"
+                class="sa-edge-insert__btn"
+                :class="{ 'sa-edge-insert__btn--pending': isPending }"
+                :aria-label="__('Insert step')"
+                :aria-pressed="isPending"
+                @click="onClick"
+            >
+                <Icon name="plus" class="size-3" />
+            </button>
         </div>
     </EdgeLabelRenderer>
 </template>
@@ -29,7 +34,6 @@
 import { computed, inject } from 'vue';
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, Position } from '@vue-flow/core';
 import { Icon } from '@statamic/cms/ui';
-import NodePicker from './NodePicker.vue';
 
 const props = defineProps({
     id: { type: String, required: true },
@@ -46,8 +50,8 @@ const props = defineProps({
     data: { type: Object, default: () => ({}) },
 });
 
-const library = inject('saLibrary');
-const insert = inject('saInsert');
+const startPick = inject('saStartPick');
+const pendingTarget = inject('saPendingTarget');
 
 const pathData = computed(() =>
     getSmoothStepPath({
@@ -70,14 +74,24 @@ const pillTransform = computed(
     () => ({ transform: `translate(-50%, -50%) translate(${props.sourceX}px, ${props.sourceY + 20}px)` }),
 );
 
-function onSelect(handle) {
-    insert(
-        {
-            from_node_key: props.source,
-            from_output: props.sourceHandleId ?? 'default',
-            to_node_key: props.target,
-        },
-        handle,
-    );
+const edgeTarget = computed(() => ({
+    kind: 'insert',
+    edge: {
+        from_node_key: props.source,
+        from_output: props.sourceHandleId ?? 'default',
+        to_node_key: props.target,
+    },
+}));
+
+const isPending = computed(() => {
+    const p = pendingTarget.value;
+    if (!p || p.kind !== 'insert') return false;
+    const a = p.edge;
+    const b = edgeTarget.value.edge;
+    return a.from_node_key === b.from_node_key && a.from_output === b.from_output && a.to_node_key === b.to_node_key;
+});
+
+function onClick() {
+    startPick(edgeTarget.value);
 }
 </script>

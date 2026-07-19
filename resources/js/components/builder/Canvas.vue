@@ -62,26 +62,30 @@ const props = defineProps({
     selectedKey: { type: String, default: null },
     validation: { type: Object, default: () => ({}) },
     library: { type: Object, default: () => ({ triggers: [], logic: [], actions: [] }) },
+    // The pending sidebar "pick mode" target (see Edit.vue). Null when no "+"
+    // is currently armed; otherwise `{kind:'append', fromNodeKey, output}` or
+    // `{kind:'insert', edge}`. Passed through so adders can render their own
+    // active/pending state without prop-drilling through NodeCard/VueFlow slots.
+    pendingTarget: { type: Object, default: null },
 });
 
 const emit = defineEmits([
     'select',
-    'append',
-    'insert',
+    'toggle-pick',
     'remove-node',
     'rename-node',
     'duplicate-node',
     'toggle-node-disabled',
 ]);
 
-// The picker components (adder nodes + insertable edges) are rendered deep
-// inside Vue Flow's slot templates. Provide the library and the append/insert
-// callbacks so they can reach back up to the page without prop drilling.
-provide('saLibrary', props.library);
-provide('saAppend', (fromNodeKey, output, handle) =>
-    emit('append', { fromNodeKey, output, handle }),
-);
-provide('saInsert', (edge, handle) => emit('insert', { edge, handle }));
+// The adder components (append nodes + insertable edges) are rendered deep
+// inside Vue Flow's slot templates. Provide the pending-pick state and a
+// callback to arm/disarm it so they can reach back up to the page without
+// prop drilling. Clicking a "+" no longer opens a dropdown — it just tells
+// Edit.vue "pick mode is now targeting this spot"; the actual node choice
+// happens in the left NodeLibrary sidebar (see fix-picker-sidebar-brief.md).
+provide('saPendingTarget', computed(() => props.pendingTarget));
+provide('saStartPick', (target) => emit('toggle-pick', target));
 
 // Vue Flow paints the dots via an SVG `fill` attribute, which does not resolve
 // CSS `var()`. Pass a neutral literal here and re-tint theme-aware from cp.css.

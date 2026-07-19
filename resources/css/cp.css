@@ -173,6 +173,14 @@
         @apply text-[11px] font-medium text-gray-400 dark:text-gray-500 select-none;
     }
 
+    /* Armed state: this is the "+" the sidebar pick mode is currently
+     * targeting. Solid ring so it reads distinctly from plain :hover. */
+    .sa-adder__btn--pending,
+    .sa-edge-insert__btn--pending {
+        @apply border-blue-500 border-solid text-blue-600 dark:text-blue-400
+               bg-blue-50 dark:bg-blue-500/10 ring-2 ring-blue-400/50;
+    }
+
     /* Insert "+" hangs on an edge; must sit above the SVG edge path. */
     .sa-edge-insert {
         @apply absolute pointer-events-auto;
@@ -194,13 +202,31 @@
         @apply text-red-600 dark:text-red-400 border-red-400/70;
     }
 
-    /* Node picker popover body (grouped library inside a Dropdown). */
-    .sa-picker {
-        @apply min-w-[220px] max-h-[340px] overflow-y-auto py-1;
+    /* -------------------------------------------------------------------
+     * Left NodeLibrary sidebar — pick mode + collapse rail.
+     * ------------------------------------------------------------------- */
+
+    /* Whole sidebar gets a tinted ring while a "+" has armed pick mode, so
+     * it's obvious where to click next even before reading the banner text. */
+    .sa-library--picking {
+        @apply ring-2 ring-inset ring-blue-400/70 bg-blue-50/40 dark:bg-blue-500/5;
     }
-    .sa-picker__label {
-        @apply px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wider
-               text-gray-400 dark:text-gray-500 select-none;
+    .sa-library-banner {
+        @apply flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 mb-3
+               text-xs font-medium text-blue-700 dark:text-blue-300
+               bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30;
+    }
+    .sa-library-banner__cancel {
+        @apply text-[11px] font-semibold underline underline-offset-2 shrink-0 cursor-pointer
+               text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200;
+    }
+
+    /* Collapsed sidebar shrinks to this slim rail (see Edit.vue's grid
+     * template) — a full-height click target that reopens it. */
+    .sa-library-rail {
+        @apply flex items-center justify-center w-full h-full
+               text-gray-400 dark:text-gray-500 cursor-pointer transition-colors
+               hover:text-blue-600 dark:hover:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800;
     }
 
     /* -------------------------------------------------------------------

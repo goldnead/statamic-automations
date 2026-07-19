@@ -46,6 +46,57 @@ const drawerOpen = ref(false);
 const lastRun = ref(null);
 const selectedNodeKey = ref(null);
 
+// Left NodeLibrary sidebar: default shown/wide; collapses to a slim rail via
+// the header chevron (see fix-picker-sidebar-brief.md § C3).
+const showLibrary = ref(true);
+
+// "Pick mode" pending-insertion target (§ C1). Armed by clicking a canvas
+// "+" (AdderNode/InsertableEdge, via Canvas's `saStartPick`/`saPendingTarget`
+// injection); disarmed by picking a node, clicking the same "+" again,
+// pressing Escape, or the sidebar's Cancel button. Shape:
+//   { kind: 'append', fromNodeKey: string|null, output: string }
+//   { kind: 'insert', edge: { from_node_key, from_output, to_node_key } }
+const pendingTarget = ref(null);
+
+const pickMode = computed(() => pendingTarget.value !== null);
+
+// The root "Add a trigger" adder targets `fromNodeKey: null` — the only spot
+// a trigger may ever be picked. Every other append/insert target is a normal
+// step (logic/action only, see § B1).
+const pickKind = computed(() =>
+    pendingTarget.value?.kind === 'append' && pendingTarget.value.fromNodeKey === null
+        ? 'trigger'
+        : 'step',
+);
+
+function sameTarget(a, b) {
+    if (!a || !b || a.kind !== b.kind) return false;
+    if (a.kind === 'append') {
+        return (a.fromNodeKey ?? null) === (b.fromNodeKey ?? null) && (a.output ?? 'default') === (b.output ?? 'default');
+    }
+    return (
+        a.edge.from_node_key === b.edge.from_node_key &&
+        (a.edge.from_output ?? 'default') === (b.edge.from_output ?? 'default') &&
+        a.edge.to_node_key === b.edge.to_node_key
+    );
+}
+
+// Canvas "+" click → arm pick mode for that target, or disarm it if the same
+// "+" was already armed (a second click toggles it off).
+function onTogglePick(target) {
+    if (sameTarget(pendingTarget.value, target)) {
+        pendingTarget.value = null;
+        return;
+    }
+    pendingTarget.value = target;
+    // Pick mode must always be able to reach the sidebar (brief § C3).
+    showLibrary.value = true;
+}
+
+function cancelPick() {
+    pendingTarget.value = null;
+}
+
 // Save-blocked-by-empty-name UX (see `save()`): the backend's
 // Store/UpdateAutomationRequest both require `name`, but a fresh flow
 // starts with an empty name and only the placeholder "Untitled
@@ -379,28 +430,58 @@ function insertOnEdge(edge, node) {
     history.record();
 }
 
-// Left-library click: drop the node at the end of the current flow.
-function addNode(handle) {
+// Kind is inferred by which library array the handle lives in — there is no
+// `kind` field on the node/handle itself (mirrors Canvas.vue's nodeKind()).
+function isTriggerHandle(handle) {
+    return (props.library.triggers ?? []).some((m) => m.handle === handle);
+}
+
+function hasTriggerNode() {
+    return automation.value.nodes.some((n) => isTriggerHandle(n.type));
+}
+
+// Single choke point for every way a node can enter the graph (left-library
+// click, pick-mode selection, or — while pick mode still has no UI to reach
+// it — a stray append/insert). Enforces the one-trigger-per-flow rule (§ B1):
+// a trigger can only land via the root append target (`fromNodeKey: null`);
+// anywhere else, if the flow already has a trigger, refuse and toast.
+function insertNode(handle, target) {
     if (!findHandleMeta(handle)) return;
+
+    if (isTriggerHandle(handle) && hasTriggerNode()) {
+        notify('error', __('A flow can only have one trigger.'));
+        return;
+    }
+
     const node = makeNode(handle);
+    if (target.kind === 'insert') {
+        insertOnEdge(target.edge, node);
+    } else {
+        appendNode(target.fromNodeKey ?? null, target.output ?? 'default', node);
+    }
+}
+
+// Left-library click OUTSIDE pick mode: drop the node at the end of the
+// current flow (unchanged legacy behaviour, now routed through the same
+// one-trigger guard as every other insertion path).
+function addNode(handle) {
     if (!automation.value.nodes.length) {
-        appendNode(null, 'default', node);
+        insertNode(handle, { kind: 'append', fromNodeKey: null, output: 'default' });
         return;
     }
     const open = firstOpenOutput();
-    appendNode(open?.fromNodeKey ?? null, open?.output ?? 'default', node);
+    insertNode(handle, { kind: 'append', fromNodeKey: open?.fromNodeKey ?? null, output: open?.output ?? 'default' });
 }
 
-// Canvas "+" adder → append at that open output (or create the root trigger).
-function onAppend({ fromNodeKey, output, handle }) {
-    if (!findHandleMeta(handle)) return;
-    appendNode(fromNodeKey ?? null, output ?? 'default', makeNode(handle));
-}
-
-// Canvas edge "+" → insert into that connection.
-function onInsert({ edge, handle }) {
-    if (!findHandleMeta(handle)) return;
-    insertOnEdge(edge, makeNode(handle));
+// Left-library click: if a "+" armed pick mode, the node lands exactly there
+// and pick mode exits; otherwise fall back to the legacy end-of-flow add.
+function onLibraryPick(handle) {
+    if (pendingTarget.value) {
+        insertNode(handle, pendingTarget.value);
+        pendingTarget.value = null;
+        return;
+    }
+    addNode(handle);
 }
 
 function findHandleMeta(handle) {
@@ -504,6 +585,12 @@ function renameNode(nodeKey) {
 // Cmd/Ctrl+Z → undo, Cmd/Ctrl+Shift+Z (or Ctrl+Y) → redo. Skip when the user is
 // typing in a field so native text undo keeps working there.
 function onKeydown(e) {
+    if (e.key === 'Escape' && pendingTarget.value) {
+        e.preventDefault();
+        cancelPick();
+        return;
+    }
+
     const mod = e.metaKey || e.ctrlKey;
     if (!mod) return;
 
@@ -633,10 +720,31 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 
         <div
             class="grid rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden h-[calc(100vh-220px)] min-h-[500px] transition-[grid-template-columns] duration-200 ease-in-out"
-            :style="{ gridTemplateColumns: selectedNode ? '260px 1fr 360px' : '260px 1fr 0px' }"
+            :style="{ gridTemplateColumns: `${showLibrary ? '300px' : '40px'} 1fr ${selectedNode ? '360px' : '0px'}` }"
         >
-            <div class="overflow-y-auto border-r border-gray-200 dark:border-gray-800">
-                <NodeLibrary :library="library" @add="addNode" />
+            <!-- Left library track: collapses to a 40px rail (never fully to 0)
+                 so there's always a click target to reopen it (§ C3). Pick mode
+                 forces this back open (see onTogglePick) and disables the
+                 in-header collapse button while armed. -->
+            <div class="overflow-hidden border-r border-gray-200 dark:border-gray-800">
+                <NodeLibrary
+                    v-if="showLibrary"
+                    :library="library"
+                    :pick-mode="pickMode"
+                    :pick-kind="pickKind"
+                    @add="onLibraryPick"
+                    @toggle="showLibrary = false"
+                    @cancel-pick="cancelPick"
+                />
+                <button
+                    v-else
+                    type="button"
+                    class="sa-library-rail"
+                    :aria-label="__('Show node library')"
+                    @click="showLibrary = true"
+                >
+                    <Icon name="chevron-right" class="size-4" />
+                </button>
             </div>
 
             <div class="sa-canvas-frame">
@@ -646,9 +754,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
                     :selected-key="selectedNodeKey"
                     :validation="validationByNode"
                     :library="library"
+                    :pending-target="pendingTarget"
                     @select="selectedNodeKey = $event"
-                    @append="onAppend"
-                    @insert="onInsert"
+                    @toggle-pick="onTogglePick"
                     @remove-node="removeNode"
                     @rename-node="renameNode"
                     @duplicate-node="duplicateNode"

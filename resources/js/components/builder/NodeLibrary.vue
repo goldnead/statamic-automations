@@ -1,8 +1,30 @@
 <template>
-    <div class="p-3 flex flex-col h-full">
-        <h3 class="text-2xs uppercase tracking-wider text-gray-500 dark:text-gray-400 m-0 mb-2">
-            {{ __('Node library') }}
-        </h3>
+    <div class="p-3 flex flex-col h-full" :class="pickMode && 'sa-library--picking'">
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-2xs uppercase tracking-wider text-gray-500 dark:text-gray-400 m-0">
+                {{ __('Node library') }}
+            </h3>
+            <Button
+                variant="ghost"
+                size="sm"
+                icon-only
+                icon="chevron-left"
+                :aria-label="__('Hide node library')"
+                :disabled="pickMode"
+                @click="$emit('toggle')"
+            />
+        </div>
+
+        <!-- Pick mode is armed by clicking a canvas "+" (see AdderNode /
+             InsertableEdge). The next node clicked below lands at that exact
+             spot instead of the old dropdown flow. -->
+        <div v-if="pickMode" class="sa-library-banner">
+            <span>{{ pickKind === 'trigger' ? __('Choose a trigger to start the flow.') : __('Choose a node to insert here.') }}</span>
+            <button type="button" class="sa-library-banner__cancel" @click="$emit('cancel-pick')">
+                {{ __('Cancel') }}
+            </button>
+        </div>
+
         <Input
             v-model="search"
             type="search"
@@ -66,24 +88,50 @@
 </template>
 
 <script setup>
-import { computed, defineComponent, h, ref } from 'vue';
-import { Badge, Icon, Input, TabContent, TabList, Tabs, TabTrigger } from '@statamic/cms/ui';
+import { computed, defineComponent, h, ref, watch } from 'vue';
+import { Badge, Button, Icon, Input, TabContent, TabList, Tabs, TabTrigger } from '@statamic/cms/ui';
 import { nodeIcon } from '../../composables/useNodeIcon.js';
 
 const props = defineProps({
     library: { type: Object, required: true },
+    // Pick mode is armed by a canvas "+" (see Edit.vue's pendingTarget). While
+    // active, `pickKind` restricts which groups can show at all — a flow can
+    // only ever have one trigger (see fix-picker-sidebar-brief.md § B1), so a
+    // mid-flow step target must never offer triggers, and the root trigger
+    // slot must only offer triggers.
+    pickMode: { type: Boolean, default: false },
+    pickKind: { type: String, default: 'step' }, // 'trigger' | 'step'
 });
 
-defineEmits(['add']);
+defineEmits(['add', 'toggle', 'cancel-pick']);
 
 const search = ref('');
 const activeTab = ref('triggers');
 
-const groups = computed(() => [
-    { key: 'triggers', kind: 'trigger', label: __('Triggers'), items: props.library.triggers ?? [] },
-    { key: 'logic', kind: 'logic', label: __('Logic'), items: props.library.logic ?? [] },
-    { key: 'actions', kind: 'action', label: __('Actions'), items: props.library.actions ?? [] },
-]);
+const groups = computed(() => {
+    const all = [
+        { key: 'triggers', kind: 'trigger', label: __('Triggers'), items: props.library.triggers ?? [] },
+        { key: 'logic', kind: 'logic', label: __('Logic'), items: props.library.logic ?? [] },
+        { key: 'actions', kind: 'action', label: __('Actions'), items: props.library.actions ?? [] },
+    ];
+    if (!props.pickMode) return all;
+    return props.pickKind === 'trigger'
+        ? all.filter((group) => group.key === 'triggers')
+        : all.filter((group) => group.key !== 'triggers');
+});
+
+// Keep the active tab valid whenever the available groups change (e.g.
+// entering a step pick while "Triggers" was focused would otherwise show an
+// empty tab body).
+watch(
+    groups,
+    (next) => {
+        if (!next.some((group) => group.key === activeTab.value)) {
+            activeTab.value = next[0]?.key ?? 'logic';
+        }
+    },
+    { immediate: true },
+);
 
 function filterItems(items) {
     const needle = search.value.toLowerCase();
