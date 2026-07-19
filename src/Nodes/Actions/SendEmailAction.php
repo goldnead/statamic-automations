@@ -60,6 +60,11 @@ class SendEmailAction implements AutomationAction
                 'options' => static::emailTemplateOptions(),
                 'options_source' => 'email_templates.templates',
                 'required' => false,
+                // Declarative UI affordance hint. ConfigPanel keys off this flag
+                // to render the "Vorschau" + "Vorlage wählen" buttons (rendered
+                // preview + master-detail picker) next to the select. Any future
+                // field can opt into the same treatment by setting this.
+                'preview' => 'email',
                 'help' => 'Optional. Send the rendered HTML of a managed email template (referenced by its slug). Leave empty to send the plain-text body below.',
             ];
         }

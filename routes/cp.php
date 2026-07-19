@@ -1,6 +1,7 @@
 <?php
 
 use Goldnead\StatamicAutomations\Http\Controllers\AutomationsController;
+use Goldnead\StatamicAutomations\Http\Controllers\EmailTemplatePreviewController;
 use Goldnead\StatamicAutomations\Http\Controllers\ExportImportController;
 use Goldnead\StatamicAutomations\Http\Controllers\NodesController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\AutomationsPageController;
@@ -108,6 +109,14 @@ Route::prefix('automations')
             Route::get('options/{source}', [NodesController::class, 'options'])
                 ->where('source', '[A-Za-z0-9_.-]+')
                 ->name('options');
+
+            // Email template preview + picker (send_email node affordances).
+            // Guarded seam to the optional email-templates addon: empty list /
+            // 404 when it's absent, never a fatal.
+            Route::get('email-templates', [EmailTemplatePreviewController::class, 'index'])
+                ->name('email-templates.index');
+            Route::get('email-templates/preview', [EmailTemplatePreviewController::class, 'preview'])
+                ->name('email-templates.preview');
 
             // Versions + audit
             Route::get('automations/{automation}/versions', [\Goldnead\StatamicAutomations\Http\Controllers\VersionsController::class, 'index'])->name('automations.versions');

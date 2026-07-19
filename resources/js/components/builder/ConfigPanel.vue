@@ -77,6 +77,29 @@
                             @update:model-value="setField(field.handle, $event)"
                         />
 
+                        <!-- Email template affordances: rendered preview +
+                             master-detail picker, next to the template select. -->
+                        <div
+                            v-if="isEmailTemplateField(field)"
+                            class="mt-2 flex items-center gap-2"
+                        >
+                            <Button
+                                size="xs"
+                                variant="filled"
+                                icon="eye"
+                                :text="__('Vorschau')"
+                                :disabled="!config[field.handle]"
+                                @click="openEmailPreview(field)"
+                            />
+                            <Button
+                                size="xs"
+                                variant="ghost"
+                                icon="layout-list"
+                                :text="__('Vorlage wählen')"
+                                @click="openEmailPicker(field)"
+                            />
+                        </div>
+
                         <p v-if="fieldErrors[field.handle]" class="sa-field-error">
                             {{ fieldErrors[field.handle] }}
                         </p>
@@ -147,12 +170,26 @@
                     @click="$emit('delete')"
                 />
             </footer>
+
+            <!-- Email template preview + picker (mounted once; driven by the
+                 field buttons above via emailFieldHandle). -->
+            <EmailPreviewModal
+                v-model:open="emailPreviewOpen"
+                :slug="emailSlug"
+                :api-base="apiBase"
+            />
+            <EmailTemplatePicker
+                v-model:open="emailPickerOpen"
+                :model-value="emailSlug"
+                :api-base="apiBase"
+                @select="onEmailTemplateSelected"
+            />
         </template>
     </div>
 </template>
 
 <script setup>
-import { computed, defineComponent, h } from 'vue';
+import { computed, defineComponent, h, ref } from 'vue';
 import {
     Badge,
     Button,
@@ -166,6 +203,8 @@ import {
     Icon,
 } from '@statamic/cms/ui';
 import ConditionBuilder from './ConditionBuilder.vue';
+import EmailPreviewModal from './EmailPreviewModal.vue';
+import EmailTemplatePicker from './EmailTemplatePicker.vue';
 import KeyValueField from './KeyValueField.vue';
 import PropertiesSection from './PropertiesSection.vue';
 import TokenInserter from './TokenInserter.vue';
@@ -385,6 +424,37 @@ function fieldComponent(field) {
         key_value: KeyValueField,
         data_reference: Input,
     }[field.type] ?? Input;
+}
+
+// ── Email template affordances ─────────────────────────────────────────────
+// A field opts into the rendered-preview + master-detail picker by declaring
+// `preview: 'email'` in its schema (see SendEmailAction's `template` field).
+// Declarative, so any future field can reuse the same treatment.
+const emailPreviewOpen = ref(false);
+const emailPickerOpen = ref(false);
+const emailFieldHandle = ref(null);
+
+function isEmailTemplateField(field) {
+    return field.preview === 'email';
+}
+
+// Slug currently selected on the field that owns the open modal.
+const emailSlug = computed(() =>
+    emailFieldHandle.value ? (config.value[emailFieldHandle.value] ?? null) : null,
+);
+
+function openEmailPreview(field) {
+    emailFieldHandle.value = field.handle;
+    emailPreviewOpen.value = true;
+}
+
+function openEmailPicker(field) {
+    emailFieldHandle.value = field.handle;
+    emailPickerOpen.value = true;
+}
+
+function onEmailTemplateSelected(slug) {
+    if (emailFieldHandle.value) setField(emailFieldHandle.value, slug);
 }
 
 function fieldProps(field) {
