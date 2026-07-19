@@ -19,6 +19,26 @@ class SwitchNode implements AutomationNode
 {
     use NormalizesKeyValue;
 
+    /**
+     * Output handles this node can route through: one per configured
+     * case (the key_value's values — see {@see execute()}), plus a
+     * trailing "default" for when nothing matches.
+     *
+     * @return array<int, string>
+     */
+    public static function outputs(array $config = []): array
+    {
+        $cases = static::normalizeKeyValue($config['cases'] ?? []);
+
+        $handles = array_map(
+            fn ($output) => (string) ($output ?: 'default'),
+            array_values($cases),
+        );
+        $handles[] = 'default';
+
+        return array_values(array_unique($handles));
+    }
+
     public static function handle(): string
     {
         return 'switch';

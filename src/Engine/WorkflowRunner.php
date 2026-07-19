@@ -9,6 +9,7 @@ use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Models\AutomationScheduledJob;
 use Goldnead\StatamicAutomations\Nodes\Logic\LoopNode;
+use Goldnead\StatamicAutomations\Nodes\Logic\ParallelNode;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 
@@ -374,6 +375,24 @@ class WorkflowRunner
                 continue;
             }
 
+            // Inline Parallel node: it declares its configured branch
+            // handles and never advances the flow itself — the runner
+            // drives EVERY subgraph wired to those handles to completion.
+            // There is no single "joined" output to continue via
+            // afterwards (each branch is its own path), so once fan-out
+            // finishes normally the walk simply ends here.
+            if ($current->type === ParallelNode::handle() && $result->outputHandle === ParallelNode::OUTPUT_FAN_OUT) {
+                $bubbled = $this->driveInlineParallel($run, $automation, $current, $result, $edges, $nodes, $context, $visited);
+
+                if ($bubbled !== null) {
+                    return $bubbled;
+                }
+
+                $current = null;
+
+                continue;
+            }
+
             $current = $this->nextNode($current, $result->outputHandle, $edges, $nodes);
         }
 
@@ -475,6 +494,55 @@ class WorkflowRunner
         }
 
         return $bubbled;
+    }
+
+    /**
+     * Run every subgraph wired to an inline Parallel node's declared
+     * branch outputs to completion — not just the first connected edge.
+     *
+     * Branches run sequentially against the same shared context (this is
+     * a scatter/gather shape, not OS-level concurrency — see
+     * {@see \Goldnead\StatamicAutomations\Nodes\Logic\ParallelNode}'s
+     * class doc), mirroring how {@see driveInlineLoop()} drives one loop
+     * pass at a time. A branch output with no wired edge is skipped.
+     *
+     * Returns null once every branch has run to its natural end (the
+     * caller has nothing further to continue to — fan-out has no single
+     * "joined" output), or a terminal run status ("stopped" / "waiting")
+     * bubbled up from the first branch that hits one — remaining branches
+     * are not started in that case, exactly like a loop pass that bubbles.
+     *
+     * @param  \Illuminate\Support\Collection  $edges
+     * @param  \Illuminate\Support\Collection  $nodes
+     * @param  array<string, bool>  $visited
+     */
+    protected function driveInlineParallel(
+        AutomationRun $run,
+        Automation $automation,
+        AutomationNode $parallelNode,
+        ActionResult $result,
+        $edges,
+        $nodes,
+        AutomationContext $context,
+        array &$visited,
+    ): ?string {
+        $handles = is_array($result->output['branches'] ?? null) ? array_values($result->output['branches']) : [];
+
+        foreach ($handles as $handle) {
+            $branchStart = $this->nextNode($parallelNode, (string) $handle, $edges, $nodes);
+
+            if ($branchStart === null) {
+                continue;
+            }
+
+            $status = $this->runFrom($run, $automation, $branchStart, $context, $edges, $nodes, $visited);
+
+            if ($status === AutomationRun::STATUS_STOPPED || $status === AutomationRun::STATUS_WAITING) {
+                return $status;
+            }
+        }
+
+        return null;
     }
 
     /**
