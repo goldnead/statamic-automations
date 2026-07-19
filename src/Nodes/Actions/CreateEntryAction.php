@@ -88,7 +88,6 @@ class CreateEntryAction implements AutomationAction
                 'label' => 'Field data',
                 'type' => 'key_value',
                 'required' => false,
-                'tokenable' => true,
                 'help' => 'Field handle → value. Values may contain tokens.',
             ],
         ];

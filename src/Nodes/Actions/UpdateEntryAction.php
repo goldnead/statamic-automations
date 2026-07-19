@@ -77,7 +77,6 @@ class UpdateEntryAction implements AutomationAction
                 'label' => 'Field data',
                 'type' => 'key_value',
                 'required' => false,
-                'tokenable' => true,
             ],
         ];
     }

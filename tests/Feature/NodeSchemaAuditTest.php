@@ -95,7 +95,7 @@ it('add_log_entry flags message tokenable', function (): void {
     expect($field['tokenable'] ?? false)->toBeTrue();
 });
 
-it('create_entry wires collection/blueprint and flags data tokenable', function (): void {
+it('create_entry wires collection/blueprint and leaves data as a plain key_value field', function (): void {
     $schema = CreateEntryAction::schema();
 
     $collection = schemaField($schema, 'collection');
@@ -106,11 +106,14 @@ it('create_entry wires collection/blueprint and flags data tokenable', function 
     expect($blueprint['options_source'])->toBe('blueprints');
     expect($blueprint['depends_on'])->toBe('collection');
 
+    // `key_value` fields no longer render a token inserter, so `data` must
+    // not carry a dead `tokenable` flag.
     $data = schemaField($schema, 'data');
-    expect($data['tokenable'] ?? false)->toBeTrue();
+    expect($data['type'])->toBe('key_value');
+    expect($data['tokenable'] ?? false)->toBeFalse();
 });
 
-it('update_entry wires collection + entry picker and flags data tokenable', function (): void {
+it('update_entry wires collection + entry picker and leaves data as a plain key_value field', function (): void {
     $schema = UpdateEntryAction::schema();
 
     $collection = schemaField($schema, 'collection');
@@ -124,8 +127,11 @@ it('update_entry wires collection + entry picker and flags data tokenable', func
     expect($entryId['options_source'])->toBe('entries');
     expect($entryId['depends_on'])->toBe('collection');
 
+    // `key_value` fields no longer render a token inserter, so `data` must
+    // not carry a dead `tokenable` flag.
     $data = schemaField($schema, 'data');
-    expect($data['tokenable'] ?? false)->toBeTrue();
+    expect($data['type'])->toBe('key_value');
+    expect($data['tokenable'] ?? false)->toBeFalse();
 });
 
 it('create_user wires roles to the roles source and flags email/name tokenable', function (): void {
@@ -153,9 +159,12 @@ it('call_automation wires the automation field to the automations source', funct
     expect($field['options_source'])->toBe('automations');
 });
 
-it('set_variable flags its value-bearing field tokenable', function (): void {
+it('set_variable leaves its key_value field without a dead tokenable flag', function (): void {
+    // `variables` is a `key_value` field — it no longer renders a token
+    // inserter, so `tokenable` must not be set.
     $field = schemaField(SetVariableAction::schema(), 'variables');
-    expect($field['tokenable'] ?? false)->toBeTrue();
+    expect($field['type'])->toBe('key_value');
+    expect($field['tokenable'] ?? false)->toBeFalse();
 });
 
 it('switch flags value tokenable and leaves cases as key_value', function (): void {

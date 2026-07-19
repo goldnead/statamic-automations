@@ -70,7 +70,6 @@ class CreateUserAction implements AutomationAction
                 'label' => 'Additional data',
                 'type' => 'key_value',
                 'required' => false,
-                'tokenable' => true,
             ],
         ];
     }

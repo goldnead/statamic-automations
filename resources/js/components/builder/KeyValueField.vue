@@ -8,6 +8,7 @@
             <Input
                 :model-value="row.key"
                 :placeholder="keyLabel"
+                :input-class="duplicateKeys.has(i) && 'ring-2 ring-red-500/70 dark:ring-red-500/70'"
                 @update:model-value="updateRow(i, 'key', $event)"
             />
             <Input
@@ -32,6 +33,10 @@
             :text="__('Add row')"
             @click="addRow"
         />
+
+        <p v-if="duplicateKeys.size" class="text-xs text-red-600 dark:text-red-400">
+            {{ __('Doppelte Schlüssel werden zusammengeführt, nur der letzte zählt.') }}
+        </p>
     </div>
 </template>
 
@@ -61,8 +66,9 @@
  * that actually differs from our own last emission (undo/redo, switching
  * to a different node, initial load) triggers a full resync from props.
  */
-import { ref, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { Input, Button } from '@statamic/cms/ui';
+import { makeRow, toRows, rowsToObject, duplicateKeyIndices } from '../../composables/useKeyValueRows.js';
 
 const props = defineProps({
     modelValue: { type: [Object, Array, String, null], default: () => ({}) },
@@ -75,59 +81,12 @@ const emit = defineEmits(['update:modelValue']);
 const keyLabel = props.keyLabel ?? __('Key');
 const valueLabel = props.valueLabel ?? __('Value');
 
-let nextId = 0;
-function makeRow(key, value) {
-    return { id: nextId++, key: key == null ? '' : String(key), value: value ?? '' };
-}
-
-/**
- * Coerce whatever shape the value arrives in into an ordered array of
- * rows. Handles the shapes that can realistically reach this component:
- * a plain object map (the normal, already-normalised case), a list of
- * `{key,value}` or `{handle,label}` pairs or `[key, value]` tuples (data
- * imported/seeded before this editor existed), or a raw JSON string (a
- * value still mid-round-trip from the old Textarea). Anything else
- * degrades to no rows — never throws.
- */
-function toRows(raw) {
-    if (raw == null) return [];
-    if (typeof raw === 'string') {
-        if (raw.trim() === '') return [];
-        try {
-            return toRows(JSON.parse(raw));
-        } catch {
-            return [];
-        }
-    }
-    if (Array.isArray(raw)) {
-        return raw
-            .map((item) => {
-                if (Array.isArray(item)) return makeRow(item[0], item[1]);
-                if (item && typeof item === 'object') {
-                    const key = item.key ?? item.handle;
-                    const value = item.value ?? item.label;
-                    return key != null ? makeRow(key, value) : null;
-                }
-                return null;
-            })
-            .filter(Boolean);
-    }
-    if (typeof raw === 'object') {
-        return Object.entries(raw).map(([k, v]) => makeRow(k, v));
-    }
-    return [];
-}
-
-function rowsToObject(list) {
-    const out = {};
-    for (const row of list) {
-        if (row.key === '' || row.key == null) continue;
-        out[row.key] = row.value;
-    }
-    return out;
-}
-
 const rows = ref(toRows(props.modelValue));
+
+// Rows whose key duplicates an earlier row's key (empty keys don't count).
+// `rowsToObject` is last-write-wins, so the duplicate silently overwrites an
+// earlier mapping/output-edge unless this is surfaced in the UI.
+const duplicateKeys = computed(() => new Set(duplicateKeyIndices(rows.value)));
 let lastEmitted = JSON.stringify(rowsToObject(rows.value));
 
 watch(
