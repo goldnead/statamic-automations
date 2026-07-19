@@ -76,6 +76,7 @@ const emit = defineEmits([
     'rename-node',
     'duplicate-node',
     'toggle-node-disabled',
+    'replace-trigger',
 ]);
 
 // The adder components (append nodes + insertable edges) are rendered deep
@@ -105,6 +106,7 @@ function cardHandlers(id) {
         duplicate: () => emit('duplicate-node', id),
         'toggle-disabled': () => emit('toggle-node-disabled', id),
         delete: () => emit('remove-node', id),
+        'replace-trigger': () => emit('replace-trigger', id),
     };
 }
 

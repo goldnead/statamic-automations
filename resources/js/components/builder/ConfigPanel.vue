@@ -122,7 +122,12 @@
                     size="sm"
                     @click="$emit('duplicate')"
                 />
+                <!-- Trigger nodes have no Delete here (one-trigger-per-flow —
+                     see NodeCard.vue's dropdown / Edit.vue's removeNode);
+                     "Replace trigger" in the node's "..." menu is the only
+                     way to change it. -->
                 <Button
+                    v-if="kind !== 'trigger'"
                     :text="__('Delete node')"
                     icon="trash"
                     variant="danger"

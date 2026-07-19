@@ -52,27 +52,33 @@ const showLibrary = ref(true);
 
 // "Pick mode" pending-insertion target (§ C1). Armed by clicking a canvas
 // "+" (AdderNode/InsertableEdge, via Canvas's `saStartPick`/`saPendingTarget`
-// injection); disarmed by picking a node, clicking the same "+" again,
-// pressing Escape, or the sidebar's Cancel button. Shape:
+// injection) or a trigger node's "Replace trigger" action; disarmed by
+// picking a node, clicking the same "+"/action again, pressing Escape, or
+// the sidebar's Cancel button. Shape:
 //   { kind: 'append', fromNodeKey: string|null, output: string }
 //   { kind: 'insert', edge: { from_node_key, from_output, to_node_key } }
+//   { kind: 'replace', nodeKey: string }
 const pendingTarget = ref(null);
 
 const pickMode = computed(() => pendingTarget.value !== null);
 
 // The root "Add a trigger" adder targets `fromNodeKey: null` — the only spot
-// a trigger may ever be picked. Every other append/insert target is a normal
-// step (logic/action only, see § B1).
-const pickKind = computed(() =>
-    pendingTarget.value?.kind === 'append' && pendingTarget.value.fromNodeKey === null
-        ? 'trigger'
-        : 'step',
-);
+// a trigger may ever be picked. "Replace trigger" also only ever offers
+// triggers (it's swapping one trigger for another). Every other append/insert
+// target is a normal step (logic/action only, see § B1).
+const pickKind = computed(() => {
+    if (pendingTarget.value?.kind === 'replace') return 'replace-trigger';
+    if (pendingTarget.value?.kind === 'append' && pendingTarget.value.fromNodeKey === null) return 'trigger';
+    return 'step';
+});
 
 function sameTarget(a, b) {
     if (!a || !b || a.kind !== b.kind) return false;
     if (a.kind === 'append') {
         return (a.fromNodeKey ?? null) === (b.fromNodeKey ?? null) && (a.output ?? 'default') === (b.output ?? 'default');
+    }
+    if (a.kind === 'replace') {
+        return a.nodeKey === b.nodeKey;
     }
     return (
         a.edge.from_node_key === b.edge.from_node_key &&
@@ -95,6 +101,19 @@ function onTogglePick(target) {
 
 function cancelPick() {
     pendingTarget.value = null;
+}
+
+// Trigger node's "Replace trigger" action → arm pick mode targeting that
+// node for a swap (see replaceTrigger()), same toggle-off-on-repeat-click
+// behaviour as the canvas "+" adders.
+function onReplaceTrigger(nodeKey) {
+    const target = { kind: 'replace', nodeKey };
+    if (sameTarget(pendingTarget.value, target)) {
+        pendingTarget.value = null;
+        return;
+    }
+    pendingTarget.value = target;
+    showLibrary.value = true;
 }
 
 // Save-blocked-by-empty-name UX (see `save()`): the backend's
@@ -474,14 +493,34 @@ function addNode(handle) {
 }
 
 // Left-library click: if a "+" armed pick mode, the node lands exactly there
-// and pick mode exits; otherwise fall back to the legacy end-of-flow add.
+// and pick mode exits; a "replace" pick mode swaps the trigger in place
+// instead; otherwise fall back to the legacy end-of-flow add.
 function onLibraryPick(handle) {
     if (pendingTarget.value) {
-        insertNode(handle, pendingTarget.value);
+        if (pendingTarget.value.kind === 'replace') {
+            replaceTrigger(pendingTarget.value.nodeKey, handle);
+        } else {
+            insertNode(handle, pendingTarget.value);
+        }
         pendingTarget.value = null;
         return;
     }
     addNode(handle);
+}
+
+// Swap the trigger at `nodeKey` for a different trigger type, IN PLACE: same
+// node_key (so every outgoing edge stays wired to downstream nodes exactly as
+// it was), only `type`/`label`/`config` change to the new trigger's defaults.
+// Does not touch nodes/edges elsewhere in the graph.
+function replaceTrigger(nodeKey, newType) {
+    const meta = findHandleMeta(newType);
+    if (!meta) return;
+    automation.value.nodes = automation.value.nodes.map((n) =>
+        n.node_key === nodeKey
+            ? { ...n, type: newType, label: meta.label ?? newType, config: {} }
+            : n,
+    );
+    history.record();
 }
 
 function findHandleMeta(handle) {
@@ -495,7 +534,21 @@ function findHandleMeta(handle) {
 // Delete a node and heal the sequence: if it sat linearly between a parent and
 // a single child, reconnect parent → child so the flow stays unbroken. Deleting
 // a branch (two children) strands its subtrees as new roots — acceptable for now.
+// A flow without a trigger is invalid (see hasTriggerNode's one-trigger-per-flow
+// rule), so deleting the sole trigger is refused — "Replace trigger" is the only
+// way to change it. removeNode has no incoming edge to heal from for a trigger
+// (it's the root), which is also what caused the pre-fix bug: the ex-child
+// became an unhealed new root that rendered as a second top "trigger".
 function removeNode(nodeKey) {
+    const target = automation.value.nodes.find((n) => n.node_key === nodeKey);
+    if (target && isTriggerHandle(target.type)) {
+        const triggerCount = automation.value.nodes.filter((n) => isTriggerHandle(n.type)).length;
+        if (triggerCount <= 1) {
+            notify('error', __("Ein Flow braucht einen Trigger. Nutze 'Trigger ersetzen', um ihn zu wechseln."));
+            return;
+        }
+    }
+
     const incoming = automation.value.edges.filter((e) => e.to_node_key === nodeKey);
     const outgoing = automation.value.edges.filter((e) => e.from_node_key === nodeKey);
     let edges = automation.value.edges.filter(
@@ -761,6 +814,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
                     @rename-node="renameNode"
                     @duplicate-node="duplicateNode"
                     @toggle-node-disabled="toggleNodeDisabled"
+                    @replace-trigger="onReplaceTrigger"
                 />
             </div>
 

@@ -39,13 +39,26 @@
                         :icon="data.disabled ? 'eye' : 'eye-slash'"
                         @click="$emit('toggle-disabled')"
                     />
-                    <DropdownSeparator />
+                    <!-- Trigger-only: the swap-in-place path (see Edit.vue's
+                         replaceTrigger). A flow always has exactly one trigger
+                         (one-trigger-per-flow rule), so this is the primary way
+                         to change it — "Delete" is hidden below for the same
+                         reason. -->
                     <DropdownItem
-                        :text="__('Delete')"
-                        icon="trash"
-                        variant="destructive"
-                        @click="$emit('delete')"
+                        v-if="kind === 'trigger'"
+                        :text="__('Replace trigger')"
+                        icon="replace"
+                        @click="$emit('replace-trigger')"
                     />
+                    <template v-if="kind !== 'trigger'">
+                        <DropdownSeparator />
+                        <DropdownItem
+                            :text="__('Delete')"
+                            icon="trash"
+                            variant="destructive"
+                            @click="$emit('delete')"
+                        />
+                    </template>
                 </Dropdown>
             </div>
         </div>
@@ -105,7 +118,7 @@ const props = defineProps({
     selected: { type: Boolean, default: false },
 });
 
-defineEmits(['rename', 'duplicate', 'toggle-disabled', 'delete']);
+defineEmits(['rename', 'duplicate', 'toggle-disabled', 'delete', 'replace-trigger']);
 
 const icon = computed(() => nodeIcon(props.data.type, props.kind));
 

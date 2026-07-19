@@ -19,7 +19,7 @@
              InsertableEdge). The next node clicked below lands at that exact
              spot instead of the old dropdown flow. -->
         <div v-if="pickMode" class="sa-library-banner">
-            <span>{{ pickKind === 'trigger' ? __('Choose a trigger to start the flow.') : __('Choose a node to insert here.') }}</span>
+            <span>{{ pickBannerText }}</span>
             <button type="button" class="sa-library-banner__cancel" @click="$emit('cancel-pick')">
                 {{ __('Cancel') }}
             </button>
@@ -94,19 +94,22 @@ import { nodeIcon } from '../../composables/useNodeIcon.js';
 
 const props = defineProps({
     library: { type: Object, required: true },
-    // Pick mode is armed by a canvas "+" (see Edit.vue's pendingTarget). While
-    // active, `pickKind` restricts which groups can show at all — a flow can
-    // only ever have one trigger (see fix-picker-sidebar-brief.md § B1), so a
-    // mid-flow step target must never offer triggers, and the root trigger
-    // slot must only offer triggers.
+    // Pick mode is armed by a canvas "+" or a trigger's "Replace trigger"
+    // action (see Edit.vue's pendingTarget). While active, `pickKind`
+    // restricts which groups can show at all — a flow can only ever have one
+    // trigger (see fix-picker-sidebar-brief.md § B1), so a mid-flow step
+    // target must never offer triggers, and the root trigger slot /
+    // replace-trigger target must only offer triggers.
     pickMode: { type: Boolean, default: false },
-    pickKind: { type: String, default: 'step' }, // 'trigger' | 'step'
+    pickKind: { type: String, default: 'step' }, // 'trigger' | 'replace-trigger' | 'step'
 });
 
 defineEmits(['add', 'toggle', 'cancel-pick']);
 
 const search = ref('');
 const activeTab = ref('triggers');
+
+const isTriggerPick = computed(() => props.pickKind === 'trigger' || props.pickKind === 'replace-trigger');
 
 const groups = computed(() => {
     const all = [
@@ -115,9 +118,15 @@ const groups = computed(() => {
         { key: 'actions', kind: 'action', label: __('Actions'), items: props.library.actions ?? [] },
     ];
     if (!props.pickMode) return all;
-    return props.pickKind === 'trigger'
+    return isTriggerPick.value
         ? all.filter((group) => group.key === 'triggers')
         : all.filter((group) => group.key !== 'triggers');
+});
+
+const pickBannerText = computed(() => {
+    if (props.pickKind === 'replace-trigger') return __('Choose a trigger to replace the current one.');
+    if (props.pickKind === 'trigger') return __('Choose a trigger to start the flow.');
+    return __('Choose a node to insert here.');
 });
 
 // Keep the active tab valid whenever the available groups change (e.g.
