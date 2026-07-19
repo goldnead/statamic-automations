@@ -62,7 +62,7 @@ class LoopNode implements AutomationNode
 
     public static function description(): ?string
     {
-        return 'Runs a sub-automation once for every item in a collection.';
+        return 'Iterates over a collection. The "For each item" output runs its connected nodes once per item; once every item has run, the flow automatically continues via "After loop" — no loop-back edge needed.';
     }
 
     public static function group(): string
@@ -84,7 +84,7 @@ class LoopNode implements AutomationNode
                 'type' => 'text',
                 'required' => true,
                 'tokenable' => true,
-                'help' => 'A token resolving to an array, e.g. {{ trigger.entries }}.',
+                'help' => 'A token resolving to an array, e.g. {{ trigger.entries }}. Connect the nodes to repeat per item to the "For each item" output; they run automatically once per item, then the flow continues via "After loop" — no loop-back edge needed.',
             ],
             [
                 'handle' => 'mode',

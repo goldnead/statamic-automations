@@ -78,7 +78,9 @@ function keyValueEntries(raw) {
  *              output per DISTINCT handle (case value becomes the label),
  *              plus a trailing "default" (deduped if a case already targets
  *              it). Empty/missing cases → just "default".
- * - loop     → fixed loop/done.
+ * - loop     → fixed handles `loop`/`done`, labelled "For each item"/"After
+ *              loop" — the body wired to `loop` runs once per item and then
+ *              continues on its own; no loop-back edge is needed.
  * - parallel → only in `inline` mode (the default): `config.branches` is a
  *              `{ outputHandle: label }` map, one output per key. In legacy
  *              `automation` mode the branches are sub-automation runs, not
@@ -113,9 +115,14 @@ export function outputsFor(node, opts = DEFAULT_OPTS) {
     }
 
     if (type === 'loop') {
+        // "loop" starts the per-item body — it runs once for every item and
+        // then continues automatically; "done" fires once after every item
+        // has run. Neither needs a loop-back edge, hence the plainer labels
+        // ("For each item" / "After loop") over the more mechanical
+        // "Loop"/"Done", which read as if the body had to close a loop.
         return [
-            { handle: 'loop', label: 'Loop' },
-            { handle: 'done', label: 'Done' },
+            { handle: 'loop', label: 'For each item' },
+            { handle: 'done', label: 'After loop' },
         ];
     }
 

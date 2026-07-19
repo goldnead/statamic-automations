@@ -150,6 +150,7 @@ import {
     Icon,
 } from '@statamic/cms/ui';
 import ConditionBuilder from './ConditionBuilder.vue';
+import KeyValueField from './KeyValueField.vue';
 import PropertiesSection from './PropertiesSection.vue';
 import TokenInserter from './TokenInserter.vue';
 import { nodeIcon } from '../../composables/useNodeIcon.js';
@@ -279,8 +280,11 @@ const nodeVariables = useNodeVariables(
 // Only text/textarea-rendered fields get a TokenInserter — a `tokenable`
 // `select` (e.g. UpdateEntryAction's `entry_id`, "pick an entry, or use a
 // token") has no caret to insert into; its help text already documents the
-// token fallback.
-const TOKENABLE_FIELD_TYPES = ['text', 'textarea', 'key_value'];
+// token fallback. `key_value` is a row editor (KeyValueField) — no single
+// caret either, so it's excluded the same way even though some backend
+// key_value fields (e.g. CreateEntryAction's `data`) still declare
+// `tokenable: true` for their own documentation purposes.
+const TOKENABLE_FIELD_TYPES = ['text', 'textarea'];
 
 function isTokenable(field) {
     return field.tokenable === true && TOKENABLE_FIELD_TYPES.includes(field.type);
@@ -326,7 +330,7 @@ function fieldComponent(field) {
         code: CodeEditor,
         json: CodeEditor,
         tags: Input,
-        key_value: Textarea,
+        key_value: KeyValueField,
         data_reference: Input,
     }[field.type] ?? Input;
 }
@@ -345,6 +349,10 @@ function fieldProps(field) {
     }
     if (field.type === 'textarea') {
         base.rows = field.rows ?? 4;
+    }
+    if (field.type === 'key_value') {
+        if (field.key_label) base.keyLabel = field.key_label;
+        if (field.value_label) base.valueLabel = field.value_label;
     }
     return base;
 }

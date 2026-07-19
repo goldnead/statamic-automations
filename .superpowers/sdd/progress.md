@@ -24,6 +24,11 @@ PHASE 2 core done (empty dropdowns fixed, entity pickers + cascading + token ins
 Task 2.3: review Spec✅/Quality Approved (backward BFS transitive+cycle-safe, non-destructive caret insert). The id-prop ⚠️ resolved by controller browser test.
 Task 3 (events): complete-pending-review (commit 3fcfe07, 269 green). +11 triggers: entry_created/entry_saving/term_saved/term_deleted/user_saved/user_deleted/asset_uploaded/asset_saved/asset_deleted/global_set_saved/nav_saved. Skipped entry_unpublished (no event class), submission_created (==form_submitted). Review dispatched. PHASE 3 DONE.
   ROLL-UP: nav_saved has no filter (no statamic.navs options source).
+Task 4 (UX): complete-pending-review (commit e69164d, build + 22/22 JS green; browser-verified: right sidebar hidden when no node selected, appears with Close(X) on select, Close re-collapses; left palette = Triggers|Logic|Actions TABS not accordion). Review dispatched. PHASE 4 DONE.
+
+STATUS: Code Phases 1-4 all implemented + browser-verified on testbench. FINAL WHOLE-BRANCH REVIEW (opus): READY TO MERGE, all integration seams verified.
+PRE-DEPLOY IMPORTANT (from final review): loop AND parallel default mode changed to `inline`. Existing STORED automations with loop/parallel nodes lacking `mode: automation` would now run inline (silently skip old sub-automation). Before deploy: grep prod/staging automation store for type:loop|parallel nodes without mode:automation. If none (likely), zero impact.
+Remaining: Phase 5 (welcome-series on staging) + deploy — BOTH outward actions on real staging/Adrian's data → need Adrian go/no-go.
 
 ## FOLLOW-UP / decisions for Adrian (not blocking)
 - webhook_received trigger uses source `webhook_manager.inbound_endpoints` which has NO arm in options endpoint (Task 2.1) → its endpoint picker is empty. Add the arm in a follow-up (needs webhook-manager installed).

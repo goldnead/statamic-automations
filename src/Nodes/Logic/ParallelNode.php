@@ -110,7 +110,9 @@ class ParallelNode implements AutomationNode
                 'label' => 'Branches',
                 'type' => 'key_value',
                 'required' => true,
-                'help' => 'Automation mode: branch name → automation handle. Inline mode: branch output handle → label. Connect an edge from each branch handle.',
+                'key_label' => 'Branch handle',
+                'value_label' => 'Label',
+                'help' => "Inline mode: one row per branch — the handle on the left becomes a connectable output on the canvas, the label on the right is just a display name. Connect an edge from each branch handle to fan out; with no rows this node has no outputs yet. Automation mode (legacy): left = branch name, right = the automation handle/id to run for that branch.",
             ],
             [
                 'handle' => 'fail_fast',

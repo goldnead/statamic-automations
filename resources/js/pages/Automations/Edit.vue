@@ -46,6 +46,15 @@ const drawerOpen = ref(false);
 const lastRun = ref(null);
 const selectedNodeKey = ref(null);
 
+// Save-blocked-by-empty-name UX (see `save()`): the backend's
+// Store/UpdateAutomationRequest both require `name`, but a fresh flow
+// starts with an empty name and only the placeholder "Untitled
+// automation" showing — sending that as-is 422s with a generic message
+// the UI didn't surface anywhere. `nameInputRef` lets `save()` focus the
+// field; `nameInvalid` drives its error ring until the user types again.
+const nameInputRef = ref(null);
+const nameInvalid = ref(false);
+
 // Undo/redo over the graph (nodes + edges). Each mutation below calls
 // `history.record()` after applying its change; drags commit once on drop.
 const history = useHistory({
@@ -125,7 +134,35 @@ function notify(level, message) {
     }
 }
 
+// Pulls the first field-level message out of a 422's `errors` map (Laravel's
+// FormRequest shape: `{ errors: { field: ["message", ...] } }`) so a future
+// validation failure surfaces something legible instead of the generic
+// "Save failed." / "the given data is invalid" fallback.
+function firstValidationMessage(e) {
+    const errors = e?.response?.data?.errors;
+    if (errors && typeof errors === 'object') {
+        const first = Object.values(errors)[0];
+        const message = Array.isArray(first) ? first[0] : first;
+        if (message) return message;
+    }
+    return e?.response?.data?.message ?? null;
+}
+
 async function save({ silent = false } = {}) {
+    // The name is required by both Store/UpdateAutomationRequest; catching an
+    // empty one here (instead of letting it 422) means the failure is
+    // attributable to a specific field the user can see and fix immediately.
+    if (!automation.value.name?.trim()) {
+        nameInvalid.value = true;
+        if (!silent) {
+            notify('error', __('Bitte benenne die Automation, bevor du speicherst.'));
+            nameInputRef.value?.focus();
+            nameInputRef.value?.select();
+        }
+        return;
+    }
+    nameInvalid.value = false;
+
     saving.value = true;
     try {
         const payload = {
@@ -153,7 +190,7 @@ async function save({ silent = false } = {}) {
             if (!silent) notify('success', __('Automation created.'));
         }
     } catch (e) {
-        if (!silent) notify('error', e?.response?.data?.message ?? __('Save failed.'));
+        if (!silent) notify('error', firstValidationMessage(e) ?? __('Save failed.'));
         throw e;
     } finally {
         saving.value = false;
@@ -519,12 +556,24 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
                     <Icon name="workflow" class="size-5 text-gray-500" />
                     <span class="text-[15px] text-gray-400 dark:text-gray-500 font-medium">{{ __('Automations') }}</span>
                     <span class="text-gray-300 dark:text-gray-600">/</span>
-                    <input
-                        v-model="automation.name"
-                        type="text"
-                        class="bg-transparent border-none focus:outline-none focus:ring-0 text-[25px] font-medium antialiased min-w-[240px] text-gray-900 dark:text-gray-100"
-                        :placeholder="__('Untitled automation')"
-                    />
+                    <!-- The ring lives on this wrapper, not the input itself —
+                         the input's own `focus:ring-0`/`focus:outline-none`
+                         (deliberate, so it reads as inline header text) would
+                         otherwise cancel an invalid-state ring the instant
+                         `save()` focuses it. -->
+                    <span
+                        class="rounded-md"
+                        :class="nameInvalid && 'ring-2 ring-red-500/70 dark:ring-red-500/70'"
+                    >
+                        <input
+                            ref="nameInputRef"
+                            v-model="automation.name"
+                            type="text"
+                            class="bg-transparent border-none focus:outline-none focus:ring-0 text-[25px] font-medium antialiased min-w-[240px] text-gray-900 dark:text-gray-100"
+                            :placeholder="__('Untitled automation')"
+                            @input="nameInvalid = false"
+                        />
+                    </span>
                     <Badge
                         :color="automation.enabled ? 'green' : 'amber'"
                         :text="automation.enabled ? __('Active') : __('Draft')"

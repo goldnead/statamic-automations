@@ -80,7 +80,9 @@ class SwitchNode implements AutomationNode
                 'label' => 'Cases',
                 'type' => 'key_value',
                 'required' => true,
-                'help' => 'Match value → output handle. Connect an edge from each output handle.',
+                'key_label' => 'Match value',
+                'value_label' => 'Output handle',
+                'help' => "One row per case: the value to match on the left, the output handle it routes to on the right. Each output handle you type here becomes a connectable output on the canvas — connect an edge from it to that case's branch.",
             ],
         ];
     }
