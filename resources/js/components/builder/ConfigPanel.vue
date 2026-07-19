@@ -47,12 +47,14 @@
                         :label="field.label"
                         :instructions="field.help"
                         class="mb-4"
+                        :class="fieldErrors[field.handle] && 'sa-field--invalid'"
                     >
                         <template v-if="isTokenable(field)" #actions>
                             <TokenInserter
                                 :variables="nodeVariables"
                                 :model-value="config[field.handle] ?? field.default ?? ''"
                                 :target-id="fieldDomId(field)"
+                                :mode="tokenMode(field)"
                                 @update:model-value="setField(field.handle, $event)"
                             />
                         </template>
@@ -74,6 +76,10 @@
                             :model-value="config[field.handle] ?? field.default ?? null"
                             @update:model-value="setField(field.handle, $event)"
                         />
+
+                        <p v-if="fieldErrors[field.handle]" class="sa-field-error">
+                            {{ fieldErrors[field.handle] }}
+                        </p>
                     </Field>
 
                     <ConditionBuilder
@@ -227,10 +233,19 @@ const props = defineProps({
     library: { type: Object, required: true },
     triggerOutputSchema: { type: Object, default: null },
     apiBase: { type: String, required: true },
+    // handle → error message for invalid fields on the selected node (A3).
+    // Drives the red field ring + inline message below each control.
+    fieldErrors: { type: Object, default: () => ({}) },
     // Full graph — `{ nodes: [...], edges: [...] }` — used by
     // `useNodeVariables` to walk upstream from the selected node and
     // collect the variables `TokenInserter` offers on `tokenable` fields.
     automation: { type: Object, default: () => ({ nodes: [], edges: [] }) },
+    // Most recent (test) run for this automation — `{ node_runs: [...] }` from
+    // `AutomationsController::test`. Optional; when present, `useNodeVariables`
+    // resolves each token's SAMPLE VALUE from the recorded node outputs so the
+    // picker can show `entry.title → "My Post"`. Absent ⇒ no samples, nothing
+    // else changes.
+    lastRun: { type: Object, default: null },
 });
 
 const emit = defineEmits(['update:config', 'update:label', 'delete', 'duplicate', 'deselect']);
@@ -285,19 +300,46 @@ const nodeVariables = useNodeVariables(
     () => props.node?.node_key ?? null,
     () => props.automation,
     () => props.library,
+    () => props.lastRun,
 );
 
-// Only text/textarea-rendered fields get a TokenInserter — a `tokenable`
-// `select` (e.g. UpdateEntryAction's `entry_id`, "pick an entry, or use a
-// token") has no caret to insert into; its help text already documents the
-// token fallback. `key_value` is a row editor (KeyValueField) — no single
-// caret either, so it's excluded the same way even though some backend
-// key_value fields (e.g. CreateEntryAction's `data`) still declare
-// `tokenable: true` for their own documentation purposes.
-const TOKENABLE_FIELD_TYPES = ['text', 'textarea'];
+// Which field types can carry a token, and HOW the token is applied:
+//  - `insert` types render a native input/textarea with a caret, so a token
+//    is spliced in at the cursor (`"Hallo {{ entry.title }}"`).
+//  - `replace` types (select/combobox) accept a token AS their whole value —
+//    there's no caret, so picking a token sets the field outright.
+// `key_value` is deliberately absent here: it's a multi-row editor whose
+// *value* cells each get their own picker inside KeyValueField, not a single
+// field-level one.
+const TOKEN_INSERT_TYPES = ['text', 'textarea', 'data_reference'];
+const TOKEN_REPLACE_TYPES = ['select', 'combobox'];
 
+// Types that default to tokenable WITHOUT needing an explicit flag — free
+// text has always offered the picker, so keep that implicit. Everything else
+// (select/combobox/…) must opt in with `tokenable: true`, because for an enum
+// `select` a token is usually NOT a valid value.
+const TOKENABLE_BY_DEFAULT = ['text', 'textarea'];
+
+/**
+ * Declarative tokenability: a field opts in/out with `tokenable`, with a
+ * sensible per-type default when the flag is absent.
+ *  - `tokenable: false` → never (hard opt-out, even for text).
+ *  - `tokenable: true`  → yes, for any insert/replace-capable type.
+ *  - unset              → default: text/textarea yes, everything else no.
+ * Fields backed by a resolved options endpoint (`options_source`, i.e. a real
+ * enum picker) never get the picker — a raw token isn't one of their options.
+ */
 function isTokenable(field) {
-    return field.tokenable === true && TOKENABLE_FIELD_TYPES.includes(field.type);
+    if (field.options_source) return false;
+    const supported = TOKEN_INSERT_TYPES.includes(field.type) || TOKEN_REPLACE_TYPES.includes(field.type);
+    if (!supported) return false;
+    if (field.tokenable === false) return false;
+    if (field.tokenable === true) return true;
+    return TOKENABLE_BY_DEFAULT.includes(field.type);
+}
+
+function tokenMode(field) {
+    return TOKEN_REPLACE_TYPES.includes(field.type) ? 'replace' : 'insert';
 }
 
 // Stable per-node-per-field DOM id so `TokenInserter` can look up the
@@ -363,6 +405,10 @@ function fieldProps(field) {
     if (field.type === 'key_value') {
         if (field.key_label) base.keyLabel = field.key_label;
         if (field.value_label) base.valueLabel = field.value_label;
+        // Row-level token picker on each value cell (unless the field opts out
+        // with `tokenable: false`). Values are the token-bearing side; keys are
+        // literal map keys, so only the value gets a picker inside KeyValueField.
+        if (field.tokenable !== false) base.variables = nodeVariables.value;
     }
     return base;
 }

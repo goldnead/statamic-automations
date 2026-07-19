@@ -100,6 +100,34 @@ class FlowValidatorTest extends TestCase
         $this->assertContains('branch_invalid_output', $codes);
     }
 
+    public function test_missing_required_field_reports_node_and_field(): void
+    {
+        $automation = Automation::create(['name' => 'A', 'handle' => 'a']);
+        AutomationNode::create(['automation_id' => $automation->id, 'node_key' => 't', 'type' => 'manual']);
+        // send_email requires to/subject/body; leave them empty.
+        AutomationNode::create([
+            'automation_id' => $automation->id,
+            'node_key' => 'mail',
+            'type' => 'send_email',
+            'config' => [],
+        ]);
+        AutomationEdge::create([
+            'automation_id' => $automation->id,
+            'from_node_key' => 't',
+            'to_node_key' => 'mail',
+        ]);
+
+        $issues = app(FlowValidator::class)->validate($automation->fresh()->load(['nodes', 'edges']));
+
+        $missing = array_values(array_filter($issues, fn ($i) => ($i['code'] ?? null) === 'missing_required_config'));
+        $this->assertNotEmpty($missing);
+        foreach ($missing as $issue) {
+            $this->assertSame('mail', $issue['node_key']);
+            $this->assertArrayHasKey('field', $issue);
+            $this->assertContains($issue['field'], ['to', 'subject', 'body']);
+        }
+    }
+
     public function test_valid_automation_returns_empty_issues(): void
     {
         $automation = Automation::create(['name' => 'A', 'handle' => 'a']);

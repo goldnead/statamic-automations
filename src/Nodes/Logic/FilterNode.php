@@ -3,11 +3,11 @@
 namespace Goldnead\StatamicAutomations\Nodes\Logic;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
-use Goldnead\StatamicAutomations\Contracts\AutomationNode;
+use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
 use Goldnead\StatamicAutomations\Engine\ConditionEvaluator;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 
-class FilterNode implements AutomationNode
+class FilterNode implements AutomationLogicNode
 {
     public static function handle(): string
     {
@@ -58,7 +58,8 @@ class FilterNode implements AutomationNode
     }
 
     /**
-     * Static evaluator entry-point used by the engine's NodeExecutor.
+     * Static evaluator entry-point used by the engine's NodeExecutor (which
+     * prefers evaluate() when present, so this stays the runtime path).
      */
     public static function evaluate(
         AutomationContext $context,
@@ -75,5 +76,14 @@ class FilterNode implements AutomationNode
         }
 
         return ActionResult::success(['matched' => true]);
+    }
+
+    /**
+     * {@see AutomationLogicNode} entry point — delegates to evaluate() with the
+     * engine's ConditionEvaluator so the node satisfies the logic-node contract.
+     */
+    public function execute(AutomationContext $context, array $config): ActionResult
+    {
+        return static::evaluate($context, $config, app(ConditionEvaluator::class));
     }
 }

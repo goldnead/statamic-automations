@@ -20,6 +20,26 @@
             </div>
 
             <div class="flex items-center gap-1 shrink-0">
+                <!-- Inline validity badge (A3): a red "Invalid" / amber
+                     "Incomplete" chip surfaces the node's validation state
+                     right in the header, complementing the card ring + the
+                     footer status pill. -->
+                <Badge
+                    v-if="status === 'error'"
+                    color="red"
+                    :text="__('Invalid')"
+                    size="sm"
+                    pill
+                    icon="warning-diamond"
+                />
+                <Badge
+                    v-else-if="status === 'warning'"
+                    color="amber"
+                    :text="__('Incomplete')"
+                    size="sm"
+                    pill
+                    icon="warning-diamond"
+                />
                 <Badge :color="kindColor" :text="kindLabel" size="sm" pill />
                 <Dropdown side="bottom" align="end">
                     <template #trigger>

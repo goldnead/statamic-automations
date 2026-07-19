@@ -11,11 +11,25 @@
                 :input-class="duplicateKeys.has(i) && 'ring-2 ring-red-500/70 dark:ring-red-500/70'"
                 @update:model-value="updateRow(i, 'key', $event)"
             />
-            <Input
-                :model-value="row.value"
-                :placeholder="valueLabel"
-                @update:model-value="updateRow(i, 'value', $event)"
-            />
+            <div class="flex items-center gap-1">
+                <Input
+                    :id="valueDomId(i)"
+                    :model-value="row.value"
+                    :placeholder="valueLabel"
+                    class="flex-1 min-w-0"
+                    @update:model-value="updateRow(i, 'value', $event)"
+                />
+                <!-- Value side accepts tokens — insert an upstream variable at
+                     the caret of this row's value input. Omitted when no
+                     variables are available (the parent passes none). -->
+                <TokenInserter
+                    v-if="variables.length"
+                    :variables="variables"
+                    :model-value="row.value"
+                    :target-id="valueDomId(i)"
+                    @update:model-value="updateRow(i, 'value', $event)"
+                />
+            </div>
             <Button
                 variant="ghost"
                 size="sm"
@@ -68,18 +82,31 @@
  */
 import { ref, computed, watch } from 'vue';
 import { Input, Button } from '@statamic/cms/ui';
+import TokenInserter from './TokenInserter.vue';
 import { makeRow, toRows, rowsToObject, duplicateKeyIndices } from '../../composables/useKeyValueRows.js';
 
 const props = defineProps({
     modelValue: { type: [Object, Array, String, null], default: () => ({}) },
     keyLabel: { type: String, default: null },
     valueLabel: { type: String, default: null },
+    // Upstream token variables (`{ token, label, source, sample }[]`) offered on
+    // each value cell. Empty ⇒ no per-row picker is rendered. Supplied by
+    // ConfigPanel from `useNodeVariables`.
+    variables: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits(['update:modelValue']);
 
 const keyLabel = props.keyLabel ?? __('Key');
 const valueLabel = props.valueLabel ?? __('Value');
+
+// Unique-per-instance base for value-input DOM ids, so TokenInserter can find
+// the right native <input> to splice a token into — and two key_value fields
+// on the same node never collide on `getElementById`.
+const instanceId = Math.random().toString(36).slice(2, 9);
+function valueDomId(i) {
+    return `sa-kv-${instanceId}-value-${i}`;
+}
 
 const rows = ref(toRows(props.modelValue));
 

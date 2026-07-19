@@ -35,7 +35,7 @@ class NodeRegistryTest extends TestCase
 
         $this->assertSame('send_email', $description['handle']);
         $this->assertSame('action', $description['kind']);
-        $this->assertSame('Send Email Notification', $description['label']);
+        $this->assertSame('Send Email', $description['label']);
         $this->assertNotEmpty($description['schema']);
     }
 

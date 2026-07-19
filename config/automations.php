@@ -263,6 +263,14 @@ return [
             'facade' => [
                 'Goldnead\\WebhookManager\\Facades\\WebhookManager',
             ],
+            // Outbound destinations live in Webhook Manager's outbound webhook
+            // repository (bound in its service provider), NOT on the facade.
+            // The adapter resolves this interface to list destinations and to
+            // dispatch by handle. Override only if you run a forked package.
+            'outbound_repository' => 'Goldnead\\WebhookManager\\Contracts\\Repositories\\OutboundWebhookRepositoryInterface',
+            // The action that performs an actual outbound delivery (snapshot +
+            // sync/queue branching). Resolved from the container when present.
+            'dispatch_action' => 'Goldnead\\WebhookManager\\Domain\\OutboundWebhook\\Actions\\DispatchOutboundWebhookAction',
             // Inbound bridge: the event Webhook Manager fires when it receives
             // a validated inbound request. When this class exists, the
             // "Webhook Received" trigger listens to it. Adjust to match the
@@ -282,6 +290,9 @@ return [
             // When true, write timeline entries on the lead whenever an
             // automation modifies it. Honored by the LeadHub addon.
             'emit_timeline_events' => true,
+            // FQCN of the LeadHub event that backs the `contact_score_changed`
+            // trigger. Overridable so a future rename plugs in without code.
+            'score_changed_event' => 'Goldnead\\Leadhub\\Events\\LeadHubContactScoreChanged',
         ],
     ],
 
@@ -303,6 +314,44 @@ return [
         'send_webhook' => true,
         'add_log_entry' => true,
         'ai_generate' => true,
+        // Native Statamic operations
+        'publish_entry' => true,
+        'unpublish_entry' => true,
+        'delete_entry' => true,
+        'create_term' => true,
+        'update_user' => true,
+        'assign_user_role' => true,
+        'add_user_to_group' => true,
+        'set_global_value' => true,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Custom Event Triggers
+    |--------------------------------------------------------------------------
+    |
+    | Turn any application event into an automation trigger without writing a
+    | trigger class. Each entry maps an event FQCN to a trigger definition.
+    | These appear in the CP trigger list automatically. Closures are not
+    | config-serialisable, so this path supports the declarative forms only:
+    | `payload` as a dot-path string (or '*' to dump public props) and
+    | `matches` as an invokable class-string. For the full-power form (closures)
+    | call `Automations::registerEventTrigger()` from a service provider's boot().
+    |
+    | Example:
+    |
+    |   \App\Events\OrderShipped::class => [
+    |       'handle' => 'order_shipped',
+    |       'label' => 'Order Shipped',
+    |       'group' => 'Shop',
+    |       'payload' => 'order',            // {{ order.id }} etc.
+    |       'output_schema' => ['order' => ['id' => 'string', 'total' => 'number']],
+    |   ],
+    |
+    */
+
+    'event_triggers' => [
+        //
     ],
 
 ];

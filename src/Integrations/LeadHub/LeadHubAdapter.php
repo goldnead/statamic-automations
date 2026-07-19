@@ -165,6 +165,71 @@ class LeadHubAdapter
     }
 
     /**
+     * Adjust a LeadHub contact's lead score by a (signed) delta. Delegates to
+     * LeadHub::adjustScore(string|Contact $contact, int $delta, ?string $reason)
+     * which returns the new score. Guarded — returns ok:false when LeadHub is
+     * absent so callers degrade gracefully instead of fataling.
+     *
+     * @return array{ok: bool, error?: string, result?: mixed}
+     */
+    public function adjustScore(string $contactRef, int $delta, ?string $reason = null): array
+    {
+        return $this->callMutation('adjustScore', [$contactRef, $delta, $reason]);
+    }
+
+    // ---------------------------------------------------------------------
+    // Click tracking (email link rewriting)
+    //
+    // The two services live in the LeadHub addon and are bound there as
+    // public singletons. We reference them by class-string (not ::class) and
+    // gate on the container binding so this seam has no hard dependency on the
+    // sibling addon — and so tests can bind fakes under these keys.
+    // ---------------------------------------------------------------------
+
+    /** @var string */
+    public const CLICK_LINKER = 'Goldnead\\Leadhub\\Services\\ClickTracking\\ClickTrackingLinker';
+
+    /** @var string */
+    public const RECIPIENT_RESOLVER = 'Goldnead\\Leadhub\\Services\\ClickTracking\\RecipientResolver';
+
+    /**
+     * Whether LeadHub's click-tracking surface is resolvable. True only when
+     * both the linker and the recipient resolver are bound in the container
+     * (they are, as singletons, when the LeadHub addon is installed).
+     */
+    public function clickTrackingAvailable(): bool
+    {
+        return app()->bound(self::CLICK_LINKER) && app()->bound(self::RECIPIENT_RESOLVER);
+    }
+
+    /**
+     * Rewrite the <a href> links in an email body to signed LeadHub tracking
+     * URLs, if the recipient resolves to a LeadHub contact. Fully guarded: the
+     * original HTML is returned unchanged when LeadHub is absent, the recipient
+     * can't be resolved, or anything throws mid-rewrite.
+     *
+     * @param  array<string, scalar>  $context
+     */
+    public function rewriteEmailLinks(string $html, ?string $email, ?string $contactId = null, array $context = []): string
+    {
+        if ($html === '' || ! $this->clickTrackingAvailable()) {
+            return $html;
+        }
+
+        try {
+            $contact = app(self::RECIPIENT_RESOLVER)->resolve($contactId, $email);
+
+            if ($contact === null) {
+                return $html;
+            }
+
+            return (string) app(self::CLICK_LINKER)->rewriteHtml($html, $contact, $context);
+        } catch (\Throwable) {
+            return $html;
+        }
+    }
+
+    /**
      * Resolve the configured LeadHub service. Real Laravel facades proxy
      * everything through __callStatic, so method_exists() on the facade
      * class is always false — for those we resolve the facade root

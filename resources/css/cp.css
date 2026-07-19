@@ -67,8 +67,19 @@
     .sa-node--selected {
         @apply ring-2 ring-blue-500/60 border-blue-400 dark:border-blue-500;
     }
-    .sa-node--invalid    { @apply border-red-400 dark:border-red-500; }
+    .sa-node--invalid    { @apply border-red-400 dark:border-red-500 ring-1 ring-red-400/50 dark:ring-red-500/40; }
     .sa-node--incomplete { @apply border-amber-400 dark:border-amber-500; }
+
+    /* Inline field validation in the ConfigPanel (A3): an invalid field rings
+     * its control red and shows a message below it. The control is a nested
+     * Statamic UI input, so tint the underlying element(s) directly. */
+    .sa-field--invalid :is(input, textarea, select) {
+        @apply border-red-400 dark:border-red-500
+               ring-1 ring-red-400/50 dark:ring-red-500/40;
+    }
+    .sa-field-error {
+        @apply text-xs text-red-600 dark:text-red-400 mt-1;
+    }
 
     .sa-node__header {
         @apply flex items-start gap-2.5 px-3 pt-3 pb-2;

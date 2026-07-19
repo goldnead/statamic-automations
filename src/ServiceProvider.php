@@ -84,6 +84,8 @@ class ServiceProvider extends AddonServiceProvider
         $this->app->singleton(TriggerRegistry::class);
         $this->app->singleton(ActionRegistry::class);
         $this->app->singleton(NodeRegistry::class);
+        $this->app->singleton(\Goldnead\StatamicAutomations\Registries\OptionSourceRegistry::class);
+        $this->app->singleton(\Goldnead\StatamicAutomations\Support\OptionSources\NativeOptionSources::class);
 
         // Integration helpers (cheap singletons; the underlying sister
         // addons are detected lazily).
@@ -129,6 +131,7 @@ class ServiceProvider extends AddonServiceProvider
                 $app->make(ActionRegistry::class),
                 $app->make(NodeRegistry::class),
                 $app->make(LicenseManager::class),
+                $app->make(\Goldnead\StatamicAutomations\Registries\OptionSourceRegistry::class),
             );
         });
     }
@@ -173,9 +176,11 @@ class ServiceProvider extends AddonServiceProvider
         // property above, under the package's publish tag — no manual
         // publishes() registration needed.
 
+        $this->registerBuiltInOptionSources();
         $this->registerBuiltInNodes();
         $this->registerOptionalIntegrations();
         $this->registerEventListeners();
+        $this->registerEventTriggers();
         $this->registerPermissions();
         $this->registerNavigation();
         $this->registerCommands();
@@ -253,31 +258,97 @@ class ServiceProvider extends AddonServiceProvider
             'update_entry' => \Goldnead\StatamicAutomations\Nodes\Actions\UpdateEntryAction::class,
             'create_user' => \Goldnead\StatamicAutomations\Nodes\Actions\CreateUserAction::class,
             'ai_generate' => \Goldnead\StatamicAutomations\Nodes\Actions\AiGenerateAction::class,
+            // Native Statamic operations (A6). Each is shipped through the same
+            // public register API a third party would use — proving it works.
+            'publish_entry' => \Goldnead\StatamicAutomations\Nodes\Actions\PublishEntryAction::class,
+            'unpublish_entry' => \Goldnead\StatamicAutomations\Nodes\Actions\UnpublishEntryAction::class,
+            'delete_entry' => \Goldnead\StatamicAutomations\Nodes\Actions\DeleteEntryAction::class,
+            'create_term' => \Goldnead\StatamicAutomations\Nodes\Actions\CreateTermAction::class,
+            'update_user' => \Goldnead\StatamicAutomations\Nodes\Actions\UpdateUserAction::class,
+            'assign_user_role' => \Goldnead\StatamicAutomations\Nodes\Actions\AssignUserRoleAction::class,
+            'add_user_to_group' => \Goldnead\StatamicAutomations\Nodes\Actions\AddUserToGroupAction::class,
+            'set_global_value' => \Goldnead\StatamicAutomations\Nodes\Actions\SetGlobalValueAction::class,
         ];
 
         $automations = $this->app->make('automations');
 
+        // Dogfood the public API: every built-in registers through the exact
+        // same surface a third-party addon uses (registerTrigger / register
+        // LogicNode / registerAction), with the handle-less overload. They are
+        // marked built-in first so Pro-gating never skips them.
         foreach ($triggers as $key => $class) {
             if (($enabled[$key] ?? true) && class_exists($class)) {
-                // Mark as built-in BEFORE registering so Pro-gating skips it.
-                $automations->registerBuiltIn($class::handle());
-                $automations->trigger($class::handle(), $class);
+                $automations->registerBuiltIn($class::handle())->registerTrigger($class);
             }
         }
 
         foreach ($logic as $key => $class) {
             if (($enabled[$key] ?? true) && class_exists($class)) {
-                $automations->registerBuiltIn($class::handle());
-                $automations->node($class::handle(), $class);
+                $automations->registerBuiltIn($class::handle())->registerLogicNode($class);
             }
         }
 
         foreach ($actions as $key => $class) {
             if (($enabled[$key] ?? true) && class_exists($class)) {
-                $automations->registerBuiltIn($class::handle());
-                $automations->action($class::handle(), $class);
+                $automations->registerBuiltIn($class::handle())->registerAction($class);
             }
         }
+    }
+
+    /**
+     * Register the built-in `options_source` resolvers into the
+     * OptionSourceRegistry — through the same public surface a third party
+     * uses (`Automations::registerOptionSource`). Statamic-native sources are
+     * registered under both the bare and the `statamic.`-prefixed spelling.
+     */
+    protected function registerBuiltInOptionSources(): void
+    {
+        /** @var \Goldnead\StatamicAutomations\Automations $automations */
+        $automations = $this->app->make('automations');
+        $native = \Goldnead\StatamicAutomations\Support\OptionSources\NativeOptionSources::class;
+
+        $map = [
+            'forms' => 'forms',
+            'collections' => 'collections',
+            'sites' => 'sites',
+            'entries' => 'entries',
+            'taxonomies' => 'taxonomies',
+            'terms' => 'terms',
+            'users' => 'users',
+            'roles' => 'roles',
+            'groups' => 'userGroups',
+            'blueprints' => 'blueprints',
+            'assets' => 'assets',
+            'asset_containers' => 'assetContainers',
+            'globals' => 'globals',
+        ];
+
+        foreach ($map as $source => $method) {
+            $resolver = fn ($request) => $this->app->make($native)->{$method}($request);
+            // Both the bare handle and the historical statamic.-prefixed spelling.
+            $automations->registerOptionSource($source, $resolver);
+            $automations->registerOptionSource("statamic.{$source}", $resolver);
+        }
+
+        // Non-statamic / integration + addon sources (single spelling each).
+        $automations->registerOptionSource('automations', fn ($request) => $this->app->make($native)->automations($request));
+        $automations->registerOptionSource('email_templates.templates', fn ($request) => $this->app->make($native)->emailTemplates($request));
+        $automations->registerOptionSource('leadhub.statuses', fn ($request) => $this->app->make($native)->leadHubStatuses($request));
+        $automations->registerOptionSource('leadhub.tags', fn ($request) => $this->app->make($native)->leadHubTags($request));
+        $webhookDestinations = fn ($request) => $this->app->make($native)->webhookDestinations($request);
+        $automations->registerOptionSource('webhook_manager.destinations', $webhookDestinations);
+        $automations->registerOptionSource('webhooks', $webhookDestinations);
+    }
+
+    /**
+     * Register custom event triggers declared in config
+     * (`automations.event_triggers`). The programmatic path
+     * (`Automations::registerEventTrigger()`) is available to any service
+     * provider's boot(); this covers the zero-PHP, config-only path.
+     */
+    protected function registerEventTriggers(): void
+    {
+        $this->app->make('automations')->bootEventTriggersFromConfig();
     }
 
     /**
@@ -325,10 +396,15 @@ class ServiceProvider extends AddonServiceProvider
                 LH\CreateTaskAction::class,
                 LH\MoveStageAction::class,
                 LH\UpsertOpportunityAction::class,
+                LH\ChangeScoreAction::class,
             ] as $actionClass) {
                 $automations->registerBuiltIn($actionClass::handle());
                 $automations->action($actionClass::handle(), $actionClass);
             }
+
+            // Score-changed event trigger (registered through the public
+            // registerEventTrigger API). Guarded on the LeadHub event class.
+            \Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubEventTriggers::register($automations);
 
             // Fire LeadHub triggers from LeadHub's domain events. Without this,
             // the LeadHub trigger nodes are selectable but never actually run.

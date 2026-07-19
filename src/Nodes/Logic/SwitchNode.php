@@ -3,7 +3,7 @@
 namespace Goldnead\StatamicAutomations\Nodes\Logic;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
-use Goldnead\StatamicAutomations\Contracts\AutomationNode;
+use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 use Goldnead\StatamicAutomations\Support\NormalizesKeyValue;
 
@@ -15,7 +15,7 @@ use Goldnead\StatamicAutomations\Support\NormalizesKeyValue;
  * Modelled with a `key_value` cases field so it is fully editable in the
  * native CP config panel without a custom fieldtype.
  */
-class SwitchNode implements AutomationNode
+class SwitchNode implements AutomationLogicNode
 {
     use NormalizesKeyValue;
 

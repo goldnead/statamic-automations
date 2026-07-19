@@ -3,7 +3,7 @@
 namespace Goldnead\StatamicAutomations\Nodes\Logic;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
-use Goldnead\StatamicAutomations\Contracts\AutomationNode;
+use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
@@ -31,7 +31,7 @@ use Goldnead\StatamicAutomations\Support\NormalizesKeyValue;
  * run to completion synchronously); the value here is the scatter/gather
  * shape, not OS-level concurrency.
  */
-class ParallelNode implements AutomationNode
+class ParallelNode implements AutomationLogicNode
 {
     use NormalizesKeyValue;
 

@@ -3,7 +3,7 @@
 namespace Goldnead\StatamicAutomations\Nodes\Logic;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
-use Goldnead\StatamicAutomations\Contracts\AutomationNode;
+use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Support\ActionResult;
@@ -27,7 +27,7 @@ use Goldnead\StatamicAutomations\Support\ActionResult;
  *   item as a sub-run, exactly as this node originally worked. Kept for
  *   backwards compatibility with existing wiring.
  */
-class LoopNode implements AutomationNode
+class LoopNode implements AutomationLogicNode
 {
     /** Output handle taken once per item — wire the loop body here. */
     public const OUTPUT_LOOP = 'loop';

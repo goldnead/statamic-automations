@@ -12,21 +12,40 @@ use InvalidArgumentException;
 class NodeRegistry
 {
     /**
-     * @var array<string, array{handle: string, class: class-string, kind: string}>
+     * @var array<string, array{handle: string, class: class-string, kind: string, meta?: array<string, mixed>}>
      */
     protected array $nodes = [];
 
-    public function register(string $handle, string $class, string $kind): void
+    /**
+     * Register a node.
+     *
+     * The optional $meta lets a caller supply a pre-built, schema-rich
+     * description directly instead of deriving it from the class's static
+     * methods. This is what backs config-driven nodes (e.g. the generic
+     * {@see \Goldnead\StatamicAutomations\Nodes\Triggers\EventTrigger}), where
+     * a single class serves many distinct handles and therefore cannot expose
+     * per-handle metadata via static methods. When $meta is null (the default)
+     * the description is built from the class as before.
+     *
+     * @param  array<string, mixed>|null  $meta
+     */
+    public function register(string $handle, string $class, string $kind, ?array $meta = null): void
     {
         if (! in_array($kind, ['trigger', 'action', 'logic'], true)) {
             throw new InvalidArgumentException("Unknown node kind: {$kind}");
         }
 
-        $this->nodes[$handle] = [
+        $entry = [
             'handle' => $handle,
             'class' => $class,
             'kind' => $kind,
         ];
+
+        if ($meta !== null) {
+            $entry['meta'] = $meta;
+        }
+
+        $this->nodes[$handle] = $entry;
     }
 
     public function has(string $handle): bool
@@ -85,6 +104,15 @@ class NodeRegistry
 
         if ($entry === null) {
             return [];
+        }
+
+        // A registration may carry a pre-built description (config-driven
+        // nodes that cannot express per-handle metadata via static methods).
+        if (isset($entry['meta']) && is_array($entry['meta'])) {
+            return array_merge($entry['meta'], [
+                'handle' => $entry['handle'],
+                'kind' => $entry['kind'],
+            ]);
         }
 
         /** @var class-string<\Goldnead\StatamicAutomations\Contracts\AutomationNode> $class */

@@ -2,23 +2,32 @@
     <Dropdown v-if="hasVariables" align="end" side="bottom">
         <template #trigger>
             <Button
-                variant="ghost"
+                variant="subtle"
                 size="xs"
                 text="{{ }}"
+                class="sa-token-btn font-mono"
                 :aria-label="__('Insert variable')"
-                :title="__('Insert a variable from an upstream step')"
+                :title="__('Insert variable')"
             />
         </template>
 
-        <div class="sa-token-inserter max-h-72 overflow-y-auto">
+        <div class="sa-token-inserter max-h-72 overflow-y-auto min-w-64">
             <template v-for="group in groupedVariables" :key="group.source">
                 <DropdownLabel :text="group.source" />
                 <DropdownItem
                     v-for="variable in group.items"
                     :key="variable.token"
-                    :text="variable.label"
                     @click="insert(variable.token)"
-                />
+                >
+                    <span class="flex items-baseline gap-2">
+                        <span class="truncate">{{ variable.label }}</span>
+                        <span
+                            v-if="variable.sample"
+                            class="ml-auto shrink-0 max-w-40 truncate text-xs text-gray-400 dark:text-gray-500"
+                            :title="variable.sample"
+                        >→ &ldquo;{{ variable.sample }}&rdquo;</span>
+                    </span>
+                </DropdownItem>
             </template>
         </div>
     </Dropdown>
@@ -26,9 +35,10 @@
     <!-- No upstream variables yet — disabled placeholder, never a crash. -->
     <Button
         v-else
-        variant="ghost"
+        variant="subtle"
         size="xs"
         text="{{ }}"
+        class="sa-token-btn font-mono"
         disabled
         :aria-label="__('No upstream variables available')"
         :title="__('No upstream variables available')"
@@ -56,12 +66,22 @@ import { Button, Dropdown, DropdownItem, DropdownLabel } from '@statamic/cms/ui'
  * corrupts existing content.
  */
 const props = defineProps({
-    /** `{ token, label, source }[]` from `useNodeVariables`. */
+    /** `{ token, label, source, sample }[]` from `useNodeVariables`. */
     variables: { type: Array, default: () => [] },
     /** Current field value (coerced to a string before splicing). */
     modelValue: { type: [String, Number, Object, Array, null], default: '' },
     /** `id` of the native input/textarea element to insert into. */
     targetId: { type: String, default: null },
+    /**
+     * How the chosen token is applied to the field value:
+     *  - `insert` (default): splice the token in at the caret of the target
+     *    input/textarea — for free-text fields where a token is one part of a
+     *    larger string (`"Hallo {{ entry.title }}"`).
+     *  - `replace`: set the whole field value to the token — for `select` /
+     *    `combobox` fields that accept a token *as* their value (no caret to
+     *    splice into; the token IS the value).
+     */
+    mode: { type: String, default: 'insert' },
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -93,6 +113,13 @@ function currentValueAsString() {
 }
 
 function insert(token) {
+    // `replace` fields (select/combobox) have no caret — the token IS the
+    // value, so set it wholesale and skip the splice/caret restore below.
+    if (props.mode === 'replace') {
+        emit('update:modelValue', token);
+        return;
+    }
+
     const el = props.targetId ? document.getElementById(props.targetId) : null;
     const current = currentValueAsString();
 

@@ -1,10 +1,12 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { Head, Link, router } from '@statamic/cms/inertia';
 import {
     Header,
     Button,
-    Switch,
+    Dropdown,
+    DropdownItem,
+    DropdownSeparator,
     Stack,
     StackHeader,
     StackContent,
@@ -29,6 +31,7 @@ import {
     canDuplicate,
     pendingTargetIsValid,
 } from '../../composables/useFlowGuards.js';
+import { computeNodeIssues, missingRequiredHandles } from '../../composables/useNodeValidation.js';
 
 const props = defineProps({
     mode: { type: String, required: true },           // 'create' | 'edit'
@@ -55,6 +58,28 @@ const selectedNodeKey = ref(null);
 // Left NodeLibrary sidebar: default shown/wide; collapses to a slim rail via
 // the header chevron (see fix-picker-sidebar-brief.md § C3).
 const showLibrary = ref(true);
+
+// Fullscreen editor: the canvas + side panels must fill the CP content area
+// down to the bottom edge. Rather than hardcode `100vh - N` (which drifts when
+// the CP chrome, the addon header or the issues Alert change height), we
+// measure the editor element's live top offset and subtract it (plus a small
+// bottom gutter) from the viewport height on mount, on resize, and whenever
+// something above it toggles.
+const editorEl = ref(null);
+const editorHeight = ref('600px');
+const BOTTOM_GUTTER = 24; // breathing room under the editor, in px
+
+function updateEditorHeight() {
+    const el = editorEl.value;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top;
+    const available = window.innerHeight - top - BOTTOM_GUTTER;
+    editorHeight.value = `${Math.max(480, Math.round(available))}px`;
+}
+
+function scheduleHeightUpdate() {
+    nextTick(() => requestAnimationFrame(updateEditorHeight));
+}
 
 // "Pick mode" pending-insertion target (§ C1). Armed by clicking a canvas
 // "+" (AdderNode/InsertableEdge, via Canvas's `saStartPick`/`saPendingTarget`
@@ -175,12 +200,37 @@ const triggerOutputSchema = computed(() => {
     return meta?.output_schema ?? null;
 });
 
+// Live client-side validation: recomputes required-field issues from each
+// node's config schema on every edit (A3), so invalid nodes/fields mark up
+// immediately without waiting for the server "Validate" round-trip.
+const liveIssues = computed(() => computeNodeIssues(automation.value.nodes, props.library));
+
+// node_key → severity for the canvas node cards. Required-field validity is
+// always taken from the *live* check (never goes stale after a fix); the server
+// contributes structural problems it alone can compute (cycles, edge/trigger
+// issues, unknown node types — issues without a `field`).
 const validationByNode = computed(() => {
     const map = {};
+    for (const issue of liveIssues.value) {
+        if (issue.node_key) map[issue.node_key] = 'error';
+    }
     for (const issue of issues.value) {
-        if (issue.node_key) {
+        if (issue.node_key && !issue.field && map[issue.node_key] !== 'error') {
             map[issue.node_key] = issue.level;
         }
+    }
+    return map;
+});
+
+// Per-field errors for the currently selected node, shown inline in the
+// ConfigPanel (red field + message). Live-computed so a field clears the
+// instant it's filled in.
+const selectedNodeFieldErrors = computed(() => {
+    const map = {};
+    const node = selectedNode.value;
+    if (!node) return map;
+    for (const handle of missingRequiredHandles(node, props.library)) {
+        map[handle] = __('This field is required.');
     }
     return map;
 });
@@ -699,8 +749,19 @@ function onKeydown(e) {
     }
 }
 
-onMounted(() => window.addEventListener('keydown', onKeydown));
-onUnmounted(() => window.removeEventListener('keydown', onKeydown));
+onMounted(() => {
+    window.addEventListener('keydown', onKeydown);
+    window.addEventListener('resize', updateEditorHeight);
+    scheduleHeightUpdate();
+});
+onUnmounted(() => {
+    window.removeEventListener('keydown', onKeydown);
+    window.removeEventListener('resize', updateEditorHeight);
+});
+
+// The issues Alert renders directly above the editor, so toggling it shifts the
+// editor's top offset — remeasure once the DOM reflects the change.
+watch(() => issues.value.length, scheduleHeightUpdate);
 </script>
 
 <template>
@@ -758,42 +819,69 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
                 </div>
             </template>
 
-            <div class="flex items-center gap-1 pr-2 border-r border-gray-200 dark:border-gray-700 mr-1">
+            <!-- Actions slot: undo/redo, a native "…" actions menu for the
+                 secondary controls (Validate / Test / Export / Enable), then the
+                 primary Save button — mirroring Statamic's entry-publish header
+                 density (title left, primary action + overflow menu right). -->
+            <template #actions>
+                <div class="flex items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        icon-only
+                        icon="arrow-left"
+                        :aria-label="__('Undo')"
+                        :disabled="!history.canUndo.value || !canEdit"
+                        @click="undo"
+                    />
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        icon-only
+                        icon="arrow-right"
+                        :aria-label="__('Redo')"
+                        :disabled="!history.canRedo.value || !canEdit"
+                        @click="redo"
+                    />
+                </div>
+
+                <Dropdown align="end">
+                    <template #trigger>
+                        <Button variant="ghost" icon="dots" :aria-label="__('More actions')" />
+                    </template>
+                    <DropdownItem
+                        :text="__('Validate')"
+                        icon="clipboard-check"
+                        @click="validate"
+                    />
+                    <DropdownItem
+                        :text="__('Test run')"
+                        icon="labs-idea-experimental-flask"
+                        :disabled="!canTest"
+                        @click="testRun"
+                    />
+                    <DropdownItem
+                        :text="__('Export JSON')"
+                        icon="download"
+                        :disabled="!automation.id"
+                        @click="exportJson"
+                    />
+                    <DropdownSeparator />
+                    <DropdownItem
+                        :text="automation.enabled ? __('Disable') : __('Enable')"
+                        icon="fieldtype-toggle"
+                        :disabled="!canEnable || !automation.id"
+                        @click="toggleEnabled"
+                    />
+                </Dropdown>
+
                 <Button
-                    variant="ghost"
-                    size="sm"
-                    icon-only
-                    icon="arrow-left"
-                    :aria-label="__('Undo')"
-                    :disabled="!history.canUndo.value || !canEdit"
-                    @click="undo"
+                    :text="saving ? __('Saving…') : __('Save')"
+                    variant="primary"
+                    :disabled="saving || !canEdit"
+                    @click="save()"
                 />
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    icon-only
-                    icon="arrow-right"
-                    :aria-label="__('Redo')"
-                    :disabled="!history.canRedo.value || !canEdit"
-                    @click="redo"
-                />
-            </div>
-
-            <Button :text="__('Validate')" variant="ghost" @click="validate" />
-            <Button :text="__('Test')" variant="ghost" :disabled="!canTest" @click="testRun" />
-            <Button :text="__('Export')" variant="ghost" :disabled="!automation.id" @click="exportJson" />
-
-            <div class="flex items-center gap-2 px-2 border-l border-gray-200 dark:border-gray-700 ml-2">
-                <span class="text-xs text-gray-600 dark:text-gray-400">{{ __('Enabled') }}</span>
-                <Switch :model-value="automation.enabled" :disabled="!canEnable || !automation.id" @update:model-value="toggleEnabled" />
-            </div>
-
-            <Button
-                :text="saving ? __('Saving…') : __('Save')"
-                variant="primary"
-                :disabled="saving || !canEdit"
-                @click="save()"
-            />
+            </template>
         </Header>
 
         <Alert v-if="issues.length" variant="warning" class="mb-4">
@@ -807,9 +895,18 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             </ul>
         </Alert>
 
+        <!-- The editor fills the CP content area down to the bottom edge: its
+             height is measured at runtime from this element's own top offset to
+             the viewport bottom (see updateEditorHeight), so it adapts to the CP
+             chrome, the addon header, and the optional issues Alert above it
+             instead of relying on a hardcoded `100vh - N` guess. -->
         <div
-            class="grid rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden h-[calc(100vh-220px)] min-h-[500px] transition-[grid-template-columns] duration-200 ease-in-out"
-            :style="{ gridTemplateColumns: `${showLibrary ? '300px' : '40px'} 1fr ${selectedNode ? '360px' : '0px'}` }"
+            ref="editorEl"
+            class="grid rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden min-h-[480px] transition-[grid-template-columns] duration-200 ease-in-out"
+            :style="{
+                gridTemplateColumns: `${showLibrary ? '300px' : '40px'} 1fr ${selectedNode ? '360px' : '0px'}`,
+                height: editorHeight,
+            }"
         >
             <!-- Left library track: collapses to a 40px rail (never fully to 0)
                  so there's always a click target to reopen it (§ C3). Pick mode
@@ -866,6 +963,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
                     :trigger-output-schema="triggerOutputSchema"
                     :api-base="apiBase"
                     :automation="automation"
+                    :last-run="lastRun"
+                    :field-errors="selectedNodeFieldErrors"
                     @update:config="updateNodeConfig"
                     @update:label="updateNodeLabel"
                     @duplicate="duplicateNode(selectedNodeKey)"

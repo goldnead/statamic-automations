@@ -46,7 +46,9 @@ SESSION 2 UX ROUND (Adrian testbench feedback, commits c944b4b + 691cc1e + eea34
 - Sidebar node-picker + one-trigger (commit 691cc1e): dropdown replaced by left-sidebar PICK MODE (click + → sidebar highlights, banner "Choose a node…", Cancel). Entry adder = triggers-only; step adder = logic+actions-only (one-trigger enforced at picker + addNode guard). Sidebar widened to 300px (tabs fit) + hideable (collapses to 40px rail with "Show node library"). ALL BROWSER-VERIFIED.
 - Replace-trigger + block-delete (commit eea34bf): trigger node's ... menu has "Replace trigger" (swaps type in place, keeps node_key + outgoing edges) and NO Delete; non-trigger nodes keep Delete. BROWSER-VERIFIED: manual→filter, replaced manual→entry_saved, filter stayed connected.
 - Combined review of the 3 commits dispatched.
+- Review of the 3 commits found CRITICAL: one-trigger bypassed via Duplicate (duplicate the trigger → 2 triggers, stuck). FIXED commit ae1c0cc: Duplicate hidden for trigger-kind (NodeCard + ConfigPanel footer) + duplicateNode backstop guard; stale-pending-target validated before insert; extracted useFlowGuards.js + 15 new unit tests (53/53 JS green); replaceTrigger re-verifies newType. BROWSER-VERIFIED: trigger menu now = Rename/Disable/Replace trigger only (no Duplicate, no Delete).
 - OPEN follow-up idea (Adrian's option): explicit n8n-style loop-back/close UX instead of the dead-end "For each item" body — separate engine+editor design if wanted.
+- REMAINING for Adrian: real-mouse pan gesture check (headless can't trigger d3-zoom).
 
 ## FOLLOW-UP / decisions for Adrian (not blocking)
 - webhook_received trigger uses source `webhook_manager.inbound_endpoints` which has NO arm in options endpoint (Task 2.1) → its endpoint picker is empty. Add the arm in a follow-up (needs webhook-manager installed).
