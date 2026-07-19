@@ -48,17 +48,20 @@ class CreateUserAction implements AutomationAction
                 'label' => 'Email',
                 'type' => 'text',
                 'required' => true,
+                'tokenable' => true,
             ],
             [
                 'handle' => 'name',
                 'label' => 'Name',
                 'type' => 'text',
                 'required' => false,
+                'tokenable' => true,
             ],
             [
                 'handle' => 'roles',
                 'label' => 'Roles',
                 'type' => 'tags',
+                'options_source' => 'roles',
                 'required' => false,
                 'help' => 'Role handles to assign.',
             ],
@@ -67,6 +70,22 @@ class CreateUserAction implements AutomationAction
                 'label' => 'Additional data',
                 'type' => 'key_value',
                 'required' => false,
+            ],
+        ];
+    }
+
+    /**
+     * Variables this action exposes downstream, e.g. {{ node.user.id }}.
+     * Mirrors the keys returned on the success path of execute().
+     *
+     * @return array<string, mixed>
+     */
+    public static function outputSchema(): array
+    {
+        return [
+            'user' => [
+                'id' => 'string',
+                'email' => 'string',
             ],
         ];
     }

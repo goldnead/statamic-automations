@@ -25,11 +25,11 @@ function makeChild(string $handle): Automation
     return $automation;
 }
 
-it('loop runs the body once per item', function () {
+it('loop (legacy automation mode) runs the body once per item', function () {
     $child = makeChild('per-item');
     $result = app(LoopNode::class)->execute(
         AutomationContext::make([]),
-        ['items' => ['a', 'b', 'c'], 'automation' => 'per-item', 'item_key' => 'item']
+        ['items' => ['a', 'b', 'c'], 'mode' => 'automation', 'automation' => 'per-item', 'item_key' => 'item']
     );
 
     expect($result->isSuccess())->toBeTrue();
@@ -37,23 +37,42 @@ it('loop runs the body once per item', function () {
     expect(AutomationRun::where('automation_id', $child->id)->count())->toBe(3);
 });
 
-it('loop respects the max_iterations cap', function () {
+it('loop (legacy automation mode) respects the max_iterations cap', function () {
     makeChild('capped');
     $result = app(LoopNode::class)->execute(
         AutomationContext::make([]),
-        ['items' => range(1, 50), 'automation' => 'capped', 'max_iterations' => 5]
+        ['items' => range(1, 50), 'mode' => 'automation', 'automation' => 'capped', 'max_iterations' => 5]
     );
 
     expect($result->output['iterations'])->toBe(5);
 });
 
-it('loop fails on a missing body automation', function () {
+it('loop (legacy automation mode) fails on a missing body automation', function () {
     $result = app(LoopNode::class)->execute(
         AutomationContext::make([]),
-        ['items' => ['a'], 'automation' => 'does-not-exist']
+        ['items' => ['a'], 'mode' => 'automation', 'automation' => 'does-not-exist']
     );
 
     expect($result->isFailed())->toBeTrue();
+});
+
+it('loop (inline mode, default) resolves items and routes to loop/done without an automation', function () {
+    $viaLoop = app(LoopNode::class)->execute(
+        AutomationContext::make([]),
+        ['items' => ['a', 'b', 'c']]
+    );
+
+    expect($viaLoop->isSuccess())->toBeTrue();
+    expect($viaLoop->outputHandle)->toBe('loop');
+    expect($viaLoop->output['items'])->toBe(['a', 'b', 'c']);
+
+    $viaDone = app(LoopNode::class)->execute(
+        AutomationContext::make([]),
+        ['items' => []]
+    );
+
+    expect($viaDone->isSuccess())->toBeTrue();
+    expect($viaDone->outputHandle)->toBe('done');
 });
 
 it('parallel fans out to named branches and joins results', function () {
@@ -62,7 +81,7 @@ it('parallel fans out to named branches and joins results', function () {
 
     $result = app(ParallelNode::class)->execute(
         AutomationContext::make([]),
-        ['branches' => ['a' => 'alpha', 'b' => 'beta']]
+        ['branches' => ['a' => 'alpha', 'b' => 'beta'], 'mode' => 'automation']
     );
 
     expect($result->isSuccess())->toBeTrue();
@@ -73,7 +92,7 @@ it('parallel fans out to named branches and joins results', function () {
 it('parallel fails fast when a branch is missing and fail_fast is on', function () {
     $result = app(ParallelNode::class)->execute(
         AutomationContext::make([]),
-        ['branches' => ['a' => 'nope'], 'fail_fast' => true]
+        ['branches' => ['a' => 'nope'], 'fail_fast' => true, 'mode' => 'automation']
     );
 
     expect($result->isFailed())->toBeTrue();

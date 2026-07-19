@@ -49,6 +49,7 @@ class AddLogEntryAction implements AutomationAction
                 'label' => 'Message',
                 'type' => 'text',
                 'required' => true,
+                'tokenable' => true,
             ],
             [
                 'handle' => 'context_keys',

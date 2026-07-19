@@ -34,7 +34,16 @@ class UserRegisteredTrigger implements AutomationTrigger
 
     public static function schema(): array
     {
-        return [];
+        return [
+            [
+                'handle' => 'role',
+                'label' => 'Role',
+                'type' => 'select',
+                'options_source' => 'roles',
+                'required' => false,
+                'help' => 'Leave empty to trigger for any role.',
+            ],
+        ];
     }
 
     public static function outputSchema(): array
@@ -46,7 +55,12 @@ class UserRegisteredTrigger implements AutomationTrigger
 
     public function matches(object|array $event, array $config): bool
     {
-        return true;
+        $expectedRole = $config['role'] ?? null;
+        if (empty($expectedRole)) {
+            return true;
+        }
+
+        return in_array($expectedRole, $this->extractRoleHandles($event), true);
     }
 
     public function buildContext(object|array $event, array $config): AutomationContext
@@ -76,5 +90,25 @@ class UserRegisteredTrigger implements AutomationTrigger
                 ? (is_object($user->data()) && method_exists($user->data(), 'all') ? $user->data()->all() : (array) $user->data())
                 : [],
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function extractRoleHandles(object|array $event): array
+    {
+        if (is_array($event)) {
+            return array_values(array_filter((array) ($event['user']['roles'] ?? [])));
+        }
+
+        $user = $event->user ?? null;
+        if (! is_object($user) || ! method_exists($user, 'roles')) {
+            return [];
+        }
+
+        return collect($user->roles())
+            ->map(fn ($role) => is_object($role) && method_exists($role, 'handle') ? $role->handle() : (string) $role)
+            ->values()
+            ->all();
     }
 }

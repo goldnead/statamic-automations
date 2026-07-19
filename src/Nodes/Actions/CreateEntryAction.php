@@ -61,10 +61,20 @@ class CreateEntryAction implements AutomationAction
                 'required' => false,
             ],
             [
+                'handle' => 'blueprint',
+                'label' => 'Blueprint',
+                'type' => 'select',
+                'options_source' => 'blueprints',
+                'depends_on' => 'collection',
+                'required' => false,
+                'help' => 'Optional. Defaults to the collection\'s default blueprint.',
+            ],
+            [
                 'handle' => 'slug',
                 'label' => 'Slug',
                 'type' => 'text',
                 'required' => false,
+                'tokenable' => true,
                 'help' => 'Optional. Tokens allowed, e.g. {{ form.email }}.',
             ],
             [
@@ -83,6 +93,24 @@ class CreateEntryAction implements AutomationAction
         ];
     }
 
+    /**
+     * Variables this action exposes downstream, e.g. {{ node.entry.id }}.
+     * Mirrors the keys returned on the success path of execute().
+     *
+     * @return array<string, mixed>
+     */
+    public static function outputSchema(): array
+    {
+        return [
+            'entry' => [
+                'id' => 'string',
+                'slug' => 'string',
+                'collection' => 'string',
+                'url' => 'string',
+            ],
+        ];
+    }
+
     public function execute(AutomationContext $context, array $config): ActionResult
     {
         $collection = $config['collection'] ?? null;
@@ -93,11 +121,12 @@ class CreateEntryAction implements AutomationAction
         $data = $this->normalizeKeyValue($config['data'] ?? []);
         $site = $config['site'] ?? null;
         $slug = $config['slug'] ?? null;
+        $blueprint = $config['blueprint'] ?? null;
         $published = (bool) ($config['published'] ?? false);
 
         if ($context->isTestMode() && ! config('automations.test_mode.persist_statamic_changes', false)) {
             return ActionResult::success([
-                'preview' => compact('collection', 'site', 'slug', 'published', 'data'),
+                'preview' => compact('collection', 'site', 'slug', 'blueprint', 'published', 'data'),
                 'note' => 'Test mode — entry not created.',
             ]);
         }
@@ -109,6 +138,9 @@ class CreateEntryAction implements AutomationAction
         }
         if (! empty($slug)) {
             $entry->slug($slug);
+        }
+        if (! empty($blueprint) && method_exists($entry, 'blueprint')) {
+            $entry->blueprint($blueprint);
         }
         $entry->published($published);
         $entry->save();

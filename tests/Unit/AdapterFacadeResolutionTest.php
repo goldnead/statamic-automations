@@ -21,11 +21,9 @@ class AdapterFacadeResolutionTest extends TestCase
         parent::setUp();
 
         RealFacadeFakeLeadHubManager::$calls = [];
-        RealFacadeFakeWebhookManager::$calls = [];
         Facade::clearResolvedInstances();
 
         $this->app->singleton('fake-leadhub-manager', fn () => new RealFacadeFakeLeadHubManager());
-        $this->app->singleton('fake-webhook-manager', fn () => new RealFacadeFakeWebhookManager());
     }
 
     public function test_create_task_works_through_a_real_laravel_facade(): void
@@ -87,19 +85,42 @@ class AdapterFacadeResolutionTest extends TestCase
         $this->assertSame([['addTag', ['42', 'vip']]], StaticFakeLeadHub::$calls);
     }
 
-    public function test_webhook_dispatch_works_through_a_real_laravel_facade(): void
+    public function test_webhook_destinations_resolve_from_the_outbound_repository(): void
     {
-        config()->set('automations.integrations.webhook_manager.facade', [RealWebhookManagerFacade::class]);
+        // Bug A2: destinations live in Webhook Manager's outbound webhook
+        // repository, not on the facade root. Bind the repository the way the
+        // addon's service provider does and confirm the adapter lists it.
+        $interface = config('automations.integrations.webhook_manager.outbound_repository');
+        $this->app->bind($interface, fn () => new RepositoryFakeOutboundWebhooks());
 
         $adapter = new WebhookManagerAdapter();
 
         $this->assertSame([['value' => 'crm', 'label' => 'CRM']], $adapter->destinations());
+    }
+
+    public function test_webhook_dispatch_degrades_gracefully_when_the_addon_is_absent(): void
+    {
+        // No repository binding and no Webhook Manager classes autoloaded in
+        // the test env: dispatch must fail cleanly rather than fatal.
+        $adapter = new WebhookManagerAdapter();
 
         $result = $adapter->dispatch('crm', ['a' => 1]);
 
-        $this->assertTrue($result['ok'], $result['error'] ?? '');
-        $this->assertSame('del-1', $result['delivery_id']);
-        $this->assertSame([['dispatch', ['crm', ['a' => 1], []]]], RealFacadeFakeWebhookManager::$calls);
+        $this->assertFalse($result['ok']);
+        $this->assertSame('Webhook Manager not installed.', $result['error']);
+    }
+}
+
+class RepositoryFakeOutboundWebhooks
+{
+    public function all(): \Illuminate\Support\Collection
+    {
+        return collect([(object) ['handle' => 'crm', 'name' => 'CRM']]);
+    }
+
+    public function findByHandle(string $handle): ?object
+    {
+        return $this->all()->firstWhere('handle', $handle);
     }
 }
 
@@ -150,30 +171,5 @@ class StaticFakeLeadHub
     public static function addTag(string $id, string $tag): void
     {
         static::$calls = [['addTag', [$id, $tag]]];
-    }
-}
-
-class RealFacadeFakeWebhookManager
-{
-    public static array $calls = [];
-
-    public function destinations(): array
-    {
-        return [['handle' => 'crm', 'name' => 'CRM']];
-    }
-
-    public function dispatch(string $destination, array $payload, array $options = []): array
-    {
-        static::$calls[] = ['dispatch', [$destination, $payload, $options]];
-
-        return ['ok' => true, 'delivery_id' => 'del-1'];
-    }
-}
-
-class RealWebhookManagerFacade extends Facade
-{
-    protected static function getFacadeAccessor(): string
-    {
-        return 'fake-webhook-manager';
     }
 }

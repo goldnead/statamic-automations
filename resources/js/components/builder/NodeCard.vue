@@ -20,6 +20,26 @@
             </div>
 
             <div class="flex items-center gap-1 shrink-0">
+                <!-- Inline validity badge (A3): a red "Invalid" / amber
+                     "Incomplete" chip surfaces the node's validation state
+                     right in the header, complementing the card ring + the
+                     footer status pill. -->
+                <Badge
+                    v-if="status === 'error'"
+                    color="red"
+                    :text="__('Invalid')"
+                    size="sm"
+                    pill
+                    icon="warning-diamond"
+                />
+                <Badge
+                    v-else-if="status === 'warning'"
+                    color="amber"
+                    :text="__('Incomplete')"
+                    size="sm"
+                    pill
+                    icon="warning-diamond"
+                />
                 <Badge :color="kindColor" :text="kindLabel" size="sm" pill />
                 <Dropdown side="bottom" align="end">
                     <template #trigger>
@@ -33,19 +53,41 @@
                         />
                     </template>
                     <DropdownItem :text="__('Rename')" icon="rename" @click="$emit('rename')" />
-                    <DropdownItem :text="__('Duplicate')" icon="duplicate" @click="$emit('duplicate')" />
+                    <!-- Trigger-only exclusion (one-trigger-per-flow rule):
+                         duplicating a trigger would create a second one, and
+                         a trigger has no Delete to recover from that (see the
+                         "Delete" gate below / Edit.vue's duplicateNode). -->
+                    <DropdownItem
+                        v-if="kind !== 'trigger'"
+                        :text="__('Duplicate')"
+                        icon="duplicate"
+                        @click="$emit('duplicate')"
+                    />
                     <DropdownItem
                         :text="data.disabled ? __('Enable') : __('Disable')"
                         :icon="data.disabled ? 'eye' : 'eye-slash'"
                         @click="$emit('toggle-disabled')"
                     />
-                    <DropdownSeparator />
+                    <!-- Trigger-only: the swap-in-place path (see Edit.vue's
+                         replaceTrigger). A flow always has exactly one trigger
+                         (one-trigger-per-flow rule), so this is the primary way
+                         to change it — "Delete" is hidden below for the same
+                         reason. -->
                     <DropdownItem
-                        :text="__('Delete')"
-                        icon="trash"
-                        variant="destructive"
-                        @click="$emit('delete')"
+                        v-if="kind === 'trigger'"
+                        :text="__('Replace trigger')"
+                        icon="replace"
+                        @click="$emit('replace-trigger')"
                     />
+                    <template v-if="kind !== 'trigger'">
+                        <DropdownSeparator />
+                        <DropdownItem
+                            :text="__('Delete')"
+                            icon="trash"
+                            variant="destructive"
+                            @click="$emit('delete')"
+                        />
+                    </template>
                 </Dropdown>
             </div>
         </div>
@@ -58,27 +100,36 @@
             </div>
         </div>
 
-        <!-- Footer: status dot + kind label · branch legend -->
+        <!-- Footer: status dot + kind label · output legend (one label per
+             source handle, e.g. true/false, switch case handles, loop/done,
+             parallel branch handles — empty for the plain single-output
+             case, matching the previous behaviour). -->
         <div class="sa-node__footer">
             <span class="sa-status-dot" :class="statusDotClass" />
             <span class="sa-node__kind-label">{{ statusLabel }}</span>
-            <span v-if="hasBranchOutputs" class="ml-auto flex items-center gap-1.5 text-[10px] font-mono">
-                <span class="sa-handle-label--true">{{ __('true') }}</span>
-                <span class="text-gray-300 dark:text-gray-600">/</span>
-                <span class="sa-handle-label--false">{{ __('false') }}</span>
+            <span v-if="labeledOutputs.length" class="ml-auto flex flex-wrap items-center justify-end gap-x-1.5 gap-y-0.5 text-[10px] font-mono">
+                <template v-for="(out, i) in labeledOutputs" :key="out.handle">
+                    <span class="text-gray-300 dark:text-gray-600" v-if="i > 0">/</span>
+                    <span :class="handleLabelClass(out.handle)">{{ out.label }}</span>
+                </template>
             </span>
         </div>
 
         <!-- Vertical flow: nodes connect top → bottom. Target sits on the top
-             edge, source(s) on the bottom edge. Branch outputs split into two
-             bottom handles offset left/right, so "If true"/"If false" edges
-             fan out downward (see inspiration screenshots 5–10). -->
+             edge, source(s) on the bottom edge. A node's outputs (branch
+             true/false, switch cases + default, loop/done, parallel
+             branches, or a single plain continuation) are spread evenly
+             across the bottom edge via handleY(), each carrying its own
+             `id` so edges/adders can address it as `from_output`. -->
         <Handle v-if="kind !== 'trigger'" type="target" :position="Position.Top" />
-        <template v-if="hasBranchOutputs">
-            <Handle id="true" type="source" :position="Position.Bottom" :style="{ left: '32%' }" />
-            <Handle id="false" type="source" :position="Position.Bottom" :style="{ left: '68%' }" />
-        </template>
-        <Handle v-else type="source" :position="Position.Bottom" />
+        <Handle
+            v-for="(out, i) in outputs"
+            :key="out.handle"
+            :id="out.handle"
+            type="source"
+            :position="Position.Bottom"
+            :style="{ left: `${handleY(i, outputs.length) * 100}%` }"
+        />
     </div>
 </template>
 
@@ -87,6 +138,7 @@ import { computed } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
 import { Badge, Button, Dropdown, DropdownItem, DropdownSeparator, Icon } from '@statamic/cms/ui';
 import { nodeIcon } from '../../composables/useNodeIcon.js';
+import { outputsFor, handleY } from '../../composables/useAutoLayout.js';
 
 const props = defineProps({
     kind: { type: String, required: true },
@@ -95,7 +147,7 @@ const props = defineProps({
     selected: { type: Boolean, default: false },
 });
 
-defineEmits(['rename', 'duplicate', 'toggle-disabled', 'delete']);
+defineEmits(['rename', 'duplicate', 'toggle-disabled', 'delete', 'replace-trigger']);
 
 const icon = computed(() => nodeIcon(props.data.type, props.kind));
 
@@ -111,7 +163,16 @@ const kindColor = computed(() => ({
     action: 'emerald',
 }[props.kind] ?? 'default'));
 
-const hasBranchOutputs = computed(() => props.data.type === 'branch');
+// `data` is already shaped like a graph node ({ type, config, ... }), so it
+// can be fed straight into the shared outputsFor() used by the layout/canvas.
+const outputs = computed(() => outputsFor(props.data));
+const labeledOutputs = computed(() => outputs.value.filter((o) => o.label));
+
+function handleLabelClass(handle) {
+    if (handle === 'true') return 'sa-handle-label--true';
+    if (handle === 'false') return 'sa-handle-label--false';
+    return 'sa-handle-label--default';
+}
 
 const summary = computed(() => {
     const config = props.data.config ?? {};

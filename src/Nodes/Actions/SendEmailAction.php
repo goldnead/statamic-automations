@@ -4,11 +4,16 @@ namespace Goldnead\StatamicAutomations\Nodes\Actions;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationAction;
+use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 use Illuminate\Support\Facades\Mail;
 
 class SendEmailAction implements AutomationAction
 {
+    public function __construct(protected ?LeadHubAdapter $adapter = null)
+    {
+    }
+
     public static function handle(): string
     {
         return 'send_email';
@@ -16,17 +21,17 @@ class SendEmailAction implements AutomationAction
 
     public static function label(): string
     {
-        return 'Send Email Notification';
+        return 'Send Email';
     }
 
     public static function description(): ?string
     {
-        return 'Sends an email with token-resolved fields — plain text, or the rendered HTML of a managed email template.';
+        return 'Sends a transactional or marketing email with token-resolved fields — plain text, or the rendered HTML of a managed email template (et_templates).';
     }
 
     public static function group(): string
     {
-        return 'Notifications';
+        return 'Email';
     }
 
     public static function supportsTestMode(): bool
@@ -37,8 +42,8 @@ class SendEmailAction implements AutomationAction
     public static function schema(): array
     {
         $schema = [
-            ['handle' => 'to', 'label' => 'To', 'type' => 'text', 'required' => true],
-            ['handle' => 'subject', 'label' => 'Subject', 'type' => 'text', 'required' => true],
+            ['handle' => 'to', 'label' => 'To', 'type' => 'text', 'required' => true, 'tokenable' => true],
+            ['handle' => 'subject', 'label' => 'Subject', 'type' => 'text', 'required' => true, 'tokenable' => true],
         ];
 
         // The template picker only exists when the email-templates addon is
@@ -62,12 +67,43 @@ class SendEmailAction implements AutomationAction
             'label' => 'Body',
             'type' => 'textarea',
             'required' => true,
+            'tokenable' => true,
             'help' => 'Sent as the plain-text body when no template is selected, and used as the fallback if a selected template cannot be resolved.',
         ];
-        $schema[] = ['handle' => 'reply_to', 'label' => 'Reply-to', 'type' => 'text', 'required' => false];
-        $schema[] = ['handle' => 'from', 'label' => 'From', 'type' => 'text', 'required' => false];
+        $schema[] = ['handle' => 'reply_to', 'label' => 'Reply-to', 'type' => 'text', 'required' => false, 'tokenable' => true];
+        $schema[] = ['handle' => 'from', 'label' => 'From', 'type' => 'text', 'required' => false, 'tokenable' => true];
+
+        // Opt-in link-click tracking. Only surfaced when the LeadHub addon (with
+        // click tracking) is installed. Off by default so tracking is never
+        // forced on a send — and only ever applies to HTML (template) sends.
+        if (static::leadHubClickTrackingInstalled()) {
+            $schema[] = [
+                'handle' => 'track_clicks',
+                'label' => 'Track link clicks (LeadHub)',
+                'type' => 'toggle',
+                'required' => false,
+                'default' => false,
+                'help' => 'Rewrite links in the HTML body to signed LeadHub tracking URLs when the recipient is a known contact. Consent still enforced by LeadHub.',
+            ];
+        }
 
         return $schema;
+    }
+
+    /**
+     * Variables this action exposes downstream, e.g. {{ node.sent_to }}.
+     * Mirrors the keys returned on the success path of execute().
+     *
+     * @return array<string, mixed>
+     */
+    public static function outputSchema(): array
+    {
+        return [
+            'sent_to' => 'string',
+            'subject' => 'string',
+            'template' => 'string',
+            'format' => 'string',
+        ];
     }
 
     public function execute(AutomationContext $context, array $config): ActionResult
@@ -103,6 +139,22 @@ class SendEmailAction implements AutomationAction
                     $subject = $resolved->subject;
                 }
             }
+        }
+
+        // Final-HTML choke point: rewrite links to LeadHub tracking URLs. Opt-in
+        // (per-node track_clicks) and fully guarded — the adapter returns the
+        // HTML unchanged when LeadHub is absent or the recipient is unknown. Only
+        // HTML (template) sends carry links; plain-text sends are untouched.
+        if ($html !== null && ! empty($config['track_clicks'])) {
+            $html = $this->leadHub()->rewriteEmailLinks(
+                $html,
+                is_string($to) ? $to : null,
+                $context->get('contact_id') ?? $context->get('contact.id'),
+                array_filter([
+                    'template' => is_string($templateSlug) ? $templateSlug : null,
+                    'automation' => $context->get('automation_id') ?? $context->get('automation.id'),
+                ], fn ($v) => $v !== null && $v !== ''),
+            );
         }
 
         $rendered = [
@@ -160,6 +212,27 @@ class SendEmailAction implements AutomationAction
     protected static function emailTemplatesInstalled(): bool
     {
         return class_exists(\Goldnead\EmailTemplates\Facades\EmailTemplates::class);
+    }
+
+    /**
+     * The single guarded seam to the LeadHub addon. Resolved lazily so
+     * `new SendEmailAction()` (tests, ad-hoc) keeps working; the container
+     * always has LeadHubAdapter bound.
+     */
+    protected function leadHub(): LeadHubAdapter
+    {
+        return $this->adapter ??= app(LeadHubAdapter::class);
+    }
+
+    /**
+     * Whether LeadHub's click-tracking surface is present. Container-binding
+     * based so it lights up exactly when the sibling addon is installed (and so
+     * tests can bind a fake under the same key). Overridable seam.
+     */
+    protected static function leadHubClickTrackingInstalled(): bool
+    {
+        return app()->bound(LeadHubAdapter::CLICK_LINKER)
+            && app()->bound(LeadHubAdapter::RECIPIENT_RESOLVER);
     }
 
     protected function emailTemplatesAvailable(): bool

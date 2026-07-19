@@ -1,10 +1,12 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { Head, Link, router } from '@statamic/cms/inertia';
 import {
     Header,
     Button,
-    Switch,
+    Dropdown,
+    DropdownItem,
+    DropdownSeparator,
     Stack,
     StackHeader,
     StackContent,
@@ -22,6 +24,14 @@ import ConfigPanel from '../../components/builder/ConfigPanel.vue';
 import RunLogPanel from '../../components/builder/RunLogPanel.vue';
 import { useAutosave } from '../../composables/useAutosave.js';
 import { useHistory } from '../../composables/useHistory.js';
+import { outputsFor } from '../../composables/useAutoLayout.js';
+import {
+    isTriggerHandle as isTriggerHandleGuard,
+    canInsert,
+    canDuplicate,
+    pendingTargetIsValid,
+} from '../../composables/useFlowGuards.js';
+import { computeNodeIssues, missingRequiredHandles } from '../../composables/useNodeValidation.js';
 
 const props = defineProps({
     mode: { type: String, required: true },           // 'create' | 'edit'
@@ -44,6 +54,107 @@ const saving = ref(false);
 const drawerOpen = ref(false);
 const lastRun = ref(null);
 const selectedNodeKey = ref(null);
+
+// Left NodeLibrary sidebar: default shown/wide; collapses to a slim rail via
+// the header chevron (see fix-picker-sidebar-brief.md § C3).
+const showLibrary = ref(true);
+
+// Fullscreen editor: the canvas + side panels must fill the CP content area
+// down to the bottom edge. Rather than hardcode `100vh - N` (which drifts when
+// the CP chrome, the addon header or the issues Alert change height), we
+// measure the editor element's live top offset and subtract it (plus a small
+// bottom gutter) from the viewport height on mount, on resize, and whenever
+// something above it toggles.
+const editorEl = ref(null);
+const editorHeight = ref('600px');
+const BOTTOM_GUTTER = 24; // breathing room under the editor, in px
+
+function updateEditorHeight() {
+    const el = editorEl.value;
+    if (!el) return;
+    const top = el.getBoundingClientRect().top;
+    const available = window.innerHeight - top - BOTTOM_GUTTER;
+    editorHeight.value = `${Math.max(480, Math.round(available))}px`;
+}
+
+function scheduleHeightUpdate() {
+    nextTick(() => requestAnimationFrame(updateEditorHeight));
+}
+
+// "Pick mode" pending-insertion target (§ C1). Armed by clicking a canvas
+// "+" (AdderNode/InsertableEdge, via Canvas's `saStartPick`/`saPendingTarget`
+// injection) or a trigger node's "Replace trigger" action; disarmed by
+// picking a node, clicking the same "+"/action again, pressing Escape, or
+// the sidebar's Cancel button. Shape:
+//   { kind: 'append', fromNodeKey: string|null, output: string }
+//   { kind: 'insert', edge: { from_node_key, from_output, to_node_key } }
+//   { kind: 'replace', nodeKey: string }
+const pendingTarget = ref(null);
+
+const pickMode = computed(() => pendingTarget.value !== null);
+
+// The root "Add a trigger" adder targets `fromNodeKey: null` — the only spot
+// a trigger may ever be picked. "Replace trigger" also only ever offers
+// triggers (it's swapping one trigger for another). Every other append/insert
+// target is a normal step (logic/action only, see § B1).
+const pickKind = computed(() => {
+    if (pendingTarget.value?.kind === 'replace') return 'replace-trigger';
+    if (pendingTarget.value?.kind === 'append' && pendingTarget.value.fromNodeKey === null) return 'trigger';
+    return 'step';
+});
+
+function sameTarget(a, b) {
+    if (!a || !b || a.kind !== b.kind) return false;
+    if (a.kind === 'append') {
+        return (a.fromNodeKey ?? null) === (b.fromNodeKey ?? null) && (a.output ?? 'default') === (b.output ?? 'default');
+    }
+    if (a.kind === 'replace') {
+        return a.nodeKey === b.nodeKey;
+    }
+    return (
+        a.edge.from_node_key === b.edge.from_node_key &&
+        (a.edge.from_output ?? 'default') === (b.edge.from_output ?? 'default') &&
+        a.edge.to_node_key === b.edge.to_node_key
+    );
+}
+
+// Canvas "+" click → arm pick mode for that target, or disarm it if the same
+// "+" was already armed (a second click toggles it off).
+function onTogglePick(target) {
+    if (sameTarget(pendingTarget.value, target)) {
+        pendingTarget.value = null;
+        return;
+    }
+    pendingTarget.value = target;
+    // Pick mode must always be able to reach the sidebar (brief § C3).
+    showLibrary.value = true;
+}
+
+function cancelPick() {
+    pendingTarget.value = null;
+}
+
+// Trigger node's "Replace trigger" action → arm pick mode targeting that
+// node for a swap (see replaceTrigger()), same toggle-off-on-repeat-click
+// behaviour as the canvas "+" adders.
+function onReplaceTrigger(nodeKey) {
+    const target = { kind: 'replace', nodeKey };
+    if (sameTarget(pendingTarget.value, target)) {
+        pendingTarget.value = null;
+        return;
+    }
+    pendingTarget.value = target;
+    showLibrary.value = true;
+}
+
+// Save-blocked-by-empty-name UX (see `save()`): the backend's
+// Store/UpdateAutomationRequest both require `name`, but a fresh flow
+// starts with an empty name and only the placeholder "Untitled
+// automation" showing — sending that as-is 422s with a generic message
+// the UI didn't surface anywhere. `nameInputRef` lets `save()` focus the
+// field; `nameInvalid` drives its error ring until the user types again.
+const nameInputRef = ref(null);
+const nameInvalid = ref(false);
 
 // Undo/redo over the graph (nodes + edges). Each mutation below calls
 // `history.record()` after applying its change; drags commit once on drop.
@@ -89,12 +200,37 @@ const triggerOutputSchema = computed(() => {
     return meta?.output_schema ?? null;
 });
 
+// Live client-side validation: recomputes required-field issues from each
+// node's config schema on every edit (A3), so invalid nodes/fields mark up
+// immediately without waiting for the server "Validate" round-trip.
+const liveIssues = computed(() => computeNodeIssues(automation.value.nodes, props.library));
+
+// node_key → severity for the canvas node cards. Required-field validity is
+// always taken from the *live* check (never goes stale after a fix); the server
+// contributes structural problems it alone can compute (cycles, edge/trigger
+// issues, unknown node types — issues without a `field`).
 const validationByNode = computed(() => {
     const map = {};
+    for (const issue of liveIssues.value) {
+        if (issue.node_key) map[issue.node_key] = 'error';
+    }
     for (const issue of issues.value) {
-        if (issue.node_key) {
+        if (issue.node_key && !issue.field && map[issue.node_key] !== 'error') {
             map[issue.node_key] = issue.level;
         }
+    }
+    return map;
+});
+
+// Per-field errors for the currently selected node, shown inline in the
+// ConfigPanel (red field + message). Live-computed so a field clears the
+// instant it's filled in.
+const selectedNodeFieldErrors = computed(() => {
+    const map = {};
+    const node = selectedNode.value;
+    if (!node) return map;
+    for (const handle of missingRequiredHandles(node, props.library)) {
+        map[handle] = __('This field is required.');
     }
     return map;
 });
@@ -124,7 +260,35 @@ function notify(level, message) {
     }
 }
 
+// Pulls the first field-level message out of a 422's `errors` map (Laravel's
+// FormRequest shape: `{ errors: { field: ["message", ...] } }`) so a future
+// validation failure surfaces something legible instead of the generic
+// "Save failed." / "the given data is invalid" fallback.
+function firstValidationMessage(e) {
+    const errors = e?.response?.data?.errors;
+    if (errors && typeof errors === 'object') {
+        const first = Object.values(errors)[0];
+        const message = Array.isArray(first) ? first[0] : first;
+        if (message) return message;
+    }
+    return e?.response?.data?.message ?? null;
+}
+
 async function save({ silent = false } = {}) {
+    // The name is required by both Store/UpdateAutomationRequest; catching an
+    // empty one here (instead of letting it 422) means the failure is
+    // attributable to a specific field the user can see and fix immediately.
+    if (!automation.value.name?.trim()) {
+        nameInvalid.value = true;
+        if (!silent) {
+            notify('error', __('Bitte benenne die Automation, bevor du speicherst.'));
+            nameInputRef.value?.focus();
+            nameInputRef.value?.select();
+        }
+        return;
+    }
+    nameInvalid.value = false;
+
     saving.value = true;
     try {
         const payload = {
@@ -152,7 +316,7 @@ async function save({ silent = false } = {}) {
             if (!silent) notify('success', __('Automation created.'));
         }
     } catch (e) {
-        if (!silent) notify('error', e?.response?.data?.message ?? __('Save failed.'));
+        if (!silent) notify('error', firstValidationMessage(e) ?? __('Save failed.'));
         throw e;
     } finally {
         saving.value = false;
@@ -252,9 +416,6 @@ async function exportJson() {
 // canvas recomputes the vertical layout on its own. `position_x/y` are written
 // as 0 purely to keep the backend payload well-formed.
 
-const BRANCH_TYPES = ['branch'];
-const TERMINAL_TYPES = ['stop'];
-
 function newNodeKey(handle) {
     return `${handle.replace(/\W/g, '_')}_${Math.random().toString(36).slice(2, 6)}`;
 }
@@ -270,12 +431,6 @@ function makeNode(handle) {
         config: {},
         disabled: false,
     };
-}
-
-function outputsFor(node) {
-    if (TERMINAL_TYPES.includes(node.type)) return [];
-    if (BRANCH_TYPES.includes(node.type)) return ['true', 'false'];
-    return ['default'];
 }
 
 function sameEdge(a, b) {
@@ -294,8 +449,8 @@ function firstOpenOutput() {
     );
     for (const n of automation.value.nodes) {
         for (const out of outputsFor(n)) {
-            if (!taken.has(`${n.node_key}::${out}`)) {
-                return { fromNodeKey: n.node_key, output: out };
+            if (!taken.has(`${n.node_key}::${out.handle}`)) {
+                return { fromNodeKey: n.node_key, output: out.handle };
             }
         }
     }
@@ -350,28 +505,95 @@ function insertOnEdge(edge, node) {
     history.record();
 }
 
-// Left-library click: drop the node at the end of the current flow.
-function addNode(handle) {
+// Kind is inferred by which library array the handle lives in — there is no
+// `kind` field on the node/handle itself (mirrors Canvas.vue's nodeKind()).
+// Thin wrapper over the pure guard module (useFlowGuards.js) so call sites
+// below don't need to thread `props.library` through by hand.
+function isTriggerHandle(handle) {
+    return isTriggerHandleGuard(handle, props.library);
+}
+
+function hasTriggerNode() {
+    return automation.value.nodes.some((n) => isTriggerHandle(n.type));
+}
+
+// Single choke point for every way a node can enter the graph (left-library
+// click, pick-mode selection, or — while pick mode still has no UI to reach
+// it — a stray append/insert). Enforces the one-trigger-per-flow rule (§ B1):
+// a trigger can only land via the root append target (`fromNodeKey: null`);
+// anywhere else, if the flow already has a trigger, refuse and toast.
+function insertNode(handle, target) {
     if (!findHandleMeta(handle)) return;
+
+    const { ok } = canInsert(handle, props.library, automation.value.nodes);
+    if (!ok) {
+        notify('error', __('A flow can only have one trigger.'));
+        return;
+    }
+
     const node = makeNode(handle);
+    if (target.kind === 'insert') {
+        insertOnEdge(target.edge, node);
+    } else {
+        appendNode(target.fromNodeKey ?? null, target.output ?? 'default', node);
+    }
+}
+
+// Left-library click OUTSIDE pick mode: drop the node at the end of the
+// current flow (unchanged legacy behaviour, now routed through the same
+// one-trigger guard as every other insertion path).
+function addNode(handle) {
     if (!automation.value.nodes.length) {
-        appendNode(null, 'default', node);
+        insertNode(handle, { kind: 'append', fromNodeKey: null, output: 'default' });
         return;
     }
     const open = firstOpenOutput();
-    appendNode(open?.fromNodeKey ?? null, open?.output ?? 'default', node);
+    insertNode(handle, { kind: 'append', fromNodeKey: open?.fromNodeKey ?? null, output: open?.output ?? 'default' });
 }
 
-// Canvas "+" adder → append at that open output (or create the root trigger).
-function onAppend({ fromNodeKey, output, handle }) {
-    if (!findHandleMeta(handle)) return;
-    appendNode(fromNodeKey ?? null, output ?? 'default', makeNode(handle));
+// Left-library click: if a "+" armed pick mode, the node lands exactly there
+// and pick mode exits; a "replace" pick mode swaps the trigger in place
+// instead; otherwise fall back to the legacy end-of-flow add.
+function onLibraryPick(handle) {
+    if (pendingTarget.value) {
+        // The pending target was armed against node_keys that may since have
+        // been deleted (another edit, an undo, …) — inserting against a
+        // stale target would produce an orphaned/corrupt edge. Silently
+        // cancel pick mode instead of mutating the graph.
+        if (!pendingTargetIsValid(pendingTarget.value, automation.value.nodes)) {
+            pendingTarget.value = null;
+            notify('info', __('Selection changed — pick cancelled.'));
+            return;
+        }
+        if (pendingTarget.value.kind === 'replace') {
+            replaceTrigger(pendingTarget.value.nodeKey, handle);
+        } else {
+            insertNode(handle, pendingTarget.value);
+        }
+        pendingTarget.value = null;
+        return;
+    }
+    addNode(handle);
 }
 
-// Canvas edge "+" → insert into that connection.
-function onInsert({ edge, handle }) {
-    if (!findHandleMeta(handle)) return;
-    insertOnEdge(edge, makeNode(handle));
+// Swap the trigger at `nodeKey` for a different trigger type, IN PLACE: same
+// node_key (so every outgoing edge stays wired to downstream nodes exactly as
+// it was), only `type`/`label`/`config` change to the new trigger's defaults.
+// Does not touch nodes/edges elsewhere in the graph.
+function replaceTrigger(nodeKey, newType) {
+    const meta = findHandleMeta(newType);
+    if (!meta) return;
+    // Defense in depth: "Replace trigger" only ever offers trigger handles
+    // via pickKind's 'replace-trigger' NodeLibrary filter, but re-verify here
+    // too — a non-trigger `newType` slipping through would leave the flow
+    // without a trigger at all.
+    if (!isTriggerHandle(newType)) return;
+    automation.value.nodes = automation.value.nodes.map((n) =>
+        n.node_key === nodeKey
+            ? { ...n, type: newType, label: meta.label ?? newType, config: {} }
+            : n,
+    );
+    history.record();
 }
 
 function findHandleMeta(handle) {
@@ -385,7 +607,21 @@ function findHandleMeta(handle) {
 // Delete a node and heal the sequence: if it sat linearly between a parent and
 // a single child, reconnect parent → child so the flow stays unbroken. Deleting
 // a branch (two children) strands its subtrees as new roots — acceptable for now.
+// A flow without a trigger is invalid (see hasTriggerNode's one-trigger-per-flow
+// rule), so deleting the sole trigger is refused — "Replace trigger" is the only
+// way to change it. removeNode has no incoming edge to heal from for a trigger
+// (it's the root), which is also what caused the pre-fix bug: the ex-child
+// became an unhealed new root that rendered as a second top "trigger".
 function removeNode(nodeKey) {
+    const target = automation.value.nodes.find((n) => n.node_key === nodeKey);
+    if (target && isTriggerHandle(target.type)) {
+        const triggerCount = automation.value.nodes.filter((n) => isTriggerHandle(n.type)).length;
+        if (triggerCount <= 1) {
+            notify('error', __("Ein Flow braucht einen Trigger. Nutze 'Trigger ersetzen', um ihn zu wechseln."));
+            return;
+        }
+    }
+
     const incoming = automation.value.edges.filter((e) => e.to_node_key === nodeKey);
     const outgoing = automation.value.edges.filter((e) => e.from_node_key === nodeKey);
     let edges = automation.value.edges.filter(
@@ -434,9 +670,22 @@ function updateNodeLabel(label) {
 
 // Duplicate a node right after itself in the sequence (insert on its default
 // output when it has a continuation, otherwise append to it).
+//
+// Backstop for the one-trigger rule (§ B1): the "Duplicate" actions in
+// NodeCard.vue's card menu and ConfigPanel.vue's footer are kind-gated so a
+// trigger node's Duplicate never renders, but this is the single choke point
+// every duplicate path funnels through, so it re-checks here too — a second
+// trigger has no Delete action to recover from (see removeNode).
 function duplicateNode(nodeKey) {
     const src = automation.value.nodes.find((n) => n.node_key === nodeKey);
     if (!src) return;
+
+    const { ok } = canDuplicate(src, props.library, automation.value.nodes);
+    if (!ok) {
+        notify('error', __('A flow can only have one trigger.'));
+        return;
+    }
+
     const copy = {
         ...src,
         node_key: newNodeKey(src.type),
@@ -475,6 +724,12 @@ function renameNode(nodeKey) {
 // Cmd/Ctrl+Z → undo, Cmd/Ctrl+Shift+Z (or Ctrl+Y) → redo. Skip when the user is
 // typing in a field so native text undo keeps working there.
 function onKeydown(e) {
+    if (e.key === 'Escape' && pendingTarget.value) {
+        e.preventDefault();
+        cancelPick();
+        return;
+    }
+
     const mod = e.metaKey || e.ctrlKey;
     if (!mod) return;
 
@@ -494,8 +749,19 @@ function onKeydown(e) {
     }
 }
 
-onMounted(() => window.addEventListener('keydown', onKeydown));
-onUnmounted(() => window.removeEventListener('keydown', onKeydown));
+onMounted(() => {
+    window.addEventListener('keydown', onKeydown);
+    window.addEventListener('resize', updateEditorHeight);
+    scheduleHeightUpdate();
+});
+onUnmounted(() => {
+    window.removeEventListener('keydown', onKeydown);
+    window.removeEventListener('resize', updateEditorHeight);
+});
+
+// The issues Alert renders directly above the editor, so toggling it shifts the
+// editor's top offset — remeasure once the DOM reflects the change.
+watch(() => issues.value.length, scheduleHeightUpdate);
 </script>
 
 <template>
@@ -527,12 +793,24 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
                     <Icon name="workflow" class="size-5 text-gray-500" />
                     <span class="text-[15px] text-gray-400 dark:text-gray-500 font-medium">{{ __('Automations') }}</span>
                     <span class="text-gray-300 dark:text-gray-600">/</span>
-                    <input
-                        v-model="automation.name"
-                        type="text"
-                        class="bg-transparent border-none focus:outline-none focus:ring-0 text-[25px] font-medium antialiased min-w-[240px] text-gray-900 dark:text-gray-100"
-                        :placeholder="__('Untitled automation')"
-                    />
+                    <!-- The ring lives on this wrapper, not the input itself —
+                         the input's own `focus:ring-0`/`focus:outline-none`
+                         (deliberate, so it reads as inline header text) would
+                         otherwise cancel an invalid-state ring the instant
+                         `save()` focuses it. -->
+                    <span
+                        class="rounded-md"
+                        :class="nameInvalid && 'ring-2 ring-red-500/70 dark:ring-red-500/70'"
+                    >
+                        <input
+                            ref="nameInputRef"
+                            v-model="automation.name"
+                            type="text"
+                            class="bg-transparent border-none focus:outline-none focus:ring-0 text-[25px] font-medium antialiased min-w-[240px] text-gray-900 dark:text-gray-100"
+                            :placeholder="__('Untitled automation')"
+                            @input="nameInvalid = false"
+                        />
+                    </span>
                     <Badge
                         :color="automation.enabled ? 'green' : 'amber'"
                         :text="automation.enabled ? __('Active') : __('Draft')"
@@ -541,42 +819,69 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
                 </div>
             </template>
 
-            <div class="flex items-center gap-1 pr-2 border-r border-gray-200 dark:border-gray-700 mr-1">
+            <!-- Actions slot: undo/redo, a native "…" actions menu for the
+                 secondary controls (Validate / Test / Export / Enable), then the
+                 primary Save button — mirroring Statamic's entry-publish header
+                 density (title left, primary action + overflow menu right). -->
+            <template #actions>
+                <div class="flex items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        icon-only
+                        icon="arrow-left"
+                        :aria-label="__('Undo')"
+                        :disabled="!history.canUndo.value || !canEdit"
+                        @click="undo"
+                    />
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        icon-only
+                        icon="arrow-right"
+                        :aria-label="__('Redo')"
+                        :disabled="!history.canRedo.value || !canEdit"
+                        @click="redo"
+                    />
+                </div>
+
+                <Dropdown align="end">
+                    <template #trigger>
+                        <Button variant="ghost" icon="dots" :aria-label="__('More actions')" />
+                    </template>
+                    <DropdownItem
+                        :text="__('Validate')"
+                        icon="clipboard-check"
+                        @click="validate"
+                    />
+                    <DropdownItem
+                        :text="__('Test run')"
+                        icon="labs-idea-experimental-flask"
+                        :disabled="!canTest"
+                        @click="testRun"
+                    />
+                    <DropdownItem
+                        :text="__('Export JSON')"
+                        icon="download"
+                        :disabled="!automation.id"
+                        @click="exportJson"
+                    />
+                    <DropdownSeparator />
+                    <DropdownItem
+                        :text="automation.enabled ? __('Disable') : __('Enable')"
+                        icon="fieldtype-toggle"
+                        :disabled="!canEnable || !automation.id"
+                        @click="toggleEnabled"
+                    />
+                </Dropdown>
+
                 <Button
-                    variant="ghost"
-                    size="sm"
-                    icon-only
-                    icon="arrow-left"
-                    :aria-label="__('Undo')"
-                    :disabled="!history.canUndo.value || !canEdit"
-                    @click="undo"
+                    :text="saving ? __('Saving…') : __('Save')"
+                    variant="primary"
+                    :disabled="saving || !canEdit"
+                    @click="save()"
                 />
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    icon-only
-                    icon="arrow-right"
-                    :aria-label="__('Redo')"
-                    :disabled="!history.canRedo.value || !canEdit"
-                    @click="redo"
-                />
-            </div>
-
-            <Button :text="__('Validate')" variant="ghost" @click="validate" />
-            <Button :text="__('Test')" variant="ghost" :disabled="!canTest" @click="testRun" />
-            <Button :text="__('Export')" variant="ghost" :disabled="!automation.id" @click="exportJson" />
-
-            <div class="flex items-center gap-2 px-2 border-l border-gray-200 dark:border-gray-700 ml-2">
-                <span class="text-xs text-gray-600 dark:text-gray-400">{{ __('Enabled') }}</span>
-                <Switch :model-value="automation.enabled" :disabled="!canEnable || !automation.id" @update:model-value="toggleEnabled" />
-            </div>
-
-            <Button
-                :text="saving ? __('Saving…') : __('Save')"
-                variant="primary"
-                :disabled="saving || !canEdit"
-                @click="save()"
-            />
+            </template>
         </Header>
 
         <Alert v-if="issues.length" variant="warning" class="mb-4">
@@ -590,9 +895,42 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             </ul>
         </Alert>
 
-        <div class="grid grid-cols-[260px_1fr_360px] rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden h-[calc(100vh-220px)] min-h-[500px]">
-            <div class="overflow-y-auto border-r border-gray-200 dark:border-gray-800">
-                <NodeLibrary :library="library" @add="addNode" />
+        <!-- The editor fills the CP content area down to the bottom edge: its
+             height is measured at runtime from this element's own top offset to
+             the viewport bottom (see updateEditorHeight), so it adapts to the CP
+             chrome, the addon header, and the optional issues Alert above it
+             instead of relying on a hardcoded `100vh - N` guess. -->
+        <div
+            ref="editorEl"
+            class="grid rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden min-h-[480px] transition-[grid-template-columns] duration-200 ease-in-out"
+            :style="{
+                gridTemplateColumns: `${showLibrary ? '300px' : '40px'} 1fr ${selectedNode ? '360px' : '0px'}`,
+                height: editorHeight,
+            }"
+        >
+            <!-- Left library track: collapses to a 40px rail (never fully to 0)
+                 so there's always a click target to reopen it (§ C3). Pick mode
+                 forces this back open (see onTogglePick) and disables the
+                 in-header collapse button while armed. -->
+            <div class="overflow-hidden border-r border-gray-200 dark:border-gray-800">
+                <NodeLibrary
+                    v-if="showLibrary"
+                    :library="library"
+                    :pick-mode="pickMode"
+                    :pick-kind="pickKind"
+                    @add="onLibraryPick"
+                    @toggle="showLibrary = false"
+                    @cancel-pick="cancelPick"
+                />
+                <button
+                    v-else
+                    type="button"
+                    class="sa-library-rail"
+                    :aria-label="__('Show node library')"
+                    @click="showLibrary = true"
+                >
+                    <Icon name="chevron-right" class="size-4" />
+                </button>
             </div>
 
             <div class="sa-canvas-frame">
@@ -602,26 +940,36 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
                     :selected-key="selectedNodeKey"
                     :validation="validationByNode"
                     :library="library"
+                    :pending-target="pendingTarget"
                     @select="selectedNodeKey = $event"
-                    @append="onAppend"
-                    @insert="onInsert"
+                    @toggle-pick="onTogglePick"
                     @remove-node="removeNode"
                     @rename-node="renameNode"
                     @duplicate-node="duplicateNode"
                     @toggle-node-disabled="toggleNodeDisabled"
+                    @replace-trigger="onReplaceTrigger"
                 />
             </div>
 
+            <!-- Right detail track: collapses to 0 width (via the grid template
+                 above) when nothing is selected, so the canvas reclaims the
+                 space. The panel itself only mounts while a node is selected —
+                 no empty "select a node" state sits in a 0-width column. -->
             <div class="overflow-hidden border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
                 <ConfigPanel
+                    v-if="selectedNode"
                     :node="selectedNode"
                     :library="library"
                     :trigger-output-schema="triggerOutputSchema"
                     :api-base="apiBase"
+                    :automation="automation"
+                    :last-run="lastRun"
+                    :field-errors="selectedNodeFieldErrors"
                     @update:config="updateNodeConfig"
                     @update:label="updateNodeLabel"
                     @duplicate="duplicateNode(selectedNodeKey)"
                     @delete="removeNode(selectedNodeKey)"
+                    @deselect="selectedNodeKey = null"
                 />
             </div>
         </div>

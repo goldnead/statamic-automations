@@ -3,7 +3,7 @@
 namespace Goldnead\StatamicAutomations\Nodes\Logic;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
-use Goldnead\StatamicAutomations\Contracts\AutomationNode;
+use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 use Illuminate\Support\Facades\Cache;
 
@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Cache;
  *
  * In test mode the key is never recorded, so test runs always pass through.
  */
-class ThrottleNode implements AutomationNode
+class ThrottleNode implements AutomationLogicNode
 {
     public static function handle(): string
     {

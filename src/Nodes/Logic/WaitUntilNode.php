@@ -3,7 +3,7 @@
 namespace Goldnead\StatamicAutomations\Nodes\Logic;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
-use Goldnead\StatamicAutomations\Contracts\AutomationNode;
+use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
 use Goldnead\StatamicAutomations\Engine\ConditionEvaluator;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 
@@ -13,7 +13,7 @@ use Goldnead\StatamicAutomations\Support\ActionResult;
  * the conditions are not yet met it returns a wait result, the run is
  * parked, and the resumer re-executes this node after the interval.
  */
-class WaitUntilNode implements AutomationNode
+class WaitUntilNode implements AutomationLogicNode
 {
     public static function handle(): string
     {
@@ -36,6 +36,18 @@ class WaitUntilNode implements AutomationNode
     }
 
     public static function supportsTestMode(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Unlike Delay (which just needs the clock to elapse), a parked
+     * Wait Until must be RE-EVALUATED when its scheduled recheck fires —
+     * the condition may still be false, in which case it should park
+     * again for another interval rather than let the run fall through.
+     * Read by {@see \Goldnead\StatamicAutomations\Engine\WorkflowRunner::resumeAfterNode()}.
+     */
+    public static function reexecuteOnResume(): bool
     {
         return true;
     }
@@ -89,5 +101,14 @@ class WaitUntilNode implements AutomationNode
         $minutes = max(1, (int) ($config['recheck_minutes'] ?? 5));
 
         return ActionResult::wait(['seconds' => $minutes * 60], ['matched' => false, 'recheck_minutes' => $minutes]);
+    }
+
+    /**
+     * {@see AutomationLogicNode} entry point — delegates to evaluate() with the
+     * engine's ConditionEvaluator so the node satisfies the logic-node contract.
+     */
+    public function execute(AutomationContext $context, array $config): ActionResult
+    {
+        return static::evaluate($context, $config, app(ConditionEvaluator::class));
     }
 }

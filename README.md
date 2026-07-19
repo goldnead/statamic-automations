@@ -146,6 +146,12 @@ Or skip steps 1–6 and start from a **template**: most common patterns ship as 
 | Send Webhook (Simple) | HTTP | Direct POST/PUT/PATCH |
 | Send Webhook _(via Webhook Manager)_ | Webhook Manager | Inherits transport, signing, retry, logs |
 | Add Log Entry | Utilities | Writes to your Laravel log channel |
+| Create / Update Entry | Statamic | Create or edit an entry from token-resolved data |
+| Publish / Unpublish / Delete Entry | Statamic | Change or remove an entry by id |
+| Create Term | Statamic | Add a taxonomy term |
+| Create / Update User | Statamic | Create or merge field data on a user |
+| Assign User Role · Add User to Group | Statamic | Add/remove a role or group membership |
+| Set Global Value | Statamic | Set a key on a global set (per site) |
 | Stop Flow | Logic | Ends the flow intentionally |
 | Create or Update Lead _(LeadHub)_ | LeadHub | Email-based upsert |
 | Change Lead Status _(LeadHub)_ | LeadHub | |
@@ -187,23 +193,40 @@ Sister addons are detected automatically through `class_exists`. The package kee
 
 Class names are configurable in `config/automations.php` under `integrations`, so you can swap implementations or use a fork.
 
-## Developer API
+## Extending Automations
 
-Register a custom action:
+The addon exposes a full public extensibility API. A third-party addon (or your host app) registers custom nodes and data sources from any service provider's `boot()` — the very same surface the built-ins are registered through. Server-registered nodes appear in the CP node library with **no frontend build**, and their `schema()` becomes the config form automatically.
 
 ```php
 use Goldnead\StatamicAutomations\Facades\Automations;
 
-Automations::action('my_package.send_to_internal_api', SendToInternalApiAction::class);
+public function boot(): void
+{
+    // Nodes — handle-less overload reads ::handle() from the class.
+    Automations::registerAction(SendToInternalApiAction::class);
+    Automations::registerTrigger(InvoicePaidTrigger::class);
+    Automations::registerLogicNode(BusinessHoursGate::class);
+
+    // Populate a custom <select> picker (options_source: 'shop.products').
+    Automations::registerOptionSource('shop.products', fn ($request) =>
+        \App\Models\Product::all()->map(fn ($p) => ['value' => $p->id, 'label' => $p->name])->all()
+    );
+
+    // Turn any application event into a trigger — one call registers the node
+    // AND subscribes a listener that funnels the event into the dispatcher.
+    Automations::registerEventTrigger(\App\Events\OrderShipped::class, [
+        'handle' => 'order_shipped',
+        'label' => 'Order Shipped',
+        'group' => 'Shop',
+        'payload' => 'order',                                   // → {{ order.id }}
+        'output_schema' => ['order' => ['id' => 'string', 'total' => 'number']],
+    ]);
+}
 ```
 
-Register a custom trigger:
+Custom **actions** implement `AutomationAction`, **triggers** `AutomationTrigger`, **logic nodes** `AutomationLogicNode` (all extend the shared `AutomationNode`). Event triggers can also be declared config-only in `config/automations.php` under `event_triggers`. A malformed registration throws immediately (`Automations::describe()`), never silently no-ops.
 
-```php
-Automations::trigger('my_package.invoice_paid', InvoicePaidTrigger::class);
-```
-
-Full documentation including interface definitions, schema fields and worked examples lives in [`docs/extending.md`](docs/extending.md).
+Full documentation — interface definitions, the schema-field vocabulary, option-source reference and worked copy-paste examples for every extension point — lives in [`docs/extending.md`](docs/extending.md).
 
 ## Export & Import
 

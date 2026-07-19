@@ -10,9 +10,15 @@ namespace Goldnead\StatamicAutomations\Support;
 trait NormalizesKeyValue
 {
     /**
+     * Static so it is also callable from static contexts (e.g. a node's
+     * static `outputs()` introspection, which needs to derive dynamic
+     * output handles from raw config without an instance). Existing
+     * `$this->normalizeKeyValue(...)` call sites keep working unchanged —
+     * PHP allows calling static methods through `->`.
+     *
      * @return array<string, mixed>
      */
-    protected function normalizeKeyValue(mixed $raw): array
+    protected static function normalizeKeyValue(mixed $raw): array
     {
         if (is_array($raw)) {
             if ($raw === [] || ! array_is_list($raw)) {

@@ -3,7 +3,7 @@
 namespace Goldnead\StatamicAutomations\Nodes\Logic;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
-use Goldnead\StatamicAutomations\Contracts\AutomationNode;
+use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 use Goldnead\StatamicAutomations\Support\NormalizesKeyValue;
 
@@ -15,9 +15,29 @@ use Goldnead\StatamicAutomations\Support\NormalizesKeyValue;
  * Modelled with a `key_value` cases field so it is fully editable in the
  * native CP config panel without a custom fieldtype.
  */
-class SwitchNode implements AutomationNode
+class SwitchNode implements AutomationLogicNode
 {
     use NormalizesKeyValue;
+
+    /**
+     * Output handles this node can route through: one per configured
+     * case (the key_value's values — see {@see execute()}), plus a
+     * trailing "default" for when nothing matches.
+     *
+     * @return array<int, string>
+     */
+    public static function outputs(array $config = []): array
+    {
+        $cases = static::normalizeKeyValue($config['cases'] ?? []);
+
+        $handles = array_map(
+            fn ($output) => (string) ($output ?: 'default'),
+            array_values($cases),
+        );
+        $handles[] = 'default';
+
+        return array_values(array_unique($handles));
+    }
 
     public static function handle(): string
     {
@@ -52,6 +72,7 @@ class SwitchNode implements AutomationNode
                 'label' => 'Value',
                 'type' => 'text',
                 'required' => true,
+                'tokenable' => true,
                 'help' => 'The value to switch on, e.g. {{ lead.status }}.',
             ],
             [
@@ -59,7 +80,9 @@ class SwitchNode implements AutomationNode
                 'label' => 'Cases',
                 'type' => 'key_value',
                 'required' => true,
-                'help' => 'Match value → output handle. Connect an edge from each output handle.',
+                'key_label' => 'Match value',
+                'value_label' => 'Output handle',
+                'help' => "One row per case: the value to match on the left, the output handle it routes to on the right. Each output handle you type here becomes a connectable output on the canvas — connect an edge from it to that case's branch.",
             ],
         ];
     }

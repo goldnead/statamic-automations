@@ -3,12 +3,12 @@
 namespace Goldnead\StatamicAutomations\Http\Controllers;
 
 use Goldnead\StatamicAutomations\Integrations\IntegrationDetector;
-use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
-use Goldnead\StatamicAutomations\Integrations\WebhookManager\WebhookManagerAdapter;
 use Goldnead\StatamicAutomations\Registries\ActionRegistry;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
+use Goldnead\StatamicAutomations\Registries\OptionSourceRegistry;
 use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class NodesController extends Controller
 {
@@ -88,126 +88,21 @@ class NodesController extends Controller
     }
 
     /**
-     * Resolve dynamic option sources (e.g. leadhub.statuses) to a flat
-     * list of options for the config form.
+     * Resolve dynamic option sources (e.g. leadhub.statuses, statamic.collections,
+     * or any third-party source) to a flat list of options for the config form.
+     *
+     * Every source — built-in Statamic sources included — is resolved through
+     * the {@see OptionSourceRegistry}. Third parties register their own via
+     * `Automations::registerOptionSource(handle, resolver)`. Statamic-native
+     * sources are registered under both the bare handle (`collections`) and the
+     * historical `statamic.`-prefixed spelling (`statamic.collections`), so
+     * existing node schemas keep working and the frontend may request either.
+     * An unknown source resolves to an empty list, never a fatal.
      */
-    public function options(string $source, LeadHubAdapter $leadHub, WebhookManagerAdapter $webhookManager): JsonResponse
+    public function options(string $source, Request $request, OptionSourceRegistry $registry): JsonResponse
     {
         $this->authorizeAction('view automations');
 
-        $options = match ($source) {
-            'leadhub.statuses' => $leadHub->statuses(),
-            'leadhub.tags' => $leadHub->tags(),
-            'webhook_manager.destinations' => $webhookManager->destinations(),
-            'statamic.forms' => $this->statamicForms(),
-            'statamic.collections' => $this->statamicCollections(),
-            'statamic.sites' => $this->statamicSites(),
-            'email_templates.templates' => $this->emailTemplates(),
-            default => [],
-        };
-
-        return response()->json(['data' => $options]);
-    }
-
-    /**
-     * @return array<int, array{value: string, label: string}>
-     */
-    protected function statamicForms(): array
-    {
-        if (! class_exists(\Statamic\Facades\Form::class)) {
-            return [];
-        }
-
-        try {
-            $forms = \Statamic\Facades\Form::all();
-
-            return collect($forms)
-                ->map(fn ($form) => [
-                    'value' => method_exists($form, 'handle') ? $form->handle() : (string) $form,
-                    'label' => method_exists($form, 'title') ? $form->title() : (string) $form,
-                ])
-                ->values()
-                ->all();
-        } catch (\Throwable) {
-            return [];
-        }
-    }
-
-    /**
-     * @return array<int, array{value: string, label: string}>
-     */
-    protected function statamicCollections(): array
-    {
-        if (! class_exists(\Statamic\Facades\Collection::class)) {
-            return [];
-        }
-
-        try {
-            $collections = \Statamic\Facades\Collection::all();
-
-            return collect($collections)
-                ->map(fn ($c) => [
-                    'value' => method_exists($c, 'handle') ? $c->handle() : (string) $c,
-                    'label' => method_exists($c, 'title') ? $c->title() : (string) $c,
-                ])
-                ->values()
-                ->all();
-        } catch (\Throwable) {
-            return [];
-        }
-    }
-
-    /**
-     * Slug/title options from the managed `email_templates` collection owned by
-     * the optional email-templates addon. Guarded by the sibling's public
-     * facade so the source resolves to an empty list (and the picker stays
-     * hidden) when the addon is not installed — no hard dependency.
-     *
-     * @return array<int, array{value: string, label: string}>
-     */
-    protected function emailTemplates(): array
-    {
-        if (! class_exists(\Goldnead\EmailTemplates\Facades\EmailTemplates::class)
-            || ! class_exists(\Statamic\Facades\Entry::class)) {
-            return [];
-        }
-
-        try {
-            return collect(\Statamic\Facades\Entry::query()->where('collection', 'et_templates')->get())
-                ->map(fn ($entry) => [
-                    'value' => method_exists($entry, 'slug') ? (string) $entry->slug() : '',
-                    'label' => method_exists($entry, 'value')
-                        ? (string) ($entry->value('title') ?? $entry->slug())
-                        : (string) $entry,
-                ])
-                ->values()
-                ->all();
-        } catch (\Throwable) {
-            return [];
-        }
-    }
-
-    /**
-     * @return array<int, array{value: string, label: string}>
-     */
-    protected function statamicSites(): array
-    {
-        if (! class_exists(\Statamic\Facades\Site::class)) {
-            return [];
-        }
-
-        try {
-            $sites = \Statamic\Facades\Site::all();
-
-            return collect($sites)
-                ->map(fn ($s) => [
-                    'value' => method_exists($s, 'handle') ? $s->handle() : (string) $s,
-                    'label' => method_exists($s, 'name') ? $s->name() : (string) $s,
-                ])
-                ->values()
-                ->all();
-        } catch (\Throwable) {
-            return [];
-        }
+        return response()->json(['data' => $registry->resolve($source, $request)]);
     }
 }

@@ -8,6 +8,8 @@ use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Models\AutomationScheduledJob;
+use Goldnead\StatamicAutomations\Nodes\Logic\LoopNode;
+use Goldnead\StatamicAutomations\Nodes\Logic\ParallelNode;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 
@@ -189,10 +191,17 @@ class WorkflowRunner
     }
 
     /**
-     * Resume a run that was paused by a Delay/Wait node. Unlike
-     * {@see executeFromNode()}, the given node is NOT re-executed — it is
-     * the delay node that already fired, so the walk continues from the
-     * node AFTER it (via its default outgoing edge).
+     * Resume a run that was paused by a Delay/Wait node.
+     *
+     * By default the paused node is NOT re-executed — it is the delay
+     * node that already fired, so the walk continues from the node AFTER
+     * it (via its default outgoing edge), same as {@see executeFromNode()}
+     * with $executeFirst = false.
+     *
+     * Some logic nodes need the opposite: a Wait Until must be
+     * RE-EVALUATED on resume (its condition may still be false), so its
+     * class opts in via a static `reexecuteOnResume(): true` method,
+     * checked here — see {@see \Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilNode}.
      *
      * Returns the refreshed run model.
      */
@@ -224,14 +233,12 @@ class WorkflowRunner
         $this->logger->startRun($run);
 
         try {
-            // executeFirst: false → skip the delay node itself and walk
-            // forward from its default outgoing edge.
             $finalStatus = $this->walk(
                 $run,
                 $automation,
                 $startNode,
                 $context,
-                executeFirst: false,
+                executeFirst: $this->reexecutesOnResume($startNode),
             );
         } catch (\Throwable $e) {
             $this->logger->finishRun($run, AutomationRun::STATUS_FAILED, $e->getMessage());
@@ -275,6 +282,38 @@ class WorkflowRunner
             ? $startNode
             : $this->nextNode($startNode, 'default', $edges, $nodes);
         $visited = [];
+
+        return $this->runFrom($run, $automation, $current, $context, $edges, $nodes, $visited);
+    }
+
+    /**
+     * Drive execution forward from $current along outgoing edges until the
+     * graph naturally ends (no outgoing edge for the taken output) or a
+     * terminal result (stopped / waiting) is hit.
+     *
+     * This is the single DFS driver used both for the top-level run and,
+     * recursively, for each pass of an inline Loop node's body — so a
+     * Stop node or a Delay/Wait node inside a loop body behaves exactly
+     * like it would at the top level (it bubbles straight up and ends the
+     * whole run, not just the current iteration).
+     *
+     * @param  \Illuminate\Support\Collection  $edges
+     * @param  \Illuminate\Support\Collection  $nodes
+     * @param  array<string, bool>  $visited  Shared safety-net guard (by
+     *                                        node_key) against runaway
+     *                                        graphs; passed by reference so
+     *                                        nested loop passes share it
+     *                                        with the caller.
+     */
+    protected function runFrom(
+        AutomationRun $run,
+        Automation $automation,
+        ?AutomationNode $current,
+        AutomationContext $context,
+        $edges,
+        $nodes,
+        array &$visited,
+    ): string {
         $maxNodes = 1000; // safety net; cycles are blocked by validator
 
         while ($current !== null && count($visited) < $maxNodes) {
@@ -326,10 +365,189 @@ class WorkflowRunner
                 return AutomationRun::STATUS_STOPPED;
             }
 
+            // Inline Loop node: it never advances the flow itself on the
+            // "loop" handle — the runner drives its body subgraph once per
+            // resolved item, then continues via "done".
+            if ($current->type === LoopNode::handle() && $result->outputHandle === LoopNode::OUTPUT_LOOP) {
+                $bubbled = $this->driveInlineLoop($run, $automation, $current, $result, $context, $edges, $nodes, $visited);
+
+                if ($bubbled !== null) {
+                    return $bubbled;
+                }
+
+                $current = $this->nextNode($current, LoopNode::OUTPUT_DONE, $edges, $nodes);
+
+                continue;
+            }
+
+            // Inline Parallel node: it declares its configured branch
+            // handles and never advances the flow itself — the runner
+            // drives EVERY subgraph wired to those handles to completion.
+            // There is no single "joined" output to continue via
+            // afterwards (each branch is its own path), so once fan-out
+            // finishes normally the walk simply ends here.
+            if ($current->type === ParallelNode::handle() && $result->outputHandle === ParallelNode::OUTPUT_FAN_OUT) {
+                $bubbled = $this->driveInlineParallel($run, $automation, $current, $result, $edges, $nodes, $context, $visited);
+
+                if ($bubbled !== null) {
+                    return $bubbled;
+                }
+
+                $current = null;
+
+                continue;
+            }
+
             $current = $this->nextNode($current, $result->outputHandle, $edges, $nodes);
         }
 
         return AutomationRun::STATUS_SUCCESS;
+    }
+
+    /**
+     * Run the subgraph wired to a Loop node's "loop" output once per
+     * resolved item, exposing `item` (or the configured item key), a bare
+     * `index`, and `loop.count` / `loop.index` / `loop.first` / `loop.last`
+     * in the run scope for the duration of each pass.
+     *
+     * The loop context is pushed/popped around each pass so nested loops
+     * correctly shadow an outer loop's variables and restore them on exit
+     * — the pop always runs (even if a body node throws) so the scope
+     * never leaks past the loop.
+     *
+     * Returns null when all items were processed normally (the caller
+     * should continue via the "done" output), or a terminal run status
+     * ("stopped" / "waiting") bubbled up from inside the body.
+     */
+    protected function driveInlineLoop(
+        AutomationRun $run,
+        Automation $automation,
+        AutomationNode $loopNode,
+        ActionResult $result,
+        AutomationContext $context,
+        $edges,
+        $nodes,
+        array &$visited,
+    ): ?string {
+        $items = is_array($result->output['items'] ?? null) ? array_values($result->output['items']) : [];
+        $itemKey = (string) ($result->output['item_key'] ?? 'item') ?: 'item';
+        $bodyStart = $this->nextNode($loopNode, LoopNode::OUTPUT_LOOP, $edges, $nodes);
+
+        if ($bodyStart === null || empty($items)) {
+            return null;
+        }
+
+        $count = count($items);
+
+        // Push: remember whatever this scope key held before the loop
+        // (e.g. an outer loop's own `item` / `loop` / `index`) so it can be
+        // restored once this loop finishes — this is the shadow/restore
+        // stack.
+        $hadItem = $context->has($itemKey);
+        $previousItem = $hadItem ? $context->get($itemKey) : null;
+        $hadLoopVar = $context->has('loop');
+        $previousLoopVar = $hadLoopVar ? $context->get('loop') : null;
+        $hadIndexVar = $context->has('index');
+        $previousIndexVar = $hadIndexVar ? $context->get('index') : null;
+
+        $bubbled = null;
+
+        try {
+            foreach ($items as $index => $item) {
+                $context->set($itemKey, $item);
+                // Bare `index` alongside the nested `loop.*` keys — the
+                // interface contract requires both to be resolvable inside
+                // the loop body (e.g. {{ index }} and {{ loop.index }}).
+                $context->set('index', $index);
+                $context->set('loop', [
+                    'count' => $count,
+                    'index' => $index,
+                    'first' => $index === 0,
+                    'last' => $index === $count - 1,
+                ]);
+
+                $status = $this->runFrom($run, $automation, $bodyStart, $context, $edges, $nodes, $visited);
+
+                if ($status === AutomationRun::STATUS_STOPPED || $status === AutomationRun::STATUS_WAITING) {
+                    $bubbled = $status;
+
+                    break;
+                }
+            }
+        } finally {
+            // Pop: restore whatever the outer scope held (or clear it if
+            // this was the outermost loop) so sibling/parent nodes never
+            // see this loop's variables leak past its "done" output — even
+            // if a body node threw (e.g. `_on_error` not "continue").
+            if ($hadItem) {
+                $context->set($itemKey, $previousItem);
+            } else {
+                unset($context[$itemKey]);
+            }
+
+            if ($hadLoopVar) {
+                $context->set('loop', $previousLoopVar);
+            } else {
+                unset($context['loop']);
+            }
+
+            if ($hadIndexVar) {
+                $context->set('index', $previousIndexVar);
+            } else {
+                unset($context['index']);
+            }
+        }
+
+        return $bubbled;
+    }
+
+    /**
+     * Run every subgraph wired to an inline Parallel node's declared
+     * branch outputs to completion — not just the first connected edge.
+     *
+     * Branches run sequentially against the same shared context (this is
+     * a scatter/gather shape, not OS-level concurrency — see
+     * {@see \Goldnead\StatamicAutomations\Nodes\Logic\ParallelNode}'s
+     * class doc), mirroring how {@see driveInlineLoop()} drives one loop
+     * pass at a time. A branch output with no wired edge is skipped.
+     *
+     * Returns null once every branch has run to its natural end (the
+     * caller has nothing further to continue to — fan-out has no single
+     * "joined" output), or a terminal run status ("stopped" / "waiting")
+     * bubbled up from the first branch that hits one — remaining branches
+     * are not started in that case, exactly like a loop pass that bubbles.
+     *
+     * @param  \Illuminate\Support\Collection  $edges
+     * @param  \Illuminate\Support\Collection  $nodes
+     * @param  array<string, bool>  $visited
+     */
+    protected function driveInlineParallel(
+        AutomationRun $run,
+        Automation $automation,
+        AutomationNode $parallelNode,
+        ActionResult $result,
+        $edges,
+        $nodes,
+        AutomationContext $context,
+        array &$visited,
+    ): ?string {
+        $handles = is_array($result->output['branches'] ?? null) ? array_values($result->output['branches']) : [];
+
+        foreach ($handles as $handle) {
+            $branchStart = $this->nextNode($parallelNode, (string) $handle, $edges, $nodes);
+
+            if ($branchStart === null) {
+                continue;
+            }
+
+            $status = $this->runFrom($run, $automation, $branchStart, $context, $edges, $nodes, $visited);
+
+            if ($status === AutomationRun::STATUS_STOPPED || $status === AutomationRun::STATUS_WAITING) {
+                return $status;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -354,6 +572,19 @@ class WorkflowRunner
     protected function onErrorPolicy(AutomationNode $node): string
     {
         return (string) data_get($node->config ?? [], '_on_error', 'fail');
+    }
+
+    /**
+     * Whether a paused node must be re-executed (not just skipped past)
+     * when its scheduled resume fires. See {@see resumeAfterNode()}.
+     */
+    protected function reexecutesOnResume(AutomationNode $node): bool
+    {
+        $class = $this->registry->class($node->type);
+
+        return $class !== null
+            && method_exists($class, 'reexecuteOnResume')
+            && $class::reexecuteOnResume();
     }
 
     protected function nextNode(

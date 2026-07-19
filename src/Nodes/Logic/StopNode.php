@@ -3,10 +3,10 @@
 namespace Goldnead\StatamicAutomations\Nodes\Logic;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
-use Goldnead\StatamicAutomations\Contracts\AutomationNode;
+use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 
-class StopNode implements AutomationNode
+class StopNode implements AutomationLogicNode
 {
     public static function handle(): string
     {

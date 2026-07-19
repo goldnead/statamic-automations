@@ -125,11 +125,15 @@ class FlowValidator
             $required = $field['required'] ?? false;
 
             if ($required && $handle && (! array_key_exists($handle, $config) || $config[$handle] === '' || $config[$handle] === null)) {
-                $issues[] = $this->error(
+                // Carry the field handle so the editor can mark the specific
+                // invalid field inline (A3), not just the node.
+                $issue = $this->error(
                     'missing_required_config',
                     "Node '{$node->node_key}' is missing required field '{$handle}'.",
                     $node->node_key,
                 );
+                $issue['field'] = $handle;
+                $issues[] = $issue;
             }
         }
 

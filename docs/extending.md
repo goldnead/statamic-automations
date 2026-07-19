@@ -1,6 +1,23 @@
 # Extending Statamic Automations
 
-Custom **triggers**, **actions** and **logic nodes** are first-class. Any service provider can register them by calling the `Automations` facade.
+Custom **triggers**, **actions**, **logic nodes**, **option sources** and **event triggers** are first-class. Any service provider can register them from its `boot()` by calling the `Automations` facade — the exact same public API the addon's own built-ins are registered through.
+
+```php
+use Goldnead\StatamicAutomations\Facades\Automations;
+
+public function boot(): void
+{
+    Automations::registerAction(MyCustomAction::class);        // handle read from ::handle()
+    Automations::registerTrigger(MyCustomTrigger::class);
+    Automations::registerLogicNode(MyRateLimitNode::class);
+    Automations::registerOptionSource('shop.products', fn ($request) => [...]);
+    Automations::registerEventTrigger(\App\Events\OrderShipped::class, [...]);
+}
+```
+
+Every `register*` method has a handle-less form (the class carries its own `::handle()`) and a two-arg form `register*('handle', Class::class)` for back-compat. A malformed registration (missing class, wrong contract, empty handle) throws immediately via the defensive `Automations::describe()` gate — it never silently no-ops.
+
+Server-registered nodes appear in the CP **Node Library** with **zero frontend build**: the library is served dynamically from the registry (`GET /cp/automations/api/nodes`). The `schema()` array becomes the config form automatically.
 
 ## Custom action
 
@@ -80,11 +97,11 @@ use Acme\\InvoiceFlow\\SendToInternalApiAction;
 
 public function boot(): void
 {
-    Automations::action(SendToInternalApiAction::handle(), SendToInternalApiAction::class);
+    Automations::registerAction(SendToInternalApiAction::class);
 }
 ```
 
-The action shows up in the **Node Library → Acme** group automatically. The schema becomes the config form on the right-hand panel without any UI work.
+The action shows up in the **Node Library → Acme** group automatically. The schema becomes the config form on the right-hand panel without any UI work. If the action returns structured output on its success path, declare it in a static `outputSchema()` so downstream nodes and the variable picker can reference `{{ node.<key> }}`.
 
 ## Custom trigger
 
@@ -155,40 +172,125 @@ class InvoicePaidTrigger implements AutomationTrigger
 }
 ```
 
-Register the trigger and wire up your own listener that fires it:
+Register the trigger, then fire it from your own listener through the shared `TriggerDispatcher` (do not re-implement the dispatch loop):
 
 ```php
 use Goldnead\\StatamicAutomations\\Facades\\Automations;
-use Goldnead\\StatamicAutomations\\Models\\Automation;
-use Goldnead\\StatamicAutomations\\Engine\\WorkflowRunner;
-use Goldnead\\StatamicAutomations\\Jobs\\RunAutomation;
+use Goldnead\\StatamicAutomations\\Engine\\TriggerDispatcher;
 
-Automations::trigger(InvoicePaidTrigger::handle(), InvoicePaidTrigger::class);
+Automations::registerTrigger(InvoicePaidTrigger::class);
 
 Event::listen(InvoicePaid::class, function (InvoicePaid $event) {
-    $trigger = app(\\Goldnead\\StatamicAutomations\\Registries\\TriggerRegistry::class)
-        ->instance('acme.invoice_paid');
-
-    $automations = Automation::query()
-        ->where('enabled', true)
-        ->whereHas('nodes', fn ($q) => $q->where('type', 'acme.invoice_paid'))
-        ->with('nodes')
-        ->get();
-
-    foreach ($automations as $automation) {
-        $node = $automation->nodes->first(fn ($n) => $n->type === 'acme.invoice_paid');
-        if (! $trigger->matches($event, $node->config ?? [])) continue;
-
-        $context = $trigger->buildContext($event, $node->config ?? []);
-        $run = app(WorkflowRunner::class)->createRun($automation, $context, $node);
-        RunAutomation::dispatch($run->id, $context->all(), false);
-    }
+    app(TriggerDispatcher::class)->dispatch('acme.invoice_paid', $event);
 });
+```
+
+The dispatcher finds every enabled automation whose start node is this trigger, runs your `matches()` predicate, builds the context via `buildContext()` and dispatches the run. For the common case (an event → a trigger), skip the trigger class entirely and use a **custom event trigger** (below) — one call does all of it.
+
+## Custom event trigger
+
+Turn any application event into a trigger without writing a trigger class. `registerEventTrigger()` builds a generic trigger, registers it in the library and subscribes **one** listener that funnels the event into the existing `TriggerDispatcher`.
+
+```php
+use Goldnead\\StatamicAutomations\\Facades\\Automations;
+
+Automations::registerEventTrigger(\\App\\Events\\OrderShipped::class, [
+    'handle' => 'order_shipped',
+    'label' => 'Order Shipped',
+    'group' => 'Shop',
+    'description' => 'Fires when an order is marked shipped.',
+    // payload mapping: a dot-path string, '*' (dump public props), a closure,
+    // or an invokable/`map()` class-string.
+    'payload' => 'order',                 // → {{ order.id }}, {{ order.total }}
+    'output_schema' => ['order' => ['id' => 'string', 'total' => 'number']],
+    // optional matcher — default matches everything.
+    'matches' => fn ($event, $config) => $event->order['total'] >= ($config['min_total'] ?? 0),
+]);
+```
+
+Zero-PHP alternative in `config/automations.php` (closures aren't config-serialisable, so `payload` is a dot-path/`*` and `matches` an invokable class-string here):
+
+```php
+'event_triggers' => [
+    \\App\\Events\\OrderShipped::class => [
+        'handle' => 'order_shipped',
+        'label' => 'Order Shipped',
+        'group' => 'Shop',
+        'payload' => 'order',
+        'output_schema' => ['order' => ['id' => 'string', 'total' => 'number']],
+    ],
+],
 ```
 
 ## Custom logic node
 
-Logic nodes are first-class engine constructs and have a slightly different shape — instead of `execute()`, they expose a static `evaluate()` that receives the engine's `ConditionEvaluator`. See `src/Nodes/Logic/FilterNode.php` for a reference implementation.
+Logic nodes implement the `AutomationLogicNode` contract: the shared `AutomationNode` statics plus an instance `execute(AutomationContext $context, array $config): ActionResult`. They steer the flow — return `ActionResult::stopped()`, `::branch(true|false)`, `::success()` with an `outputHandle` (switch case / loop / parallel fan-out), etc.
+
+```php
+<?php
+
+namespace Acme\\InvoiceFlow;
+
+use Goldnead\\StatamicAutomations\\Context\\AutomationContext;
+use Goldnead\\StatamicAutomations\\Contracts\\AutomationLogicNode;
+use Goldnead\\StatamicAutomations\\Support\\ActionResult;
+
+class BusinessHoursGate implements AutomationLogicNode
+{
+    public static function handle(): string { return 'acme.business_hours'; }
+    public static function label(): string { return 'Business hours only'; }
+    public static function description(): ?string { return 'Stops the flow outside business hours.'; }
+    public static function group(): string { return 'Acme'; }
+    public static function supportsTestMode(): bool { return true; }
+    public static function schema(): array { return []; }
+
+    public function execute(AutomationContext $context, array $config): ActionResult
+    {
+        return now()->isWeekday()
+            ? ActionResult::success()
+            : ActionResult::stopped('Outside business hours.');
+    }
+}
+```
+
+```php
+Automations::registerLogicNode(BusinessHoursGate::class);
+```
+
+The built-in condition nodes (`FilterNode`, `BranchNode`, `WaitUntilNode`) additionally expose a static `evaluate(AutomationContext, array, ConditionEvaluator)` which the engine's `NodeExecutor` prefers when present; they satisfy the contract by delegating `execute()` to it. Your own logic node only needs `execute()`.
+
+## Option sources
+
+Dynamic `<select>` pickers declare `options_source: '<handle>'` in a schema field; the CP config form fetches `GET /cp/automations/api/options/<handle>`, resolved through the **OptionSourceRegistry**. Register your own resolver — full parity with the built-ins:
+
+```php
+Automations::registerOptionSource('shop.products', fn (\\Illuminate\\Http\\Request $request) =>
+    \\App\\Models\\Product::all()->map(fn ($p) => ['value' => $p->id, 'label' => $p->name])->all()
+);
+```
+
+A resolver returns `[['value' => ..., 'label' => ...], ...]`; a plain `value => label` map or a list of scalars is accepted and normalised. Errors and unknown sources resolve to an empty list, never a fatal. The resolver may also be an invokable class-string (or one exposing `resolve(Request)`).
+
+Built-in sources (each also available under a bare handle, e.g. `collections` == `statamic.collections`):
+
+| Source | Returns |
+|---|---|
+| `statamic.collections` | All collections |
+| `statamic.entries` (`?collection=`) | Entries in a collection |
+| `statamic.blueprints` (`?collection=`) | Blueprints |
+| `statamic.taxonomies` / `statamic.terms` (`?taxonomy=`) | Taxonomies / terms |
+| `statamic.sites` | Configured sites |
+| `statamic.users` / `statamic.roles` / `statamic.groups` | Users / roles / user groups |
+| `statamic.globals` | Global sets |
+| `statamic.forms` | Statamic forms |
+| `statamic.assets` (`?container=`) / `statamic.asset_containers` | Assets / containers |
+| `automations` | Other automations (for sub-automation actions) |
+| `leadhub.statuses` / `leadhub.tags` | LeadHub (when installed) |
+| `webhook_manager.destinations` | Webhook Manager destinations (when installed) |
+
+## Native Statamic action nodes
+
+The addon ships these operation nodes (group **Statamic**), all registered through the public API above: `create_entry`, `update_entry`, `publish_entry`, `unpublish_entry`, `delete_entry`, `create_term`, `create_user`, `update_user`, `assign_user_role`, `add_user_to_group`, `set_global_value`, `send_email`. Each wraps the real Statamic API and gates its writes behind the `persist_statamic_changes` test-mode flag, so a test run previews without touching content.
 
 ## Schema field types
 
@@ -204,21 +306,6 @@ The dynamic config panel renders these field types out of the box:
 | `tags` | Tag input (comma / enter separated) |
 | `data_reference` | Reference to a context node (defaults to `{{ source.id }}`) |
 | `condition_list` | Filter / Branch condition builder |
-
-## Option sources
-
-`options_source` values map to the `NodesController::options()` resolver:
-
-| Source | Returns |
-|---|---|
-| `statamic.forms` | All Statamic forms |
-| `statamic.collections` | All Statamic collections |
-| `statamic.sites` | Configured Statamic sites |
-| `leadhub.statuses` | LeadHub statuses (only when LeadHub is installed) |
-| `leadhub.tags` | LeadHub tags |
-| `webhook_manager.destinations` | Webhook Manager destinations |
-
-To add your own source, override the controller in your application — or open a PR.
 
 ## Tokens
 

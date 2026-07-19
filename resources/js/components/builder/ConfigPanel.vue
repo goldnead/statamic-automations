@@ -1,19 +1,27 @@
 <template>
     <div class="flex flex-col h-full">
-        <div v-if="!node" class="text-sm text-gray-500 dark:text-gray-400 text-center py-12 px-4">
-            {{ __('Select a node to configure it.') }}
-        </div>
-
-        <template v-else>
-            <!-- Card header: icon chip + node title -->
+        <!-- The panel only ever mounts while a node is selected (see Edit.vue's
+             `v-if="selectedNode"`), so there is no inline empty state here —
+             deselecting collapses the whole column instead. -->
+        <template v-if="node">
+            <!-- Card header: icon chip + node title + close (deselect) -->
             <header class="flex items-center gap-2.5 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
                 <span class="sa-icon-chip size-8" :class="`sa-icon-chip--${kind}`">
                     <Icon :name="icon" class="size-4" />
                 </span>
-                <div class="min-w-0">
+                <div class="min-w-0 flex-1">
                     <h3 class="text-sm font-semibold m-0 truncate">{{ node.label || schema?.label || node.type }}</h3>
                     <p class="text-[11px] text-gray-500 dark:text-gray-400 font-mono truncate m-0">{{ node.type }}</p>
                 </div>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    icon-only
+                    icon="x"
+                    :aria-label="__('Close')"
+                    class="shrink-0"
+                    @click="$emit('deselect')"
+                />
             </header>
 
             <div class="flex-1 overflow-y-auto">
@@ -39,13 +47,39 @@
                         :label="field.label"
                         :instructions="field.help"
                         class="mb-4"
+                        :class="fieldErrors[field.handle] && 'sa-field--invalid'"
                     >
+                        <template v-if="isTokenable(field)" #actions>
+                            <TokenInserter
+                                :variables="nodeVariables"
+                                :model-value="config[field.handle] ?? field.default ?? ''"
+                                :target-id="fieldDomId(field)"
+                                :mode="tokenMode(field)"
+                                @update:model-value="setField(field.handle, $event)"
+                            />
+                        </template>
+
+                        <component
+                            :is="OptionsSelect"
+                            v-if="field.options_source"
+                            :source="field.options_source"
+                            :params="dependsOnParams(field)"
+                            :api-base="apiBase"
+                            :placeholder="field.placeholder ?? null"
+                            :model-value="config[field.handle] ?? field.default ?? null"
+                            @update:model-value="setField(field.handle, $event)"
+                        />
                         <component
                             :is="fieldComponent(field)"
+                            v-else
                             v-bind="fieldProps(field)"
                             :model-value="config[field.handle] ?? field.default ?? null"
                             @update:model-value="setField(field.handle, $event)"
                         />
+
+                        <p v-if="fieldErrors[field.handle]" class="sa-field-error">
+                            {{ fieldErrors[field.handle] }}
+                        </p>
                     </Field>
 
                     <ConditionBuilder
@@ -87,14 +121,24 @@
 
             <!-- Sticky footer actions -->
             <footer class="flex items-center gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+                <!-- Trigger nodes have no Duplicate here either (same
+                     one-trigger-per-flow rule as Delete below): duplicating
+                     a trigger would create a second one, which has no
+                     Delete action to recover from. -->
                 <Button
+                    v-if="kind !== 'trigger'"
                     :text="__('Duplicate')"
                     icon="duplicate"
                     variant="ghost"
                     size="sm"
                     @click="$emit('duplicate')"
                 />
+                <!-- Trigger nodes have no Delete here (one-trigger-per-flow —
+                     see NodeCard.vue's dropdown / Edit.vue's removeNode);
+                     "Replace trigger" in the node's "..." menu is the only
+                     way to change it. -->
                 <Button
+                    v-if="kind !== 'trigger'"
                     :text="__('Delete node')"
                     icon="trash"
                     variant="danger"
@@ -108,7 +152,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, defineComponent, h } from 'vue';
 import {
     Badge,
     Button,
@@ -122,17 +166,89 @@ import {
     Icon,
 } from '@statamic/cms/ui';
 import ConditionBuilder from './ConditionBuilder.vue';
+import KeyValueField from './KeyValueField.vue';
 import PropertiesSection from './PropertiesSection.vue';
+import TokenInserter from './TokenInserter.vue';
 import { nodeIcon } from '../../composables/useNodeIcon.js';
+import { useNodeOptions } from '../../composables/useNodeOptions.js';
+import { useNodeVariables } from '../../composables/useNodeVariables.js';
+
+/**
+ * Async, cascading `<select>` for fields declaring `options_source`.
+ * Wraps `@statamic/cms/ui` Select + `useNodeOptions`, defined inline here
+ * (rather than as a separate SFC) since it's only ever used from the field
+ * loop below. Shows a loading placeholder while fetching and a hint in the
+ * dropdown's empty state instead of a blank list.
+ */
+const OptionsSelect = defineComponent({
+    name: 'OptionsSelect',
+    props: {
+        modelValue: { type: [String, Number, null], default: null },
+        source: { type: String, required: true },
+        params: { type: Object, default: () => ({}) },
+        apiBase: { type: String, required: true },
+        placeholder: { type: String, default: null },
+    },
+    emits: ['update:modelValue'],
+    setup(props, { emit }) {
+        const { options, loading, error } = useNodeOptions(
+            computed(() => props.source),
+            computed(() => props.params),
+            props.apiBase,
+        );
+
+        const emptyHint = computed(() => {
+            if (loading.value) return __('Loading…');
+            if (error.value) return __('Could not load options.');
+            if (/webhook_manager|^webhooks$/.test(props.source)) {
+                return __('Install Webhook Manager to use this option.');
+            }
+            return __('No options');
+        });
+
+        return () =>
+            h(
+                Select,
+                {
+                    modelValue: props.modelValue,
+                    'onUpdate:modelValue': (value) => emit('update:modelValue', value),
+                    options: options.value,
+                    disabled: loading.value,
+                    placeholder: loading.value ? __('Loading…') : (props.placeholder ?? __('Select an option')),
+                },
+                {
+                    'no-options': () =>
+                        h(
+                            'div',
+                            { class: 'text-xs text-gray-500 dark:text-gray-400 px-2 py-1.5' },
+                            emptyHint.value,
+                        ),
+                },
+            );
+    },
+});
 
 const props = defineProps({
     node: { type: Object, default: null },
     library: { type: Object, required: true },
     triggerOutputSchema: { type: Object, default: null },
     apiBase: { type: String, required: true },
+    // handle → error message for invalid fields on the selected node (A3).
+    // Drives the red field ring + inline message below each control.
+    fieldErrors: { type: Object, default: () => ({}) },
+    // Full graph — `{ nodes: [...], edges: [...] }` — used by
+    // `useNodeVariables` to walk upstream from the selected node and
+    // collect the variables `TokenInserter` offers on `tokenable` fields.
+    automation: { type: Object, default: () => ({ nodes: [], edges: [] }) },
+    // Most recent (test) run for this automation — `{ node_runs: [...] }` from
+    // `AutomationsController::test`. Optional; when present, `useNodeVariables`
+    // resolves each token's SAMPLE VALUE from the recorded node outputs so the
+    // picker can show `entry.title → "My Post"`. Absent ⇒ no samples, nothing
+    // else changes.
+    lastRun: { type: Object, default: null },
 });
 
-const emit = defineEmits(['update:config', 'update:label', 'delete', 'duplicate']);
+const emit = defineEmits(['update:config', 'update:label', 'delete', 'duplicate', 'deselect']);
 
 const schema = computed(() => {
     if (!props.node) return null;
@@ -177,8 +293,82 @@ const hasConditions = computed(() =>
 
 const config = computed(() => props.node?.config ?? {});
 
+// Upstream token variables for the selected node (Task 2.3). Computed once
+// per node selection and shared by every `TokenInserter` on this panel —
+// the field loop below only needs to know *which* fields are tokenable.
+const nodeVariables = useNodeVariables(
+    () => props.node?.node_key ?? null,
+    () => props.automation,
+    () => props.library,
+    () => props.lastRun,
+);
+
+// Which field types can carry a token, and HOW the token is applied:
+//  - `insert` types render a native input/textarea with a caret, so a token
+//    is spliced in at the cursor (`"Hallo {{ entry.title }}"`).
+//  - `replace` types (select/combobox) accept a token AS their whole value —
+//    there's no caret, so picking a token sets the field outright.
+// `key_value` is deliberately absent here: it's a multi-row editor whose
+// *value* cells each get their own picker inside KeyValueField, not a single
+// field-level one.
+const TOKEN_INSERT_TYPES = ['text', 'textarea', 'data_reference'];
+const TOKEN_REPLACE_TYPES = ['select', 'combobox'];
+
+// Types that default to tokenable WITHOUT needing an explicit flag — free
+// text has always offered the picker, so keep that implicit. Everything else
+// (select/combobox/…) must opt in with `tokenable: true`, because for an enum
+// `select` a token is usually NOT a valid value.
+const TOKENABLE_BY_DEFAULT = ['text', 'textarea'];
+
+/**
+ * Declarative tokenability: a field opts in/out with `tokenable`, with a
+ * sensible per-type default when the flag is absent.
+ *  - `tokenable: false` → never (hard opt-out, even for text).
+ *  - `tokenable: true`  → yes, for any insert/replace-capable type.
+ *  - unset              → default: text/textarea yes, everything else no.
+ * Fields backed by a resolved options endpoint (`options_source`, i.e. a real
+ * enum picker) never get the picker — a raw token isn't one of their options.
+ */
+function isTokenable(field) {
+    if (field.options_source) return false;
+    const supported = TOKEN_INSERT_TYPES.includes(field.type) || TOKEN_REPLACE_TYPES.includes(field.type);
+    if (!supported) return false;
+    if (field.tokenable === false) return false;
+    if (field.tokenable === true) return true;
+    return TOKENABLE_BY_DEFAULT.includes(field.type);
+}
+
+function tokenMode(field) {
+    return TOKEN_REPLACE_TYPES.includes(field.type) ? 'replace' : 'insert';
+}
+
+// Stable per-node-per-field DOM id so `TokenInserter` can look up the
+// native input/textarea element (via `document.getElementById`) to read
+// and set caret position — see `TokenInserter.vue` for why `id` rather
+// than a template ref.
+function fieldDomId(field) {
+    return `sa-field-${props.node?.node_key ?? 'none'}-${field.handle}`;
+}
+
 function setField(handle, value) {
     emit('update:config', { ...config.value, [handle]: value });
+}
+
+/**
+ * Resolves the query params to send with an `options_source` fetch.
+ * A field declaring `depends_on: '<otherFieldHandle>'` passes that other
+ * field's current config value as a param named after the target handle
+ * (e.g. `entry` field with `depends_on: 'collection'` → `{ collection }`,
+ * matching `NodesController::options()`'s `$request->query('collection')`).
+ * Returns `{}` (no params, i.e. unscoped fetch) until the dependency has a
+ * value, so cascading pickers stay empty/hinted rather than fetching an
+ * unscoped list.
+ */
+function dependsOnParams(field) {
+    if (!field.depends_on) return {};
+    const value = config.value[field.depends_on];
+    if (value === null || value === undefined || value === '') return {};
+    return { [field.depends_on]: value };
 }
 
 function fieldComponent(field) {
@@ -192,13 +382,14 @@ function fieldComponent(field) {
         code: CodeEditor,
         json: CodeEditor,
         tags: Input,
-        key_value: Textarea,
+        key_value: KeyValueField,
         data_reference: Input,
     }[field.type] ?? Input;
 }
 
 function fieldProps(field) {
     const base = {};
+    if (isTokenable(field)) base.id = fieldDomId(field);
     if (field.type === 'number') base.type = 'number';
     if (field.type === 'select') {
         base.options = (field.options ?? []).map((o) =>
@@ -210,6 +401,14 @@ function fieldProps(field) {
     }
     if (field.type === 'textarea') {
         base.rows = field.rows ?? 4;
+    }
+    if (field.type === 'key_value') {
+        if (field.key_label) base.keyLabel = field.key_label;
+        if (field.value_label) base.valueLabel = field.value_label;
+        // Row-level token picker on each value cell (unless the field opts out
+        // with `tokenable: false`). Values are the token-bearing side; keys are
+        // literal map keys, so only the value gets a picker inside KeyValueField.
+        if (field.tokenable !== false) base.variables = nodeVariables.value;
     }
     return base;
 }
