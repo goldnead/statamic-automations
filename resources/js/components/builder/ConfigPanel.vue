@@ -115,7 +115,12 @@
 
             <!-- Sticky footer actions -->
             <footer class="flex items-center gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+                <!-- Trigger nodes have no Duplicate here either (same
+                     one-trigger-per-flow rule as Delete below): duplicating
+                     a trigger would create a second one, which has no
+                     Delete action to recover from. -->
                 <Button
+                    v-if="kind !== 'trigger'"
                     :text="__('Duplicate')"
                     icon="duplicate"
                     variant="ghost"

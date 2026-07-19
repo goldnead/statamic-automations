@@ -39,6 +39,15 @@ FUNCTIONAL DEBUG (Adrian tested on testbench, found real bugs; commit 5a3bede):
 - Fix review Spec✅/Quality Approved (37 JS + 269 PHP green). Important finding fixed (commit 42efa51): KeyValueField silently dropped duplicate keys; now shows invalid state + German hint "Doppelte Schlüssel werden zusammengeführt, nur der letzte zählt." + extracted pure useKeyValueRows.js with 16 unit tests + stripped dead tokenable from key_value schemas. Browser-verified duplicate-key hint appears.
 - Testbench has 2 demo automations (1 Debug Test Flow, 2 Loop Switch Test) left for Adrian to inspect. Functional debug commits on branch: 5a3bede + 42efa51.
 
+SESSION 2 UX ROUND (Adrian testbench feedback, commits c944b4b + 691cc1e + eea34bf):
+- Switch always has 1 extra output = the `default` fallback (intended, answered).
+- A1 edge/handle misalignment at 3+ outputs (commit c944b4b): unified fractionForOutput===handleY. BROWSER-VERIFIED programmatically (3 switch case edges anchor exactly to their handle x-positions).
+- A2 panning (c944b4b): set pan-on-drag + pan-activation-key-code='Space' + selection-key-code='Shift' + select-nodes-on-drag=false. Config is textbook-correct BUT the d3-zoom pan GESTURE cannot be triggered by headless synthetic/dragTo events (d3-zoom ignores non-trusted + HTML5-DnD) → NEEDS ADRIAN REAL-MOUSE CONFIRM.
+- Sidebar node-picker + one-trigger (commit 691cc1e): dropdown replaced by left-sidebar PICK MODE (click + → sidebar highlights, banner "Choose a node…", Cancel). Entry adder = triggers-only; step adder = logic+actions-only (one-trigger enforced at picker + addNode guard). Sidebar widened to 300px (tabs fit) + hideable (collapses to 40px rail with "Show node library"). ALL BROWSER-VERIFIED.
+- Replace-trigger + block-delete (commit eea34bf): trigger node's ... menu has "Replace trigger" (swaps type in place, keeps node_key + outgoing edges) and NO Delete; non-trigger nodes keep Delete. BROWSER-VERIFIED: manual→filter, replaced manual→entry_saved, filter stayed connected.
+- Combined review of the 3 commits dispatched.
+- OPEN follow-up idea (Adrian's option): explicit n8n-style loop-back/close UX instead of the dead-end "For each item" body — separate engine+editor design if wanted.
+
 ## FOLLOW-UP / decisions for Adrian (not blocking)
 - webhook_received trigger uses source `webhook_manager.inbound_endpoints` which has NO arm in options endpoint (Task 2.1) → its endpoint picker is empty. Add the arm in a follow-up (needs webhook-manager installed).
 - WaitUntil deeper limitation: its condition rechecks a FROZEN context snapshot (taken at pause time); nothing in the engine refreshes context before recheck, so in production an unmet condition can't become met without external mutation. Wiring is fixed; the context-refresh is a pre-existing architectural gap. Decide later whether to build context-refresh-on-recheck.

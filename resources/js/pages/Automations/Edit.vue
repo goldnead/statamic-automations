@@ -23,6 +23,12 @@ import RunLogPanel from '../../components/builder/RunLogPanel.vue';
 import { useAutosave } from '../../composables/useAutosave.js';
 import { useHistory } from '../../composables/useHistory.js';
 import { outputsFor } from '../../composables/useAutoLayout.js';
+import {
+    isTriggerHandle as isTriggerHandleGuard,
+    canInsert,
+    canDuplicate,
+    pendingTargetIsValid,
+} from '../../composables/useFlowGuards.js';
 
 const props = defineProps({
     mode: { type: String, required: true },           // 'create' | 'edit'
@@ -451,8 +457,10 @@ function insertOnEdge(edge, node) {
 
 // Kind is inferred by which library array the handle lives in — there is no
 // `kind` field on the node/handle itself (mirrors Canvas.vue's nodeKind()).
+// Thin wrapper over the pure guard module (useFlowGuards.js) so call sites
+// below don't need to thread `props.library` through by hand.
 function isTriggerHandle(handle) {
-    return (props.library.triggers ?? []).some((m) => m.handle === handle);
+    return isTriggerHandleGuard(handle, props.library);
 }
 
 function hasTriggerNode() {
@@ -467,7 +475,8 @@ function hasTriggerNode() {
 function insertNode(handle, target) {
     if (!findHandleMeta(handle)) return;
 
-    if (isTriggerHandle(handle) && hasTriggerNode()) {
+    const { ok } = canInsert(handle, props.library, automation.value.nodes);
+    if (!ok) {
         notify('error', __('A flow can only have one trigger.'));
         return;
     }
@@ -497,6 +506,15 @@ function addNode(handle) {
 // instead; otherwise fall back to the legacy end-of-flow add.
 function onLibraryPick(handle) {
     if (pendingTarget.value) {
+        // The pending target was armed against node_keys that may since have
+        // been deleted (another edit, an undo, …) — inserting against a
+        // stale target would produce an orphaned/corrupt edge. Silently
+        // cancel pick mode instead of mutating the graph.
+        if (!pendingTargetIsValid(pendingTarget.value, automation.value.nodes)) {
+            pendingTarget.value = null;
+            notify('info', __('Selection changed — pick cancelled.'));
+            return;
+        }
         if (pendingTarget.value.kind === 'replace') {
             replaceTrigger(pendingTarget.value.nodeKey, handle);
         } else {
@@ -515,6 +533,11 @@ function onLibraryPick(handle) {
 function replaceTrigger(nodeKey, newType) {
     const meta = findHandleMeta(newType);
     if (!meta) return;
+    // Defense in depth: "Replace trigger" only ever offers trigger handles
+    // via pickKind's 'replace-trigger' NodeLibrary filter, but re-verify here
+    // too — a non-trigger `newType` slipping through would leave the flow
+    // without a trigger at all.
+    if (!isTriggerHandle(newType)) return;
     automation.value.nodes = automation.value.nodes.map((n) =>
         n.node_key === nodeKey
             ? { ...n, type: newType, label: meta.label ?? newType, config: {} }
@@ -597,9 +620,22 @@ function updateNodeLabel(label) {
 
 // Duplicate a node right after itself in the sequence (insert on its default
 // output when it has a continuation, otherwise append to it).
+//
+// Backstop for the one-trigger rule (§ B1): the "Duplicate" actions in
+// NodeCard.vue's card menu and ConfigPanel.vue's footer are kind-gated so a
+// trigger node's Duplicate never renders, but this is the single choke point
+// every duplicate path funnels through, so it re-checks here too — a second
+// trigger has no Delete action to recover from (see removeNode).
 function duplicateNode(nodeKey) {
     const src = automation.value.nodes.find((n) => n.node_key === nodeKey);
     if (!src) return;
+
+    const { ok } = canDuplicate(src, props.library, automation.value.nodes);
+    if (!ok) {
+        notify('error', __('A flow can only have one trigger.'));
+        return;
+    }
+
     const copy = {
         ...src,
         node_key: newNodeKey(src.type),

@@ -33,7 +33,16 @@
                         />
                     </template>
                     <DropdownItem :text="__('Rename')" icon="rename" @click="$emit('rename')" />
-                    <DropdownItem :text="__('Duplicate')" icon="duplicate" @click="$emit('duplicate')" />
+                    <!-- Trigger-only exclusion (one-trigger-per-flow rule):
+                         duplicating a trigger would create a second one, and
+                         a trigger has no Delete to recover from that (see the
+                         "Delete" gate below / Edit.vue's duplicateNode). -->
+                    <DropdownItem
+                        v-if="kind !== 'trigger'"
+                        :text="__('Duplicate')"
+                        icon="duplicate"
+                        @click="$emit('duplicate')"
+                    />
                     <DropdownItem
                         :text="data.disabled ? __('Enable') : __('Disable')"
                         :icon="data.disabled ? 'eye' : 'eye-slash'"
