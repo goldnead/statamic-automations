@@ -191,10 +191,17 @@ class WorkflowRunner
     }
 
     /**
-     * Resume a run that was paused by a Delay/Wait node. Unlike
-     * {@see executeFromNode()}, the given node is NOT re-executed — it is
-     * the delay node that already fired, so the walk continues from the
-     * node AFTER it (via its default outgoing edge).
+     * Resume a run that was paused by a Delay/Wait node.
+     *
+     * By default the paused node is NOT re-executed — it is the delay
+     * node that already fired, so the walk continues from the node AFTER
+     * it (via its default outgoing edge), same as {@see executeFromNode()}
+     * with $executeFirst = false.
+     *
+     * Some logic nodes need the opposite: a Wait Until must be
+     * RE-EVALUATED on resume (its condition may still be false), so its
+     * class opts in via a static `reexecuteOnResume(): true` method,
+     * checked here — see {@see \Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilNode}.
      *
      * Returns the refreshed run model.
      */
@@ -226,14 +233,12 @@ class WorkflowRunner
         $this->logger->startRun($run);
 
         try {
-            // executeFirst: false → skip the delay node itself and walk
-            // forward from its default outgoing edge.
             $finalStatus = $this->walk(
                 $run,
                 $automation,
                 $startNode,
                 $context,
-                executeFirst: false,
+                executeFirst: $this->reexecutesOnResume($startNode),
             );
         } catch (\Throwable $e) {
             $this->logger->finishRun($run, AutomationRun::STATUS_FAILED, $e->getMessage());
@@ -567,6 +572,19 @@ class WorkflowRunner
     protected function onErrorPolicy(AutomationNode $node): string
     {
         return (string) data_get($node->config ?? [], '_on_error', 'fail');
+    }
+
+    /**
+     * Whether a paused node must be re-executed (not just skipped past)
+     * when its scheduled resume fires. See {@see resumeAfterNode()}.
+     */
+    protected function reexecutesOnResume(AutomationNode $node): bool
+    {
+        $class = $this->registry->class($node->type);
+
+        return $class !== null
+            && method_exists($class, 'reexecuteOnResume')
+            && $class::reexecuteOnResume();
     }
 
     protected function nextNode(

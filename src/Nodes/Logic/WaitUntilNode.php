@@ -40,6 +40,18 @@ class WaitUntilNode implements AutomationNode
         return true;
     }
 
+    /**
+     * Unlike Delay (which just needs the clock to elapse), a parked
+     * Wait Until must be RE-EVALUATED when its scheduled recheck fires —
+     * the condition may still be false, in which case it should park
+     * again for another interval rather than let the run fall through.
+     * Read by {@see \Goldnead\StatamicAutomations\Engine\WorkflowRunner::resumeAfterNode()}.
+     */
+    public static function reexecuteOnResume(): bool
+    {
+        return true;
+    }
+
     public static function schema(): array
     {
         return [
