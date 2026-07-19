@@ -62,6 +62,7 @@ class AiGenerateAction implements AutomationAction
                 'label' => 'Prompt',
                 'type' => 'textarea',
                 'required' => true,
+                'tokenable' => true,
                 'help' => 'The user message sent to the model. May contain tokens.',
             ],
             [
@@ -92,6 +93,22 @@ class AiGenerateAction implements AutomationAction
                 'required' => false,
                 'help' => 'Optional {{ vars.<name> }} to also hold the generated text.',
             ],
+        ];
+    }
+
+    /**
+     * Variables this action exposes downstream, e.g. {{ node.text }}.
+     * Mirrors the keys returned on the success path of execute().
+     *
+     * @return array<string, mixed>
+     */
+    public static function outputSchema(): array
+    {
+        return [
+            'text' => 'string',
+            'model' => 'string',
+            'stop_reason' => 'string',
+            'usage' => 'array',
         ];
     }
 

@@ -53,8 +53,9 @@ class CallAutomationAction implements AutomationAction
         return [
             [
                 'handle' => 'automation',
-                'label' => 'Automation (handle or id)',
-                'type' => 'text',
+                'label' => 'Automation',
+                'type' => 'select',
+                'options_source' => 'automations',
                 'required' => true,
             ],
             [

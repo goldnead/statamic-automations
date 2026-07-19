@@ -51,6 +51,7 @@ class SetVariableAction implements AutomationAction
                 'label' => 'Variables',
                 'type' => 'key_value',
                 'required' => true,
+                'tokenable' => true,
                 'help' => 'Variable name → value. Values may contain tokens.',
             ],
         ];

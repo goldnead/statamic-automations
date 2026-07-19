@@ -37,8 +37,8 @@ class SendEmailAction implements AutomationAction
     public static function schema(): array
     {
         $schema = [
-            ['handle' => 'to', 'label' => 'To', 'type' => 'text', 'required' => true],
-            ['handle' => 'subject', 'label' => 'Subject', 'type' => 'text', 'required' => true],
+            ['handle' => 'to', 'label' => 'To', 'type' => 'text', 'required' => true, 'tokenable' => true],
+            ['handle' => 'subject', 'label' => 'Subject', 'type' => 'text', 'required' => true, 'tokenable' => true],
         ];
 
         // The template picker only exists when the email-templates addon is
@@ -62,12 +62,29 @@ class SendEmailAction implements AutomationAction
             'label' => 'Body',
             'type' => 'textarea',
             'required' => true,
+            'tokenable' => true,
             'help' => 'Sent as the plain-text body when no template is selected, and used as the fallback if a selected template cannot be resolved.',
         ];
-        $schema[] = ['handle' => 'reply_to', 'label' => 'Reply-to', 'type' => 'text', 'required' => false];
-        $schema[] = ['handle' => 'from', 'label' => 'From', 'type' => 'text', 'required' => false];
+        $schema[] = ['handle' => 'reply_to', 'label' => 'Reply-to', 'type' => 'text', 'required' => false, 'tokenable' => true];
+        $schema[] = ['handle' => 'from', 'label' => 'From', 'type' => 'text', 'required' => false, 'tokenable' => true];
 
         return $schema;
+    }
+
+    /**
+     * Variables this action exposes downstream, e.g. {{ node.sent_to }}.
+     * Mirrors the keys returned on the success path of execute().
+     *
+     * @return array<string, mixed>
+     */
+    public static function outputSchema(): array
+    {
+        return [
+            'sent_to' => 'string',
+            'subject' => 'string',
+            'template' => 'string',
+            'format' => 'string',
+        ];
     }
 
     public function execute(AutomationContext $context, array $config): ActionResult

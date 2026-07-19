@@ -100,7 +100,12 @@ class NodeRegistry
             'supports_test_mode' => $class::supportsTestMode(),
         ];
 
-        if ($entry['kind'] === 'trigger' && method_exists($class, 'outputSchema')) {
+        // Triggers expose outputSchema() via the AutomationTrigger contract;
+        // actions/logic nodes that produce downstream-readable variables
+        // (e.g. create_entry -> {{ node.entry.id }}) may optionally define
+        // the same static method without it being part of their contract.
+        // The token inserter (Task 2.3) reads this for every node kind.
+        if (method_exists($class, 'outputSchema')) {
             $description['output_schema'] = $class::outputSchema();
         }
 

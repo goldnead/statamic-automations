@@ -44,11 +44,22 @@ class UpdateEntryAction implements AutomationAction
     {
         return [
             [
+                'handle' => 'collection',
+                'label' => 'Collection',
+                'type' => 'select',
+                'options_source' => 'statamic.collections',
+                'required' => false,
+                'help' => 'Optional. Scopes the entry picker below — has no effect on the update itself.',
+            ],
+            [
                 'handle' => 'entry_id',
-                'label' => 'Entry ID',
-                'type' => 'text',
+                'label' => 'Entry',
+                'type' => 'select',
+                'options_source' => 'entries',
+                'depends_on' => 'collection',
                 'required' => true,
-                'help' => 'Tokens allowed, e.g. {{ entry.id }}.',
+                'tokenable' => true,
+                'help' => 'Pick an entry, or use a token, e.g. {{ entry.id }}.',
             ],
             [
                 'handle' => 'published',
@@ -66,6 +77,23 @@ class UpdateEntryAction implements AutomationAction
                 'label' => 'Field data',
                 'type' => 'key_value',
                 'required' => false,
+                'tokenable' => true,
+            ],
+        ];
+    }
+
+    /**
+     * Variables this action exposes downstream, e.g. {{ node.entry.id }}.
+     * Mirrors the keys returned on the success path of execute().
+     *
+     * @return array<string, mixed>
+     */
+    public static function outputSchema(): array
+    {
+        return [
+            'entry' => [
+                'id' => 'string',
+                'slug' => 'string',
             ],
         ];
     }

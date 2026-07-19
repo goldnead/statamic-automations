@@ -83,6 +83,7 @@ class LoopNode implements AutomationNode
                 'label' => 'Items',
                 'type' => 'text',
                 'required' => true,
+                'tokenable' => true,
                 'help' => 'A token resolving to an array, e.g. {{ trigger.entries }}.',
             ],
             [

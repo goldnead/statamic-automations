@@ -37,7 +37,7 @@ class SimpleWebhookAction implements AutomationAction
     public static function schema(): array
     {
         return [
-            ['handle' => 'url', 'label' => 'URL', 'type' => 'text', 'required' => true],
+            ['handle' => 'url', 'label' => 'URL', 'type' => 'text', 'required' => true, 'tokenable' => true],
             [
                 'handle' => 'method',
                 'label' => 'Method',
@@ -56,6 +56,7 @@ class SimpleWebhookAction implements AutomationAction
                 'label' => 'Payload (JSON)',
                 'type' => 'textarea',
                 'required' => false,
+                'tokenable' => true,
                 'help' => 'Either valid JSON or a tokenized JSON string.',
             ],
             [
@@ -64,6 +65,21 @@ class SimpleWebhookAction implements AutomationAction
                 'type' => 'number',
                 'default' => 10,
             ],
+        ];
+    }
+
+    /**
+     * Variables this action exposes downstream, e.g. {{ node.status }}.
+     * Mirrors the keys returned on the success path of execute().
+     *
+     * @return array<string, mixed>
+     */
+    public static function outputSchema(): array
+    {
+        return [
+            'status' => 'integer',
+            'body' => 'string',
+            'headers' => 'array',
         ];
     }
 

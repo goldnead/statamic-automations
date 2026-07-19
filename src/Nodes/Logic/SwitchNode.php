@@ -72,6 +72,7 @@ class SwitchNode implements AutomationNode
                 'label' => 'Value',
                 'type' => 'text',
                 'required' => true,
+                'tokenable' => true,
                 'help' => 'The value to switch on, e.g. {{ lead.status }}.',
             ],
             [
