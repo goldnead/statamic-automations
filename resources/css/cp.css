@@ -127,9 +127,12 @@
         @apply text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500;
     }
 
-    /* Branch-output handle labels rendered inside the card. */
-    .sa-handle-label--true  { @apply text-emerald-600 dark:text-emerald-400; }
-    .sa-handle-label--false { @apply text-red-600 dark:text-red-400; }
+    /* Output-handle labels rendered inside the card footer: branch keeps its
+     * success/failed tint, every other labelled output (switch case, loop,
+     * parallel branch) gets a neutral gray token. */
+    .sa-handle-label--true    { @apply text-emerald-600 dark:text-emerald-400; }
+    .sa-handle-label--false   { @apply text-red-600 dark:text-red-400; }
+    .sa-handle-label--default { @apply text-gray-500 dark:text-gray-400; }
 
     /* Edge branch pills ("If true"/"If false") are drawn by Vue Flow as SVG
      * text (labelStyle) over a rounded background rect (labelBgStyle); both are

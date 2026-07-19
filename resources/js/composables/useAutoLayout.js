@@ -32,15 +32,114 @@ const DEFAULT_OPTS = {
 };
 
 /**
- * Ordered outputs a node exposes, left→right. A branch fans into two columns
- * ("true" left, "false" right); a terminal node has none; everything else has
- * a single "default" continuation.
+ * Normalize a `key_value` config field (as produced by the backend's
+ * NormalizesKeyValue trait) into an ordered array of [key, value] pairs.
+ * Accepts the shapes that field can realistically arrive in on the frontend:
+ * a plain object map (the normal case — Laravel serializes an associative
+ * array to a JSON object), a list of {key,value}/{handle,label} pairs, a
+ * list of [key, value] tuples, or a raw JSON string (e.g. mid-edit in the
+ * key_value Textarea before it round-trips through a save). Anything else
+ * (missing, malformed) degrades to an empty list — never throws.
+ */
+function keyValueEntries(raw) {
+    if (raw == null) return [];
+    if (typeof raw === 'string') {
+        try {
+            return keyValueEntries(JSON.parse(raw));
+        } catch {
+            return [];
+        }
+    }
+    if (Array.isArray(raw)) {
+        return raw
+            .map((item) => {
+                if (Array.isArray(item)) return [item[0], item[1]];
+                if (item && typeof item === 'object') {
+                    const key = item.key ?? item.handle;
+                    const value = item.value ?? item.label;
+                    return key != null ? [key, value] : null;
+                }
+                return null;
+            })
+            .filter((pair) => pair != null && pair[0] != null);
+    }
+    if (typeof raw === 'object') return Object.entries(raw);
+    return [];
+}
+
+/**
+ * Ordered outputs a node exposes, left→right, as `{ handle, label }` pairs.
+ * Mirrors the backend's per-node `outputs()` declarations exactly (see
+ * src/Nodes/Logic/{SwitchNode,ParallelNode,LoopNode}.php) so the canvas only
+ * ever renders handles the engine actually knows how to route:
+ *
+ * - branch   → fixed true/false.
+ * - switch   → `config.cases` is a `{ matchValue: outputHandle }` map; one
+ *              output per DISTINCT handle (case value becomes the label),
+ *              plus a trailing "default" (deduped if a case already targets
+ *              it). Empty/missing cases → just "default".
+ * - loop     → fixed loop/done.
+ * - parallel → only in `inline` mode (the default): `config.branches` is a
+ *              `{ outputHandle: label }` map, one output per key. In legacy
+ *              `automation` mode the branches are sub-automation runs, not
+ *              graph edges, so it exposes a single "default" continuation.
+ *              No branches configured → no outputs (never invented).
+ * - everything else → a single unlabeled "default" continuation.
  */
 export function outputsFor(node, opts = DEFAULT_OPTS) {
     const type = node?.type;
+    const config = node?.config ?? {};
+
     if (opts.terminalTypes.includes(type)) return [];
-    if (opts.branchTypes.includes(type)) return ['true', 'false'];
-    return ['default'];
+
+    if (opts.branchTypes.includes(type)) {
+        return [
+            { handle: 'true', label: 'True' },
+            { handle: 'false', label: 'False' },
+        ];
+    }
+
+    if (type === 'switch') {
+        const seen = new Set();
+        const outputs = [];
+        for (const [matchValue, output] of keyValueEntries(config.cases)) {
+            const handle = String(output || 'default');
+            if (seen.has(handle)) continue;
+            seen.add(handle);
+            outputs.push({ handle, label: String(matchValue) });
+        }
+        if (!seen.has('default')) outputs.push({ handle: 'default', label: 'Default' });
+        return outputs;
+    }
+
+    if (type === 'loop') {
+        return [
+            { handle: 'loop', label: 'Loop' },
+            { handle: 'done', label: 'Done' },
+        ];
+    }
+
+    if (type === 'parallel') {
+        const mode = config.mode || 'inline';
+        if (mode !== 'inline') return [{ handle: 'default', label: '' }];
+        return keyValueEntries(config.branches).map(([handle, label]) => ({
+            handle: String(handle),
+            label: label ? String(label) : String(handle),
+        }));
+    }
+
+    return [{ handle: 'default', label: '' }];
+}
+
+/**
+ * Evenly distribute `total` handles across a 0..1 axis, e.g. for a branch
+ * node handleY(0,2) ≈ 0.33 / handleY(1,2) ≈ 0.67 — matching the previous
+ * fixed 32%/68% split. Used as the horizontal fraction of the node's bottom
+ * edge (the flow is vertical, so a node's outputs fan out left→right).
+ */
+export function handleY(index, total) {
+    if (!total) return 0.5;
+    return (index + 1) / (total + 1);
 }
 
 /**
@@ -89,7 +188,7 @@ export function computeLayout(nodes = [], edges = [], options = {}) {
             result.push(to);
         };
         for (const out of outs) {
-            for (const edge of edgesOut) if (edge.output === out) push(edge.to);
+            for (const edge of edgesOut) if (edge.output === out.handle) push(edge.to);
         }
         // Edges on unexpected outputs (legacy data) trail after.
         for (const edge of edgesOut) push(edge.to);
@@ -143,8 +242,8 @@ export function computeLayout(nodes = [], edges = [], options = {}) {
     const openOutputs = [];
     for (const n of nodes) {
         for (const out of outputsFor(n, opts)) {
-            if (!hasEdgeFrom.has(`${n.node_key}::${out}`)) {
-                openOutputs.push({ from_node_key: n.node_key, from_output: out });
+            if (!hasEdgeFrom.has(`${n.node_key}::${out.handle}`)) {
+                openOutputs.push({ from_node_key: n.node_key, from_output: out.handle, label: out.label });
             }
         }
     }

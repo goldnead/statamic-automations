@@ -22,6 +22,7 @@ import ConfigPanel from '../../components/builder/ConfigPanel.vue';
 import RunLogPanel from '../../components/builder/RunLogPanel.vue';
 import { useAutosave } from '../../composables/useAutosave.js';
 import { useHistory } from '../../composables/useHistory.js';
+import { outputsFor } from '../../composables/useAutoLayout.js';
 
 const props = defineProps({
     mode: { type: String, required: true },           // 'create' | 'edit'
@@ -252,9 +253,6 @@ async function exportJson() {
 // canvas recomputes the vertical layout on its own. `position_x/y` are written
 // as 0 purely to keep the backend payload well-formed.
 
-const BRANCH_TYPES = ['branch'];
-const TERMINAL_TYPES = ['stop'];
-
 function newNodeKey(handle) {
     return `${handle.replace(/\W/g, '_')}_${Math.random().toString(36).slice(2, 6)}`;
 }
@@ -270,12 +268,6 @@ function makeNode(handle) {
         config: {},
         disabled: false,
     };
-}
-
-function outputsFor(node) {
-    if (TERMINAL_TYPES.includes(node.type)) return [];
-    if (BRANCH_TYPES.includes(node.type)) return ['true', 'false'];
-    return ['default'];
 }
 
 function sameEdge(a, b) {
@@ -294,8 +286,8 @@ function firstOpenOutput() {
     );
     for (const n of automation.value.nodes) {
         for (const out of outputsFor(n)) {
-            if (!taken.has(`${n.node_key}::${out}`)) {
-                return { fromNodeKey: n.node_key, output: out };
+            if (!taken.has(`${n.node_key}::${out.handle}`)) {
+                return { fromNodeKey: n.node_key, output: out.handle };
             }
         }
     }

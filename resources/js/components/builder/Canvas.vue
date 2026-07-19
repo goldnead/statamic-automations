@@ -50,7 +50,7 @@ import NodeCard from './NodeCard.vue';
 import ControlBar from './ControlBar.vue';
 import AdderNode from './AdderNode.vue';
 import InsertableEdge from './InsertableEdge.vue';
-import { computeLayout, LAYOUT } from '../../composables/useAutoLayout.js';
+import { computeLayout, LAYOUT, outputsFor, handleY } from '../../composables/useAutoLayout.js';
 
 const props = defineProps({
     nodes: { type: Array, required: true },
@@ -110,9 +110,17 @@ const realNodeCount = computed(() => props.nodes.length);
 
 const { fitView, onNodesInitialized } = useVueFlow(flowId);
 
-// Where each output's handle sits across the node width (see NodeCard: branch
-// handles at 32% / 68%, single output centred).
-const HANDLE_FRACTION = { default: 0.5, true: 0.32, false: 0.68 };
+// Where a given output's handle sits across the node width. Mirrors
+// NodeCard's own handle layout exactly: N outputs are evenly spread via
+// handleY(index, total) (see useAutoLayout.js), so the "+" adder always
+// centres under the matching handle regardless of how many outputs a node
+// (branch/switch/loop/parallel) exposes.
+function fractionForOutput(node, output) {
+    const outs = outputsFor(node);
+    const idx = outs.findIndex((o) => o.handle === output);
+    if (idx === -1 || !outs.length) return 0.5;
+    return handleY(idx, outs.length);
+}
 const ADDER_HALF = 18; // half the "+" button, to centre it under the handle
 const ADDER_DROP = 150; // vertical offset from the node top to its adder
 
@@ -156,8 +164,8 @@ function toVueFlowNode(n, position) {
     };
 }
 
-function adderNode(open, srcPos) {
-    const frac = HANDLE_FRACTION[open.from_output] ?? 0.5;
+function adderNode(open, srcPos, node) {
+    const frac = fractionForOutput(node, open.from_output);
     return {
         id: `${ADDER_PREFIX}${open.from_node_key}__${open.from_output}`,
         type: 'adder',
@@ -199,7 +207,10 @@ function toVueFlowEdge(e) {
         id: `${e.from_node_key}__${out}__${e.to_node_key}`,
         source: e.from_node_key,
         target: e.to_node_key,
-        sourceHandle: out === 'default' ? null : out,
+        // NodeCard renders one explicitly-`id`'d Handle per output (even the
+        // lone "default" case), so the edge's sourceHandle must always name
+        // it — Vue Flow can't resolve a `null` handle id against a real one.
+        sourceHandle: out,
         type: 'insertable',
         data: { branch: branch ? out : null },
         style: accent ? { stroke: accent } : undefined,
@@ -213,29 +224,34 @@ function stubEdge(open) {
     const accent = out === 'true'
         ? 'var(--sa-color-success)'
         : out === 'false' ? 'var(--sa-color-failed)' : null;
+    // Non-branch, non-default outputs (switch cases, loop/parallel handles)
+    // still get a label on their stub so an unconnected switch case reads
+    // as e.g. "a", not a bare dashed line.
+    const showLabel = branch || (out && out !== 'default' && open.label);
 
     return {
         id: `${STUB_PREFIX}${open.from_node_key}__${out}`,
         source: open.from_node_key,
-        sourceHandle: out === 'default' ? null : out,
+        sourceHandle: out,
         target: `${ADDER_PREFIX}${open.from_node_key}__${out}`,
         type: 'smoothstep',
         selectable: false,
         deletable: false,
         focusable: false,
         style: { stroke: accent ?? 'var(--color-gray-300, #d1d5db)', strokeDasharray: '4 4' },
-        label: branch ? (out === 'true' ? __('If true') : __('If false')) : '',
+        label: branch ? (out === 'true' ? __('If true') : __('If false')) : (showLabel ? open.label : ''),
         labelBgBorderRadius: 8,
-        labelBgPadding: branch ? [7, 4] : undefined,
-        labelStyle: branch ? { fill: accent, fontSize: 11, fontWeight: 600 } : undefined,
-        labelBgStyle: branch
-            ? { fill: 'var(--sa-edge-label-bg)', stroke: accent, strokeWidth: 1 }
+        labelBgPadding: showLabel ? [7, 4] : undefined,
+        labelStyle: showLabel ? { fill: accent ?? 'var(--color-gray-500, #6b7280)', fontSize: 11, fontWeight: 600 } : undefined,
+        labelBgStyle: showLabel
+            ? { fill: 'var(--sa-edge-label-bg)', stroke: accent ?? 'var(--color-gray-300, #d1d5db)', strokeWidth: 1 }
             : undefined,
     };
 }
 
 function rebuild() {
     const layout = computeLayout(props.nodes, props.edges);
+    const nodeByKey = new Map(props.nodes.map((n) => [n.node_key, n]));
 
     const nodes = props.nodes.map((n) => toVueFlowNode(n, layout.positions[n.node_key]));
     if (!props.nodes.length) {
@@ -243,7 +259,7 @@ function rebuild() {
     } else {
         for (const open of layout.openOutputs) {
             const srcPos = layout.positions[open.from_node_key];
-            if (srcPos) nodes.push(adderNode(open, srcPos));
+            if (srcPos) nodes.push(adderNode(open, srcPos, nodeByKey.get(open.from_node_key)));
         }
     }
     vfNodes.value = nodes;
