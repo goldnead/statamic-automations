@@ -7,6 +7,10 @@
         :nodes-connectable="false"
         :edges-updatable="false"
         :elements-selectable="true"
+        :select-nodes-on-drag="false"
+        :pan-on-drag="true"
+        :pan-activation-key-code="'Space'"
+        :selection-key-code="'Shift'"
         :delete-key-code="null"
         :min-zoom="0.3"
         :max-zoom="1.5"
@@ -50,7 +54,7 @@ import NodeCard from './NodeCard.vue';
 import ControlBar from './ControlBar.vue';
 import AdderNode from './AdderNode.vue';
 import InsertableEdge from './InsertableEdge.vue';
-import { computeLayout, LAYOUT, outputsFor, handleY } from '../../composables/useAutoLayout.js';
+import { computeLayout, LAYOUT, fractionForOutput } from '../../composables/useAutoLayout.js';
 
 const props = defineProps({
     nodes: { type: Array, required: true },
@@ -110,17 +114,6 @@ const realNodeCount = computed(() => props.nodes.length);
 
 const { fitView, onNodesInitialized } = useVueFlow(flowId);
 
-// Where a given output's handle sits across the node width. Mirrors
-// NodeCard's own handle layout exactly: N outputs are evenly spread via
-// handleY(index, total) (see useAutoLayout.js), so the "+" adder always
-// centres under the matching handle regardless of how many outputs a node
-// (branch/switch/loop/parallel) exposes.
-function fractionForOutput(node, output) {
-    const outs = outputsFor(node);
-    const idx = outs.findIndex((o) => o.handle === output);
-    if (idx === -1 || !outs.length) return 0.5;
-    return handleY(idx, outs.length);
-}
 const ADDER_HALF = 18; // half the "+" button, to centre it under the handle
 const ADDER_DROP = 150; // vertical offset from the node top to its adder
 

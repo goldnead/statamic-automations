@@ -150,6 +150,22 @@ export function handleY(index, total) {
 }
 
 /**
+ * Horizontal fraction (0..1) for a given output's handle on a node — the
+ * SAME math NodeCard uses to position the rendered Handle dot itself
+ * (`handleY(index, outputsFor(node).length)`). Canvas.vue positions the "+"
+ * adder and the dashed open-output stub from this single shared function so
+ * they can never drift from the actual dot, however many outputs a node has
+ * (switch cases, parallel branches, loop/done, …). `output` not found (or no
+ * outputs at all) falls back to the horizontal centre.
+ */
+export function fractionForOutput(node, output, opts = DEFAULT_OPTS) {
+    const outs = outputsFor(node, opts);
+    const idx = outs.findIndex((o) => o.handle === output);
+    if (idx === -1 || !outs.length) return 0.5;
+    return handleY(idx, outs.length);
+}
+
+/**
  * @param {Array}  nodes    [{ node_key, type, ... }]
  * @param {Array}  edges    [{ from_node_key, from_output, to_node_key }]
  * @param {Object} options  { branchTypes, terminalTypes }

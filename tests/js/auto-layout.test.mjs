@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { computeLayout, outputsFor, LAYOUT } from '../../resources/js/composables/useAutoLayout.js';
+import { computeLayout, outputsFor, handleY, fractionForOutput, LAYOUT } from '../../resources/js/composables/useAutoLayout.js';
 
 const trigger = { node_key: 't', type: 'manual' };
 const step = (key, type = 'send_email') => ({ node_key: key, type });
@@ -86,4 +86,33 @@ test('cyclic data does not hang and still places every node', () => {
     const edges = [edge('a', 'b'), edge('b', 'a')];
     const { positions } = computeLayout(nodes, edges);
     assert.ok(positions.a && positions.b);
+});
+
+// Regression: the canvas positions its "+" adder / open-output stub from
+// fractionForOutput(), while NodeCard positions the actual Handle dot from
+// handleY(index, outputsFor(node).length) directly. These MUST resolve to
+// the same fraction for every output on a node, or the adder/stub drifts
+// visually away from the dot it's supposed to sit under (this is exactly
+// what Adrian saw with a 3+ output switch).
+test('fractionForOutput matches handleY exactly for every output on a node', () => {
+    const branch = { type: 'branch' };
+    const branchOuts = outputsFor(branch);
+    branchOuts.forEach((out, i) => {
+        assert.equal(fractionForOutput(branch, out.handle), handleY(i, branchOuts.length));
+    });
+
+    const cases = { a: 'case_a', b: 'case_b', c: 'case_c' };
+    const sw = { type: 'switch', config: { cases } };
+    const switchOuts = outputsFor(sw);
+    assert.equal(switchOuts.length, 4); // 3 cases + trailing default
+    switchOuts.forEach((out, i) => {
+        assert.equal(fractionForOutput(sw, out.handle), handleY(i, switchOuts.length));
+    });
+
+    const plain = { type: 'send_email' };
+    assert.equal(fractionForOutput(plain, 'default'), handleY(0, 1));
+
+    // Unknown/missing output falls back to dead centre rather than a wrong dot.
+    assert.equal(fractionForOutput(plain, 'nonexistent'), 0.5);
+    assert.equal(fractionForOutput({ type: 'stop' }, 'default'), 0.5);
 });
