@@ -582,7 +582,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
             </ul>
         </Alert>
 
-        <div class="grid grid-cols-[260px_1fr_360px] rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden h-[calc(100vh-220px)] min-h-[500px]">
+        <div
+            class="grid rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden h-[calc(100vh-220px)] min-h-[500px] transition-[grid-template-columns] duration-200 ease-in-out"
+            :style="{ gridTemplateColumns: selectedNode ? '260px 1fr 360px' : '260px 1fr 0px' }"
+        >
             <div class="overflow-y-auto border-r border-gray-200 dark:border-gray-800">
                 <NodeLibrary :library="library" @add="addNode" />
             </div>
@@ -604,8 +607,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
                 />
             </div>
 
+            <!-- Right detail track: collapses to 0 width (via the grid template
+                 above) when nothing is selected, so the canvas reclaims the
+                 space. The panel itself only mounts while a node is selected —
+                 no empty "select a node" state sits in a 0-width column. -->
             <div class="overflow-hidden border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
                 <ConfigPanel
+                    v-if="selectedNode"
                     :node="selectedNode"
                     :library="library"
                     :trigger-output-schema="triggerOutputSchema"
@@ -615,6 +623,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
                     @update:label="updateNodeLabel"
                     @duplicate="duplicateNode(selectedNodeKey)"
                     @delete="removeNode(selectedNodeKey)"
+                    @deselect="selectedNodeKey = null"
                 />
             </div>
         </div>

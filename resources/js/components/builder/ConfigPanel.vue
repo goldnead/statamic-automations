@@ -1,19 +1,27 @@
 <template>
     <div class="flex flex-col h-full">
-        <div v-if="!node" class="text-sm text-gray-500 dark:text-gray-400 text-center py-12 px-4">
-            {{ __('Select a node to configure it.') }}
-        </div>
-
-        <template v-else>
-            <!-- Card header: icon chip + node title -->
+        <!-- The panel only ever mounts while a node is selected (see Edit.vue's
+             `v-if="selectedNode"`), so there is no inline empty state here —
+             deselecting collapses the whole column instead. -->
+        <template v-if="node">
+            <!-- Card header: icon chip + node title + close (deselect) -->
             <header class="flex items-center gap-2.5 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
                 <span class="sa-icon-chip size-8" :class="`sa-icon-chip--${kind}`">
                     <Icon :name="icon" class="size-4" />
                 </span>
-                <div class="min-w-0">
+                <div class="min-w-0 flex-1">
                     <h3 class="text-sm font-semibold m-0 truncate">{{ node.label || schema?.label || node.type }}</h3>
                     <p class="text-[11px] text-gray-500 dark:text-gray-400 font-mono truncate m-0">{{ node.type }}</p>
                 </div>
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    icon-only
+                    icon="x"
+                    :aria-label="__('Close')"
+                    class="shrink-0"
+                    @click="$emit('deselect')"
+                />
             </header>
 
             <div class="flex-1 overflow-y-auto">
@@ -214,7 +222,7 @@ const props = defineProps({
     automation: { type: Object, default: () => ({ nodes: [], edges: [] }) },
 });
 
-const emit = defineEmits(['update:config', 'update:label', 'delete', 'duplicate']);
+const emit = defineEmits(['update:config', 'update:label', 'delete', 'duplicate', 'deselect']);
 
 const schema = computed(() => {
     if (!props.node) return null;
