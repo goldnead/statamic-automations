@@ -2,11 +2,14 @@
 
 namespace Goldnead\StatamicAutomations\Models;
 
+use Goldnead\BrandContext\Concerns\HasBrand;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AutomationAuditLog extends Model
 {
+    use HasBrand;
+
     public const UPDATED_AT = null;
 
     protected $table = 'automation_audit_logs';

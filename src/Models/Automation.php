@@ -2,6 +2,7 @@
 
 namespace Goldnead\StatamicAutomations\Models;
 
+use Goldnead\BrandContext\Concerns\HasBrand;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,6 +10,8 @@ use Illuminate\Support\Facades\Schema;
 
 class Automation extends Model
 {
+    use HasBrand;
+
     protected $table = 'automations';
 
     /**

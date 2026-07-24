@@ -2,6 +2,7 @@
 
 namespace Goldnead\StatamicAutomations\Models;
 
+use Goldnead\BrandContext\Concerns\HasBrand;
 use Goldnead\StatamicAutomations\Casts\EncryptedJson;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class AutomationRun extends Model
 {
+    use HasBrand;
+
     public const STATUS_QUEUED = 'queued';
     public const STATUS_RUNNING = 'running';
     public const STATUS_SUCCESS = 'success';

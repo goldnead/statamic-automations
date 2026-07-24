@@ -23,11 +23,21 @@
         "issues": "https://github.com/goldnead/statamic-automations/issues",
         "source": "https://github.com/goldnead/statamic-automations"
     },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../statamic-brand-context",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
     "require": {
         "php": "^8.2",
         "laravel/framework": "^11.0|^12.0|^13.0",
         "statamic/cms": "^6.0",
-        "inertiajs/inertia-laravel": "^1.0|^2.0"
+        "inertiajs/inertia-laravel": "^1.0|^2.0",
+        "goldnead/statamic-brand-context": "@dev"
     },
     "suggest": {
         "goldnead/statamic-leadhub": "Trigger automations from LeadHub CRM events (contacts, follow-ups, opportunities)",

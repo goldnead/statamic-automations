@@ -34,6 +34,7 @@ abstract class TestCase extends OrchestraTestCase
     {
         return [
             StatamicServiceProvider::class,
+            \Goldnead\BrandContext\ServiceProvider::class,
             ServiceProvider::class,
         ];
     }

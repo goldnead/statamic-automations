@@ -2,12 +2,15 @@
 
 namespace Goldnead\StatamicAutomations\Models;
 
+use Goldnead\BrandContext\Concerns\HasBrand;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AutomationNode extends Model
 {
+    use HasBrand;
+
     protected $table = 'automation_nodes';
 
     protected $fillable = [

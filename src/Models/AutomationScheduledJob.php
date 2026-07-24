@@ -2,11 +2,14 @@
 
 namespace Goldnead\StatamicAutomations\Models;
 
+use Goldnead\BrandContext\Concerns\HasBrand;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AutomationScheduledJob extends Model
 {
+    use HasBrand;
+
     public const STATUS_PENDING = 'pending';
     public const STATUS_QUEUED = 'queued';
     public const STATUS_DISPATCHED = 'dispatched';

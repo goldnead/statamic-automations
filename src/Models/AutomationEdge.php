@@ -2,11 +2,14 @@
 
 namespace Goldnead\StatamicAutomations\Models;
 
+use Goldnead\BrandContext\Concerns\HasBrand;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AutomationEdge extends Model
 {
+    use HasBrand;
+
     protected $table = 'automation_edges';
 
     protected $fillable = [
