@@ -23,21 +23,12 @@
         "issues": "https://github.com/goldnead/statamic-automations/issues",
         "source": "https://github.com/goldnead/statamic-automations"
     },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../statamic-brand-context",
-            "options": {
-                "symlink": true
-            }
-        }
-    ],
     "require": {
         "php": "^8.2",
         "laravel/framework": "^11.0|^12.0|^13.0",
         "statamic/cms": "^6.0",
         "inertiajs/inertia-laravel": "^1.0|^2.0",
-        "goldnead/statamic-brand-context": "@dev"
+        "goldnead/statamic-brand-context": "^1.0"
     },
     "suggest": {
         "goldnead/statamic-leadhub": "Trigger automations from LeadHub CRM events (contacts, follow-ups, opportunities)",
@@ -62,9 +53,15 @@
         "statamic": {
             "name": "Statamic Automations",
             "description": "Visual automation builder for Statamic forms, entries, leads and webhooks.",
-            "editions": ["free", "pro"],
+            "editions": [
+                "free",
+                "pro"
+            ],
             "vite": {
-                "input": ["resources/js/cp.js", "resources/css/cp.css"],
+                "input": [
+                    "resources/js/cp.js",
+                    "resources/css/cp.css"
+                ],
                 "publicDirectory": "resources/dist"
             }
         },
