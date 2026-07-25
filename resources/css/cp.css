@@ -12,14 +12,27 @@
  *   base → addon-theme → addon-utilities → components → utilities → ui → ui-states
  * ------------------------------------------------------------------- */
 
-@import "tailwindcss";
+/* Import Statamic's own Tailwind entry, NOT the bare `tailwindcss` package.
+ *
+ * This is load-bearing, not a style preference. `@import "tailwindcss"` pulls in
+ * Preflight plus the default theme and utilities in the *shared* `base`, `theme`
+ * and `utilities` layers. Because this stylesheet is linked after the CP's
+ * app.css, its plain `.bg-white` then lands after every `dark:` variant that the
+ * CP (and every other addon) already emitted into that same `utilities` layer,
+ * so `bg-white dark:bg-gray-850` renders white in dark mode — across the whole
+ * Control Panel, not just this addon. It also overwrote `--color-gray-*` and
+ * `--font-sans` on `:root`, re-theming the entire CP.
+ *
+ * `@statamic/cms/tailwind.css` routes the theme and utilities into the
+ * `addon-theme` / `addon-utilities` layers (which Statamic orders *below* its
+ * own `components`/`utilities`/`ui`), skips Preflight, keeps
+ * `--color-*: var(--theme-color-*)` intact so the CP theme + dark-mode swap
+ * still work, and declares the class-based `dark` variant for us.
+ */
+@import "@statamic/cms/tailwind.css";
+
 @source "../js/**/*.{vue,js,ts}";
 @source "../views/**/*.blade.php";
-
-/* Statamic's dark mode is `.dark` on <html>, not prefers-color-scheme.
- * Replicate the host's variant so this addon's components light up
- * correctly in both modes when used standalone (e.g. in Storybook). */
-@custom-variant dark (&:where(.dark, .dark *));
 
 @layer addon-theme {
     /* Status accent palette — used by node borders / pills. Pulled from
