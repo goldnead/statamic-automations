@@ -23,6 +23,12 @@
         "issues": "https://github.com/goldnead/statamic-automations/issues",
         "source": "https://github.com/goldnead/statamic-automations"
     },
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/goldnead/statamic-brand-context.git"
+        }
+    ],
     "require": {
         "php": "^8.2",
         "laravel/framework": "^11.0|^12.0|^13.0",
