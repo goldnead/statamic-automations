@@ -32,6 +32,31 @@ export function schemaFor(node, library) {
 }
 
 /**
+ * The starting config for a node built from a node-library entry's schema:
+ * every field that declares a `default` is seeded with that default.
+ *
+ * The config panel *renders* `field.default` as a display fallback
+ * (`config[handle] ?? field.default`), but a rendered fallback is not a model
+ * value. Without this seeding, a required field that has a default — the Delay
+ * node's `unit` is the clearest case — showed "Minutes" on screen while
+ * `config.unit` stayed undefined. The node was therefore flagged as missing a
+ * required field and stayed red until the user re-picked the very option
+ * already displayed, which is the only thing that wrote it into the model.
+ *
+ * @param {Array<{handle?: string, default?: *}>} schema
+ * @returns {Object<string, *>}
+ */
+export function defaultConfigForSchema(schema) {
+    const config = {};
+    for (const field of schema ?? []) {
+        if (field?.handle && field.default !== undefined && field.default !== null) {
+            config[field.handle] = field.default;
+        }
+    }
+    return config;
+}
+
+/**
  * Mirror the server's emptiness test: a required field is missing when its
  * config value is absent, an empty string, or null. (Empty arrays/objects —
  * e.g. a key_value or conditions field — count as present, matching PHP's

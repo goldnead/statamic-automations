@@ -79,7 +79,11 @@ it('lists entries for a given collection and empty for an unknown one', function
 
         expect($data)->toBeArray()->not->toBeEmpty();
         expect($data[0])->toHaveKeys(['value', 'label']);
-        expect($data[0]['label'])->toBe('Hello World');
+        // Statamic's flat-file content lives in the testbench skeleton and is
+        // NOT rolled back between tests, so the `blog` collection also holds
+        // entries other tests wrote. Assert the seeded entry is present rather
+        // than assuming it sorts first — the endpoint promises no order.
+        expect(collect($data)->pluck('label'))->toContain('Hello World');
 
         $this->getJson("/cp/automations/api/options/{$source}?collection=does-not-exist")
             ->assertOk()

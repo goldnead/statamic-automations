@@ -15,6 +15,7 @@ import {
     isEmptyValue,
     missingRequiredHandles,
     computeNodeIssues,
+    defaultConfigForSchema,
 } from '../../resources/js/composables/useNodeValidation.js';
 
 // send_email requires to/subject/body; `template`/`reply_to`/`from` optional.
@@ -89,4 +90,71 @@ test('a fully valid graph yields no issues', () => {
         { node_key: 'm', type: 'send_email', config: { to: 'a@b.c', subject: 'S', body: 'B' } },
     ];
     assert.deepEqual(computeNodeIssues(nodes, library), []);
+});
+
+/**
+ * Delay-node regression: the schema declares `unit` as required WITH a
+ * default of "minutes". The config panel rendered that default, so the field
+ * looked filled in, but it never reached the model — the node stayed flagged
+ * "Invalid" with a "This field is required." message under a visibly
+ * pre-selected "Minutes", and only re-picking that same option fixed it.
+ */
+const delayLibrary = {
+    triggers: [{ handle: 'manual', schema: [] }],
+    logic: [
+        {
+            handle: 'delay',
+            schema: [
+                { handle: 'amount', label: 'Amount', type: 'number', required: true, default: 1 },
+                {
+                    handle: 'unit',
+                    label: 'Unit',
+                    type: 'select',
+                    required: true,
+                    default: 'minutes',
+                    options: [
+                        { value: 'minutes', label: 'Minutes' },
+                        { value: 'hours', label: 'Hours' },
+                    ],
+                },
+            ],
+        },
+    ],
+    actions: [],
+};
+
+test('defaultConfigForSchema seeds every declared default into the model', () => {
+    const schema = schemaFor({ type: 'delay' }, delayLibrary);
+    assert.deepEqual(defaultConfigForSchema(schema), { amount: 1, unit: 'minutes' });
+});
+
+test('defaultConfigForSchema skips fields without a usable default', () => {
+    assert.deepEqual(
+        defaultConfigForSchema([
+            { handle: 'a' },
+            { handle: 'b', default: null },
+            { handle: 'c', default: undefined },
+            { handle: 'd', default: '' },
+            { handle: 'e', default: 0 },
+            { handle: 'f', default: false },
+            { default: 'no-handle' },
+        ]),
+        { d: '', e: 0, f: false },
+    );
+    assert.deepEqual(defaultConfigForSchema(undefined), {});
+});
+
+test('a freshly created delay node is valid without any user interaction', () => {
+    const schema = schemaFor({ type: 'delay' }, delayLibrary);
+    const node = { node_key: 'delay_ab12', type: 'delay', config: defaultConfigForSchema(schema) };
+
+    assert.deepEqual(missingRequiredHandles(node, delayLibrary), []);
+    assert.deepEqual(computeNodeIssues([node], delayLibrary), []);
+    // The default must be PERSISTED, not merely displayed.
+    assert.equal(node.config.unit, 'minutes');
+});
+
+test('without seeding, the same delay node is flagged invalid (the old behaviour)', () => {
+    const node = { node_key: 'delay_ab12', type: 'delay', config: {} };
+    assert.deepEqual(missingRequiredHandles(node, delayLibrary), ['amount', 'unit']);
 });

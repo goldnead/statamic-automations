@@ -5,6 +5,7 @@ namespace Goldnead\StatamicAutomations\Engine;
 use Goldnead\StatamicAutomations\Models\AutomationNodeRun;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Support\ActionResult;
+use Illuminate\Support\Carbon;
 
 /**
  * Persists run / node-run records during automation execution and
@@ -16,11 +17,20 @@ class RunLogger
     {
     }
 
+    /**
+     * Stamp the run as RUNNING.
+     *
+     * `started_at` is stamped ONCE, on the first start. A run that resumes
+     * after a Delay / Wait node comes back through here (see
+     * {@see WorkflowRunner::resumeAfterNode()}); overwriting `started_at`
+     * there would discard the real origin of the run, erase the wait from
+     * the record, and leave `started_at == finished_at`.
+     */
     public function startRun(AutomationRun $run): void
     {
         $run->forceFill([
             'status' => AutomationRun::STATUS_RUNNING,
-            'started_at' => now(),
+            'started_at' => $run->started_at ?? now(),
         ])->save();
     }
 
@@ -32,7 +42,7 @@ class RunLogger
             'status' => $status,
             'finished_at' => $finished,
             'duration_ms' => $run->started_at
-                ? (int) ($finished->diffInMilliseconds($run->started_at))
+                ? static::elapsedMs($run->started_at, $finished)
                 : null,
             'error_message' => $error,
         ])->save();
@@ -44,7 +54,27 @@ class RunLogger
     }
 
     /**
+     * Milliseconds between two instants, never negative.
+     *
+     * Carbon 3 returns a SIGNED diff, so `$to->diffInMilliseconds($from)`
+     * yields a NEGATIVE number whenever $from precedes $to — which is the
+     * normal case for a start/finish pair. Computing in the natural
+     * direction ($from → $to) gives the positive value; the clamp then
+     * absorbs backwards clock adjustments (NTP steps) so a stored duration
+     * can never be negative.
+     */
+    public static function elapsedMs(\DateTimeInterface $from, \DateTimeInterface $to): int
+    {
+        return max(0, (int) round(Carbon::instance($from)->diffInMilliseconds(Carbon::instance($to))));
+    }
+
+    /**
      * Persist a node run with redacted input/output payloads.
+     *
+     * `$startedAt` is the instant the node actually began executing. The
+     * caller must capture it BEFORE running the node — otherwise the only
+     * thing measurable here is the time it takes to build this record,
+     * which always rounds to 0 ms.
      */
     public function recordNodeRun(
         AutomationRun $run,
@@ -53,9 +83,10 @@ class RunLogger
         array $input,
         ?ActionResult $result = null,
         ?\Throwable $exception = null,
+        ?\DateTimeInterface $startedAt = null,
     ): AutomationNodeRun {
-        $started = now();
         $finished = now();
+        $started = $startedAt ? Carbon::instance($startedAt) : $finished->copy();
 
         $status = match (true) {
             $exception !== null => AutomationNodeRun::STATUS_FAILED,
@@ -80,7 +111,7 @@ class RunLogger
             'error_message' => $exception?->getMessage() ?? $result?->error,
             'started_at' => $started,
             'finished_at' => $finished,
-            'duration_ms' => (int) $finished->diffInMilliseconds($started),
+            'duration_ms' => static::elapsedMs($started, $finished),
         ]);
     }
 }

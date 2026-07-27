@@ -31,7 +31,7 @@ import {
     canDuplicate,
     pendingTargetIsValid,
 } from '../../composables/useFlowGuards.js';
-import { computeNodeIssues, missingRequiredHandles } from '../../composables/useNodeValidation.js';
+import { computeNodeIssues, defaultConfigForSchema, missingRequiredHandles } from '../../composables/useNodeValidation.js';
 
 const props = defineProps({
     mode: { type: String, required: true },           // 'create' | 'edit'
@@ -428,7 +428,9 @@ function makeNode(handle) {
         label: meta?.label ?? handle,
         position_x: 0,
         position_y: 0,
-        config: {},
+        // Seed the schema's declared defaults into the model, so a field the
+        // panel already shows pre-filled also counts as filled in validation.
+        config: defaultConfigForSchema(meta?.schema),
         disabled: false,
     };
 }
@@ -590,7 +592,7 @@ function replaceTrigger(nodeKey, newType) {
     if (!isTriggerHandle(newType)) return;
     automation.value.nodes = automation.value.nodes.map((n) =>
         n.node_key === nodeKey
-            ? { ...n, type: newType, label: meta.label ?? newType, config: {} }
+            ? { ...n, type: newType, label: meta.label ?? newType, config: defaultConfigForSchema(meta.schema) }
             : n,
     );
     history.record();

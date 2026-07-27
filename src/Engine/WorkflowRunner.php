@@ -319,6 +319,10 @@ class WorkflowRunner
         while ($current !== null && count($visited) < $maxNodes) {
             $visited[$current->node_key] = true;
 
+            // Capture the start BEFORE the node runs — this is the only
+            // point at which the node's real execution time is measurable.
+            $nodeStartedAt = now();
+
             $result = $this->executeWithRetries($current, $context);
 
             $this->logger->recordNodeRun(
@@ -327,6 +331,7 @@ class WorkflowRunner
                 $current->type,
                 $context->all(),
                 $result,
+                startedAt: $nodeStartedAt,
             );
 
             $context->recordNodeOutput($current->node_key, $result->output);

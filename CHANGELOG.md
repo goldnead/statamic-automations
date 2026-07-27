@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.5.2 — 2026-07-27
+
+### Fixed — a resumed run reported a negative duration
+
+Three defects stacked into the CP showing `DURATION -652 ms` on every run with a delay:
+
+- **The resume job restamped `started_at`.** `RunLogger::startRun()` is called again when `WorkflowRunner::resumeAfterNode()` picks a run back up after a Delay / Wait. It overwrote `started_at` with the resume moment, so the run's real origin — and with it the entire wait — was gone from the record. `started_at` is now stamped once, on the first start only.
+- **`duration_ms` was computed backwards.** `$finished->diffInMilliseconds($started)` reads as "finish, then diff to start", and Carbon 3 returns a *signed* difference, so a well-ordered start/finish pair yielded a negative number. Carbon 2 returned the absolute value, which is why this only surfaced after the Carbon 3 bump. All duration arithmetic now goes through `RunLogger::elapsedMs()`, which computes in the natural direction and clamps at zero, so a stored duration can never be negative — not even when the wall clock steps backwards mid-run.
+- **`duration_ms` is stored in an `unsignedInteger` column.** SQLite accepted the negative value and handed it straight back to the UI; MySQL in strict mode would have rejected the write instead. Either way the value was wrong at the source.
+
+**What "duration" means for a waiting run:** `duration_ms` is **wall clock — first start to final finish, waiting time included.** A run that sits in a 3-day delay reports 3 days. This is the reading that matches what is stored (`finished_at - started_at`), and the one that answers the question the runs list is actually asked: "when did this finish relative to when it was triggered?" Pure compute time is not lost — it is the sum of the node durations, which the next item makes truthful for the first time.
+
+### Fixed — every node run reported `0 ms`
+
+`RunLogger::recordNodeRun()` set `started_at` and `finished_at` from two `now()` calls taken *after* the node had already executed, so the only interval it ever measured was the time to build the record itself. The answer to "is the node duration measured or just not displayed?" is that it was never measured. The runner now captures the start before executing the node and passes it in.
+
+Note: `started_at` / `finished_at` are plain `timestamp` columns (whole-second precision), so a sub-second node still collapses to a single stored second. The millisecond value lives in `duration_ms`, which is computed before persisting — that is what the CP renders.
+
+### Fixed — the Delay node was permanently "Invalid"
+
+The `unit` field is required and declares a default of `minutes`. The config panel *rendered* that default (`config[handle] ?? field.default`), so "Minutes" was on screen, but a rendered fallback is not a model value: `config.unit` stayed undefined, inline validation flagged a missing required field, and the node stayed red under a visibly pre-filled select — reporting "This field is required." about a field that looked filled. Only re-picking the very same option wrote it into the model. Newly created nodes (and trigger replacements) now seed every schema-declared default into their config, so what the panel shows is what the model holds and what gets persisted.
+
+Behaviour was never affected — `DelayNode::execute()` falls back to minutes — but the node is now green without user interaction, and `{"amount":1,"unit":"minutes"}` is what actually gets saved.
+
+### Notes
+
+- Existing saved nodes are not migrated. A Delay node saved before this release still has no `unit` in its config and will keep showing as invalid until it is opened and re-saved. It continues to run as minutes.
+- `resources/dist/build` was already out of date with its source at 1.5.1, independently of these changes; this release ships a matching rebuild.
+
 ## 1.5.1 — 2026-07-27
 
 ### Fixed — `automations:run-scheduled` was left out of the 1.5.0 fix
