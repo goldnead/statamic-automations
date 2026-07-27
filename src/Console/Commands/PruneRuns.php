@@ -3,6 +3,7 @@
 namespace Goldnead\StatamicAutomations\Console\Commands;
 
 use Goldnead\StatamicAutomations\Models\AutomationRun;
+use Goldnead\BrandContext\Concerns\RunsForEachBrand;
 use Illuminate\Console\Command;
 
 /**
@@ -11,14 +12,24 @@ use Illuminate\Console\Command;
  */
 class PruneRuns extends Command
 {
+    use RunsForEachBrand;
+
     protected $signature = 'automations:prune
         {--days= : Override the configured retention window}
         {--keep-failed-days= : Override how long failed runs are kept}
-        {--dry-run : Show how many rows would be deleted without deleting}';
+        {--dry-run : Show how many rows would be deleted without deleting} {--brand= : Restrict to one brand handle or id}';
 
     protected $description = 'Delete automation runs older than the configured retention window.';
 
     public function handle(): int
+    {
+        // A scheduled run has no session and therefore no brand; without this
+        // the fail-closed scope hides every row and the command silently
+        // reports success while doing nothing.
+        return $this->forEachBrand(fn (): int => $this->handleForBrand());
+    }
+
+    protected function handleForBrand(): int
     {
         $days = (int) ($this->option('days') ?? config('automations.runs.prune_after_days', 30));
         $keepFailedDays = $this->option('keep-failed-days') ?? config('automations.runs.keep_failed_runs_days');

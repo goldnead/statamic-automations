@@ -7,6 +7,7 @@ use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
+use Goldnead\BrandContext\Concerns\RunsForEachBrand;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
@@ -17,7 +18,9 @@ use Illuminate\Support\Carbon;
  */
 class RunScheduledAutomations extends Command
 {
-    protected $signature = 'automations:run-scheduled';
+    use RunsForEachBrand;
+
+    protected $signature = 'automations:run-scheduled {--brand= : Restrict to one brand handle or id}';
 
     protected $description = 'Dispatch automations whose schedule is due now.';
 

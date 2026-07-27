@@ -4,6 +4,7 @@ namespace Goldnead\StatamicAutomations\Console\Commands;
 
 use Goldnead\StatamicAutomations\Jobs\ResumeDelayedRun;
 use Goldnead\StatamicAutomations\Models\AutomationScheduledJob;
+use Goldnead\BrandContext\Concerns\RunsForEachBrand;
 use Illuminate\Console\Command;
 
 /**
@@ -17,11 +18,21 @@ use Illuminate\Console\Command;
  */
 class RunDueScheduledJobs extends Command
 {
-    protected $signature = 'automations:run-due';
+    use RunsForEachBrand;
+
+    protected $signature = 'automations:run-due {--brand= : Restrict to one brand handle or id}';
 
     protected $description = 'Resume automation runs whose delay/wait window has elapsed.';
 
     public function handle(): int
+    {
+        // A scheduled run has no session and therefore no brand; without this
+        // the fail-closed scope hides every row and the command silently
+        // reports success while doing nothing.
+        return $this->forEachBrand(fn (): int => $this->handleForBrand());
+    }
+
+    protected function handleForBrand(): int
     {
         $due = AutomationScheduledJob::query()
             ->where('status', AutomationScheduledJob::STATUS_PENDING)

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.5.0 — 2026-07-27
+
+### Fixed — scheduled commands did nothing under multi-brand and reported success
+
+- **`automations:run-due` never resumed a delayed step.** A scheduled run has no session and therefore no brand; the fail-closed scope hid every row, so the command reported "Dispatched 0" while a due job sat there indefinitely. Delays simply never continued. `automations:run-scheduled` and `automations:prune` had the same defect.
+- All three now iterate the brands via `RunsForEachBrand` from `goldnead/statamic-brand-context` ^1.3, and each accepts `--brand=<handle|id>` to restrict. Single-brand installs are unaffected — the work runs once, in the ambient context.
+
+### Notes
+
+- Found in the hub QA run: `DB::table('automation_runs')->count()` returned 1 while `AutomationRun::count()` returned 0, with `multiBrand=true hasCurrent=false failMode=closed`.
+- The silent shape of this failure is the dangerous part: nothing errors, nothing is logged, and the scheduler keeps reporting healthy runs forever.
+
 All notable changes to **Statamic Automations** are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
