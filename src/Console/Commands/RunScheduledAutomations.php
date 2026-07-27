@@ -26,6 +26,14 @@ class RunScheduledAutomations extends Command
 
     public function handle(WorkflowRunner $runner, AutomationRepository $repository): int
     {
+        // A scheduled run has no session and therefore no brand; without
+        // this the fail-closed scope hides every row and the command
+        // reports success while doing nothing at all.
+        return $this->forEachBrand(fn () => $this->handleForBrand($runner, $repository));
+    }
+
+    protected function handleForBrand(WorkflowRunner $runner, AutomationRepository $repository): int
+    {
         $automations = $repository->enabled()
             ->filter(fn ($automation) => $automation->nodes->contains(fn ($n) => $n->type === 'scheduled'));
 

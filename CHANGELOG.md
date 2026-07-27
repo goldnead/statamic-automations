@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.1 — 2026-07-27
+
+### Fixed — `automations:run-scheduled` was left out of the 1.5.0 fix
+
+Its `handle()` takes an injected service, and the transformation that added the `forEachBrand` call only matched parameter-less signatures. The command imported the trait and never called it — still blind under multi-brand.
+
 ## 1.5.0 — 2026-07-27
 
 ### Fixed — scheduled commands did nothing under multi-brand and reported success
