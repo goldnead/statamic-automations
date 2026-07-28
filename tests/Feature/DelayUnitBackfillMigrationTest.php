@@ -27,6 +27,11 @@ function delayBackfillNode(array $attributes = []): int
         'handle' => 'backfill-' . Str::random(6),
         'enabled' => true,
         'version' => 1,
+        // A raw insert is exactly the writer that used to leave brand_id NULL
+        // and slip out from under `unique(brand_id, handle)`. The column is
+        // NOT NULL since 1.5.4, so the fixture now has to say what a real row
+        // says — which is the point of the constraint.
+        'brand_id' => app('brand-context')->currentId(),
         'created_at' => now(),
         'updated_at' => now(),
     ]);

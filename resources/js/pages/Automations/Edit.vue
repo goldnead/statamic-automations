@@ -113,7 +113,7 @@ function sameTarget(a, b) {
     }
     return (
         a.edge.from_node_key === b.edge.from_node_key &&
-        (a.edge.from_output ?? 'default') === (b.edge.from_output ?? 'default') &&
+        (a.edge.from_output || 'default') === (b.edge.from_output || 'default') &&
         a.edge.to_node_key === b.edge.to_node_key
     );
 }
@@ -358,12 +358,12 @@ async function testRun() {
         if (data.status === 'success') {
             notify('success', __('Test run completed.'));
         } else if (data.status === 'failed') {
-            notify('error', data.error_message ?? __('Test run failed.'));
+            notify('error', data.error_message || __('Test run failed.'));
         } else {
             notify('info', __('Run finished with status: :status', { status: data.status }));
         }
     } catch (e) {
-        notify('error', e?.response?.data?.message ?? __('Test run failed.'));
+        notify('error', e?.response?.data?.message || __('Test run failed.'));
     }
 }
 
@@ -378,13 +378,13 @@ async function toggleEnabled() {
         const { data } = await axios.post(url);
         if (data?.ok === false) {
             issues.value = data.issues ?? [];
-            notify('error', data.message ?? __('Could not enable.'));
+            notify('error', data.message || __('Could not enable.'));
         } else {
             automation.value.enabled = next;
             notify(next ? 'success' : 'info', next ? __('Enabled.') : __('Disabled.'));
         }
     } catch (e) {
-        notify('error', e?.response?.data?.message ?? __('Toggle failed.'));
+        notify('error', e?.response?.data?.message || __('Toggle failed.'));
     }
 }
 
@@ -438,7 +438,7 @@ function makeNode(handle) {
 function sameEdge(a, b) {
     return (
         a.from_node_key === b.from_node_key &&
-        (a.from_output ?? 'default') === (b.from_output ?? 'default') &&
+        (a.from_output || 'default') === (b.from_output || 'default') &&
         a.to_node_key === b.to_node_key
     );
 }
@@ -447,7 +447,7 @@ function sameEdge(a, b) {
 // for the left library ("add to the end of the flow").
 function firstOpenOutput() {
     const taken = new Set(
-        automation.value.edges.map((e) => `${e.from_node_key}::${e.from_output ?? 'default'}`),
+        automation.value.edges.map((e) => `${e.from_node_key}::${e.from_output || 'default'}`),
     );
     for (const n of automation.value.nodes) {
         for (const out of outputsFor(n)) {
@@ -491,7 +491,7 @@ function insertOnEdge(edge, node) {
             ...rest,
             {
                 from_node_key: edge.from_node_key,
-                from_output: edge.from_output ?? 'default',
+                from_output: edge.from_output || 'default',
                 to_node_key: node.node_key,
                 to_input: 'default',
             },
@@ -635,7 +635,7 @@ function removeNode(nodeKey) {
         const child = outgoing[0];
         const healed = {
             from_node_key: parent.from_node_key,
-            from_output: parent.from_output ?? 'default',
+            from_output: parent.from_output || 'default',
             to_node_key: child.to_node_key,
             to_input: 'default',
         };
@@ -697,7 +697,7 @@ function duplicateNode(nodeKey) {
         config: JSON.parse(JSON.stringify(src.config ?? {})),
     };
     const cont = automation.value.edges.find(
-        (e) => e.from_node_key === nodeKey && (e.from_output ?? 'default') === 'default',
+        (e) => e.from_node_key === nodeKey && (e.from_output || 'default') === 'default',
     );
     if (cont) {
         insertOnEdge(

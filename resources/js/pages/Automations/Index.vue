@@ -38,12 +38,12 @@ async function toggleEnabled(row) {
     try {
         const { data } = await axios.post(url);
         if (data?.ok === false) {
-            window?.Statamic?.$toast?.error?.(data.message ?? __('Could not change state.'));
+            window?.Statamic?.$toast?.error?.(data.message || __('Could not change state.'));
         } else {
             reloadPage();
         }
     } catch (e) {
-        window?.Statamic?.$toast?.error?.(e?.response?.data?.message ?? __('Request failed.'));
+        window?.Statamic?.$toast?.error?.(e?.response?.data?.message || __('Request failed.'));
     }
 }
 

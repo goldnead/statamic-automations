@@ -7,6 +7,8 @@ use Illuminate\Validation\Rule;
 
 class UpdateAutomationRequest extends FormRequest
 {
+    use ScopesUniquenessToBrand;
+
     public function authorize(): bool
     {
         $user = $this->user();
@@ -23,7 +25,7 @@ class UpdateAutomationRequest extends FormRequest
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'handle' => [
                 'sometimes', 'required', 'string', 'max:255',
-                Rule::unique('automations', 'handle')->ignore($automationId),
+                $this->brandScoped(Rule::unique('automations', 'handle'))->ignore($automationId),
             ],
             'description' => ['nullable', 'string'],
 

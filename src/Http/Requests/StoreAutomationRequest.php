@@ -3,9 +3,12 @@
 namespace Goldnead\StatamicAutomations\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreAutomationRequest extends FormRequest
 {
+    use ScopesUniquenessToBrand;
+
     public function authorize(): bool
     {
         $user = $this->user();
@@ -17,7 +20,10 @@ class StoreAutomationRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'handle' => ['nullable', 'string', 'max:255', 'unique:automations,handle'],
+            'handle' => [
+                'nullable', 'string', 'max:255',
+                $this->brandScoped(Rule::unique('automations', 'handle')),
+            ],
             'description' => ['nullable', 'string'],
 
             'nodes' => ['array'],

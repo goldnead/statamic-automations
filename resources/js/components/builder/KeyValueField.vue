@@ -97,8 +97,13 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue']);
 
-const keyLabel = props.keyLabel ?? __('Key');
-const valueLabel = props.valueLabel ?? __('Value');
+// Computed, not plain consts: ConfigPanel passes these conditionally
+// (`if (field.key_label) base.keyLabel = …`), so the same instance can be
+// handed a different label — or none at all — without being remounted. Read
+// once at setup, the placeholders kept describing whichever field mounted the
+// component first. `||` rather than `??` so an empty label also falls back.
+const keyLabel = computed(() => props.keyLabel || __('Key'));
+const valueLabel = computed(() => props.valueLabel || __('Value'));
 
 // Unique-per-instance base for value-input DOM ids, so TokenInserter can find
 // the right native <input> to splice a token into — and two key_value fields

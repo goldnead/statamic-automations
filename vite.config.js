@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import laravel from 'laravel-vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
+import vue from '@vitejs/plugin-vue';
 import statamic from '@statamic/cms/vite-plugin';
 
 /**
@@ -24,18 +25,50 @@ import statamic from '@statamic/cms/vite-plugin';
  * Third-party Vue libraries that are NOT part of the CP runtime (the Vue Flow
  * canvas, axios) are bundled normally; only `vue` and `@statamic/cms/*` are
  * externalised by the Statamic plugin.
+ *
+ * ---------------------------------------------------------------------------
+ * One config, two jobs.
+ *
+ * Everything above is correct for a bundle that runs inside the Control Panel
+ * and fatal in a test process. The Statamic plugin rewrites `vue` to
+ * `window.Vue`, and there is no `window.Vue` under Vitest; the imports have to
+ * resolve for real there.
+ *
+ * So under Vitest the SFCs are compiled with the plain Vue plugin instead. The
+ * `@statamic/cms/*` entry points then resolve through node_modules (symlinked
+ * to `vendor/statamic/cms/resources/dist-package`) and read their components
+ * off the `__STATAMIC__` global, which `tests/js/setup.js` populates with stubs
+ * before any test module is imported.
+ *
+ * `@vitejs/plugin-vue` is not listed in devDependencies on purpose: it is a
+ * declared dependency of `@statamic/cms`, which this package depends on, so it
+ * is always installed and always the version the CP itself compiles with.
+ * ---------------------------------------------------------------------------
  */
+const isTest = !!process.env.VITEST;
+
 export default defineConfig({
-    plugins: [
-        laravel({
-            input: [
-                'resources/js/cp.js',
-                'resources/css/cp.css',
-            ],
-            publicDirectory: 'resources/dist',
-            refresh: true,
-        }),
-        statamic(),
-        tailwindcss(),
-    ],
+    plugins: isTest
+        ? [vue()]
+        : [
+            laravel({
+                input: [
+                    'resources/js/cp.js',
+                    'resources/css/cp.css',
+                ],
+                publicDirectory: 'resources/dist',
+                refresh: true,
+            }),
+            statamic(),
+            tailwindcss(),
+        ],
+
+    test: {
+        environment: 'jsdom',
+        // The node:test suite in tests/js/*.test.mjs stays where it is: it
+        // covers pure functions and needs no DOM, no compiler and no CP. Vitest
+        // takes the `.test.js` files, which mount components.
+        include: ['tests/js/**/*.test.js'],
+        setupFiles: ['tests/js/setup.js'],
+    },
 });

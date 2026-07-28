@@ -50,7 +50,7 @@ export function useAutosave({ source, saver, debounceMs = 2000, defaultEnabled =
             lastError.value = null;
         } catch (e) {
             status.value = 'error';
-            lastError.value = e?.response?.data?.message ?? e.message ?? 'Autosave failed.';
+            lastError.value = e?.response?.data?.message || e.message || 'Autosave failed.';
         }
     }
 

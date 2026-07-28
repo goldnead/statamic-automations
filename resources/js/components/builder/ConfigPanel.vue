@@ -30,7 +30,7 @@
                     <Field :label="__('Name')">
                         <Input
                             :model-value="node.label ?? ''"
-                            :placeholder="schema?.label ?? node.type"
+                            :placeholder="schema?.label || node.type"
                             @update:model-value="$emit('update:label', $event)"
                         />
                     </Field>
@@ -41,9 +41,17 @@
 
                 <!-- 2 · Configuration (the existing dynamic form — logic unchanged) -->
                 <PropertiesSection v-if="fields.length || hasConditions" :title="__('Configuration')">
+                    <!-- Keyed by node AND handle, not by handle alone. The
+                         panel component is reused across node selections (no
+                         :key on it in Edit.vue), so a bare handle key let Vue
+                         reuse the field's child component too — and a child
+                         with internal state, KeyValueField above all, carried
+                         the previous node's half-typed rows over to the next
+                         node and committed them there on the first keystroke.
+                         Including the node key remounts the control instead. -->
                     <Field
                         v-for="field in fields"
-                        :key="field.handle"
+                        :key="`${node.node_key}::${field.handle}`"
                         :label="field.label"
                         :instructions="field.help"
                         class="mb-4"
@@ -189,7 +197,7 @@
 </template>
 
 <script setup>
-import { computed, defineComponent, h, ref } from 'vue';
+import { computed, defineComponent, h, ref, watch } from 'vue';
 import {
     Badge,
     Button,
@@ -321,14 +329,29 @@ const kindColor = computed(() => ({
 
 const icon = computed(() => nodeIcon(props.node?.type, kind.value));
 
-const fields = computed(() => {
-    const raw = schema.value?.schema ?? [];
-    return raw.filter((f) => !['conditions', 'mode'].includes(f.handle));
-});
-
 const hasConditions = computed(() =>
     (schema.value?.schema ?? []).some((f) => f.handle === 'conditions'),
 );
+
+const fields = computed(() => {
+    const raw = schema.value?.schema ?? [];
+
+    // `conditions` is always rendered by ConditionBuilder instead of the
+    // generic field loop, so it is filtered out unconditionally.
+    //
+    // `mode` belongs to ConditionBuilder too — but only where there ARE
+    // conditions for it to combine (filter, branch, wait_until: all/any).
+    // Filtering it unconditionally removed the field from four node types
+    // that declare a `mode` and no `conditions`, and nothing rendered a
+    // replacement: parallel and loop lost their inline/automation switch, and
+    // `add_user_to_group` / `assign_user_role` lost the add/remove switch
+    // entirely — so "remove from group" and "remove role" could not be
+    // configured at all. The default seeded by `defaultConfigForSchema` kept
+    // the node valid, which is why nothing ever complained.
+    const ownedByConditionBuilder = hasConditions.value ? ['conditions', 'mode'] : ['conditions'];
+
+    return raw.filter((f) => !ownedByConditionBuilder.includes(f.handle));
+});
 
 const config = computed(() => props.node?.config ?? {});
 
@@ -433,6 +456,20 @@ function fieldComponent(field) {
 const emailPreviewOpen = ref(false);
 const emailPickerOpen = ref(false);
 const emailFieldHandle = ref(null);
+
+// Selecting another node reuses this component instance (Edit.vue mounts the
+// panel with `v-if`, not `:key`), so these three refs survived the switch.
+// `emailFieldHandle` in particular is the target `setField()` writes to when a
+// template is picked: left pointing at the previous node's field, the pick
+// landed on a handle the current node may not even have.
+watch(
+    () => props.node?.node_key ?? null,
+    () => {
+        emailPreviewOpen.value = false;
+        emailPickerOpen.value = false;
+        emailFieldHandle.value = null;
+    },
+);
 
 function isEmailTemplateField(field) {
     return field.preview === 'email';

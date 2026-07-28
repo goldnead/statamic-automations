@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    The same suite, against a real MySQL server.
+
+        vendor/bin/pest -c phpunit.mysql.xml
+
+    Needed because the default SQLite run cannot see the class of defect that
+    took statamic-notifications v1.0.3 down on production: InnoDB's 3072-byte
+    index limit, utf8mb4's four bytes per character, and fixed column widths do
+    not exist in SQLite. It also cannot see what `->change()` really does on a
+    typed engine, or a NOT NULL that a nullable-column backfill fails to
+    satisfy. Point DB_HOST/DB_PORT/DB_DATABASE/DB_USERNAME/DB_PASSWORD at a
+    throwaway database; the suite migrates it from scratch on every run.
+
+        mysql -e 'CREATE DATABASE automations_test'
+        vendor/bin/pest -c phpunit.mysql.xml
+
+    IndexKeyLengthTest measures the same index arithmetic without a server, so
+    CI does not depend on this file. It exists for the run that proves the
+    compiled DDL and the real engine agree.
+-->
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         processIsolation="false"
+         stopOnFailure="false"
+         cacheDirectory=".phpunit.cache"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory suffix="Test.php">./tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory suffix="Test.php">./tests/Feature</directory>
+        </testsuite>
+        <testsuite name="Engine">
+            <directory suffix="Test.php">./tests/Engine</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>./src</directory>
+        </include>
+    </source>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <!-- tests/TestCase.php switches the default connection on this. -->
+        <env name="AUTOMATIONS_TEST_DB" value="mysql"/>
+        <env name="DB_HOST" value="127.0.0.1"/>
+        <env name="DB_PORT" value="3306"/>
+        <env name="DB_DATABASE" value="automations_test"/>
+        <env name="DB_USERNAME" value="root"/>
+        <env name="DB_PASSWORD" value=""/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+    </php>
+</phpunit>

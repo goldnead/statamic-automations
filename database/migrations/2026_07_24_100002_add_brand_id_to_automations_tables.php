@@ -78,11 +78,44 @@ return new class extends Migration
             }
         }
 
-        // 3. Unique rework — the handle identifier becomes brand-scoped.
+        // 3. `automations.brand_id` becomes NOT NULL before it carries a
+        //    unique. A SQL unique does not constrain NULL on any engine: two
+        //    rows that differ only by a NULL in an indexed column are both
+        //    accepted, without limit. Left nullable, `(brand_id, handle)` would
+        //    enforce nothing at all for any row whose brand_id is empty — and
+        //    the one identifier this addon promises to keep unique is the
+        //    handle. The models stamp brand_id on create, but a raw insert,
+        //    an upsert or an import that reaches the table another way does
+        //    not, and the constraint has to hold against those too.
+        //
+        //    Only this column is tightened. The denormalized brand_id on the
+        //    child tables stays nullable: none of them carries a unique, and
+        //    changing a column's nullability on MySQL rebuilds the table with
+        //    ALGORITHM=COPY — a cost worth paying on `automations`, which holds
+        //    one row per automation, and not on `automation_runs`, which grows
+        //    without bound.
+        if ($this->pendingNullBrandIds() > 0) {
+            throw new RuntimeException(
+                'Cannot scope automation handles per brand: automations rows remain without a brand_id '
+                .'and no default brand was found. Run the goldnead/statamic-brand-context migrations first.'
+            );
+        }
+
+        Schema::table('automations', function (Blueprint $table): void {
+            $table->unsignedBigInteger('brand_id')->nullable(false)->change();
+        });
+
+        // 4. Unique rework — the handle identifier becomes brand-scoped.
         Schema::table('automations', function (Blueprint $table): void {
             $table->dropUnique(['handle']);
             $table->unique(['brand_id', 'handle']);
         });
+    }
+
+    /** Rows the backfill could not stamp, which NOT NULL would reject. */
+    private function pendingNullBrandIds(): int
+    {
+        return DB::table('automations')->whereNull('brand_id')->count();
     }
 
     public function down(): void

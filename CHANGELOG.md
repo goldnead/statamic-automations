@@ -1,5 +1,80 @@
 # Changelog
 
+## 1.5.4 — 2026-07-28
+
+### Fixed — the handle unique did not constrain anything without a brand
+
+Since 1.5.0 the automation handle is unique per brand: `unique(brand_id, handle)`. The column it leads with was added nullable, and **a SQL unique does not constrain NULL** — on any engine. Two rows that differ only by a NULL in an indexed column are both accepted, and there is no limit to how many. So for every `automations` row without a brand_id, the one identifier this addon promises to keep unique was not constrained at all: the handle could repeat freely, and `Automation::where('handle', …)->first()` would return whichever row the engine happened to reach first.
+
+The models stamp brand_id on create, which is why the hole never opened in normal use. It is reachable from everything that writes the table without going through Eloquent — an import, an upsert, a data fix from tinker — and this package's own test fixture did exactly that, inserting automations rows with no brand_id for a year without anything noticing. A constraint that holds only while every future writer remembers something is not a constraint.
+
+**Why a green suite would never have found it.** Not because the assertion was missing, but because the thing to assert is invisible from the test's vantage point. The suite runs on in-memory SQLite, where the schema is never measured and NULL-permeability is not a property anything reports; the addon's own fixture inserted the NULL rows and the tests passed, since there were never two of them with the same handle. Nothing fails until a second row arrives, on a host, months later, and then it does not fail either — it resolves to the wrong automation. `statamic-notifications` v1.0.4 found the same shape in its preferences table, where an entire recipient type had been unconstrained since it shipped.
+
+`automations.brand_id` is now NOT NULL. `2026_07_24_100002` tightens it where it creates it, which helps new installations only; `2026_07_28_000003_require_brand_id_on_automations_table` is for the ones already on 1.5.x. It is idempotent, a no-op on a fresh install, and it renames rather than deletes any duplicate handles it has to separate before the backfill — an automation is somebody's work, and a suffixed handle is visible and fixable where a deleted flow is neither. Renames are written to the log.
+
+Only `automations` is tightened. The denormalized brand_id on the child tables stays nullable: none of them carries a unique, and changing a column's nullability on MySQL rebuilds the table with `ALGORITHM=COPY` — a fair price on `automations`, which holds one row per automation, and the wrong one on `automation_runs`, which grows without bound. Tenant separation is unchanged and asserted rather than assumed: two brands can still hold the same handle, and one brand still cannot hold it twice.
+
+### Fixed — the handle validation was still global, three releases after the schema stopped being
+
+The mirror image of the same question, found by asking of every unique whether it enforces what its name claims. `StoreAutomationRequest` and `UpdateAutomationRequest` still used `Rule::unique('automations', 'handle')`, which compiles to a query on the raw query builder that no Eloquent global scope ever reaches, and is therefore global.
+
+Two consequences, both silent, both in the direction of the validator being stricter than the database. A brand could not create an automation with a handle another brand had already taken, although the schema has allowed exactly that since 1.5.0 and that was the entire point of the change. And the refusal named the reason: *"The handle has already been taken"* is a statement about rows the asking tenant is not permitted to see. Both rules now carry `->where('brand_id', …)`.
+
+### Added — the suite can see MySQL's index rules
+
+`tests/Unit/IndexKeyLengthTest.php`, ported from `statamic-notifications` v1.0.4 by way of `statamic-webhook-manager` v1.6.1, compiles this package's own migration files through Laravel's MySQL grammar in pretend mode and measures the DDL MySQL would have received — no server, no connection, nothing to install in CI. It reads the real migration files, so it cannot drift from them, and it needs the extended version: this schema is built across eleven migrations, and `brand_id` arrives by `alter table … add` long after the create migrations, together with the drop of the global handle unique and the per-brand one that replaces it.
+
+It asserts three things: no index over InnoDB's 3072 bytes; no index over **half** of it, because an index that is under the limit by accident breaks on the next column added to it; and no unique covering a column that may be NULL — the check that failed above.
+
+**What the measurement says about the width.** Sound, and sound by luck rather than by check until now. The widest index is **1028 bytes**, 33% of the limit, shared by `automations_brand_id_handle_unique`, `automation_nodes_automation_id_node_key_unique`, the two `automation_edges` node-key lookups and `automation_runs_status_created_at_index`. Nothing is near the wall. `statamic-notifications` v1.0.3 shipped a 3212-byte unique that had run hundreds of times locally and died on the production hub with *SQLSTATE 1071*, leaving two tables that never existed there — the arithmetic that rejects it is a MySQL mechanism and does not exist in SQLite to be tested.
+
+`phpunit.mysql.xml` runs the identical suite against a real MySQL server (`vendor/bin/pest -c phpunit.mysql.xml`, `AUTOMATIONS_TEST_DB=mysql`), for the run that proves the compiled DDL and the engine agree.
+
+### Added — a test level for the Control Panel's Vue code (Vitest)
+
+The package had two test levels and a gap between them. PHPUnit reaches the route, the FormRequest, the controller and the props it hands to Inertia; `tests/js/*.test.mjs` reaches the builder's pure functions. Neither could mount a component, and the builder keeps most of its state there.
+
+Rolled out from `statamic-webhook-manager` v1.6.0: the `test` block lives in the existing `vite.config.js` (under `VITEST` the Statamic Vite plugin is swapped for the plain Vue plugin, because the former rewrites `vue` to `window.Vue` — correct for the CP bundle, fatal in a test process), `tests/js/setup.js` installs the `__STATAMIC__` global the `@statamic/cms/*` shims destructure at import time, and the new dependencies are `vitest`, `@vue/test-utils` and `jsdom`. Two additions to that setup were needed here: `__` is installed on `globalThis`, because this addon's components call the translator from `<script setup>` and not only from templates, and the stubs forward event listeners, without which a stubbed `<Button>` cannot be clicked and no interaction is testable. `npm test` runs the component suite; `npm run test:js` keeps running the pure-function one.
+
+### Fixed — four node types had a setting the editor silently swallowed
+
+`ConfigPanel` filtered `mode` out of every generic field form unconditionally, because for `filter`, `branch` and `wait_until` the `mode` field *is* the all/any selector that `ConditionBuilder` renders instead. But `ConditionBuilder` only mounts when the schema declares `conditions`, and four node types declare a `mode` and no conditions. Their setting was removed from the form and nothing put it back:
+
+- **`add_user_to_group` and `assign_user_role`** — "Remove from group" and "Remove role" could not be configured at all. The panel offered the group or the role and nothing else.
+- **`parallel` and `loop`** — the inline/automation switch was unreachable, and on `parallel` that setting decides the node's entire output set.
+
+`defaultConfigForSchema` seeded the default (`add`, `inline`), so every affected node validated and looked complete. `mode` is now filtered only where there are conditions for it to combine.
+
+### Fixed — an edge output handle could be stored as an empty string
+
+`edges.*.from_output` is `['nullable', 'string']`, so `""` is valid input, and every write path normalised it with `$edge['from_output'] ?? 'default'` — which substitutes for a *missing* key, not for a present empty one. Stored, the edge is invisible on the canvas (Vue Flow cannot resolve `sourceHandle: ""` against a handle called `default`, and the source node still shows an unused "+" adder on the output it is already wired to) and dead at run time: `WorkflowRunner` selects outgoing edges with `$e->from_output === $output`, so the edge is never followed. The run reports success and stops one node early, with nothing to show for it.
+
+A CP save was protected by accident — Laravel's `ConvertEmptyStringsToNull` turns the cleared field into null before the FormRequest sees it. An import reads JSON off disk, where `""` stays `""`. `AutomationEdge` now normalises both handles on write, so every path gets the same guarantee, including the ones added next.
+
+### Fixed — `??` where `||` was meant, in the builder and the CP pages
+
+Twenty-two sites, judged one at a time rather than replaced wholesale: a good half of this package's `??` is load-bearing and a `||` there would be the defect (`positions[key]?.x ?? cursor` must keep a legitimate `0`; `config[handle] ?? field.default ?? ''` must keep a stored `false` from a toggle and a `''` the user deliberately cleared; `is_test ?? null` must keep the `0` that means "non-test runs only"). The ones that were wrong:
+
+- **`from_output ?? 'default'`** (nine sites) — the reading half of the defect above.
+- **`data?.message ?? __('… failed.')`** (eleven sites) — a server `message: ""` rendered a blank error toast instead of the readable fallback. `Edit.vue` was already internally inconsistent about this: its validation branch used truthiness, its message branch did not.
+- **`schema?.label ?? node.type`** — a node class whose `label()` returns `''` produced an empty name placeholder, while the heading directly above it fell back correctly.
+- **`props.queue ?? 'default'`** — an empty `STATAMIC_AUTOMATIONS_QUEUE=` in `.env` rendered the Settings row blank, reading as if no queue were configured.
+
+### Fixed — the config panel carried the previous node's state to the next one
+
+`Edit.vue` mounts the panel with `v-if`, not `:key`, so selecting another node reuses the same component instance. Three defects followed from that, all of them invisible outside a browser:
+
+- **The template picker wrote to the wrong field.** `emailFieldHandle` is the handle `onEmailTemplateSelected` calls `setField()` with; left pointing at the previous node's field, a template picked after a node switch landed on a handle the current node may not even have. The three modal refs now reset when the selected node changes.
+- **Key-value rows leaked between nodes.** The field loop was keyed by `field.handle` alone, so two nodes with a `headers` field shared one `KeyValueField` — and that component keeps its rows locally, resyncing only when the incoming value differs from what it last emitted. Two empty maps serialise identically, so the resync was skipped: the previous node's half-typed rows stayed on screen and the next keystroke committed them onto the new node. The loop is now keyed by node *and* handle.
+- **`KeyValueField` read its labels once.** `const keyLabel = props.keyLabel ?? __('Key')` was evaluated at setup, and ConfigPanel passes those labels conditionally, so the placeholders kept describing whichever field mounted the component first. Now computed.
+
+### Notes
+
+- **The Vue review found no live instance of the other class this QA round looked for** — a string method on a value the backend can also send as an array or null. All 34 call sites were traced to their receiver; the ones reading node config, run output and error payloads are guarded by an explicit `typeof … === 'string'` or a `String()` coercion, and `error_message` is only ever interpolated. The nearest thing to a hole is `NodeLibrary`'s `item.label.toLowerCase()`, which would throw while typing in the filter box if a third party registered a node with no `label` in its meta — not reachable through any first-party path, and left alone rather than patched into a finding.
+- **Known and unchanged:** `SubAutomationAndAlertsTest > failure alerter logs and throttles` fails under MySQL on a foreign-key violation (`automation_id=999`, which SQLite does not enforce). Reproducible at v1.5.3.
+- **Still open, reported rather than fixed:** history records one snapshot per keystroke, so ~100 characters of typing evicts every structural undo from the 100-entry stack; `useHistory.reset()` is exported and never called, so undo reaches past a save; duplicating a `branch`, `loop` or `parallel` node appends the copy on a hard-coded `default` output that those node types do not have, which `FlowValidator` then rejects; and `newNodeKey()` has no collision check against `unique(automation_id, node_key)`. All four live in graph mutations inlined in `Edit.vue`; pinning them wants those extracted into a composable first, in the style of the ones already tested.
+- Suite: **359 passed (1269 assertions)** on SQLite, baseline 343. Vitest **11 passed**, `node:test` unchanged at **73**.
+
 ## 1.5.3 — 2026-07-28
 
 ### Fixed — Delay nodes saved before 1.5.2 stayed invalid

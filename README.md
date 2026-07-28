@@ -252,10 +252,52 @@ See [`config/automations.php`](config/automations.php). Highlights:
 ## Testing
 
 ```bash
-composer test
+composer test          # or: vendor/bin/pest
 ```
 
 The package ships with unit + feature tests for the engine, validators, integrations, exporter/importer, registries and the CP API.
+
+### Component tests (Vitest)
+
+```bash
+npm test               # or: npx vitest run   /   npx vitest  (watch)
+npm run test:js        # the older node:test suite for pure builder functions
+```
+
+PHPUnit reaches the route, the FormRequest, the controller and the props it
+hands to Inertia. `tests/js/*.test.mjs` reaches the builder's pure functions
+(auto-layout, history, validation, icons). Neither could execute a line of the
+component logic in between — a `.toLowerCase()` on a value the backend also
+stores as an array, or a `??` that should have been a `||`, throws or renders
+wrong at mount time and nowhere else.
+
+- Vitest reads the same `vite.config.js`. Under `VITEST` the Statamic Vite
+  plugin is swapped for the plain Vue plugin, because the former rewrites
+  `vue` to `window.Vue` — correct for the CP bundle, fatal in a test process.
+- `@statamic/cms/ui` and `@statamic/cms/inertia` are shims that destructure a
+  global `__STATAMIC__` at import time. `tests/js/setup.js` installs it before
+  any test module loads and answers every requested name with a stub that
+  mirrors its scalar attributes into the DOM
+  (`<div data-stub="Badge" data-attr-variant="success">`), so a test can assert
+  what a component was handed without pinning the CP's real markup.
+- Component tests live in `tests/js/**/*.test.js`; the pure-function suite stays
+  in `tests/js/*.test.mjs` and is run by `npm run test:js`.
+
+### The whole suite against MySQL
+
+```bash
+mysql -e 'CREATE DATABASE automations_test'
+vendor/bin/pest -c phpunit.mysql.xml
+```
+
+The default run is in-memory SQLite, which has no InnoDB key-length limit, no
+per-character byte cost and no fixed column widths — so it cannot see the class
+of defect that took `statamic-notifications` v1.0.3 down on production.
+`tests/Unit/IndexKeyLengthTest.php` closes that gap without a server: it
+compiles this package's own migration files through Laravel's MySQL grammar in
+pretend mode and measures every index the way InnoDB would, plus asserts
+headroom and that no unique covers a nullable column. `phpunit.mysql.xml` is
+for the run that proves the compiled DDL and the real engine agree.
 
 ## Documentation
 

@@ -51,7 +51,7 @@ const sections = computed(() => {
     s.push({
         title: __('Queue'),
         rows: [
-            { label: __('Queue name'), description: __('The queue automation jobs are dispatched onto.'), mono: props.queue ?? 'default' },
+            { label: __('Queue name'), description: __('The queue automation jobs are dispatched onto.'), mono: props.queue || 'default' },
             { label: __('Connection'), description: __('The queue connection used to dispatch runs.'), mono: props.queue_connection ?? __('default') },
         ],
     });

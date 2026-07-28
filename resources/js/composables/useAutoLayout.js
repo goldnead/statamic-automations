@@ -193,7 +193,7 @@ export function computeLayout(nodes = [], edges = [], options = {}) {
         if (!childrenOf.has(e.from_node_key)) childrenOf.set(e.from_node_key, []);
         childrenOf.get(e.from_node_key).push({
             to: e.to_node_key,
-            output: e.from_output ?? 'default',
+            output: e.from_output || 'default',
         });
         indegree.set(e.to_node_key, (indegree.get(e.to_node_key) ?? 0) + 1);
     }
@@ -260,7 +260,7 @@ export function computeLayout(nodes = [], edges = [], options = {}) {
 
     // Open outputs = append points ("+" adders).
     const hasEdgeFrom = new Set(
-        edges.map((e) => `${e.from_node_key}::${e.from_output ?? 'default'}`),
+        edges.map((e) => `${e.from_node_key}::${e.from_output || 'default'}`),
     );
     const openOutputs = [];
     for (const n of nodes) {

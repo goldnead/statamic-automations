@@ -44,7 +44,7 @@ async function retry() {
         await axios.post(props.retryUrl);
         window.Statamic?.$toast?.success?.(__('Re-queued.'));
     } catch (e) {
-        window.Statamic?.$toast?.error?.(e?.response?.data?.message ?? __('Retry failed.'));
+        window.Statamic?.$toast?.error?.(e?.response?.data?.message || __('Retry failed.'));
     }
 }
 
@@ -56,7 +56,7 @@ async function retryNode(nodeRun) {
         );
         window.Statamic?.$toast?.success?.(__('Re-queued from :node', { node: nodeRun.node_key }));
     } catch (e) {
-        window.Statamic?.$toast?.error?.(e?.response?.data?.message ?? __('Partial retry failed.'));
+        window.Statamic?.$toast?.error?.(e?.response?.data?.message || __('Partial retry failed.'));
     } finally {
         retryingNodeId.value = null;
     }

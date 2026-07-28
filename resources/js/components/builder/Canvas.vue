@@ -196,7 +196,7 @@ function rootAdder() {
 }
 
 function toVueFlowEdge(e) {
-    const out = e.from_output ?? 'default';
+    const out = e.from_output || 'default';
     const branch = out === 'true' || out === 'false';
     const accent = out === 'true'
         ? 'var(--sa-color-success)'
