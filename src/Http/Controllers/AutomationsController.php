@@ -68,13 +68,13 @@ class AutomationsController extends Controller
             ->setStatusCode(200);
     }
 
-    public function show(Automation $automation): JsonResponse
+    public function show(Automation $automationFlow): JsonResponse
     {
         $this->authorizeAction('view automations');
 
-        $automation->load(['nodes', 'edges']);
+        $automationFlow->load(['nodes', 'edges']);
 
-        return (new AutomationResource($automation))
+        return (new AutomationResource($automationFlow))
             ->response()
             ->setStatusCode(200);
     }
@@ -104,61 +104,61 @@ class AutomationsController extends Controller
             ->setStatusCode(201);
     }
 
-    public function update(UpdateAutomationRequest $request, Automation $automation): JsonResponse
+    public function update(UpdateAutomationRequest $request, Automation $automationFlow): JsonResponse
     {
         $data = $request->validated();
 
         // Snapshot the pre-edit graph so this change can be rolled back.
-        app(\Goldnead\StatamicAutomations\Engine\VersionManager::class)->snapshot($automation);
+        app(\Goldnead\StatamicAutomations\Engine\VersionManager::class)->snapshot($automationFlow);
 
-        $automation->fill(array_filter([
+        $automationFlow->fill(array_filter([
             'name' => $data['name'] ?? null,
             'handle' => $data['handle'] ?? null,
             'description' => array_key_exists('description', $data) ? $data['description'] : null,
         ], fn ($v) => $v !== null));
-        $automation->version = (int) $automation->version + 1;
+        $automationFlow->version = (int) $automationFlow->version + 1;
 
         $hasGraph = isset($data['nodes']) || isset($data['edges']);
 
-        $automation = app(AutomationRepository::class)->save(
-            $automation,
+        $automationFlow = app(AutomationRepository::class)->save(
+            $automationFlow,
             $hasGraph ? ($data['nodes'] ?? []) : null,
             $hasGraph ? ($data['edges'] ?? []) : null,
         );
 
         app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)
-            ->record('updated', $automation, ['version' => $automation->version]);
+            ->record('updated', $automationFlow, ['version' => $automationFlow->version]);
 
-        return (new AutomationResource($automation))
+        return (new AutomationResource($automationFlow))
             ->response()
             ->setStatusCode(200);
     }
 
-    public function destroy(Automation $automation): JsonResponse
+    public function destroy(Automation $automationFlow): JsonResponse
     {
         $this->authorizeAction('delete automations');
 
         app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)
-            ->record('deleted', $automation->exists ? $automation : null, ['name' => $automation->name, 'handle' => $automation->handle]);
+            ->record('deleted', $automationFlow->exists ? $automationFlow : null, ['name' => $automationFlow->name, 'handle' => $automationFlow->handle]);
 
-        app(AutomationRepository::class)->delete($automation);
+        app(AutomationRepository::class)->delete($automationFlow);
 
         return response()->json(['ok' => true]);
     }
 
-    public function duplicate(Automation $automation): JsonResponse
+    public function duplicate(Automation $automationFlow): JsonResponse
     {
         $this->authorizeAction('create automations');
 
         $clone = new Automation([
-            'name' => $automation->name . ' (copy)',
-            'handle' => $automation->handle . '-copy-' . Str::lower(Str::random(4)),
-            'description' => $automation->description,
+            'name' => $automationFlow->name . ' (copy)',
+            'handle' => $automationFlow->handle . '-copy-' . Str::lower(Str::random(4)),
+            'description' => $automationFlow->description,
             'enabled' => false,
             'created_by' => optional(auth()->user())->id,
         ]);
 
-        $nodes = $automation->nodes->map(fn ($node) => [
+        $nodes = $automationFlow->nodes->map(fn ($node) => [
             'node_key' => $node->node_key,
             'type' => $node->type,
             'label' => $node->label,
@@ -168,7 +168,7 @@ class AutomationsController extends Controller
             'disabled' => $node->disabled,
         ])->all();
 
-        $edges = $automation->edges->map(fn ($edge) => [
+        $edges = $automationFlow->edges->map(fn ($edge) => [
             'from_node_key' => $edge->from_node_key,
             'from_output' => $edge->from_output,
             'to_node_key' => $edge->to_node_key,
@@ -182,12 +182,12 @@ class AutomationsController extends Controller
             ->setStatusCode(201);
     }
 
-    public function validateAutomation(Automation $automation, FlowValidator $validator): JsonResponse
+    public function validateAutomation(Automation $automationFlow, FlowValidator $validator): JsonResponse
     {
         $this->authorizeAction('view automations');
 
-        $automation->loadMissing(['nodes', 'edges']);
-        $issues = $validator->validate($automation);
+        $automationFlow->loadMissing(['nodes', 'edges']);
+        $issues = $validator->validate($automationFlow);
 
         return response()->json([
             'valid' => empty(array_filter($issues, fn ($i) => ($i['level'] ?? 'error') === 'error')),
@@ -195,12 +195,12 @@ class AutomationsController extends Controller
         ]);
     }
 
-    public function enable(Automation $automation, FlowValidator $validator): JsonResponse
+    public function enable(Automation $automationFlow, FlowValidator $validator): JsonResponse
     {
         $this->authorizeAction('enable automations');
 
-        $automation->loadMissing(['nodes', 'edges']);
-        $issues = $validator->validate($automation);
+        $automationFlow->loadMissing(['nodes', 'edges']);
+        $issues = $validator->validate($automationFlow);
         $errors = array_filter($issues, fn ($i) => ($i['level'] ?? 'error') === 'error');
 
         if (! empty($errors)) {
@@ -211,40 +211,40 @@ class AutomationsController extends Controller
             ], 422);
         }
 
-        $automation->enabled = true;
-        app(AutomationRepository::class)->save($automation);
+        $automationFlow->enabled = true;
+        app(AutomationRepository::class)->save($automationFlow);
 
-        app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)->record('enabled', $automation);
+        app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)->record('enabled', $automationFlow);
 
         return response()->json(['ok' => true, 'enabled' => true]);
     }
 
-    public function disable(Automation $automation): JsonResponse
+    public function disable(Automation $automationFlow): JsonResponse
     {
         $this->authorizeAction('enable automations');
 
-        $automation->enabled = false;
-        app(AutomationRepository::class)->save($automation);
+        $automationFlow->enabled = false;
+        app(AutomationRepository::class)->save($automationFlow);
 
-        app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)->record('disabled', $automation);
+        app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)->record('disabled', $automationFlow);
 
         return response()->json(['ok' => true, 'enabled' => false]);
     }
 
-    public function test(Request $request, Automation $automation, WorkflowRunner $runner): JsonResponse
+    public function test(Request $request, Automation $automationFlow, WorkflowRunner $runner): JsonResponse
     {
         $this->authorizeAction('run automation tests');
 
-        $automation->loadMissing(['nodes', 'edges']);
+        $automationFlow->loadMissing(['nodes', 'edges']);
         $contextData = (array) $request->input('context', []);
 
         $context = AutomationContext::make($contextData, testMode: true);
-        $triggerNode = $automation->nodes->first(
+        $triggerNode = $automationFlow->nodes->first(
             fn ($n) => app(\Goldnead\StatamicAutomations\Registries\NodeRegistry::class)
                 ->kind($n->type) === 'trigger',
         );
 
-        $run = $runner->createRun($automation, $context, $triggerNode);
+        $run = $runner->createRun($automationFlow, $context, $triggerNode);
         $finalRun = $runner->execute($run, $context);
 
         return response()->json([
@@ -271,13 +271,13 @@ class AutomationsController extends Controller
      */
     public function testNode(
         Request $request,
-        Automation $automation,
+        Automation $automationFlow,
         \Goldnead\StatamicAutomations\Engine\NodeExecutor $executor,
     ): JsonResponse {
         $this->authorizeAction('run automation tests');
 
         $nodeKey = (string) $request->input('node_key');
-        $node = $automation->nodes()->where('node_key', $nodeKey)->first();
+        $node = $automationFlow->nodes()->where('node_key', $nodeKey)->first();
 
         if ($node === null) {
             return response()->json(['ok' => false, 'message' => "Node '{$nodeKey}' not found."], 404);

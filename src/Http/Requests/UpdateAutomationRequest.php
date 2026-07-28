@@ -18,8 +18,13 @@ class UpdateAutomationRequest extends FormRequest
 
     public function rules(): array
     {
-        $automation = $this->route('automation');
-        $automationId = is_object($automation) ? $automation->id : $automation;
+        // `automationFlow`, not `automation` — the route parameter was renamed
+        // so this addon binds only a name of its own. A stale key here would
+        // not raise: route() would return null, the ignore-id would fall away,
+        // and saving an automation without touching its handle would start
+        // failing the unique rule against itself.
+        $automationFlow = $this->route('automationFlow');
+        $automationId = is_object($automationFlow) ? $automationFlow->id : $automationFlow;
 
         return [
             'name' => ['sometimes', 'required', 'string', 'max:255'],

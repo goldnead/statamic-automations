@@ -143,9 +143,17 @@ class ServiceProvider extends AddonServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
 
-        // Resolve the {automation} route parameter through the active storage
-        // driver so flat-file definitions (which have no DB row) bind too.
-        \Illuminate\Support\Facades\Route::bind('automation', function ($value) {
+        // Resolve the {automationFlow} route parameter through the active
+        // storage driver so flat-file definitions (which have no DB row) bind
+        // too.
+        //
+        // The name is `automationFlow` and not `automation` because a
+        // Route::bind() is registered on the router, not on this package: it
+        // resolves that parameter name in every addon installed alongside, and
+        // the losing route answers 404 without an error anywhere. So an addon
+        // may only bind names that unambiguously belong to it — this addon's
+        // prefix plus a capital. See tests/Feature/RouteParameterCollisionTest.
+        \Illuminate\Support\Facades\Route::bind('automationFlow', function ($value) {
             return $this->app
                 ->make(\Goldnead\StatamicAutomations\Contracts\AutomationRepository::class)
                 ->find($value) ?? abort(404);
@@ -565,7 +573,14 @@ class ServiceProvider extends AddonServiceProvider
                     $nav->item(__('Automations'))->route('statamic-automations.automations.index'),
                     $nav->item(__('Runs'))->route('statamic-automations.runs.index'),
                     $nav->item(__('Audit log'))->route('statamic-automations.audit'),
-                    $nav->item(__('Templates'))->route('statamic-automations.templates.index'),
+                    // `Automation templates`, not `Templates`: JSON string
+                    // translations from every package merge into one Control
+                    // Panel dictionary, so a key here replaces that string for
+                    // statamic/cms too. `Templates` is Statamic's own word for
+                    // Antlers views; ours is a different thing and needs a
+                    // source string of its own rather than a translation that
+                    // overrules the core's. See tests/Unit/TranslationKeyOwnershipTest.
+                    $nav->item(__('Automation templates'))->route('statamic-automations.templates.index'),
                     $nav->item(__('Import'))->route('statamic-automations.import'),
                     $nav->item(__('Settings'))->route('statamic-automations.settings'),
                 ]);

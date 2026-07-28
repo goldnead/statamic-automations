@@ -183,7 +183,7 @@ describe('handle validation across brands', function () {
         BrandContext::setCurrent($this->brandA);
 
         $this->patchJson(
-            cp_route('statamic-automations.api.automations.update', ['automation' => $automation->id]),
+            cp_route('statamic-automations.api.automations.update', ['automationFlow' => $automation->id]),
             ['name' => 'Renamed', 'handle' => 'welcome']
         )->assertSuccessful();
     });

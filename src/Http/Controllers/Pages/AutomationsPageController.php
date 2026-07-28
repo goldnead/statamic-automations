@@ -81,20 +81,20 @@ class AutomationsPageController extends Controller
         ]);
     }
 
-    public function edit(Request $request, Automation $automation)
+    public function edit(Request $request, Automation $automationFlow)
     {
         $this->authorizeAction('edit automations');
 
-        $automation->loadMissing(['nodes', 'edges']);
+        $automationFlow->loadMissing(['nodes', 'edges']);
 
         return Inertia::render('statamic-automations::Automations/Edit', [
             'mode' => 'edit',
-            'title' => $automation->name,
-            'automation' => $this->automationPayload($automation),
+            'title' => $automationFlow->name,
+            'automation' => $this->automationPayload($automationFlow),
             'library' => $this->nodeLibraryPayload(),
             'apiBase' => cp_route('statamic-automations.api.index'),
             'indexUrl' => cp_route('statamic-automations.automations.index'),
-            'runsUrl' => cp_route('statamic-automations.runs.index') . '?automation_id=' . $automation->id,
+            'runsUrl' => cp_route('statamic-automations.runs.index') . '?automation_id=' . $automationFlow->id,
             'canEdit' => $this->userCan('edit automations'),
             'canEnable' => $this->userCan('enable automations'),
             'canDelete' => $this->userCan('delete automations'),

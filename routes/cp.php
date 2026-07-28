@@ -54,7 +54,7 @@ Route::prefix('automations')
         Route::get('automations/create', [AutomationsPageController::class, 'create'])
             ->name('automations.create');
 
-        Route::get('automations/{automation}/edit', [AutomationsPageController::class, 'edit'])
+        Route::get('automations/{automationFlow}/edit', [AutomationsPageController::class, 'edit'])
             ->name('automations.edit');
 
         Route::get('runs', [RunsPageController::class, 'index'])
@@ -86,15 +86,15 @@ Route::prefix('automations')
             // Automations CRUD + actions
             Route::get('automations', [AutomationsController::class, 'index'])->name('automations.index');
             Route::post('automations', [AutomationsController::class, 'store'])->name('automations.store');
-            Route::get('automations/{automation}', [AutomationsController::class, 'show'])->name('automations.show');
-            Route::patch('automations/{automation}', [AutomationsController::class, 'update'])->name('automations.update');
-            Route::delete('automations/{automation}', [AutomationsController::class, 'destroy'])->name('automations.destroy');
-            Route::post('automations/{automation}/duplicate', [AutomationsController::class, 'duplicate'])->name('automations.duplicate');
-            Route::post('automations/{automation}/validate', [AutomationsController::class, 'validateAutomation'])->name('automations.validate');
-            Route::post('automations/{automation}/test', [AutomationsController::class, 'test'])->name('automations.test');
-            Route::post('automations/{automation}/test-node', [AutomationsController::class, 'testNode'])->name('automations.test-node');
-            Route::post('automations/{automation}/enable', [AutomationsController::class, 'enable'])->name('automations.enable');
-            Route::post('automations/{automation}/disable', [AutomationsController::class, 'disable'])->name('automations.disable');
+            Route::get('automations/{automationFlow}', [AutomationsController::class, 'show'])->name('automations.show');
+            Route::patch('automations/{automationFlow}', [AutomationsController::class, 'update'])->name('automations.update');
+            Route::delete('automations/{automationFlow}', [AutomationsController::class, 'destroy'])->name('automations.destroy');
+            Route::post('automations/{automationFlow}/duplicate', [AutomationsController::class, 'duplicate'])->name('automations.duplicate');
+            Route::post('automations/{automationFlow}/validate', [AutomationsController::class, 'validateAutomation'])->name('automations.validate');
+            Route::post('automations/{automationFlow}/test', [AutomationsController::class, 'test'])->name('automations.test');
+            Route::post('automations/{automationFlow}/test-node', [AutomationsController::class, 'testNode'])->name('automations.test-node');
+            Route::post('automations/{automationFlow}/enable', [AutomationsController::class, 'enable'])->name('automations.enable');
+            Route::post('automations/{automationFlow}/disable', [AutomationsController::class, 'disable'])->name('automations.disable');
 
             // Node / trigger / action metadata
             Route::get('nodes', [NodesController::class, 'index'])->name('nodes.index');
@@ -119,8 +119,8 @@ Route::prefix('automations')
                 ->name('email-templates.preview');
 
             // Versions + audit
-            Route::get('automations/{automation}/versions', [\Goldnead\StatamicAutomations\Http\Controllers\VersionsController::class, 'index'])->name('automations.versions');
-            Route::post('automations/{automation}/versions/{timestamp}/revert', [\Goldnead\StatamicAutomations\Http\Controllers\VersionsController::class, 'revert'])
+            Route::get('automations/{automationFlow}/versions', [\Goldnead\StatamicAutomations\Http\Controllers\VersionsController::class, 'index'])->name('automations.versions');
+            Route::post('automations/{automationFlow}/versions/{timestamp}/revert', [\Goldnead\StatamicAutomations\Http\Controllers\VersionsController::class, 'revert'])
                 ->where('timestamp', '[0-9]+')
                 ->name('automations.versions.revert');
             Route::get('audit', [\Goldnead\StatamicAutomations\Http\Controllers\AuditController::class, 'index'])->name('audit.list');
@@ -142,9 +142,9 @@ Route::prefix('automations')
             Route::get('license/status', [SettingsController::class, 'license'])->name('license.status');
 
             // Export / Import
-            Route::get('automations/{automation}/export', [ExportImportController::class, 'export'])->name('automations.export');
-            Route::get('automations/{automation}/sync-status', [ExportImportController::class, 'syncStatus'])->name('automations.sync-status');
-            Route::post('automations/{automation}/sync-to-file', [ExportImportController::class, 'syncToFile'])->name('automations.sync-to-file');
+            Route::get('automations/{automationFlow}/export', [ExportImportController::class, 'export'])->name('automations.export');
+            Route::get('automations/{automationFlow}/sync-status', [ExportImportController::class, 'syncStatus'])->name('automations.sync-status');
+            Route::post('automations/{automationFlow}/sync-to-file', [ExportImportController::class, 'syncToFile'])->name('automations.sync-to-file');
             Route::post('automations/import', [ExportImportController::class, 'import'])->name('automations.import');
             Route::get('automations/file-storage/list', [ExportImportController::class, 'listFiles'])->name('automations.files.list');
         });

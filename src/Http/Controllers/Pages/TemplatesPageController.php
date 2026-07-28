@@ -33,7 +33,7 @@ class TemplatesPageController extends Controller
         })->values();
 
         return Inertia::render('statamic-automations::Templates/Index', [
-            'title' => __('Templates'),
+            'title' => __('Automation templates'),
             'templates' => $templates,
             'canCreate' => $this->userCan('create automations'),
         ]);

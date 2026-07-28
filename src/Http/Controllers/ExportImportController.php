@@ -13,12 +13,12 @@ use Symfony\Component\HttpFoundation\Response;
 
 class ExportImportController extends Controller
 {
-    public function export(Automation $automation, AutomationExporter $exporter): Response
+    public function export(Automation $automationFlow, AutomationExporter $exporter): Response
     {
         $this->authorizeAction('view automations');
 
-        $payload = $exporter->toArray($automation);
-        $filename = "{$automation->handle}.json";
+        $payload = $exporter->toArray($automationFlow);
+        $filename = "{$automationFlow->handle}.json";
 
         return response()
             ->json($payload, 200, [
@@ -66,11 +66,11 @@ class ExportImportController extends Controller
         ], 201);
     }
 
-    public function syncToFile(Automation $automation, AutomationFileSync $sync): JsonResponse
+    public function syncToFile(Automation $automationFlow, AutomationFileSync $sync): JsonResponse
     {
         $this->authorizeAction('edit automations');
 
-        $path = $sync->exportToFile($automation);
+        $path = $sync->exportToFile($automationFlow);
 
         return response()->json([
             'ok' => true,
@@ -78,11 +78,11 @@ class ExportImportController extends Controller
         ]);
     }
 
-    public function syncStatus(Automation $automation, AutomationFileSync $sync): JsonResponse
+    public function syncStatus(Automation $automationFlow, AutomationFileSync $sync): JsonResponse
     {
         $this->authorizeAction('view automations');
 
-        return response()->json(['data' => $sync->syncStatus($automation)]);
+        return response()->json(['data' => $sync->syncStatus($automationFlow)]);
     }
 
     public function listFiles(AutomationFileSync $sync): JsonResponse

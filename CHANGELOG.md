@@ -1,5 +1,52 @@
 # Changelog
 
+## 1.6.0 — 2026-07-28
+
+### Changed — this addon binds `{automationFlow}`, not `{automation}`
+
+1.5.6 added a guard that compared this addon's route parameter names against a hand-written list of what the siblings bind. The list was a snapshot, and it went stale in the same week it was written: `goldnead/statamic-webhook-manager` 1.7.0 renamed all four of the names it claimed, so four of the fourteen entries were describing a world that had moved on, and the file was silently asserting something false. It was also the wrong shape. What replaces it is the rule webhook-manager arrived at, applied here:
+
+> **A `Route::bind()` is registered on the router, not on the package that calls it. Bind only names that unambiguously belong to your addon — specific enough that no sibling would reach for one by accident. Names you do *not* bind may stay as generic as they like: nothing resolves them, so nothing can be taken from anyone.**
+
+`{automation}` was the last generic name any addon in this family still claimed application-wide. It is renamed to `{automationFlow}` — the addon's own prefix plus a capital, which is the shape the guard test now checks for rather than a list of approved words.
+
+**No URL changes.** `/cp/automations/17/edit` is the same string before and after; a route parameter name is the placeholder, never the path. What changed with it, across 8 files: the one `Route::bind()` registration, the 15 route definitions in `routes/cp.php`, the `$this->route(…)` lookup in `UpdateAutomationRequest`, the bound argument in 15 controller methods across `AutomationsController`, `VersionsController`, `ExportImportController` and `AutomationsPageController` — 61 variable occurrences in all — and one `cp_route(…, ['automation' => …])` in `BrandHandleUniquenessTest`, which would have generated the id as a query string instead of a path segment and produced a 405 rather than the 200 it asserts.
+
+The rename was done method by method rather than by search-and-replace, because three of the `$automation` variables in those same files are *not* route-bound and had to stay: `store()` builds its own, `syncGraph()` takes one as an argument, and `automationPayload()` renders one. The Inertia payload key `'automation' => …` that every Vue page reads is likewise untouched — it is not a route parameter, and renaming it would have broken the builder for no reason.
+
+`$this->route('automation')` in `UpdateAutomationRequest::rules()` is why this was worth doing carefully rather than quickly. It is a null-safe read feeding the ignore-id of a `unique` rule. Miss it and it silently reads null, the ignore falls away, and saving an automation without changing its handle starts failing validation against itself — no error at the point of the mistake, one at the far end.
+
+**Why the guard test changed shape.** It now reads the `Route::bind()` calls out of this package's own `src/` — comments stripped, string literals only, and a call whose name is not a literal fails the test rather than escaping it — and requires every name found to match `automation` + a capital. That is a property of this package, so this package's own suite can enforce it without knowing anything about its neighbours, and a second binding cannot arrive by default.
+
+The behavioural half is `it does not swallow a sibling addon's generic route parameter`. `tests/TestCase.php` now mounts stand-in routes for a sibling package — `{automation}`, `{rule}`, `{template}`, `{webhook}`, `{endpoint}`, `{handle}`, `{id}`, `{slug}`, `{record}`, each doing nothing but echoing its own value — and the test asserts every one of them answers with what it was given. Before the rename, `{automation}` answered 404: the LeadHub defect, reproduced from the losing side inside this package's own suite for the first time. They are registered in the bed rather than in the test body deliberately; a route added from inside a test is shadowed by Statamic's `{segments?}` frontend catch-all and answers 404 whatever the bindings do, which would have made the check pass for the wrong reason.
+
+**What deliberately did not change: `{handle}`, `{run}`, `{source}`, `{nodeRun}` and `{timestamp}`.** They are generic and they are staying. Renaming them would move text without removing any exposure, because they are not bound — nothing resolves them, so nothing can collide. `{run}` and `{nodeRun}` resolve through Laravel's *implicit* binding, which matches a route parameter to a typed controller argument and is therefore scoped to that one route. Only `Route::bind()` is application-wide, which is why only that is the subject of the rule.
+
+**Still true, and still not fixable from here:** a collision exists only once two packages are installed together, and a package cannot see its siblings from inside its own suite. The rule turns that from something each addon must know into something each addon can check alone.
+
+### Fixed — this addon was retranslating the German Control Panel for the whole application
+
+The same shape as the section above, one layer over: `loadJsonTranslationsFrom()` appends a directory to a single list on the translator's file loader, and at lookup time the loader merges every `<locale>.json` in that list into one flat array with `array_merge`. The last package to register a key wins, application-wide, for every caller of `__('…')` including statamic/cms itself. There is no namespace, no prefix and no warning — and an addon's own suite loads its own JSON and nobody else's, so of course it never sees a conflict.
+
+`resources/lang/de.json` shipped four bare Control Panel words that statamic/cms also defines. Two of them disagreed with the core:
+
+| key | statamic/cms | this addon, until now |
+|---|---|---|
+| `Templates` | Templates | Vorlagen |
+| `User` | Benutzer:in | Benutzer |
+
+Neither stayed inside the automations screens. `User` is the plainer of the two: Statamic's German uses a gender-inclusive form throughout, and four convenience strings here undid it on **every German CP page in the install** — entries, assets, users, forms, none of which have anything to do with automations. That is not a matter of taste; it is an addon reversing a decision of the core for the whole application.
+
+The fix follows what `goldnead/statamic-leadhub` did in its 1.9.0: where the addon genuinely means something else, the **source string** is made unambiguous rather than the core's translation overridden. `__('Templates')` — an automation template, not an Antlers view — becomes `__('Automation templates')`, in the CP nav item and in the templates page title, with `"Automation templates": "Automatisierungsvorlagen"` in `de.json`. Where the addon means the same thing as the core, the key is simply dropped: `User` in the audit log column now reads Statamic's "Benutzer:in".
+
+`Dashboard` and `Settings` are dropped for the third reason. Their values were identical to statamic/cms's, so nothing anyone sees changes — but a duplicate that agrees today is a disagreement waiting for one side to be edited, and the hub's detector only reports keys where the values differ. Those two would have gone unreported until the day somebody changed one.
+
+**`Enabled` stays, deliberately.** statamic/cms does not define it at all, so dropping it would leave the string untranslated in the German CP. It is also shipped by `goldnead/statamic-leadhub` with the identical value, which is a shared word rather than a defect: nothing a user sees changes whichever package wins.
+
+`tests/Unit/TranslationKeyOwnershipTest.php` is the guard. statamic/cms is a hard dependency of this package, so its dictionary is readable from inside this suite and the check needs no hub — it fails on any key this addon ships that statamic/cms also owns, naming whether the value REPLACES the core's or merely duplicates it. Against the file before this release it reports all four. It also pins the other half of the rename: a source string changed in the code but not in the dictionary leaves the CP untranslated, and `__()` reports that by silently returning the key.
+
+**What this cannot see, and where it is seen instead:** the siblings. A package cannot read what its neighbours register, only what the core does. The hub compares all installed packages at once, in `tests/Feature/GlobalTranslationDictionaryTest.php`, which is where this finding came from.
+
 ## 1.5.6 — 2026-07-28
 
 ### Added — the route parameter names are checked against the rest of the family

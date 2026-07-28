@@ -98,13 +98,57 @@ abstract class TestCase extends OrchestraTestCase
     protected function defineRoutes($router): void
     {
         // SubstituteBindings is part of Statamic's CP route group in
-        // production; mount it here so implicit route-model binding for
-        // {automation}, {run}, {nodeRun} resolves to real Eloquent models.
+        // production; mount it here so route-model binding for
+        // {automationFlow}, {run}, {nodeRun} resolves to real models.
         $router->name('statamic.cp.')
             ->prefix('cp')
             ->middleware(\Illuminate\Routing\Middleware\SubstituteBindings::class)
             ->group(__DIR__ . '/../routes/cp.php');
+
+        $this->mountStandInSiblingRoutes($router);
     }
+
+    /**
+     * Stand-ins for the routes of a sibling addon installed next to this one.
+     *
+     * They belong to the bed rather than to the test that reads them because a
+     * sibling registers its routes the same way this addon does: at boot, and
+     * therefore ahead of Statamic's `{segments?}` frontend catch-all. A route
+     * added later — from inside a test body — is shadowed by that catch-all and
+     * answers 404 no matter what the bindings do, which would make the check
+     * pass for the wrong reason.
+     *
+     * Each one does nothing but echo its own parameter. If this addon binds a
+     * name they use, the echo never happens: the binder resolves the value
+     * against this addon's repository first, finds nothing, and aborts 404 —
+     * precisely what LeadHub's delete button did.
+     *
+     * @see \Goldnead\StatamicAutomations\Tests\Feature\RouteParameterCollisionTest
+     */
+    protected function mountStandInSiblingRoutes($router): void
+    {
+        $router->middleware(\Illuminate\Routing\Middleware\SubstituteBindings::class)
+            ->group(function ($router) {
+                foreach (static::NAMES_A_SIBLING_MIGHT_USE as $name) {
+                    $router->get(
+                        'sibling-probe/' . $name . '/{' . $name . '}',
+                        fn ($value) => (string) $value
+                    );
+                }
+            });
+    }
+
+    /**
+     * Generic names a sibling addon could plausibly put in one of its own
+     * routes. `automation` heads the list because this addon bound it until
+     * 1.6.0; `rule` and `template` are not hypothetical either — LeadHub
+     * shipped `{rule}` and lost its edit and its delete to a sibling's binding.
+     *
+     * @var list<string>
+     */
+    public const NAMES_A_SIBLING_MIGHT_USE = [
+        'automation', 'rule', 'template', 'webhook', 'endpoint', 'handle', 'id', 'slug', 'record',
+    ];
 
     /**
      * Create and authenticate a Statamic super user — the standard actor for
