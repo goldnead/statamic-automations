@@ -10,6 +10,7 @@ import {
     Badge,
 } from '@statamic/cms/ui';
 import axios from 'axios';
+import { firstMessage } from '../support/serverErrors.js';
 
 const props = defineProps({
     title: { type: String, required: true },
@@ -55,7 +56,7 @@ async function submit() {
         result.value = data;
         window.Statamic?.$toast?.success?.(__('Imported.'));
     } catch (e) {
-        window.Statamic?.$toast?.error?.(e?.response?.data?.message || __('Import failed.'));
+        window.Statamic?.$toast?.error?.(firstMessage(e, __('Import failed.')));
     } finally {
         submitting.value = false;
     }

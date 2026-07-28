@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { Head, Link, router } from '@statamic/cms/inertia';
 import {
     Header,
@@ -11,8 +11,11 @@ import {
     EmptyStateItem,
     DocsCallout,
     DropdownItem,
+    Alert,
 } from '@statamic/cms/ui';
 import axios from 'axios';
+
+import { errorMessages, firstMessage } from '../../support/serverErrors.js';
 
 const props = defineProps({
     title: { type: String, required: true },
@@ -33,27 +36,46 @@ function reloadPage() {
     router.reload({ preserveScroll: true });
 }
 
+// What the server said when a row action was refused. A toast is a two-second
+// window over a message the user may need to act on — a refused enable comes
+// back with the per-node reasons, a refused delete with the permission it
+// wanted — so it is kept on screen here as well.
+const actionErrors = ref([]);
+
+function report(e, fallback) {
+    actionErrors.value = errorMessages(e);
+    window?.Statamic?.$toast?.error?.(firstMessage(e, fallback));
+}
+
 async function toggleEnabled(row) {
     const url = props.apiBase + '/automations/' + row.id + (row.enabled ? '/disable' : '/enable');
     try {
         const { data } = await axios.post(url);
+        // The `ok === false` shape is returned with HTTP 422, which axios
+        // rejects — so this branch never ran and the reasons that came with it
+        // were dropped. It is kept for a 200 that reports a refusal in-band.
         if (data?.ok === false) {
+            actionErrors.value = (data.issues ?? []).map((i) => i?.message ?? i).filter(Boolean);
             window?.Statamic?.$toast?.error?.(data.message || __('Could not change state.'));
         } else {
+            actionErrors.value = [];
             reloadPage();
         }
     } catch (e) {
-        window?.Statamic?.$toast?.error?.(e?.response?.data?.message || __('Request failed.'));
+        report(e, __('Request failed.'));
     }
 }
 
 async function duplicate(row) {
     try {
         await axios.post(props.apiBase + '/automations/' + row.id + '/duplicate');
+        actionErrors.value = [];
         window?.Statamic?.$toast?.success?.(__('Duplicated.'));
         reloadPage();
     } catch (e) {
-        window?.Statamic?.$toast?.error?.(__('Duplicate failed.'));
+        // Bound `e` and then ignored it: the server's reason — a permission
+        // name, a validation message — was replaced by "Duplicate failed."
+        report(e, __('Duplicate failed.'));
     }
 }
 
@@ -63,10 +85,11 @@ async function destroy(row) {
     }
     try {
         await axios.delete(props.apiBase + '/automations/' + row.id);
+        actionErrors.value = [];
         window?.Statamic?.$toast?.success?.(__('Deleted.'));
         reloadPage();
     } catch (e) {
-        window?.Statamic?.$toast?.error?.(__('Delete failed.'));
+        report(e, __('Delete failed.'));
     }
 }
 
@@ -112,6 +135,19 @@ function exportJson(row) {
                 variant="primary"
             />
         </Header>
+
+        <!-- What the server said when a row action was refused. There is no
+             field on this page to hang it on, so everything comes here. -->
+        <Alert
+            v-if="actionErrors.length"
+            variant="error"
+            class="mb-4"
+            data-automations-form-errors
+        >
+            <ul class="list-disc list-inside space-y-0.5">
+                <li v-for="(message, i) in actionErrors" :key="i">{{ message }}</li>
+            </ul>
+        </Alert>
 
         <Listing
             :items="rows"

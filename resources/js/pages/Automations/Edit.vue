@@ -27,6 +27,7 @@ import { useHistory } from '../../composables/useHistory.js';
 import { useGraphMutations } from '../../composables/useGraphMutations.js';
 import { pendingTargetIsValid } from '../../composables/useFlowGuards.js';
 import { computeNodeIssues, missingRequiredHandles } from '../../composables/useNodeValidation.js';
+import { errorBag, firstMessage } from '../../support/serverErrors.js';
 
 const props = defineProps({
     mode: { type: String, required: true },           // 'create' | 'edit'
@@ -264,19 +265,30 @@ function notify(level, message) {
     }
 }
 
-// Pulls the first field-level message out of a 422's `errors` map (Laravel's
-// FormRequest shape: `{ errors: { field: ["message", ...] } }`) so a future
-// validation failure surfaces something legible instead of the generic
-// "Save failed." / "the given data is invalid" fallback.
-function firstValidationMessage(e) {
-    const errors = e?.response?.data?.errors;
-    if (errors && typeof errors === 'object') {
-        const first = Object.values(errors)[0];
-        const message = Array.isArray(first) ? first[0] : first;
-        if (message) return message;
-    }
-    return e?.response?.data?.message ?? null;
+// What the server rejected, kept on screen rather than only thrown at a toast.
+//
+// `name` is bound to the header input below; everything else — `description`,
+// `handle`, and the `nodes.*` / `edges.*` keys the canvas generates — belongs
+// to no visible control, so it goes into the collected output above the editor.
+// Before this, a 422 produced one toast line and the rest of what the server
+// said was discarded.
+const serverErrors = ref({});
+
+const nameError = computed(() => serverErrors.value.name ?? null);
+
+// Typing clears the verdict on the name: the ring and the message both refer
+// to the value that was rejected, not the one being typed.
+function clearNameError() {
+    nameInvalid.value = false;
+    const { name, ...rest } = serverErrors.value;
+    serverErrors.value = rest;
 }
+
+const generalErrors = computed(() =>
+    Object.entries(serverErrors.value)
+        .filter(([key]) => key !== 'name')
+        .map(([, message]) => message)
+);
 
 async function save({ silent = false } = {}) {
     // The name is required by both Store/UpdateAutomationRequest; catching an
@@ -294,6 +306,7 @@ async function save({ silent = false } = {}) {
     nameInvalid.value = false;
 
     saving.value = true;
+    serverErrors.value = {};
     try {
         const payload = {
             name: automation.value.name,
@@ -326,7 +339,18 @@ async function save({ silent = false } = {}) {
             }
         }
     } catch (e) {
-        if (!silent) notify('error', firstValidationMessage(e) ?? __('Save failed.'));
+        // Kept even for a silent (autosave) rejection: an autosave that keeps
+        // failing used to leave no trace anywhere on the page.
+        serverErrors.value = errorBag(e);
+        nameInvalid.value = Boolean(serverErrors.value.name);
+        if (!silent) {
+            notify('error', firstMessage(e, __('Save failed.')));
+            // Only the autosave path needs the rethrow (useAutosave catches it
+            // to keep `lastError`). Rethrowing out of the header button's click
+            // handler produced an uncaught promise rejection on every failed
+            // save, carrying nothing the user had not already been told.
+            return;
+        }
         throw e;
     } finally {
         saving.value = false;
@@ -348,8 +372,11 @@ async function validate() {
         } else {
             notify('warning', __(':n issue(s) found.', { n: issues.value.length }));
         }
-    } catch {
-        notify('error', __('Validation failed.'));
+    } catch (e) {
+        // Was a bare `catch {}`: whatever the server said about why validation
+        // could not run was thrown away before anyone saw it.
+        serverErrors.value = errorBag(e);
+        notify('error', firstMessage(e, __('Validation failed.')));
     }
 }
 
@@ -373,7 +400,7 @@ async function testRun() {
             notify('info', __('Run finished with status: :status', { status: data.status }));
         }
     } catch (e) {
-        notify('error', e?.response?.data?.message || __('Test run failed.'));
+        notify('error', firstMessage(e, __('Test run failed.')));
     }
 }
 
@@ -394,7 +421,12 @@ async function toggleEnabled() {
             notify(next ? 'success' : 'info', next ? __('Enabled.') : __('Disabled.'));
         }
     } catch (e) {
-        notify('error', e?.response?.data?.message || __('Toggle failed.'));
+        // A refused enable comes back as HTTP 422 carrying `issues[]` — the
+        // per-node reasons. axios rejects a 422, so the `ok === false` branch
+        // above could never run and those reasons were dropped every time.
+        const refused = e?.response?.data?.issues;
+        if (Array.isArray(refused) && refused.length) issues.value = refused;
+        notify('error', firstMessage(e, __('Toggle failed.')));
     }
 }
 
@@ -414,8 +446,8 @@ async function exportJson() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         notify('success', __('Exported.'));
-    } catch {
-        notify('error', __('Export failed.'));
+    } catch (e) {
+        notify('error', firstMessage(e, __('Export failed.')));
     }
 }
 
@@ -561,9 +593,17 @@ watch(() => issues.value.length, scheduleHeightUpdate);
                             type="text"
                             class="bg-transparent border-none focus:outline-none focus:ring-0 text-[25px] font-medium antialiased min-w-[240px] text-gray-900 dark:text-gray-100"
                             :placeholder="__('Untitled automation')"
-                            @input="nameInvalid = false"
+                            @input="clearNameError"
                         />
                     </span>
+                    <!-- `name` is the one validated key with a control on this
+                         page. The ring said something was wrong; it never said
+                         what. -->
+                    <span
+                        v-if="nameError"
+                        class="text-sm text-red-600 dark:text-red-400"
+                        data-automations-field-error="name"
+                    >{{ nameError }}</span>
                     <Badge
                         :color="automation.enabled ? 'green' : 'amber'"
                         :text="automation.enabled ? __('Active') : __('Draft')"
@@ -636,6 +676,20 @@ watch(() => issues.value.length, scheduleHeightUpdate);
                 />
             </template>
         </Header>
+
+        <!-- Everything the server rejected that belongs to no control here:
+             `description`, `handle`, and the `nodes.*` / `edges.*` keys the
+             canvas generates. One toast line used to be the whole of it. -->
+        <Alert
+            v-if="generalErrors.length"
+            variant="error"
+            class="mb-4"
+            data-automations-form-errors
+        >
+            <ul class="list-disc list-inside space-y-0.5">
+                <li v-for="(message, i) in generalErrors" :key="i">{{ message }}</li>
+            </ul>
+        </Alert>
 
         <Alert v-if="issues.length" variant="warning" class="mb-4">
             <strong>{{ __(':n issue(s) found:', { n: issues.length }) }}</strong>

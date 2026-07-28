@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.6.1 — 2026-07-28
+
+### Fixed — a refusal now says what the server said, and stays on screen
+
+The automations half of the cross-addon sweep marketing 1.5.3 started: for every mask in this control panel, does a rejected request reach the user? The shape of the problem here is different from its siblings, because this addon does not go through Inertia. Every call is axios, so there is no error bag handed to a page — whatever a `catch` block does not dig out of the response is gone. The defect was therefore never a missing handler. Every submitting function already had one. Four of them threw the server's answer away and replaced it with a guess.
+
+**Four places that answered a rejection with a message of their own invention.** `Automations/Index.vue`'s `duplicate()` and `destroy()` both read `catch (e) { toast(__('Duplicate failed.')) }` — the error was bound and then never touched. The most likely rejection at either site is an authorization failure, and this addon's `Controller::authorizeAction()` throws with the permission it wanted by name (`Permission 'delete automations' is required.`). That sentence was constructed, sent, received, and discarded, every time. `Automations/Edit.vue`'s `validate()` and `exportJson()` did the same with a bare `catch {}`, which does not even bind.
+
+**A branch that could not run, and the reasons it dropped.** `toggleEnabled()`, on both the editor and the listing, checked `data.ok === false` to report a blocked enable. The API returns that shape with HTTP **422**, and axios rejects a 422 — so the check sat on the success path where it could never be reached, and control went to the `catch`, which read `.message` only. The `issues[]` array that comes with it, carrying the per-node reasons the automation cannot be enabled, was dropped on every refused enable since the endpoint existed. Both pages now read it off the rejection: the editor feeds it into the issues panel it already has, the listing into its own.
+
+**One toast line was the whole of a rejected save.** `save()` did read `errors` — it was the only site that did — but reduced the map to its first entry and showed it in a toast. `StoreAutomationRequest` validates 16 keys; a save that fails on three of them said one thing and vanished after two seconds. The bag is now kept: `name` is rendered at the header input it belongs to (the invalid ring was there before, but it was only ever set by the client-side pre-check, so it said *that* something was wrong and never *what*), and everything else — `description`, `handle`, and the `nodes.*` / `edges.*` keys the canvas generates, which name array indices no control corresponds to — goes into a collected block above the editor.
+
+**A rejected autosave left no trace at all.** `save({ silent: true })` suppressed the toast by design and rethrew; `useAutosave` caught it into `lastError`, which no template binds. An autosave failing every two seconds was invisible. It now fills the same error state as an explicit save, so the reason is on screen even though nothing is shouted.
+
+**And an uncaught rejection on every failed save.** `save()` rethrew unconditionally, including out of the header button's click handler, where nothing awaits it — one unhandled promise rejection in the browser console per failed save, carrying nothing the user had not just been told. The rethrow is now confined to the autosave path, which is the only caller that needs it.
+
+`resources/js/support/serverErrors.js` is the one new file: `errorBag`, `errorMessages` and `firstMessage`, so reading a rejection is one import rather than a hand-rolled `e?.response?.data?.…` chain at each site — which is how four of them came to have none. `firstMessage` prefers a real validation message over Laravel's generic `"The given data was invalid."`, which is what the remaining toasts in `Import.vue`, `Runs/Show.vue` and `Templates/Index.vue` were showing whenever a 422 carried an `errors` map.
+
+**The two test layers.** `tests/Feature/CpValidationVisibilityTest.php` reads the sources: every submitting function must have a catch, and no catch may report a failure without reading the response — the check that fails on `catch (e) { … }` where `e` is never mentioned again, which is the exact defect this release removes. `tests/js/cp-validation-visibility.test.js` mounts the two pages and hands them real rejections, in the shapes Laravel sends, and requires the server's sentence to appear in the DOM. All 7 of its tests fail against 1.6.0.
+
+Mounting the editor there needed a `ResizeObserver` stub, and the reason is worth writing down: without it Vue Flow's mount throws into an unhandled rejection, and the *next* mount in the file comes back without a component instance — a missing browser API presenting as a page that will not render. It cost more time than the defects did.
+
 ## 1.6.0 — 2026-07-28
 
 ### Changed — this addon binds `{automationFlow}`, not `{automation}`

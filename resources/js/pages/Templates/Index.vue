@@ -8,6 +8,7 @@ import {
     Icon,
 } from '@statamic/cms/ui';
 import axios from 'axios';
+import { firstMessage } from '../../support/serverErrors.js';
 
 const props = defineProps({
     title: { type: String, required: true },
@@ -25,7 +26,7 @@ async function install(template) {
         window.Statamic?.$toast?.success?.(__('Template installed.'));
         router.visit(window.location.pathname.replace('/templates', '/automations/' + created.id + '/edit'));
     } catch (e) {
-        window.Statamic?.$toast?.error?.(e?.response?.data?.message || __('Install failed.'));
+        window.Statamic?.$toast?.error?.(firstMessage(e, __('Install failed.')));
     } finally {
         installing.value = null;
     }
