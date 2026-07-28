@@ -4,6 +4,7 @@ namespace Goldnead\StatamicAutomations\Models;
 
 use Goldnead\BrandContext\Concerns\HasBrand;
 use Goldnead\StatamicAutomations\Casts\EncryptedJson;
+use Goldnead\StatamicAutomations\Casts\MillisecondDateTime;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -39,8 +40,11 @@ class AutomationRun extends Model
 
     protected $casts = [
         'context' => EncryptedJson::class,
-        'started_at' => 'datetime',
-        'finished_at' => 'datetime',
+        // Millisecond precision — see MillisecondDateTime. The default
+        // `datetime` cast writes `Y-m-d H:i:s` and drops the fraction before
+        // it ever reaches the column.
+        'started_at' => MillisecondDateTime::class,
+        'finished_at' => MillisecondDateTime::class,
         'duration_ms' => 'integer',
         'is_test' => 'boolean',
     ];

@@ -44,12 +44,40 @@ abstract class TestCase extends OrchestraTestCase
         // Stable APP_KEY so Crypt-based casts (EncryptedJson) work in tests.
         $app['config']->set('app.key', 'base64:' . base64_encode(random_bytes(32)));
 
-        $app['config']->set('database.default', 'sqlite');
+        // The suite runs on SQLite by default — fast, no service required.
+        // Hosts run MySQL, and the two databases disagree about things that
+        // matter here (typed datetimes, fractional-second precision, what
+        // `->change()` actually does). Set AUTOMATIONS_TEST_DB=mysql plus the
+        // usual DB_* variables to run the same suite against a real server:
+        //
+        //   AUTOMATIONS_TEST_DB=mysql DB_HOST=127.0.0.1 DB_PORT=3306 \
+        //   DB_DATABASE=automations_test DB_USERNAME=root DB_PASSWORD=secret \
+        //   vendor/bin/pest
+        $driver = env('AUTOMATIONS_TEST_DB', 'sqlite');
+
+        $app['config']->set('database.default', $driver);
         $app['config']->set('database.connections.sqlite', [
             'driver' => 'sqlite',
             'database' => ':memory:',
             'prefix' => '',
         ]);
+
+        if ($driver === 'mysql') {
+            $app['config']->set('database.connections.mysql', array_merge(
+                $app['config']->get('database.connections.mysql', []),
+                [
+                    'driver' => 'mysql',
+                    'host' => env('DB_HOST', '127.0.0.1'),
+                    'port' => env('DB_PORT', '3306'),
+                    'database' => env('DB_DATABASE', 'automations_test'),
+                    'username' => env('DB_USERNAME', 'root'),
+                    'password' => env('DB_PASSWORD', ''),
+                    'charset' => 'utf8mb4',
+                    'collation' => 'utf8mb4_unicode_ci',
+                    'prefix' => '',
+                ],
+            ));
+        }
 
         // Use Statamic's flat-file user repository so feature tests can create
         // real CP super users and hit the authenticated CP routes.

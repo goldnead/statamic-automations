@@ -4,6 +4,7 @@ namespace Goldnead\StatamicAutomations\Models;
 
 use Goldnead\BrandContext\Concerns\HasBrand;
 use Goldnead\StatamicAutomations\Casts\EncryptedJson;
+use Goldnead\StatamicAutomations\Casts\MillisecondDateTime;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -37,8 +38,10 @@ class AutomationNodeRun extends Model
     protected $casts = [
         'input' => EncryptedJson::class,
         'output' => EncryptedJson::class,
-        'started_at' => 'datetime',
-        'finished_at' => 'datetime',
+        // Millisecond precision — a node that runs in 40 ms must not collapse
+        // onto the same stored instant as the one before it.
+        'started_at' => MillisecondDateTime::class,
+        'finished_at' => MillisecondDateTime::class,
         'duration_ms' => 'integer',
     ];
 

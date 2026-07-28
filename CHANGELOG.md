@@ -1,5 +1,93 @@
 # Changelog
 
+## 1.5.3 — 2026-07-28
+
+### Fixed — Delay nodes saved before 1.5.2 stayed invalid
+
+1.5.2 fixed the *writing* side of the config panel: a Delay node created from
+then on carries `{"amount":1,"unit":"minutes"}` instead of a default that was
+only ever painted on screen. It left the rows that were already on disk alone,
+and said so in its notes. That is the part this release finishes.
+
+A Delay node saved before 1.5.2 has an `amount` and no `unit`. It runs —
+`DelayNode::execute()` falls back to minutes — but the editor marks it red with
+"This field is required." under a select that visibly reads "Minutes", and the
+only way out was to open the node and re-save it. On an install with a few
+dozen automations that is busywork with no decision in it, which is exactly
+what a migration is for.
+
+The new migration writes `unit: minutes` into Delay node configs that have
+none. `minutes` is not a preference — it is the value the node has been
+behaving as all along, and a test pins the migration's constant to
+`DelayNode::execute()` rather than to a comment, so the two cannot drift apart.
+The migration touches only `type = 'delay'`, only rows without a usable `unit`,
+decodes and re-encodes the rest of the config unchanged, and leaves
+`updated_at` alone: this is a repair, and that column should keep answering
+"when did a human last change this node?".
+
+It deliberately has no `down()`. Reversing it would mean deleting `unit` from
+Delay configs, and the migration cannot tell the rows it wrote from the ones a
+user has since set to "hours" or "days" — a rollback would strip real settings
+to restore a state whose only property was being broken.
+
+**Multi-brand:** the migration goes through the query builder, not the
+`AutomationNode` model. The model carries the fail-closed `HasBrand` scope, and
+a migration runs with no brand in context — via the model it would have matched
+zero rows and silently skipped every tenant. Brand isolation is a request-time
+boundary; a migration runs beneath it, across the whole table, once. `brand_id`
+is neither read nor written, and each row is completed from its own config.
+
+**Flat-file installs are not covered.** With
+`automations.storage.driver = flatfile` the nodes live in YAML and there is no
+table to migrate; those still need the one-time re-save from the 1.5.2 notes.
+
+### Changed — run timestamps now keep their milliseconds
+
+`started_at` and `finished_at` on runs and node runs were whole-second
+`timestamp` columns. Two nodes that ran 40 ms apart came back with the same
+stored instant, and the only surviving evidence of the difference was
+`duration_ms` — enough to render a duration, not enough to sort or correlate by
+point in time. 1.5.2 noted this as a known limit; it is now lifted.
+
+The column change alone would not have done it. Eloquent serialises every
+date-castable attribute with the *connection's* format, which is
+`Y-m-d H:i:s` on every driver Laravel ships, so the fraction was being dropped
+in the model before the column was ever consulted. The four attributes now cast
+through `MillisecondDateTime`, which writes `Y-m-d H:i:s.v` and reads both
+shapes — rows written before this release parse unchanged. The cast is scoped
+to those four attributes on purpose: setting `$dateFormat` on the model would
+have been shorter, but it also applies to `created_at` / `updated_at`, which
+are whole-second columns that MySQL would then round by up to half a second.
+
+**SQLite is skipped by the migration, on purpose.** SQLite has no typed
+datetime — Laravel maps `timestamp` and `timestamp(3)` both to `datetime`,
+stored as text — so `->change()` there produces a column byte-for-byte
+identical to the one it replaced. What it *does* do is rebuild the whole table:
+create a temp table, copy every row, drop, rename, recreate the indexes. Paying
+a full table copy on a growing table for a no-op is the wrong trade, so the
+migration reports the skip instead of performing it. SQLite installs still get
+millisecond timestamps; there the precision comes entirely from the string the
+cast writes, which SQLite stores and returns verbatim.
+
+**MySQL note for large installs.** Changing a `TIMESTAMP` column's
+fractional-seconds precision cannot be done in place — MySQL rebuilds the table
+with `ALGORITHM=COPY` and blocks writes for the duration. On a runs table of
+any size, run this in a maintenance window or through
+`pt-online-schema-change`. The 2038 limit of `TIMESTAMP` is unchanged; these
+columns were already `timestamp` and stay that way.
+
+### Testing
+
+- The suite can now be pointed at a real MySQL server:
+  `AUTOMATIONS_TEST_DB=mysql DB_HOST=… vendor/bin/pest`. Both new areas were
+  verified on SQLite and on MySQL 8.4, because the two disagree about precisely
+  the things this release touches — typed datetimes, fractional seconds, and
+  what `->change()` does.
+- One back-fill test is skipped on MySQL: a `json` column refuses to store
+  malformed text, so the migration's "leave unparseable config alone" guard
+  cannot be provoked there. It still matters on SQLite and on legacy text
+  columns.
+
 ## 1.5.2 — 2026-07-27
 
 ### Fixed — a resumed run reported a negative duration
