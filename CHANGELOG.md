@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.5.6 — 2026-07-28
+
+### Added — the route parameter names are checked against the rest of the family
+
+No defect in this addon, and no change to a single route. What is added is the check that would have caught one.
+
+`Route::bind()` is registered on the router, not on a package. The binding this addon registers for `{automation}` applies to every route with an `{automation}` parameter in every other addon installed beside it, and every sibling's binding applies here in the same way. Nothing warns, nothing logs, and the losing route does not fail loudly: it resolves its id against a repository that has never heard of it and returns 404.
+
+`goldnead/statamic-leadhub` 1.8.0 shipped `/scoring/{rule}` while `goldnead/statamic-webhook-manager` binds `rule` to its own rule repository. On the production hub, which has both, editing or deleting a scoring rule did nothing at all and said nothing at all, through a release.
+
+**Why a green suite did not find that, and why this addon's suite was better placed than most.** Two things have to hold for the failure to be observable in an addon's own bed: the sibling's binding has to exist there, which it never does, and the bed has to mount the CP routes with `SubstituteBindings`, which is the middleware that applies a binding at all. LeadHub's bed had neither. This one has had the middleware since it needed it for its own `{automation}` binder — so a test *could* be written here, and now one is, which also names the property instead of leaving it implied in twelve other tests that happen to depend on it. Taking the middleware back out of `tests/TestCase.php` fails 13 of the 362 tests: the new first case, which is about the property itself, and twelve that only ever exercised it as a side effect of resolving an automation.
+
+The test reads this addon's parameter names out of `routes/cp.php` — string literals only, so the example URLs in the comments are not mistaken for routes — and checks them two ways. The first is exact: a hand-maintained list of names that packages installed beside this one bind application-wide, read off the running hub, and the failure message names the package that would swallow the route. The second is a judgement call made explicit: `handle`, `run` and `source` are generic enough that a sibling could claim one tomorrow, so they are recorded in the test with their reason, and a *new* generic parameter fails until somebody renames it or writes down why it stays.
+
+**What this cannot do.** A collision only exists once two packages are installed together, and no package can see its siblings from inside its own suite. The reserved list is a snapshot maintained by hand; it will not catch an addon that starts binding a name nobody binds today. `automation` is one such name — this addon binds it, so it owns it, but a sibling that ever routes an `{automation}` of its own will silently be handed automations from here. The hub remains the only place the real answer is measurable.
+
+This addon's six parameters (`automation`, `handle`, `run`, `source`, `nodeRun`, `timestamp`) collide with nothing bound elsewhere.
+
 ## 1.5.5 — 2026-07-28
 
 The four builder defects 1.5.4 reported and left standing, plus the extraction
