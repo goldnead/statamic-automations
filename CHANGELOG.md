@@ -1,5 +1,165 @@
 # Changelog
 
+## 1.5.5 — 2026-07-28
+
+The four builder defects 1.5.4 reported and left standing, plus the extraction
+it said they needed first.
+
+### Changed — the graph mutations moved out of `Edit.vue`
+
+`resources/js/composables/useGraphMutations.js` now owns every way the builder's
+graph can change: add, insert on an edge, append, duplicate, delete, rename,
+reconfigure, enable/disable, replace the trigger. `Edit.vue` keeps what is
+genuinely the page's — pick mode, selection, save/validate/test, the editor's
+measured height — and drops from 986 lines to 737.
+
+This is a means, not the point. Those functions are where the builder's
+invariants live (a node key must be unique, an edge must leave an output its
+node actually has, one mutation must cost exactly one undo step), and while they
+sat inline in the page component the only way to exercise them was to open a
+browser and click. Three of the four defects below are in code that was
+never reachable from a test. The behaviour is unchanged where it was right; what
+changed is that it can now be asserted, and the assertions are what the rest of
+this entry rests on.
+
+Two things surfaced during the move that were correct only by luck:
+
+- **`insertOnEdge()` had the same hard-coded `'default'` as `duplicateNode()`,
+  on a path nobody had reported.** Dropping a node onto an existing edge wires
+  the new node onward to the old target — and did so from an output called
+  `default`, whichever node had just been inserted. For every node type in the
+  library except three that is the right handle, which is why it never showed:
+  insert a **branch** on a "+" between two steps and the second edge was
+  invalid in exactly the way duplicating one was. Both now ask the node.
+- **`hasTriggerNode()` had no callers.** The one-trigger rule moved into
+  `useFlowGuards.js` in 1.2.0 and the function stayed behind, still reading
+  correct, still describing the rule in a comment two other functions rely on.
+  Deleted.
+
+### Fixed — the history recorded one snapshot per keystroke
+
+A node's name and its config fields are text inputs, and every keystroke reached
+`history.record()`. The stack holds 100 entries, so roughly a hundred typed
+characters pushed every structural step out of it. Delete a node, type a name,
+press undo: the delete is not in the stack any more, and no amount of pressing
+undo brings the node back. The stack was longest precisely when it was least
+useful.
+
+`record()` now takes an optional tag, and consecutive records carrying the same
+tag within 600 ms fold into the entry the run started with. The cut:
+
+- **Structural steps are never folded.** An untagged `record()` — add, delete,
+  duplicate, connect, replace trigger, enable/disable — always gets its own
+  entry, whatever precedes or follows it. Those are the steps a user means when
+  reaching for undo, and none of them can be repeated fast enough to be one
+  gesture anyway.
+- **Text folds per field, per burst.** The tag names what is being edited
+  (`label:<node_key>`, `config:<node_key>`), so moving to another field or
+  another node ends the run mid-typing, and so does a pause longer than the
+  window — which is where a user's own sense of "one edit" ends.
+- **Undo, redo and reset end the run**, so typing after an undo cannot fold into
+  the entry that undo just restored past.
+
+600 ms is the usual keystroke-coalescing window, and the clock is injectable, so
+the window is asserted rather than waited out.
+
+### Fixed — undo walked behind the last save
+
+`useHistory.reset()` was exported since it was written, documented as
+"re-baseline after a fresh load / save", and never called. Undo therefore
+reached across a save into edits the user had already committed past — and the
+Save button then offered to write that older graph back, with nothing on screen
+saying so.
+
+An explicit Save now resets the stack. A background autosave deliberately does
+not: it fires two seconds into a pause while the user is still working, and
+wiping the undo stack under a running edit is worse than the thing being fixed.
+The re-baseline is tied to the moment the user says "save", which is the moment
+they mean it.
+
+### Fixed — duplicating a branch produced a graph the validator refuses
+
+"Duplicate" appended the copy on the source node's `default` output. A `branch`
+has `true` and `false`; a `loop` has `loop` and `done`; an inline `parallel` has
+whatever handles its branches are configured with. None of them has a `default`,
+so the new edge left a handle that does not exist: invisible on the canvas (Vue
+Flow cannot resolve the source handle), never followed at run time
+(`WorkflowRunner::nextNode()` matches `from_output` exactly), and rejected by
+`FlowValidator` with `branch_invalid_output`. One click on Duplicate, one
+invalid automation, and the "issue" it reports names a node the user never
+touched.
+
+Insertions now ask the node for its first declared output instead of assuming
+one, so a duplicated branch hangs off `true` and its own onward edge leaves
+`true` as well. A node that declares no outputs at all — a `stop`, or a
+`parallel` whose branches are not configured yet — gets no edge invented for it:
+duplicating it adds the copy unconnected, with a toast saying so, and inserting
+one onto an existing edge no longer leaves a dead edge behind it. That last one
+is a behaviour change on a path that previously produced an edge which was
+already invisible and already unroutable.
+
+### Fixed — `newNodeKey()` never looked at the keys already in use
+
+Four random base-36 characters, no collision check, against a
+`unique(automation_id, node_key)` in the schema. The odds are small and they are
+not zero — a birthday collision at a few hundred nodes of one type, and a plain
+accident at any size — and the failure mode is the worst available: an SQL error
+on save, on a graph the user has already finished building, with no way to tell
+which node is the problem. Nothing in the editor could have shown it, because
+nothing in the editor knew.
+
+`uniqueNodeKey()` draws against the keys the automation already holds. Keys keep
+the shape they have always had; the draw simply repeats when it collides, and
+falls back to a counter so the loop provably terminates. With a frozen RNG the
+old code produces two nodes with one key (and a self-referencing edge for good
+measure); the new one produces two keys.
+
+### Changed — the canvas knows the namespaced `*.branch` types the validator has always known
+
+`FlowValidator` has required `true`/`false` on any node type ending in
+`.branch` since the first release. Nothing else in the package had heard of the
+convention. What that meant in practice, once traced: a third-party addon
+registering `acme.branch` got a single `default` output from the canvas, the
+user wired the only handle on offer, and validation then refused the graph. The
+suffix did not enable a custom branch node — it made one *less* usable than any
+other custom node type, and no first-party type has ever ended in `.branch`, so
+nothing ever ran into it.
+
+`outputsFor()` now applies the same rule, which is the whole of the alignment on
+the canvas side: edge labels, handle positions and the "+" adders all derive
+from the output list, and `WorkflowRunner` needs no counterpart at all — it
+routes on the output handle a node returns, never on the node's type. The
+previous release left this alone on the grounds that it might be half a feature;
+the half that is a feature is a different one, and is named under Notes.
+
+### Notes
+
+- **Still open, and genuinely a feature this time: node outputs are declared
+  twice.** `SwitchNode`, `ParallelNode` and `LoopNode` each declare `outputs()`
+  in PHP, and `outputsFor()` in `useAutoLayout.js` mirrors all three by hand,
+  including how they read `config.cases` and `config.branches`. The mirror is
+  accurate today and the tests pin it, but `NodeRegistry::describe()` does not
+  expose `outputs()`, so a third-party node cannot declare handles of its own —
+  it gets `default`, or `true`/`false` if it is named for it. Making the canvas
+  read the outputs from the library payload means changing `describe()`, handing
+  config-dependent outputs to the frontend, and versioning that payload. Worth
+  doing, and not something to start inside a bug-fix release.
+- **Duplicate attaches the copy to the source's *first* output**, which for a
+  `loop` means the copy lands inside the loop body rather than after it. Valid,
+  deterministic, and arguably not what the user meant; there is no metadata
+  marking a node's "main" continuation, and inventing one is the same feature as
+  above.
+- **Known and unchanged:** `SubAutomationAndAlertsTest > failure alerter logs
+  and throttles` fails under MySQL on a foreign-key violation
+  (`automation_id=999`, which SQLite does not enforce). Reproducible at 1.5.3.
+- Suite: **359 passed (1269 assertions)** on SQLite, unchanged — nothing on the
+  PHP side moved. Vitest **30 passed**, baseline 11: the graph mutations
+  (15) and the builder page driven through its own canvas and header stubs (4).
+  `node:test` **81 passed**, baseline 73. Every fix was verified by stashing the
+  source and watching its test fail against 1.5.4: the undo returned `Welco`
+  instead of the deleted node, undo stayed enabled after the save, the duplicated
+  branch left two edges on `br`, and five nodes carried four distinct keys.
+
 ## 1.5.4 — 2026-07-28
 
 ### Fixed — the handle unique did not constrain anything without a brand

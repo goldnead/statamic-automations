@@ -116,3 +116,31 @@ test('fractionForOutput matches handleY exactly for every output on a node', () 
     assert.equal(fractionForOutput(plain, 'nonexistent'), 0.5);
     assert.equal(fractionForOutput({ type: 'stop' }, 'default'), 0.5);
 });
+
+// A third-party addon may register a namespaced branch node (`acme.branch`).
+// FlowValidator has required true/false off that suffix since the first
+// release (src/Engine/FlowValidator.php, `str_ends_with($node->type,
+// '.branch')`), and the canvas is the only thing that can create an edge — so
+// while the canvas offered such a node a single `default` output, the suffix
+// made a custom branch unbuildable: the user wired the only handle on offer
+// and validation then refused the graph. The two layers now agree.
+test('a namespaced *.branch node exposes the same true/false outputs', () => {
+    assert.deepEqual(outputsFor({ type: 'acme.branch' }), [
+        { handle: 'true', label: 'True' },
+        { handle: 'false', label: 'False' },
+    ]);
+
+    // Not a suffix match: only the segment after the last dot counts.
+    assert.deepEqual(outputsFor({ type: 'acme.branchless' }), [{ handle: 'default', label: '' }]);
+    assert.deepEqual(outputsFor({ type: 'rebranch' }), [{ handle: 'default', label: '' }]);
+
+    // And it lays out as a two-column split, like the first-party branch.
+    const { openOutputs } = computeLayout(
+        [{ node_key: 'br', type: 'acme.branch' }],
+        [],
+    );
+    assert.deepEqual(
+        openOutputs.map((o) => o.from_output),
+        ['true', 'false'],
+    );
+});

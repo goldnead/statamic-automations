@@ -24,14 +24,9 @@ import ConfigPanel from '../../components/builder/ConfigPanel.vue';
 import RunLogPanel from '../../components/builder/RunLogPanel.vue';
 import { useAutosave } from '../../composables/useAutosave.js';
 import { useHistory } from '../../composables/useHistory.js';
-import { outputsFor } from '../../composables/useAutoLayout.js';
-import {
-    isTriggerHandle as isTriggerHandleGuard,
-    canInsert,
-    canDuplicate,
-    pendingTargetIsValid,
-} from '../../composables/useFlowGuards.js';
-import { computeNodeIssues, defaultConfigForSchema, missingRequiredHandles } from '../../composables/useNodeValidation.js';
+import { useGraphMutations } from '../../composables/useGraphMutations.js';
+import { pendingTargetIsValid } from '../../composables/useFlowGuards.js';
+import { computeNodeIssues, missingRequiredHandles } from '../../composables/useNodeValidation.js';
 
 const props = defineProps({
     mode: { type: String, required: true },           // 'create' | 'edit'
@@ -156,8 +151,17 @@ function onReplaceTrigger(nodeKey) {
 const nameInputRef = ref(null);
 const nameInvalid = ref(false);
 
-// Undo/redo over the graph (nodes + edges). Each mutation below calls
-// `history.record()` after applying its change; drags commit once on drop.
+// Undo/redo over the graph (nodes + edges). Every mutation in
+// useGraphMutations.js calls `history.record()` after applying its change;
+// text edits pass a tag so a burst of typing costs one undo step.
+//
+// A successful *explicit* save re-baselines the stack (`history.reset()` in
+// save()): after a save the graph on screen is the graph on disk, and an undo
+// that walks behind that point silently reintroduces edits the user has
+// already committed past — with the Save button then offering to write them
+// back. A background autosave deliberately does NOT reset: it fires two
+// seconds into a pause while the user is still working, and wiping the undo
+// stack under a running edit is worse than the thing being fixed.
 const history = useHistory({
     getState: () => ({
         nodes: automation.value.nodes,
@@ -303,7 +307,10 @@ async function save({ silent = false } = {}) {
                 payload,
             );
             automation.value = { ...automation.value, ...(data?.data ?? data) };
-            if (!silent) notify('success', __('Automation saved.'));
+            if (!silent) {
+                history.reset();
+                notify('success', __('Automation saved.'));
+            }
         } else {
             const { data } = await axios.post(`${props.apiBase}/automations`, payload);
             const created = data?.data ?? data;
@@ -313,7 +320,10 @@ async function save({ silent = false } = {}) {
                 replace: true,
                 preserveState: true,
             });
-            if (!silent) notify('success', __('Automation created.'));
+            if (!silent) {
+                history.reset();
+                notify('success', __('Automation created.'));
+            }
         }
     } catch (e) {
         if (!silent) notify('error', firstValidationMessage(e) ?? __('Save failed.'));
@@ -410,148 +420,27 @@ async function exportJson() {
 }
 
 // ---------- Canvas mutations ----------
-
-// Node positions are DERIVED from the graph (see useAutoLayout) — never stored
-// or dragged. Every mutation below therefore only touches nodes + edges; the
-// canvas recomputes the vertical layout on its own. `position_x/y` are written
-// as 0 purely to keep the backend payload well-formed.
-
-function newNodeKey(handle) {
-    return `${handle.replace(/\W/g, '_')}_${Math.random().toString(36).slice(2, 6)}`;
-}
-
-function makeNode(handle) {
-    const meta = findHandleMeta(handle);
-    return {
-        node_key: newNodeKey(handle),
-        type: handle,
-        label: meta?.label ?? handle,
-        position_x: 0,
-        position_y: 0,
-        // Seed the schema's declared defaults into the model, so a field the
-        // panel already shows pre-filled also counts as filled in validation.
-        config: defaultConfigForSchema(meta?.schema),
-        disabled: false,
-    };
-}
-
-function sameEdge(a, b) {
-    return (
-        a.from_node_key === b.from_node_key &&
-        (a.from_output || 'default') === (b.from_output || 'default') &&
-        a.to_node_key === b.to_node_key
-    );
-}
-
-// First output anywhere in the graph that has no edge yet — the default target
-// for the left library ("add to the end of the flow").
-function firstOpenOutput() {
-    const taken = new Set(
-        automation.value.edges.map((e) => `${e.from_node_key}::${e.from_output || 'default'}`),
-    );
-    for (const n of automation.value.nodes) {
-        for (const out of outputsFor(n)) {
-            if (!taken.has(`${n.node_key}::${out.handle}`)) {
-                return { fromNodeKey: n.node_key, output: out.handle };
-            }
-        }
-    }
-    return null;
-}
-
-// Append `node` after (fromNodeKey, output). A null fromNodeKey creates a root.
-function appendNode(fromNodeKey, output, node) {
-    const edges = fromNodeKey
-        ? [
-            ...automation.value.edges,
-            {
-                from_node_key: fromNodeKey,
-                from_output: output || 'default',
-                to_node_key: node.node_key,
-                to_input: 'default',
-            },
-        ]
-        : automation.value.edges;
-    automation.value = {
-        ...automation.value,
-        nodes: [...automation.value.nodes, node],
-        edges,
-    };
-    selectedNodeKey.value = node.node_key;
-    history.record();
-}
-
-// Split an existing A→B edge by dropping `node` between them: A→node, node→B.
-function insertOnEdge(edge, node) {
-    const rest = automation.value.edges.filter((e) => !sameEdge(e, edge));
-    automation.value = {
-        ...automation.value,
-        nodes: [...automation.value.nodes, node],
-        edges: [
-            ...rest,
-            {
-                from_node_key: edge.from_node_key,
-                from_output: edge.from_output || 'default',
-                to_node_key: node.node_key,
-                to_input: 'default',
-            },
-            {
-                from_node_key: node.node_key,
-                from_output: 'default',
-                to_node_key: edge.to_node_key,
-                to_input: 'default',
-            },
-        ],
-    };
-    selectedNodeKey.value = node.node_key;
-    history.record();
-}
-
-// Kind is inferred by which library array the handle lives in — there is no
-// `kind` field on the node/handle itself (mirrors Canvas.vue's nodeKind()).
-// Thin wrapper over the pure guard module (useFlowGuards.js) so call sites
-// below don't need to thread `props.library` through by hand.
-function isTriggerHandle(handle) {
-    return isTriggerHandleGuard(handle, props.library);
-}
-
-function hasTriggerNode() {
-    return automation.value.nodes.some((n) => isTriggerHandle(n.type));
-}
-
-// Single choke point for every way a node can enter the graph (left-library
-// click, pick-mode selection, or — while pick mode still has no UI to reach
-// it — a stray append/insert). Enforces the one-trigger-per-flow rule (§ B1):
-// a trigger can only land via the root append target (`fromNodeKey: null`);
-// anywhere else, if the flow already has a trigger, refuse and toast.
-function insertNode(handle, target) {
-    if (!findHandleMeta(handle)) return;
-
-    const { ok } = canInsert(handle, props.library, automation.value.nodes);
-    if (!ok) {
-        notify('error', __('A flow can only have one trigger.'));
-        return;
-    }
-
-    const node = makeNode(handle);
-    if (target.kind === 'insert') {
-        insertOnEdge(target.edge, node);
-    } else {
-        appendNode(target.fromNodeKey ?? null, target.output ?? 'default', node);
-    }
-}
-
-// Left-library click OUTSIDE pick mode: drop the node at the end of the
-// current flow (unchanged legacy behaviour, now routed through the same
-// one-trigger guard as every other insertion path).
-function addNode(handle) {
-    if (!automation.value.nodes.length) {
-        insertNode(handle, { kind: 'append', fromNodeKey: null, output: 'default' });
-        return;
-    }
-    const open = firstOpenOutput();
-    insertNode(handle, { kind: 'append', fromNodeKey: open?.fromNodeKey ?? null, output: open?.output ?? 'default' });
-}
+//
+// Every mutation of the graph itself lives in useGraphMutations.js — the page
+// keeps the UI state around them (pick mode, selection, save/validate/test).
+// They were inline here until 1.5.5, which is why three defects in them could
+// only ever be found by driving a browser.
+const {
+    insertNode,
+    addNode,
+    replaceTrigger,
+    removeNode,
+    updateNodeConfig,
+    updateNodeLabel,
+    duplicateNode,
+    toggleNodeDisabled,
+} = useGraphMutations({
+    automation,
+    selectedNodeKey,
+    library: props.library,
+    history,
+    notify,
+});
 
 // Left-library click: if a "+" armed pick mode, the node lands exactly there
 // and pick mode exits; a "replace" pick mode swaps the trigger in place
@@ -576,144 +465,6 @@ function onLibraryPick(handle) {
         return;
     }
     addNode(handle);
-}
-
-// Swap the trigger at `nodeKey` for a different trigger type, IN PLACE: same
-// node_key (so every outgoing edge stays wired to downstream nodes exactly as
-// it was), only `type`/`label`/`config` change to the new trigger's defaults.
-// Does not touch nodes/edges elsewhere in the graph.
-function replaceTrigger(nodeKey, newType) {
-    const meta = findHandleMeta(newType);
-    if (!meta) return;
-    // Defense in depth: "Replace trigger" only ever offers trigger handles
-    // via pickKind's 'replace-trigger' NodeLibrary filter, but re-verify here
-    // too — a non-trigger `newType` slipping through would leave the flow
-    // without a trigger at all.
-    if (!isTriggerHandle(newType)) return;
-    automation.value.nodes = automation.value.nodes.map((n) =>
-        n.node_key === nodeKey
-            ? { ...n, type: newType, label: meta.label ?? newType, config: defaultConfigForSchema(meta.schema) }
-            : n,
-    );
-    history.record();
-}
-
-function findHandleMeta(handle) {
-    return [
-        ...(props.library.triggers ?? []),
-        ...(props.library.logic ?? []),
-        ...(props.library.actions ?? []),
-    ].find((m) => m.handle === handle);
-}
-
-// Delete a node and heal the sequence: if it sat linearly between a parent and
-// a single child, reconnect parent → child so the flow stays unbroken. Deleting
-// a branch (two children) strands its subtrees as new roots — acceptable for now.
-// A flow without a trigger is invalid (see hasTriggerNode's one-trigger-per-flow
-// rule), so deleting the sole trigger is refused — "Replace trigger" is the only
-// way to change it. removeNode has no incoming edge to heal from for a trigger
-// (it's the root), which is also what caused the pre-fix bug: the ex-child
-// became an unhealed new root that rendered as a second top "trigger".
-function removeNode(nodeKey) {
-    const target = automation.value.nodes.find((n) => n.node_key === nodeKey);
-    if (target && isTriggerHandle(target.type)) {
-        const triggerCount = automation.value.nodes.filter((n) => isTriggerHandle(n.type)).length;
-        if (triggerCount <= 1) {
-            notify('error', __("Ein Flow braucht einen Trigger. Nutze 'Trigger ersetzen', um ihn zu wechseln."));
-            return;
-        }
-    }
-
-    const incoming = automation.value.edges.filter((e) => e.to_node_key === nodeKey);
-    const outgoing = automation.value.edges.filter((e) => e.from_node_key === nodeKey);
-    let edges = automation.value.edges.filter(
-        (e) => e.from_node_key !== nodeKey && e.to_node_key !== nodeKey,
-    );
-
-    if (incoming.length === 1 && outgoing.length === 1) {
-        const parent = incoming[0];
-        const child = outgoing[0];
-        const healed = {
-            from_node_key: parent.from_node_key,
-            from_output: parent.from_output || 'default',
-            to_node_key: child.to_node_key,
-            to_input: 'default',
-        };
-        const dup = edges.some((e) => sameEdge(e, healed));
-        if (!dup && healed.from_node_key !== healed.to_node_key) {
-            edges = [...edges, healed];
-        }
-    }
-
-    automation.value = {
-        ...automation.value,
-        nodes: automation.value.nodes.filter((n) => n.node_key !== nodeKey),
-        edges,
-    };
-    if (selectedNodeKey.value === nodeKey) selectedNodeKey.value = null;
-    history.record();
-}
-
-function updateNodeConfig(config) {
-    if (!selectedNodeKey.value) return;
-    automation.value.nodes = automation.value.nodes.map((n) =>
-        n.node_key === selectedNodeKey.value ? { ...n, config } : n,
-    );
-    history.record();
-}
-
-function updateNodeLabel(label) {
-    if (!selectedNodeKey.value) return;
-    automation.value.nodes = automation.value.nodes.map((n) =>
-        n.node_key === selectedNodeKey.value ? { ...n, label } : n,
-    );
-    history.record();
-}
-
-// Duplicate a node right after itself in the sequence (insert on its default
-// output when it has a continuation, otherwise append to it).
-//
-// Backstop for the one-trigger rule (§ B1): the "Duplicate" actions in
-// NodeCard.vue's card menu and ConfigPanel.vue's footer are kind-gated so a
-// trigger node's Duplicate never renders, but this is the single choke point
-// every duplicate path funnels through, so it re-checks here too — a second
-// trigger has no Delete action to recover from (see removeNode).
-function duplicateNode(nodeKey) {
-    const src = automation.value.nodes.find((n) => n.node_key === nodeKey);
-    if (!src) return;
-
-    const { ok } = canDuplicate(src, props.library, automation.value.nodes);
-    if (!ok) {
-        notify('error', __('A flow can only have one trigger.'));
-        return;
-    }
-
-    const copy = {
-        ...src,
-        node_key: newNodeKey(src.type),
-        label: src.label ? `${src.label} (${__('copy')})` : src.label,
-        position_x: 0,
-        position_y: 0,
-        config: JSON.parse(JSON.stringify(src.config ?? {})),
-    };
-    const cont = automation.value.edges.find(
-        (e) => e.from_node_key === nodeKey && (e.from_output || 'default') === 'default',
-    );
-    if (cont) {
-        insertOnEdge(
-            { from_node_key: nodeKey, from_output: 'default', to_node_key: cont.to_node_key },
-            copy,
-        );
-    } else {
-        appendNode(nodeKey, 'default', copy);
-    }
-}
-
-function toggleNodeDisabled(nodeKey) {
-    automation.value.nodes = automation.value.nodes.map((n) =>
-        n.node_key === nodeKey ? { ...n, disabled: !n.disabled } : n,
-    );
-    history.record();
 }
 
 // "Rename" from a node's context menu just focuses it — the editable Name lives

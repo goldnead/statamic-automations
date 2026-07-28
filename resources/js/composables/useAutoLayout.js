@@ -73,7 +73,16 @@ function keyValueEntries(raw) {
  * src/Nodes/Logic/{SwitchNode,ParallelNode,LoopNode}.php) so the canvas only
  * ever renders handles the engine actually knows how to route:
  *
- * - branch   → fixed true/false.
+ * - branch   → fixed true/false. So does any namespaced `*.branch` type a
+ *              third-party addon registers: `FlowValidator` has required
+ *              true/false from that suffix since the first release
+ *              (src/Engine/FlowValidator.php), and the canvas is the only
+ *              thing that can create an edge. Without the same rule here such
+ *              a node was offered a single `default` output, the user wired
+ *              it, and validation then refused the graph — the suffix made a
+ *              custom branch strictly less usable than any other custom node.
+ *              `WorkflowRunner` needs no counterpart: it routes on whatever
+ *              output handle the node class returns, never on the type.
  * - switch   → `config.cases` is a `{ matchValue: outputHandle }` map; one
  *              output per DISTINCT handle (case value becomes the label),
  *              plus a trailing "default" (deduped if a case already targets
@@ -88,13 +97,23 @@ function keyValueEntries(raw) {
  *              No branches configured → no outputs (never invented).
  * - everything else → a single unlabeled "default" continuation.
  */
+/**
+ * Is `type` a two-way branch? Either a configured branch type (`branch`) or a
+ * namespaced one (`acme.branch`) — see outputsFor()'s note on the suffix.
+ */
+export function isBranchType(type, opts = DEFAULT_OPTS) {
+    if ((opts.branchTypes ?? []).includes(type)) return true;
+
+    return typeof type === 'string' && type.endsWith('.branch');
+}
+
 export function outputsFor(node, opts = DEFAULT_OPTS) {
     const type = node?.type;
     const config = node?.config ?? {};
 
     if (opts.terminalTypes.includes(type)) return [];
 
-    if (opts.branchTypes.includes(type)) {
+    if (isBranchType(type, opts)) {
         return [
             { handle: 'true', label: 'True' },
             { handle: 'false', label: 'False' },

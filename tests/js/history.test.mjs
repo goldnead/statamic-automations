@@ -12,17 +12,26 @@ import test from 'node:test';
 
 const { useHistory } = await import('../../resources/js/composables/useHistory.js');
 
-function makeHarness(initial = { nodes: [], edges: [] }) {
+function makeHarness(initial = { nodes: [], edges: [] }, options = {}) {
     let state = JSON.parse(JSON.stringify(initial));
     const history = useHistory({
         getState: () => state,
         setState: (next) => { state = next; },
+        ...options,
     });
     return {
         history,
         get: () => state,
         set: (next) => { state = JSON.parse(JSON.stringify(next)); },
     };
+}
+
+/** A harness whose clock only moves when the test moves it. */
+function makeClockHarness(initial = { nodes: [], edges: [] }, coalesceMs = 600) {
+    let at = 1_000;
+    const h = makeHarness(initial, { coalesceMs, now: () => at });
+    h.advance = (ms) => { at += ms; };
+    return h;
 }
 
 test('a fresh history cannot undo or redo', () => {
@@ -99,4 +108,125 @@ test('restored state is a deep clone (mutating the graph does not corrupt histor
     h.history.redo();
     assert.equal(h.get().nodes.length, 1);
     assert.equal(h.get().nodes[0].node_key, 'a');
+});
+
+// ---------------------------------------------------------------------------
+// Coalescing: `record(tag)`.
+//
+// The builder's node label and node config are text fields — every keystroke
+// reaches record(). One snapshot per keystroke means ~100 typed characters
+// evict every structural step from the 100-entry stack, and the delete the
+// user is reaching for is no longer in it.
+// ---------------------------------------------------------------------------
+
+const label = (key) => `label:${key}`;
+
+test('a burst of tagged edits costs one undo step', () => {
+    const h = makeClockHarness({ nodes: [{ node_key: 'a', label: '' }], edges: [] });
+
+    for (const text of ['W', 'We', 'Wel', 'Welcome']) {
+        h.set({ nodes: [{ node_key: 'a', label: text }], edges: [] });
+        h.advance(40);
+        h.history.record(label('a'));
+    }
+
+    h.history.undo();
+    assert.equal(h.get().nodes[0].label, '');
+    assert.equal(h.history.canUndo.value, false);
+});
+
+test('a structural step in front of the typing survives it', () => {
+    const h = makeClockHarness({ nodes: [{ node_key: 'a' }, { node_key: 'b', label: '' }], edges: [] });
+
+    // Delete a node (untagged), then type a name on the other one.
+    h.set({ nodes: [{ node_key: 'b', label: '' }], edges: [] });
+    h.history.record();
+
+    for (const text of ['x', 'xy', 'xyz']) {
+        h.set({ nodes: [{ node_key: 'b', label: text }], edges: [] });
+        h.advance(40);
+        h.history.record(label('b'));
+    }
+
+    h.history.undo();
+    assert.equal(h.get().nodes[0].label, '');
+
+    h.history.undo();
+    assert.equal(h.get().nodes.length, 2);
+    assert.equal(h.get().nodes[0].node_key, 'a');
+});
+
+test('a pause longer than the window starts a new step', () => {
+    const h = makeClockHarness({ nodes: [{ node_key: 'a', label: '' }], edges: [] });
+
+    h.set({ nodes: [{ node_key: 'a', label: 'one' }], edges: [] });
+    h.history.record(label('a'));
+
+    h.advance(601);
+    h.set({ nodes: [{ node_key: 'a', label: 'one two' }], edges: [] });
+    h.history.record(label('a'));
+
+    h.history.undo();
+    assert.equal(h.get().nodes[0].label, 'one');
+});
+
+test('a different tag starts a new step even without a pause', () => {
+    const h = makeClockHarness({ nodes: [{ node_key: 'a', label: '' }, { node_key: 'b', label: '' }], edges: [] });
+
+    h.set({ nodes: [{ node_key: 'a', label: 'one' }, { node_key: 'b', label: '' }], edges: [] });
+    h.history.record(label('a'));
+    h.set({ nodes: [{ node_key: 'a', label: 'one' }, { node_key: 'b', label: 'two' }], edges: [] });
+    h.history.record(label('b'));
+
+    h.history.undo();
+    assert.equal(h.get().nodes[1].label, '');
+    assert.equal(h.get().nodes[0].label, 'one');
+});
+
+test('two untagged records are never folded together', () => {
+    const h = makeClockHarness({ nodes: [], edges: [] });
+
+    h.set({ nodes: [{ node_key: 'a' }], edges: [] });
+    h.history.record();
+    h.set({ nodes: [{ node_key: 'a' }, { node_key: 'b' }], edges: [] });
+    h.history.record();
+
+    h.history.undo();
+    assert.equal(h.get().nodes.length, 1);
+});
+
+test('undo ends the run, so later typing cannot fold into it', () => {
+    const h = makeClockHarness({ nodes: [{ node_key: 'a', label: '' }], edges: [] });
+
+    h.set({ nodes: [{ node_key: 'a', label: 'one' }], edges: [] });
+    h.history.record(label('a'));
+    h.set({ nodes: [{ node_key: 'a', label: 'one two' }], edges: [] });
+    h.history.record(label('a'));
+
+    h.history.undo();
+    assert.equal(h.get().nodes[0].label, '');
+
+    // Same tag, same instant — but the run was broken by the undo.
+    h.set({ nodes: [{ node_key: 'a', label: 'three' }], edges: [] });
+    h.history.record(label('a'));
+    h.history.undo();
+    assert.equal(h.get().nodes[0].label, '');
+});
+
+test('reset() drops every undo step, which is what a save does', () => {
+    const h = makeHarness({ nodes: [], edges: [] });
+
+    h.set({ nodes: [{ node_key: 'a' }], edges: [] });
+    h.history.record();
+    assert.equal(h.history.canUndo.value, true);
+
+    h.history.reset();
+    assert.equal(h.history.canUndo.value, false);
+    assert.equal(h.history.canRedo.value, false);
+
+    // And the new baseline is the saved graph, not the one before it.
+    h.set({ nodes: [{ node_key: 'a' }, { node_key: 'b' }], edges: [] });
+    h.history.record();
+    h.history.undo();
+    assert.equal(h.get().nodes.length, 1);
 });
