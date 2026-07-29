@@ -82,18 +82,7 @@ class FlowValidator
                 continue;
             }
 
-            if ($node->type === 'branch' || str_ends_with($node->type, '.branch')) {
-                $outgoing = $edges->where('from_node_key', $node->node_key);
-                foreach ($outgoing as $edge) {
-                    if (! in_array($edge->from_output, ['true', 'false'], true)) {
-                        $issues[] = $this->error(
-                            'branch_invalid_output',
-                            "Branch node '{$node->node_key}' has invalid output handle '{$edge->from_output}'.",
-                            $node->node_key,
-                        );
-                    }
-                }
-            }
+            $issues = array_merge($issues, $this->validateOutputs($node, $edges));
 
             // 5) Required config fields.
             $issues = array_merge(
@@ -105,6 +94,68 @@ class FlowValidator
         // 6) No cycles.
         if ($this->hasCycle($nodes->pluck('node_key')->all(), $edges->all())) {
             $issues[] = $this->error('cycle_detected', 'Automation contains a cycle.');
+        }
+
+        return $issues;
+    }
+
+    /**
+     * Every edge must leave an output handle its source node actually has.
+     *
+     * Until 1.7.0 this could only be asked of a branch, because the handles
+     * a node has were not knowable from here — `outputs()` was declared on
+     * three node classes and nowhere read. Now the registry answers for any
+     * type, against that node's own config, so a third-party node's declared
+     * handles are held to here exactly as the built-ins' are.
+     *
+     * Two levels, and the split is deliberate. A branch is an **error**, as
+     * it has been since the first release: its handles are fixed, the engine
+     * cannot route anything else, and 1.5.5 made "Duplicate" stop producing
+     * such an edge. Every other mismatch is a **warning**, because the
+     * handles can be config-dependent — edit a switch's cases or a parallel's
+     * branches and edges wired to the old handles are still stored. Raising
+     * those to errors would refuse to enable automations that were enabled
+     * yesterday, on a graph the user has not touched.
+     *
+     * `error` is never reported: it is the handle the runner takes when a
+     * node fails under `_on_error: continue`, so every node has it whether
+     * or not its spec says so.
+     *
+     * @param  \Illuminate\Support\Collection<int, \Goldnead\StatamicAutomations\Models\AutomationEdge>  $edges
+     * @return array<int, array{level: string, code: string, message: string, node_key?: string}>
+     */
+    protected function validateOutputs(
+        \Goldnead\StatamicAutomations\Models\AutomationNode $node,
+        $edges,
+    ): array {
+        $issues = [];
+        $declared = $this->nodes->outputsFor($node->type, $node->config ?? []);
+        $isBranch = $node->type === 'branch' || str_ends_with((string) $node->type, '.branch');
+
+        foreach ($edges->where('from_node_key', $node->node_key) as $edge) {
+            $output = (string) ($edge->from_output ?: 'default');
+
+            if ($output === \Goldnead\StatamicAutomations\Support\NodeOutputs::ERROR_HANDLE) {
+                continue;
+            }
+
+            if (in_array($output, $declared, true)) {
+                continue;
+            }
+
+            $issues[] = $isBranch
+                ? $this->error(
+                    'branch_invalid_output',
+                    "Branch node '{$node->node_key}' has invalid output handle '{$edge->from_output}'.",
+                    $node->node_key,
+                )
+                : $this->warning(
+                    'edge_unknown_output',
+                    "Node '{$node->node_key}' has an edge on output handle '{$output}', which it does not declare ("
+                        . ($declared === [] ? 'it declares none' : 'declared: ' . implode(', ', $declared))
+                        . ').',
+                    $node->node_key,
+                );
         }
 
         return $issues;
@@ -192,7 +243,17 @@ class FlowValidator
 
     protected function error(string $code, string $message, ?string $nodeKey = null): array
     {
-        $issue = ['level' => 'error', 'code' => $code, 'message' => $message];
+        return $this->issue('error', $code, $message, $nodeKey);
+    }
+
+    protected function warning(string $code, string $message, ?string $nodeKey = null): array
+    {
+        return $this->issue('warning', $code, $message, $nodeKey);
+    }
+
+    protected function issue(string $level, string $code, string $message, ?string $nodeKey = null): array
+    {
+        $issue = ['level' => $level, 'code' => $code, 'message' => $message];
 
         if ($nodeKey !== null) {
             $issue['node_key'] = $nodeKey;

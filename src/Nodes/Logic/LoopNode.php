@@ -7,6 +7,8 @@ use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Support\ActionResult;
+use Goldnead\StatamicAutomations\Support\DeclaresOutputs;
+use Goldnead\StatamicAutomations\Support\NodeOutputs;
 
 /**
  * Iterate over a collection, driving the downstream graph once per item.
@@ -29,6 +31,8 @@ use Goldnead\StatamicAutomations\Support\ActionResult;
  */
 class LoopNode implements AutomationLogicNode
 {
+    use DeclaresOutputs;
+
     /** Output handle taken once per item — wire the loop body here. */
     public const OUTPUT_LOOP = 'loop';
 
@@ -40,14 +44,26 @@ class LoopNode implements AutomationLogicNode
     }
 
     /**
-     * Output handles this node can route through. Inline mode uses both;
-     * legacy automation mode always routes via the default "success" handle.
+     * The body runs once per item off `loop` and the flow continues on
+     * `done` — no loop-back edge, hence the plain labels over the more
+     * mechanical "Loop"/"Done", which read as if the body had to close a
+     * loop. Legacy automation mode routes via neither (it returns the
+     * default success handle), but declaring both regardless keeps a graph
+     * built in one mode wireable in the other.
      *
-     * @return array<int, string>
+     * `done` is the continuation: it is where the flow goes *after* the
+     * loop, so it is what Duplicate and insert-on-edge attach to. Before
+     * 1.7.0 they took the first output and dropped the copy inside the loop
+     * body.
+     *
+     * @return array<string, mixed>
      */
-    public static function outputs(): array
+    public static function outputSpec(): array
     {
-        return [self::OUTPUT_LOOP, self::OUTPUT_DONE];
+        return NodeOutputs::fixed([
+            ['handle' => self::OUTPUT_LOOP, 'label' => 'For each item'],
+            ['handle' => self::OUTPUT_DONE, 'label' => 'After loop'],
+        ], primary: self::OUTPUT_DONE);
     }
 
     public static function handle(): string

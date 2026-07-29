@@ -2,7 +2,9 @@
 
 namespace Goldnead\StatamicAutomations\Registries;
 
+use Goldnead\StatamicAutomations\Support\NodeOutputs;
 use InvalidArgumentException;
+use ReflectionMethod;
 
 /**
  * Unified node registry — stores trigger / action / logic nodes in one
@@ -112,6 +114,11 @@ class NodeRegistry
             return array_merge($entry['meta'], [
                 'handle' => $entry['handle'],
                 'kind' => $entry['kind'],
+                // A meta registration may declare outputs itself; a
+                // config-driven trigger normally has the one continuation.
+                'outputs' => isset($entry['meta']['outputs']) && is_array($entry['meta']['outputs'])
+                    ? $entry['meta']['outputs']
+                    : NodeOutputs::defaultSpec(),
             ]);
         }
 
@@ -126,6 +133,10 @@ class NodeRegistry
             'group' => $class::group(),
             'schema' => $class::schema(),
             'supports_test_mode' => $class::supportsTestMode(),
+            // The node's output handles, as a spec the canvas resolves
+            // against the node's live config. Present on every node, so the
+            // canvas never has to know a node type by name.
+            'outputs' => $this->outputSpec($entry['handle']),
         ];
 
         // Triggers expose outputSchema() via the AutomationTrigger contract;
@@ -138,6 +149,97 @@ class NodeRegistry
         }
 
         return $description;
+    }
+
+    /**
+     * The output spec for a registered handle — the single declaration the
+     * canvas, the validator and the node's own `outputs()` all read.
+     *
+     * Precedence, and the reason for each step:
+     *
+     * 1. `outputSpec()` on the class. The only form that can express
+     *    config-dependent outputs to a frontend, because it is data rather
+     *    than code.
+     * 2. `outputs()` on the class, resolved under an empty config and
+     *    serialised as fixed. A third-party node with a fixed set of handles
+     *    gets full canvas support without knowing the spec grammar exists;
+     *    one whose outputs vary by config is served approximately here and
+     *    should declare `outputSpec()` instead.
+     * 3. The `.branch` suffix. `FlowValidator` has required true/false of
+     *    any such type since the first release, so a type that declares
+     *    nothing gets the outputs the validator will hold it to. 1.5.5 fixed
+     *    this by teaching the canvas the same suffix rule; the rule now
+     *    lives here instead, and an explicit declaration overrides it.
+     * 4. One unlabelled `default` continuation — every other node.
+     *
+     * @return array<string, mixed>
+     */
+    public function outputSpec(string $handle): array
+    {
+        $class = $this->class($handle);
+
+        if ($class === null) {
+            return NodeOutputs::defaultSpec();
+        }
+
+        if (method_exists($class, 'outputSpec')) {
+            return $class::outputSpec();
+        }
+
+        if (method_exists($class, 'outputs')) {
+            return NodeOutputs::fixed($this->callOutputs($class, []));
+        }
+
+        if (str_ends_with($handle, '.branch')) {
+            return NodeOutputs::branchSpec();
+        }
+
+        return NodeOutputs::defaultSpec();
+    }
+
+    /**
+     * The output handles a node of this type actually has under `$config` —
+     * what `FlowValidator` compares an automation's stored edges against.
+     *
+     * A node declaring `outputs()` imperatively is asked directly (its answer
+     * for this config beats the fixed serialisation in {@see outputSpec()});
+     * everything else resolves its spec.
+     *
+     * @param  array<string, mixed>  $config
+     * @return array<int, string>
+     */
+    public function outputsFor(string $handle, array $config = []): array
+    {
+        $class = $this->class($handle);
+
+        if ($class !== null && ! method_exists($class, 'outputSpec') && method_exists($class, 'outputs')) {
+            return array_values(array_filter(array_map(
+                fn ($output) => is_array($output) ? (string) ($output['handle'] ?? '') : (string) $output,
+                $this->callOutputs($class, $config),
+            ), fn (string $out) => $out !== ''));
+        }
+
+        return NodeOutputs::handles($this->outputSpec($handle), $config);
+    }
+
+    /**
+     * Call a node's `outputs()`, passing the config only when it takes one.
+     *
+     * `LoopNode::outputs()` took no argument until 1.7.0 and a third-party
+     * node may well do the same; PHP tolerates the extra argument, but not
+     * every static analyser or `__callStatic` shim does.
+     *
+     * @param  class-string  $class
+     * @param  array<string, mixed>  $config
+     * @return array<mixed>
+     */
+    protected function callOutputs(string $class, array $config): array
+    {
+        $accepts = (new ReflectionMethod($class, 'outputs'))->getNumberOfParameters() > 0;
+
+        $outputs = $accepts ? $class::outputs($config) : $class::outputs();
+
+        return is_array($outputs) ? $outputs : [];
     }
 
     /**

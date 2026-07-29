@@ -27,6 +27,7 @@ import { useHistory } from '../../composables/useHistory.js';
 import { useGraphMutations } from '../../composables/useGraphMutations.js';
 import { pendingTargetIsValid } from '../../composables/useFlowGuards.js';
 import { computeNodeIssues, missingRequiredHandles } from '../../composables/useNodeValidation.js';
+import { setNodeOutputSpecs } from '../../composables/useNodeOutputs.js';
 import { errorBag, firstMessage } from '../../support/serverErrors.js';
 
 const props = defineProps({
@@ -42,6 +43,15 @@ const props = defineProps({
     canDelete: { type: Boolean, default: true },
     canTest: { type: Boolean, default: true },
 });
+
+// Which output handles each node type has is declared by the node in PHP and
+// travels in this payload (`library[*][].outputs`). Registering it here, at
+// the top of setup, is what makes the canvas stop guessing: the layout, the
+// handle dots, the "+" adders and every edge-writing mutation resolve it from
+// the node's own declaration. Before the first render, because NodeCard reads
+// it while rendering.
+setNodeOutputSpecs(props.library);
+watch(() => props.library, (library) => setNodeOutputSpecs(library));
 
 // Local mutable state (we keep the user's edits client-side until Save).
 const automation = ref({ ...props.automation });

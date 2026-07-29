@@ -18,6 +18,16 @@
  * Pure and framework-free so it is unit-testable in isolation.
  */
 
+import { outputsFor } from './useNodeOutputs.js';
+
+/**
+ * Re-exported so the layout's callers (Canvas, NodeCard, the graph mutations)
+ * keep importing the outputs from the module that lays them out. The rule
+ * itself moved to `useNodeOutputs.js` in 1.7.0: it is no longer the canvas's
+ * to know.
+ */
+export { outputsFor };
+
 export const LAYOUT = {
     NODE_WIDTH: 240,
     COLUMN_SPAN: 320, // horizontal distance between sibling branch columns
@@ -25,137 +35,6 @@ export const LAYOUT = {
     ORIGIN_X: 0,
     ORIGIN_Y: 0,
 };
-
-const DEFAULT_OPTS = {
-    branchTypes: ['branch'],
-    terminalTypes: ['stop'],
-};
-
-/**
- * Normalize a `key_value` config field (as produced by the backend's
- * NormalizesKeyValue trait) into an ordered array of [key, value] pairs.
- * Accepts the shapes that field can realistically arrive in on the frontend:
- * a plain object map (the normal case — Laravel serializes an associative
- * array to a JSON object), a list of {key,value}/{handle,label} pairs, a
- * list of [key, value] tuples, or a raw JSON string (e.g. mid-edit in the
- * key_value Textarea before it round-trips through a save). Anything else
- * (missing, malformed) degrades to an empty list — never throws.
- */
-function keyValueEntries(raw) {
-    if (raw == null) return [];
-    if (typeof raw === 'string') {
-        try {
-            return keyValueEntries(JSON.parse(raw));
-        } catch {
-            return [];
-        }
-    }
-    if (Array.isArray(raw)) {
-        return raw
-            .map((item) => {
-                if (Array.isArray(item)) return [item[0], item[1]];
-                if (item && typeof item === 'object') {
-                    const key = item.key ?? item.handle;
-                    const value = item.value ?? item.label;
-                    return key != null ? [key, value] : null;
-                }
-                return null;
-            })
-            .filter((pair) => pair != null && pair[0] != null);
-    }
-    if (typeof raw === 'object') return Object.entries(raw);
-    return [];
-}
-
-/**
- * Ordered outputs a node exposes, left→right, as `{ handle, label }` pairs.
- * Mirrors the backend's per-node `outputs()` declarations exactly (see
- * src/Nodes/Logic/{SwitchNode,ParallelNode,LoopNode}.php) so the canvas only
- * ever renders handles the engine actually knows how to route:
- *
- * - branch   → fixed true/false. So does any namespaced `*.branch` type a
- *              third-party addon registers: `FlowValidator` has required
- *              true/false from that suffix since the first release
- *              (src/Engine/FlowValidator.php), and the canvas is the only
- *              thing that can create an edge. Without the same rule here such
- *              a node was offered a single `default` output, the user wired
- *              it, and validation then refused the graph — the suffix made a
- *              custom branch strictly less usable than any other custom node.
- *              `WorkflowRunner` needs no counterpart: it routes on whatever
- *              output handle the node class returns, never on the type.
- * - switch   → `config.cases` is a `{ matchValue: outputHandle }` map; one
- *              output per DISTINCT handle (case value becomes the label),
- *              plus a trailing "default" (deduped if a case already targets
- *              it). Empty/missing cases → just "default".
- * - loop     → fixed handles `loop`/`done`, labelled "For each item"/"After
- *              loop" — the body wired to `loop` runs once per item and then
- *              continues on its own; no loop-back edge is needed.
- * - parallel → only in `inline` mode (the default): `config.branches` is a
- *              `{ outputHandle: label }` map, one output per key. In legacy
- *              `automation` mode the branches are sub-automation runs, not
- *              graph edges, so it exposes a single "default" continuation.
- *              No branches configured → no outputs (never invented).
- * - everything else → a single unlabeled "default" continuation.
- */
-/**
- * Is `type` a two-way branch? Either a configured branch type (`branch`) or a
- * namespaced one (`acme.branch`) — see outputsFor()'s note on the suffix.
- */
-export function isBranchType(type, opts = DEFAULT_OPTS) {
-    if ((opts.branchTypes ?? []).includes(type)) return true;
-
-    return typeof type === 'string' && type.endsWith('.branch');
-}
-
-export function outputsFor(node, opts = DEFAULT_OPTS) {
-    const type = node?.type;
-    const config = node?.config ?? {};
-
-    if (opts.terminalTypes.includes(type)) return [];
-
-    if (isBranchType(type, opts)) {
-        return [
-            { handle: 'true', label: 'True' },
-            { handle: 'false', label: 'False' },
-        ];
-    }
-
-    if (type === 'switch') {
-        const seen = new Set();
-        const outputs = [];
-        for (const [matchValue, output] of keyValueEntries(config.cases)) {
-            const handle = String(output || 'default');
-            if (seen.has(handle)) continue;
-            seen.add(handle);
-            outputs.push({ handle, label: String(matchValue) });
-        }
-        if (!seen.has('default')) outputs.push({ handle: 'default', label: 'Default' });
-        return outputs;
-    }
-
-    if (type === 'loop') {
-        // "loop" starts the per-item body — it runs once for every item and
-        // then continues automatically; "done" fires once after every item
-        // has run. Neither needs a loop-back edge, hence the plainer labels
-        // ("For each item" / "After loop") over the more mechanical
-        // "Loop"/"Done", which read as if the body had to close a loop.
-        return [
-            { handle: 'loop', label: 'For each item' },
-            { handle: 'done', label: 'After loop' },
-        ];
-    }
-
-    if (type === 'parallel') {
-        const mode = config.mode || 'inline';
-        if (mode !== 'inline') return [{ handle: 'default', label: '' }];
-        return keyValueEntries(config.branches).map(([handle, label]) => ({
-            handle: String(handle),
-            label: label ? String(label) : String(handle),
-        }));
-    }
-
-    return [{ handle: 'default', label: '' }];
-}
 
 /**
  * Evenly distribute `total` handles across a 0..1 axis, e.g. for a branch
@@ -177,25 +56,27 @@ export function handleY(index, total) {
  * (switch cases, parallel branches, loop/done, …). `output` not found (or no
  * outputs at all) falls back to the horizontal centre.
  */
-export function fractionForOutput(node, output, opts = DEFAULT_OPTS) {
-    const outs = outputsFor(node, opts);
+export function fractionForOutput(node, output) {
+    const outs = outputsFor(node);
     const idx = outs.findIndex((o) => o.handle === output);
     if (idx === -1 || !outs.length) return 0.5;
     return handleY(idx, outs.length);
 }
 
 /**
- * @param {Array}  nodes    [{ node_key, type, ... }]
+ * Which handles each node has comes from the node itself (see
+ * useNodeOutputs.js) — the layout no longer carries a `branchTypes` /
+ * `terminalTypes` option list, because it no longer knows a node type by name.
+ *
+ * @param {Array}  nodes    [{ node_key, type, config, ... }]
  * @param {Array}  edges    [{ from_node_key, from_output, to_node_key }]
- * @param {Object} options  { branchTypes, terminalTypes }
  * @returns {{ positions: Object, openOutputs: Array, roots: Array }}
  *   positions:   { [node_key]: { x, y } }
  *   openOutputs: [{ from_node_key, from_output }] — outputs with no edge yet
  *                (these are where the append "+" adders are placed)
  *   roots:       node_keys with no incoming edge (top of the flow)
  */
-export function computeLayout(nodes = [], edges = [], options = {}) {
-    const opts = { ...DEFAULT_OPTS, ...options };
+export function computeLayout(nodes = [], edges = []) {
     const positions = {};
     if (!nodes.length) {
         return { positions, openOutputs: [], roots: [] };
@@ -221,7 +102,7 @@ export function computeLayout(nodes = [], edges = [], options = {}) {
     // to the same left/right columns.
     function orderedChildren(key) {
         const edgesOut = childrenOf.get(key) ?? [];
-        const outs = outputsFor(byKey.get(key), opts);
+        const outs = outputsFor(byKey.get(key));
         const seen = new Set();
         const result = [];
         const push = (to) => {
@@ -283,7 +164,7 @@ export function computeLayout(nodes = [], edges = [], options = {}) {
     );
     const openOutputs = [];
     for (const n of nodes) {
-        for (const out of outputsFor(n, opts)) {
+        for (const out of outputsFor(n)) {
             if (!hasEdgeFrom.has(`${n.node_key}::${out.handle}`)) {
                 openOutputs.push({ from_node_key: n.node_key, from_output: out.handle, label: out.label });
             }

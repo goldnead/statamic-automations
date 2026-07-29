@@ -10,6 +10,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { computeLayout, outputsFor, handleY, fractionForOutput, LAYOUT } from '../../resources/js/composables/useAutoLayout.js';
+import { specs, useBuiltInOutputs } from './fixtures/built-in-library.mjs';
+
+// Which handles a node has is the node's own declaration, shipped in the
+// library payload (see useNodeOutputs.js). The layout reads it; it no longer
+// keeps a copy of the rule, so the specs have to be registered here the way
+// Edit.vue registers them from the server's payload. `acme.branch` gets the
+// true/false spec the registry hands a `.branch` type that declares nothing.
+useBuiltInOutputs({ 'acme.branch': specs.branch });
 
 const trigger = { node_key: 't', type: 'manual' };
 const step = (key, type = 'send_email') => ({ node_key: key, type });
@@ -130,7 +138,10 @@ test('a namespaced *.branch node exposes the same true/false outputs', () => {
         { handle: 'false', label: 'False' },
     ]);
 
-    // Not a suffix match: only the segment after the last dot counts.
+    // Which is now the server's ruling, not the canvas's: the registry hands
+    // a `.branch` type that declares nothing the true/false spec, so a type
+    // that only looks like one gets the ordinary single continuation without
+    // the canvas needing a string test of its own.
     assert.deepEqual(outputsFor({ type: 'acme.branchless' }), [{ handle: 'default', label: '' }]);
     assert.deepEqual(outputsFor({ type: 'rebranch' }), [{ handle: 'default', label: '' }]);
 

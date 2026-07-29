@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defineComponent, h } from 'vue';
 import { flushPromises, mount } from '@vue/test-utils';
 
+import { builtInLibrary } from './fixtures/built-in-library.mjs';
+
 vi.mock('axios', () => ({
     default: {
         patch: vi.fn(async () => ({ data: { data: {} } })),
@@ -43,11 +45,11 @@ const HeaderStub = defineComponent({
     setup: (_props, { slots }) => () => h('div', Object.values(slots).map((slot) => slot())),
 });
 
-const library = {
-    triggers: [{ handle: 'manual', label: 'Manual', schema: [] }],
-    logic: [{ handle: 'branch', label: 'Branch', schema: [] }],
-    actions: [{ handle: 'send_email', label: 'Send email', schema: [] }],
-};
+// The server's payload, carrying each node's declared output handles. The
+// page registers them (setNodeOutputSpecs) at the top of setup — without
+// that, a branch on this canvas has one `default` output and duplicating it
+// produces the edge FlowValidator rejects.
+const library = builtInLibrary();
 
 const node = (node_key, type) => ({
     node_key,

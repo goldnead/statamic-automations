@@ -1,5 +1,60 @@
 # Changelog
 
+## 1.7.0 — 2026-07-29
+
+A node's output handles are now declared once, by the node, and read from that one declaration by the canvas, the validator and the node's own `outputs()`. The reason this is a **minor** and not a patch is that it adds public surface — a field in the node-library payload, an extension point third-party nodes are meant to implement, and a documented wire contract with a version on it — and changes one visible behaviour (Duplicate on a loop). The reason it is not a major is that nothing a consumer already depends on was removed or renamed: no stored data, no route, no API response shape, no permission, no output handle string.
+
+### Added — the registry hands out a node's outputs, so a third-party node can have more than one
+
+Until now, which handles a node has was written twice. `SwitchNode`, `ParallelNode` and `LoopNode` each declared `outputs()` in PHP, and `outputsFor()` in `resources/js/composables/useAutoLayout.js` mirrored all three by hand, down to how they read `config.cases` and `config.branches`. The mirror was accurate — the tests pinned it — and it was also the whole of the canvas's knowledge. `NodeRegistry::describe()` did not expose outputs at all, so a node registered by anybody else got a single `default` handle whatever its class declared. Since a handle is the only thing an edge can leave from, its second and third outputs did not exist as far as the builder was concerned.
+
+1.5.5 fixed the sharpest edge of that — a type ending in `.branch` got true/false on both sides, because `FlowValidator` had required true/false off that suffix since the first release and the canvas offering one `default` made such a node *less* usable than any other custom node. It left the double declaration standing, and named the reason: outputs can depend on config, so exposing them means handing a config-dependent thing to a frontend and versioning it.
+
+That is what this release does. `describe()` now carries an `outputs` key for every node — not a list of handles, which would be wrong the moment a switch gains a case, but a small declarative spec that both sides resolve against the node's live config. `src/Support/NodeOutputs.php` holds the grammar and the PHP resolver; `resources/js/composables/useNodeOutputs.js` is the same resolver in the browser. A node writes `outputSpec()` (with the `DeclaresOutputs` trait deriving `outputs()` from it), or, if its handles are fixed, just `outputs()` — the registry serialises that for the canvas, so the common third-party case needs no knowledge of the grammar at all.
+
+`outputsFor()` on the canvas no longer contains a single test of a node's type. It looks the type up in the library payload the page was rendered with and resolves what it finds; a type with no declaration gets one `default` continuation, which is what every custom node got before. The `.branch` suffix rule moved out of the canvas and into the registry, where it is now a fallback for a type that declares nothing rather than a cap on what such a type may declare — an `acme.branch` may now declare three outputs and get three.
+
+**What the promise is worth, checked end to end.** `tests/Feature/ThirdPartyNodeOutputsTest.php` registers `acme.review`, a node this package knows nothing about that declares `approved` / `rejected` / `escalated`: all three reach the canvas in the library payload, the validator holds the graph to exactly those three and names a fourth handle as unknown, and a run routes down whichever one the node returns. `tests/js/node-card-outputs.test.js` mounts the real canvas — Vue Flow, the node cards, Vue Flow's own `Handle` components — and finds three connectable source handles on it, against one before this release.
+
+The engine needed no change and got none: `WorkflowRunner` has always routed on the handle a node returns and never on the node's type. That half of the promise already held; it was the only half that did.
+
+### Added — the payload is versioned, and a mismatch degrades instead of guessing
+
+The spec carries `version` (`NodeOutputs::VERSION`, 1) and the canvas carries the version it understands (`OUTPUT_SPEC_VERSION`). Both are packaged together, but the built assets are published into the host's `public/vendor/`, so a stale canvas meeting a newer server is a real shape and not a theoretical one — it is the shape `npm run build:check` and the publish step exist to prevent.
+
+A resolver meeting a spec numbered above its own does not guess at fields it does not know: it resolves the node to a single `default` output, which is exactly what a canvas that had never heard of output specs did with the same node, and logs once per type saying the assets are behind. The other direction needs no rule — a spec from an older contract uses only fields a newer resolver already understands. Both directions are asserted, in `tests/js/node-outputs.test.mjs` and in `NodeOutputSpecContractTest`.
+
+### Changed — Duplicate on a loop puts the copy after the loop, not inside it
+
+A node may now name its `primary` output: the one that means "and then". Duplicate and insert-on-edge attach there instead of taking the first declared output.
+
+For every node except one this changes nothing, because first *is* the continuation. `LoopNode` declares `done` as its primary, and its outputs are `loop` then `done` — so duplicating a loop used to hang the copy off `loop`, inside the body it was meant to follow. Valid and deterministic, and not what the user meant; 1.5.5 wrote it down as unresolvable because there was no metadata marking a node's main continuation. There is now, and it falls out of the same declaration rather than being a second mechanism.
+
+A branch deliberately declares no primary: neither side of a condition is the continuation, so Duplicate still attaches to `true`, as it has since 1.5.5. Same for a switch (which case is "the" case is the user's business) and an inline parallel (a fan-out has no single continuation).
+
+### Changed — the validator can now check any node's outputs, and says so quietly
+
+`FlowValidator` checked output handles on branch nodes only, because a branch was the only node whose handles it could know. It now asks the registry for any node's declared outputs, resolved against that node's own config.
+
+The level is deliberate. A branch stays an **error** with the same `branch_invalid_output` code and the same message it has had since the first release. Every other mismatch is a new **warning**, `edge_unknown_output`, naming the node, the handle and what the node does declare. Warnings do not block enabling or running (only `level === 'error'` does, in `AutomationsController` and `WorkflowRunner`), and that is the point: a switch's outputs move when its cases are edited, so edges stored against a removed case are ordinary in existing data. Raising those to errors would refuse to enable automations that were enabled yesterday, on a graph nobody touched. The `error` handle — taken by the runner when a node fails under `_on_error: continue` — is never reported, because every node has it whether or not its spec mentions it.
+
+### Compatibility
+
+Stored graphs were the real risk here: `automation_edges.from_output` holds handle strings, `WorkflowRunner::nextNode()` matches them exactly, and nothing reconciles them with anything. A rename or a reorder would not raise an error — it would produce an automation that quietly stops at the node whose handle changed.
+
+So the handles are pinned twice. `NodeOutputSpecContractTest` asserts the pre-1.7.0 `outputs()` results survive verbatim, including order and the switch's dedupe of a case that already targets `default`. And `tests/Fixtures/stored-automations/hub-2026-07-29.json` is not test data: it is the five automations in the running QA hub, exported from its database — a five-step marketing nurture on `default` edges, two delay flows, and the branch graph 1.5.5 was built against, wired on `true` with `false` left open. `StoredAutomationsSurviveOutputSpecsTest` restores each of them, resolves all 18 stored `from_output` values against the new declarations, and requires the validator to report nothing about any of them.
+
+No migration: nothing about the database changed.
+
+Two internals of the JS layer went away with the mirror they served. `isBranchType()` was exported from `useAutoLayout.js` (added in 1.5.5, no callers), and `computeLayout()`'s `options` argument carried `branchTypes` / `terminalTypes`, which the layout no longer needs because it no longer knows a node type by name. `LoopNode::outputs()` gained the optional `array $config = []` its siblings already had.
+
+### Notes
+
+- `tests/Fixtures/stored-automations/` and `tests/js/fixtures/node-output-specs.json` are both fixtures written from something real: the first from the hub's database, the second from the live PHP registry by `NodeOutputSpecContractTest` (regenerate with `UPDATE_NODE_OUTPUT_FIXTURE=1`). The JS suite reads the second, so a change to a built-in node's outputs that is not carried across cannot pass both suites.
+- Mounting the canvas under Vitest needs a `getBBox` stub alongside the `ResizeObserver` one 1.6.1 documented, for the same reason and with the same symptom: the throw lands in a post-render hook, so the mount that fails is silent and the *next* one in the file returns an empty wrapper.
+- **Known and unchanged:** `SubAutomationAndAlertsTest > failure alerter logs and throttles` fails under MySQL on a foreign-key violation (`automation_id=999`, which SQLite does not enforce). Reproducible at 1.5.3.
+- Suite: **392 passed (1585 assertions)** on SQLite, baseline 378. Vitest **45 passed**, baseline 37. `node:test` **91 passed**, baseline 81. Every capability was verified by stashing the source and watching its test fail against 1.6.2: without the PHP half, 9 of the 14 new PHP cases fail (the five that pass are the ones that were already true — the runner's routing, the validator's silence about output handles it could not see, and the resolver's own version guard, which is in a new file the stash left in place); without the JS half, the third-party node renders one handle instead of three, its "+" adders and its layout columns collapse to one, and the loop's copy lands back in the body; without the version guard, a spec from a newer contract is resolved as if the canvas understood it.
+
 ## 1.6.2 — 2026-07-28
 
 ### Fixed — an interrupted brand-scoping migration could not be repaired by running it again

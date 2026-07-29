@@ -259,6 +259,58 @@ Automations::registerLogicNode(BusinessHoursGate::class);
 
 The built-in condition nodes (`FilterNode`, `BranchNode`, `WaitUntilNode`) additionally expose a static `evaluate(AutomationContext, array, ConditionEvaluator)` which the engine's `NodeExecutor` prefers when present; they satisfy the contract by delegating `execute()` to it. Your own logic node only needs `execute()`.
 
+### Declaring output handles (1.7.0+)
+
+A node with more than one way out has to say so, or the canvas gives it a single `default` handle and the user can never wire the rest. Add a static `outputs()` returning the handles, in the order they should appear left to right:
+
+```php
+use Goldnead\\StatamicAutomations\\Support\\DeclaresOutputs;
+
+public static function outputs(array $config = []): array
+{
+    return ['approved', 'rejected', 'escalated'];
+}
+```
+
+The handle you return here is the one `ActionResult::success($output, 'approved')` routes on, the one stored in `automation_edges.from_output`, and the one `FlowValidator` holds the graph to. `['approved' => 'Approved', …]` gives each handle a display label on the canvas; a plain list labels them by handle.
+
+If your outputs depend on the node's config — a different set per configured case, per branch, per mode — return a declaration instead of a list, because the canvas has to resolve them while the user is typing and cannot ask the server per keystroke. Use `outputSpec()` with the `DeclaresOutputs` trait, which derives `outputs()` from it:
+
+```php
+use Goldnead\\StatamicAutomations\\Support\\DeclaresOutputs;
+use Goldnead\\StatamicAutomations\\Support\\NodeOutputs;
+
+class AcmeRouter implements AutomationLogicNode
+{
+    use DeclaresOutputs;
+
+    public static function outputSpec(): array
+    {
+        return NodeOutputs::spec([
+            // First clause that matches wins; the last should be unconditional.
+            [
+                'when' => ['field' => 'mode', 'default' => 'inline', 'not' => ['inline']],
+                'outputs' => [['handle' => 'default', 'label' => '']],
+            ],
+            [
+                // One output per row of a `key_value` config field.
+                'from' => ['field' => 'routes', 'handle' => 'key', 'label' => 'value'],
+                'append' => [['handle' => 'default', 'label' => 'Default']],
+            ],
+        ], primary: 'default');
+    }
+}
+```
+
+`primary` names the node's continuation — the output that means "and then". Duplicate and insert-on-edge attach there; without it they use the first declared output. A `loop` declares `done` (the copy belongs after the loop, not inside its body); a branch declares none, because neither side is the continuation.
+
+`NodeOutputs::fixed([...], primary: …)` is the shorthand for a spec with no config-dependence. The full grammar is documented in `src/Support/NodeOutputs.php`; `resources/js/composables/useNodeOutputs.js` is the resolver the canvas runs, and the two are pinned against each other by `tests/Feature/NodeOutputSpecContractTest.php` and `tests/js/node-outputs.test.mjs`.
+
+Two things to know about compatibility:
+
+- The spec carries a `version`. A canvas older than the spec it meets ignores it and falls back to a single `default` output rather than misreading fields it does not know, so a stale `public/vendor/statamic-automations/build` degrades instead of mis-wiring. Re-publish the assets after upgrading.
+- A type whose handle ends in `.branch` and declares nothing still gets `true`/`false`, which is what `FlowValidator` has required of that suffix since the first release. Declaring your own outputs overrides it.
+
 ## Option sources
 
 Dynamic `<select>` pickers declare `options_source: '<handle>'` in a schema field; the CP config form fetches `GET /cp/automations/api/options/<handle>`, resolved through the **OptionSourceRegistry**. Register your own resolver — full parity with the built-ins:

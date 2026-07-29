@@ -6,9 +6,29 @@ use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
 use Goldnead\StatamicAutomations\Engine\ConditionEvaluator;
 use Goldnead\StatamicAutomations\Support\ActionResult;
+use Goldnead\StatamicAutomations\Support\DeclaresOutputs;
+use Goldnead\StatamicAutomations\Support\NodeOutputs;
 
 class BranchNode implements AutomationLogicNode
 {
+    use DeclaresOutputs;
+
+    /**
+     * The true/false split `FlowValidator` has required of this node — and
+     * of any third-party type ending in `.branch` — since the first release.
+     * Written down here now instead of only being enforced there and
+     * mirrored in the canvas.
+     *
+     * No `primary`: neither side of a condition is "the continuation", so
+     * Duplicate keeps attaching to `true`, as it has since 1.5.5.
+     *
+     * @return array<string, mixed>
+     */
+    public static function outputSpec(): array
+    {
+        return NodeOutputs::branchSpec();
+    }
+
     public static function handle(): string
     {
         return 'branch';

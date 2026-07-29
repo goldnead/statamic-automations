@@ -23,7 +23,7 @@
  * @param {Object}   options.history  `useHistory()` instance.
  * @param {Function} options.notify   `(level, message) => void`.
  */
-import { outputsFor } from './useAutoLayout.js';
+import { continuationOutput, outputsFor } from './useNodeOutputs.js';
 import { canDuplicate, canInsert, isTriggerHandle as isTriggerHandleGuard } from './useFlowGuards.js';
 import { defaultConfigForSchema } from './useNodeValidation.js';
 
@@ -66,8 +66,8 @@ export function uniqueNodeKey(handle, taken = [], random = randomSuffix) {
 }
 
 /**
- * The output handle a node continues on — its FIRST declared output, or null
- * when it declares none (a `stop`, or a `parallel` with no branches yet).
+ * The output handle a node continues on — re-exported from the module that
+ * owns the node's declaration.
  *
  * There is no `default` output on a `branch` (true/false), a `loop`
  * (loop/done) or an inline `parallel` (its configured branch handles). Code
@@ -76,11 +76,12 @@ export function uniqueNodeKey(handle, taken = [], random = randomSuffix) {
  * source handle), never followed at run time (`WorkflowRunner::nextNode()`
  * matches `from_output` exactly), and rejected outright by `FlowValidator` for
  * a branch, which turned "Duplicate" on a branch node into a one-click
- * invalid graph.
+ * invalid graph. 1.5.5 replaced that with the node's FIRST output, which is
+ * right for a branch and wrong for a loop — first is `loop`, so the copy
+ * landed inside the body. A node can now name the output that means "and
+ * then", and this follows it where one is named.
  */
-export function continuationOutput(node) {
-    return outputsFor(node)[0]?.handle ?? null;
-}
+export { continuationOutput };
 
 export function sameEdge(a, b) {
     return (
@@ -180,8 +181,9 @@ export function useGraphMutations({ automation, selectedNodeKey, library, histor
     // Split an existing A→B edge by dropping `node` between them: A→node, node→B.
     //
     // The second edge leaves the NEW node, so it has to leave an output the new
-    // node has: `true` for a branch, `loop` for a loop, the first configured
-    // handle for an inline parallel. A node with no outputs at all (a `stop`)
+    // node has: `true` for a branch, `done` for a loop (B comes after the loop,
+    // not inside its body), the first configured handle for an inline
+    // parallel. A node with no outputs at all (a `stop`)
     // gets no second edge — B is left as a root instead of being wired to a
     // handle that does not exist, which is what the old hard-coded `'default'`
     // produced: an edge invisible on the canvas and never followed at run time.
@@ -373,7 +375,9 @@ export function useGraphMutations({ automation, selectedNodeKey, library, histor
 
         // Where the copy hangs off the source. Not `'default'`: a branch has
         // true/false and nothing else, and appending the copy on a handle the
-        // source does not have is precisely what FlowValidator refuses.
+        // source does not have is precisely what FlowValidator refuses. On a
+        // loop this is `done` rather than the first output, so the copy lands
+        // after the loop instead of inside its body.
         const out = continuationOutput(src);
 
         if (out === null) {

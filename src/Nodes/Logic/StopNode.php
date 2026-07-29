@@ -5,9 +5,25 @@ namespace Goldnead\StatamicAutomations\Nodes\Logic;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
 use Goldnead\StatamicAutomations\Support\ActionResult;
+use Goldnead\StatamicAutomations\Support\DeclaresOutputs;
+use Goldnead\StatamicAutomations\Support\NodeOutputs;
 
 class StopNode implements AutomationLogicNode
 {
+    use DeclaresOutputs;
+
+    /**
+     * A terminal node: the run ends here, so there is nothing to continue
+     * to and no handle to offer. This is what the canvas used to know as a
+     * hard-coded `terminalTypes: ['stop']`.
+     *
+     * @return array<string, mixed>
+     */
+    public static function outputSpec(): array
+    {
+        return NodeOutputs::fixed([]);
+    }
+
     public static function handle(): string
     {
         return 'stop';

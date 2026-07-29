@@ -7,6 +7,8 @@ import {
     useGraphMutations,
 } from '../../resources/js/composables/useGraphMutations.js';
 import { useHistory } from '../../resources/js/composables/useHistory.js';
+import { builtInLibrary, specs } from './fixtures/built-in-library.mjs';
+import { setNodeOutputSpecs } from '../../resources/js/composables/useNodeOutputs.js';
 
 /**
  * The builder's graph mutations, driven exactly as Edit.vue drives them.
@@ -17,17 +19,16 @@ import { useHistory } from '../../resources/js/composables/useHistory.js';
  * a node key that collides with one already in the automation.
  */
 
-const library = {
-    triggers: [{ handle: 'manual', label: 'Manual', schema: [] }],
-    logic: [
-        { handle: 'branch', label: 'Branch', schema: [] },
-        { handle: 'loop', label: 'Loop', schema: [] },
-        { handle: 'parallel', label: 'Parallel', schema: [] },
-        { handle: 'acme.branch', label: 'Acme branch', schema: [] },
-        { handle: 'stop', label: 'Stop', schema: [] },
-    ],
-    actions: [{ handle: 'send_email', label: 'Send email', schema: [] }],
-};
+// The library the server renders, carrying each node's declared outputs —
+// the specs are the ones the PHP registry actually ships (see
+// fixtures/built-in-library.mjs). `acme.branch` gets the same true/false
+// spec, which is what the registry hands a third-party type ending in
+// `.branch` that declares nothing of its own.
+const library = builtInLibrary({ 'acme.branch': specs.branch });
+
+// Edit.vue does this once at the top of setup; the mutations read the
+// resulting declarations when they decide which handle an edge leaves.
+setNodeOutputSpecs(library);
 
 function harness(graph) {
     const automation = ref({ id: 1, name: 'Flow', ...graph });
@@ -75,12 +76,19 @@ const edge = (from, output, to) => ({
  * handle the node does not declare is both invalid and dead.
  */
 describe('continuationOutput', () => {
-    it('is the node\'s first declared output, never a hard-coded default', () => {
+    it('is the node\'s declared continuation, never a hard-coded default', () => {
         expect(continuationOutput({ type: 'send_email' })).toBe('default');
         expect(continuationOutput({ type: 'branch' })).toBe('true');
         expect(continuationOutput({ type: 'acme.branch' })).toBe('true');
-        expect(continuationOutput({ type: 'loop' })).toBe('loop');
         expect(continuationOutput({ type: 'parallel', config: { branches: { a: 'A', b: 'B' } } })).toBe('a');
+    });
+
+    it('follows a node that names which output means "and then"', () => {
+        // A loop's outputs are `loop` then `done`. First-output-wins put the
+        // copy inside the body; `done` is where the flow goes after the loop,
+        // and LoopNode now says so (`primary`) instead of the canvas having
+        // to guess from a position in a list.
+        expect(continuationOutput({ type: 'loop' })).toBe('done');
     });
 
     it('is null for a node that declares no outputs at all', () => {

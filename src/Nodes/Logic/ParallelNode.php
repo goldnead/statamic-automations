@@ -8,6 +8,8 @@ use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Support\ActionResult;
+use Goldnead\StatamicAutomations\Support\DeclaresOutputs;
+use Goldnead\StatamicAutomations\Support\NodeOutputs;
 use Goldnead\StatamicAutomations\Support\NormalizesKeyValue;
 
 /**
@@ -33,6 +35,7 @@ use Goldnead\StatamicAutomations\Support\NormalizesKeyValue;
  */
 class ParallelNode implements AutomationLogicNode
 {
+    use DeclaresOutputs;
     use NormalizesKeyValue;
 
     /**
@@ -47,24 +50,33 @@ class ParallelNode implements AutomationLogicNode
     }
 
     /**
-     * Output handles this node can route through. Automation mode always
-     * routes via the default "success" handle (the branches are sub-runs,
-     * not graph edges); inline mode's outputs are its configured branch
-     * handles (the key_value's keys — see {@see executeInlineMode()}).
+     * Legacy automation mode routes via the single default "success" handle
+     * — its branches are sub-runs, not graph edges. Inline mode's outputs
+     * are its configured branch handles (the key_value's keys, labelled with
+     * its values — see {@see executeInlineMode()}), and with no branches
+     * configured it has none: a fan-out with nowhere to fan is not given an
+     * invented continuation.
      *
-     * @return array<int, string>
+     * No `primary`: a fan-out has no single continuation to attach to.
+     *
+     * @return array<string, mixed>
      */
-    public static function outputs(array $config = []): array
+    public static function outputSpec(): array
     {
-        $mode = (string) ($config['mode'] ?? 'inline') ?: 'inline';
-
-        if ($mode !== 'inline') {
-            return ['default'];
-        }
-
-        $branches = static::normalizeKeyValue($config['branches'] ?? []);
-
-        return array_values(array_map('strval', array_keys($branches)));
+        return NodeOutputs::spec([
+            [
+                'when' => ['field' => 'mode', 'default' => 'inline', 'not' => ['inline']],
+                'outputs' => [['handle' => 'default', 'label' => '']],
+            ],
+            [
+                'from' => [
+                    'field' => 'branches',
+                    'handle' => 'key',
+                    'label' => 'value',
+                    'label_fallback' => 'handle',
+                ],
+            ],
+        ]);
     }
 
     public static function handle(): string

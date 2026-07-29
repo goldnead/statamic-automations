@@ -1,0 +1,118 @@
+{
+    "manual": {
+        "version": 1,
+        "clauses": [
+            {
+                "outputs": [
+                    {
+                        "handle": "default",
+                        "label": ""
+                    }
+                ]
+            }
+        ]
+    },
+    "send_email": {
+        "version": 1,
+        "clauses": [
+            {
+                "outputs": [
+                    {
+                        "handle": "default",
+                        "label": ""
+                    }
+                ]
+            }
+        ]
+    },
+    "branch": {
+        "version": 1,
+        "clauses": [
+            {
+                "outputs": [
+                    {
+                        "handle": "true",
+                        "label": "True"
+                    },
+                    {
+                        "handle": "false",
+                        "label": "False"
+                    }
+                ]
+            }
+        ]
+    },
+    "switch": {
+        "version": 1,
+        "clauses": [
+            {
+                "from": {
+                    "field": "cases",
+                    "handle": "value",
+                    "label": "key",
+                    "handle_fallback": "default"
+                },
+                "append": [
+                    {
+                        "handle": "default",
+                        "label": "Default"
+                    }
+                ]
+            }
+        ]
+    },
+    "loop": {
+        "version": 1,
+        "clauses": [
+            {
+                "outputs": [
+                    {
+                        "handle": "loop",
+                        "label": "For each item"
+                    },
+                    {
+                        "handle": "done",
+                        "label": "After loop"
+                    }
+                ]
+            }
+        ],
+        "primary": "done"
+    },
+    "parallel": {
+        "version": 1,
+        "clauses": [
+            {
+                "when": {
+                    "field": "mode",
+                    "default": "inline",
+                    "not": [
+                        "inline"
+                    ]
+                },
+                "outputs": [
+                    {
+                        "handle": "default",
+                        "label": ""
+                    }
+                ]
+            },
+            {
+                "from": {
+                    "field": "branches",
+                    "handle": "key",
+                    "label": "value",
+                    "label_fallback": "handle"
+                }
+            }
+        ]
+    },
+    "stop": {
+        "version": 1,
+        "clauses": [
+            {
+                "outputs": []
+            }
+        ]
+    }
+}

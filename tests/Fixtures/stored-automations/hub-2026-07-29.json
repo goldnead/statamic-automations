@@ -1,0 +1,346 @@
+[
+    {
+        "handle": "familystack-waitlist-nurture",
+        "name": "FamilyStack Waitlist Nurture",
+        "enabled": false,
+        "nodes": [
+            {
+                "node_key": "trigger",
+                "type": "marketing.subscribed",
+                "config": []
+            },
+            {
+                "node_key": "email1",
+                "type": "send_email",
+                "config": {
+                    "to": "{{ subscriber.email }}",
+                    "subject": "Willkommen bei FamilyStack — schön, dass du da bist",
+                    "template": "familystack-nurture-01",
+                    "body": "Diese E-Mail wird als HTML-Vorlage (familystack-nurture-01) versendet. Falls dein Programm kein HTML anzeigt, öffne sie im Browser.",
+                    "dedupe": "fs-nurture-1"
+                }
+            },
+            {
+                "node_key": "delay1",
+                "type": "delay",
+                "config": {
+                    "amount": 2,
+                    "unit": "days"
+                }
+            },
+            {
+                "node_key": "email2",
+                "type": "send_email",
+                "config": {
+                    "to": "{{ subscriber.email }}",
+                    "subject": "Wer denkt bei euch an den Zahnarzttermin?",
+                    "template": "familystack-nurture-02",
+                    "body": "Diese E-Mail wird als HTML-Vorlage (familystack-nurture-02) versendet. Falls dein Programm kein HTML anzeigt, öffne sie im Browser.",
+                    "dedupe": "fs-nurture-2"
+                }
+            },
+            {
+                "node_key": "delay2",
+                "type": "delay",
+                "config": {
+                    "amount": 2,
+                    "unit": "days"
+                }
+            },
+            {
+                "node_key": "email3",
+                "type": "send_email",
+                "config": {
+                    "to": "{{ subscriber.email }}",
+                    "subject": "Vom Wochenplan zur fertigen Einkaufsliste — in einem Schritt",
+                    "template": "familystack-nurture-03",
+                    "body": "Diese E-Mail wird als HTML-Vorlage (familystack-nurture-03) versendet. Falls dein Programm kein HTML anzeigt, öffne sie im Browser.",
+                    "dedupe": "fs-nurture-3"
+                }
+            },
+            {
+                "node_key": "delay3",
+                "type": "delay",
+                "config": {
+                    "amount": 3,
+                    "unit": "days"
+                }
+            },
+            {
+                "node_key": "email4",
+                "type": "send_email",
+                "config": {
+                    "to": "{{ subscriber.email }}",
+                    "subject": "Ein Ort statt fünf Apps",
+                    "template": "familystack-nurture-04",
+                    "body": "Diese E-Mail wird als HTML-Vorlage (familystack-nurture-04) versendet. Falls dein Programm kein HTML anzeigt, öffne sie im Browser.",
+                    "dedupe": "fs-nurture-4"
+                }
+            },
+            {
+                "node_key": "delay4",
+                "type": "delay",
+                "config": {
+                    "amount": 3,
+                    "unit": "days"
+                }
+            },
+            {
+                "node_key": "email5",
+                "type": "send_email",
+                "config": {
+                    "to": "{{ subscriber.email }}",
+                    "subject": "Was nervt euch im Familienalltag am meisten?",
+                    "template": "familystack-nurture-05",
+                    "body": "Diese E-Mail wird als HTML-Vorlage (familystack-nurture-05) versendet. Falls dein Programm kein HTML anzeigt, öffne sie im Browser.",
+                    "dedupe": "fs-nurture-5",
+                    "reply_to": "hallo@familystack.de"
+                }
+            }
+        ],
+        "edges": [
+            {
+                "from_node_key": "trigger",
+                "from_output": "default",
+                "to_node_key": "email1"
+            },
+            {
+                "from_node_key": "email1",
+                "from_output": "default",
+                "to_node_key": "delay1"
+            },
+            {
+                "from_node_key": "delay1",
+                "from_output": "default",
+                "to_node_key": "email2"
+            },
+            {
+                "from_node_key": "email2",
+                "from_output": "default",
+                "to_node_key": "delay2"
+            },
+            {
+                "from_node_key": "delay2",
+                "from_output": "default",
+                "to_node_key": "email3"
+            },
+            {
+                "from_node_key": "email3",
+                "from_output": "default",
+                "to_node_key": "delay3"
+            },
+            {
+                "from_node_key": "delay3",
+                "from_output": "default",
+                "to_node_key": "email4"
+            },
+            {
+                "from_node_key": "email4",
+                "from_output": "default",
+                "to_node_key": "delay4"
+            },
+            {
+                "from_node_key": "delay4",
+                "from_output": "default",
+                "to_node_key": "email5"
+            }
+        ]
+    },
+    {
+        "handle": "qa-nachtrag-delay-durchstich-ybcy",
+        "name": "QA Nachtrag Delay-Durchstich",
+        "enabled": true,
+        "nodes": [
+            {
+                "node_key": "marketing_subscribed_44uh",
+                "type": "marketing.subscribed",
+                "config": {
+                    "list": "qa-newsletter"
+                }
+            },
+            {
+                "node_key": "send_email_kyab",
+                "type": "send_email",
+                "config": {
+                    "to": "{{ subscriber.email }}",
+                    "subject": "QA Nachtrag Mail 1 (sofort)",
+                    "body": "Erste Mail des Delay-Durchstichs. Sie geht sofort beim Auslösen raus. Danach wartet die Automation eine Minute.",
+                    "dedupe": "qa-nachtrag-1"
+                }
+            },
+            {
+                "node_key": "delay_th53",
+                "type": "delay",
+                "config": {
+                    "amount": "1",
+                    "unit": "minutes"
+                }
+            },
+            {
+                "node_key": "send_email_x4nm",
+                "type": "send_email",
+                "config": {
+                    "to": "{{ subscriber.email }}",
+                    "subject": "QA Nachtrag Mail 2 (nach Delay)",
+                    "body": "Zweite Mail. Sie kann nur ankommen, wenn der Scheduler den wartenden Run nach Ablauf des Delays fortsetzt.",
+                    "dedupe": "qa-nachtrag-2"
+                }
+            }
+        ],
+        "edges": [
+            {
+                "from_node_key": "marketing_subscribed_44uh",
+                "from_output": "default",
+                "to_node_key": "send_email_kyab"
+            },
+            {
+                "from_node_key": "send_email_kyab",
+                "from_output": "default",
+                "to_node_key": "delay_th53"
+            },
+            {
+                "from_node_key": "delay_th53",
+                "from_output": "default",
+                "to_node_key": "send_email_x4nm"
+            }
+        ]
+    },
+    {
+        "handle": "qa-fixes-delay-node-1785187238819-0faf",
+        "name": "QA Fixes Delay-Node 1785187238819",
+        "enabled": false,
+        "nodes": [
+            {
+                "node_key": "marketing_subscribed_0scv",
+                "type": "marketing.subscribed",
+                "config": {
+                    "list": "qa-newsletter"
+                }
+            },
+            {
+                "node_key": "delay_4bjl",
+                "type": "delay",
+                "config": {
+                    "amount": 1,
+                    "unit": "minutes"
+                }
+            }
+        ],
+        "edges": [
+            {
+                "from_node_key": "marketing_subscribed_0scv",
+                "from_output": "default",
+                "to_node_key": "delay_4bjl"
+            }
+        ]
+    },
+    {
+        "handle": "qa-fixes-delay-node-1785187428048-zj8h",
+        "name": "QA Fixes Delay-Node 1785187428048",
+        "enabled": false,
+        "nodes": [
+            {
+                "node_key": "marketing_subscribed_f006",
+                "type": "marketing.subscribed",
+                "config": {
+                    "list": "qa-newsletter"
+                }
+            },
+            {
+                "node_key": "delay_89p7",
+                "type": "delay",
+                "config": {
+                    "amount": 1,
+                    "unit": "minutes"
+                }
+            }
+        ],
+        "edges": [
+            {
+                "from_node_key": "marketing_subscribed_f006",
+                "from_output": "default",
+                "to_node_key": "delay_89p7"
+            }
+        ]
+    },
+    {
+        "handle": "qa-builder-155",
+        "name": "QA Builder v1.5.5",
+        "enabled": false,
+        "nodes": [
+            {
+                "node_key": "manual_trg",
+                "type": "manual",
+                "config": []
+            },
+            {
+                "node_key": "send_email_a",
+                "type": "send_email",
+                "config": {
+                    "to": "qa@local.test",
+                    "subject": "A",
+                    "body": "QA"
+                }
+            },
+            {
+                "node_key": "branch_br",
+                "type": "branch",
+                "config": {
+                    "mode": "all",
+                    "conditions": [
+                        {
+                            "field": "email",
+                            "operator": "is_not_empty",
+                            "value": null
+                        }
+                    ]
+                }
+            },
+            {
+                "node_key": "send_email_b",
+                "type": "send_email",
+                "config": {
+                    "to": "qa@local.test",
+                    "subject": "B",
+                    "body": "QA"
+                }
+            },
+            {
+                "node_key": "branch_wqwe",
+                "type": "branch",
+                "config": {
+                    "mode": "all",
+                    "conditions": [
+                        {
+                            "field": "email",
+                            "operator": "is_not_empty",
+                            "value": null
+                        }
+                    ]
+                }
+            }
+        ],
+        "edges": [
+            {
+                "from_node_key": "manual_trg",
+                "from_output": "default",
+                "to_node_key": "send_email_a"
+            },
+            {
+                "from_node_key": "send_email_a",
+                "from_output": "default",
+                "to_node_key": "branch_br"
+            },
+            {
+                "from_node_key": "branch_br",
+                "from_output": "true",
+                "to_node_key": "branch_wqwe"
+            },
+            {
+                "from_node_key": "branch_wqwe",
+                "from_output": "true",
+                "to_node_key": "send_email_b"
+            }
+        ]
+    }
+]

@@ -5,6 +5,8 @@ namespace Goldnead\StatamicAutomations\Nodes\Logic;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
 use Goldnead\StatamicAutomations\Support\ActionResult;
+use Goldnead\StatamicAutomations\Support\DeclaresOutputs;
+use Goldnead\StatamicAutomations\Support\NodeOutputs;
 use Goldnead\StatamicAutomations\Support\NormalizesKeyValue;
 
 /**
@@ -17,26 +19,32 @@ use Goldnead\StatamicAutomations\Support\NormalizesKeyValue;
  */
 class SwitchNode implements AutomationLogicNode
 {
+    use DeclaresOutputs;
     use NormalizesKeyValue;
 
     /**
-     * Output handles this node can route through: one per configured
-     * case (the key_value's values — see {@see execute()}), plus a
-     * trailing "default" for when nothing matches.
+     * One output per configured case — the `cases` key_value maps a match
+     * value (the label the user sees on the handle) to the output handle it
+     * routes to, and a case with no handle typed falls to `default`. A
+     * trailing `default` catches everything that matches nothing, deduped
+     * away when a case already targets it.
      *
-     * @return array<int, string>
+     * No `primary`: which case is "the continuation" is the user's business,
+     * so Duplicate keeps attaching to the first one, as it did before 1.7.0.
+     *
+     * @return array<string, mixed>
      */
-    public static function outputs(array $config = []): array
+    public static function outputSpec(): array
     {
-        $cases = static::normalizeKeyValue($config['cases'] ?? []);
-
-        $handles = array_map(
-            fn ($output) => (string) ($output ?: 'default'),
-            array_values($cases),
-        );
-        $handles[] = 'default';
-
-        return array_values(array_unique($handles));
+        return NodeOutputs::spec([[
+            'from' => [
+                'field' => 'cases',
+                'handle' => 'value',
+                'label' => 'key',
+                'handle_fallback' => 'default',
+            ],
+            'append' => [['handle' => 'default', 'label' => 'Default']],
+        ]]);
     }
 
     public static function handle(): string
