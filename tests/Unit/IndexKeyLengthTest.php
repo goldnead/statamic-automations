@@ -4,6 +4,7 @@ namespace Goldnead\StatamicAutomations\Tests\Unit;
 
 use Goldnead\StatamicAutomations\Tests\TestCase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Measures every index these migrations create the way MySQL would.
@@ -17,15 +18,23 @@ use Illuminate\Support\Facades\DB;
  * *SQLSTATE 1071: Specified key was too long; max key length is 3072 bytes*,
  * leaving two tables that never existed there at all.
  *
- * This test does not ask a database. It compiles this addon's own migration
- * files through Laravel's MySQL grammar in pretend mode — no server, no
- * connection, nothing to install in CI — and measures the DDL MySQL would have
- * received. It reads the real migration files, so it cannot drift from them.
+ * This test asks no MySQL server. It compiles this addon's own migration files
+ * through Laravel's MySQL grammar in pretend mode — nothing to install in CI —
+ * and measures the DDL MySQL would have received. It reads the real migration
+ * files, so it cannot drift from them.
+ *
+ * It does keep a throwaway in-memory SQLite database alongside, because the
+ * migrations branch on the schema they find: `2026_07_24_100002` has to be
+ * re-runnable, so it asks which tables already carry `brand_id` and which
+ * indexes `automations` already has. Under `pretend()` every such question is
+ * answered "nothing is there", which is a state no install is ever in. See
+ * compileMigrationsForMysql() for how the two are kept in step.
  *
  * Ported from `statamic-notifications` v1.0.4 by way of
- * `statamic-webhook-manager` v1.6.1. This addon needs the extended version:
- * its schema is built across eleven migrations, and `brand_id` — the whole
- * tenant boundary — arrives by `alter table … add` long after the create
+ * `statamic-webhook-manager` v1.6.1, and extended in the same shape
+ * `statamic-marketing` 1.6.4 arrived at. This addon needs the extended
+ * version: its schema is built across a dozen migrations, and `brand_id` — the
+ * whole tenant boundary — arrives by `alter table … add` long after the create
  * migrations, together with the drop of the global handle unique and the
  * per-brand one that replaces it. All four statement shapes are replayed, so
  * what is measured is the schema at the end of the run rather than the one the
@@ -165,6 +174,31 @@ class IndexKeyLengthTest extends TestCase
      * and returns the column widths and index definitions MySQL would end up
      * with.
      *
+     * Two connections, because a migration that branches on the schema needs
+     * both halves and no single connection can give them:
+     *
+     * - the **probe** compiles the DDL. Its grammar is MySQL's, `pretend()`
+     *   stops every statement before it reaches a driver, and the rendered SQL
+     *   is what gets measured. It has no server and no schema of its own —
+     *   under `pretend()` a `select` returns an empty array, so anything asked
+     *   of it about the current schema comes back as "nothing is there".
+     * - the **state** is a real SQLite database that the same migrations are
+     *   run against for real, one file behind. It is what
+     *   `Schema::hasColumn()`, `Schema::getIndexes()` and
+     *   `Schema::getColumns()` are answered from.
+     *
+     * That split is not incidental. `2026_07_24_100002` asks which tables
+     * already carry `brand_id` and which indexes `automations` already has,
+     * because it has to be re-runnable on an install its own first run left
+     * halfway through. A probe that answers "nothing is there" to both would
+     * measure a schema no install ever has: it would compile the new unique
+     * without the drop of the old one that precedes it, and then report that
+     * the global handle unique is still in place.
+     *
+     * The two run interleaved, probe first: the DDL for migration N is
+     * compiled against the schema as it stood after N-1, which is exactly what
+     * the server sees.
+     *
      * @return array{columns: array<string, array<string, array{bytes: int, nullable: bool}>>, indexes: list<array{table: string, name: string, unique: bool, columns: list<string>}>}
      */
     private function compileMigrationsForMysql(): array
@@ -181,27 +215,82 @@ class IndexKeyLengthTest extends TestCase
             'prefix' => '',
         ]);
 
+        config()->set('database.connections.key_length_state', [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+            'prefix' => '',
+            'foreign_key_constraints' => false,
+        ]);
+
         $previous = DB::getDefaultConnection();
-        DB::setDefaultConnection('key_length_probe');
+
+        DB::purge('key_length_probe');
+        DB::purge('key_length_state');
+
+        $probe = DB::connection('key_length_probe');
+        $state = DB::connection('key_length_state');
+
+        // pretend() renders every logged statement with its bindings
+        // substituted, and substituting a binding goes through PDO::quote. So
+        // without a PDO the probe would try to reach a MySQL server after all
+        // — for the query log, not for the query. A throwaway SQLite handle
+        // quotes values and is never asked to run anything: pretending()
+        // short-circuits every statement before it reaches the driver, and the
+        // grammar stays MySQL's, which is the thing being measured.
+        $probe->setPdo(new \PDO('sqlite::memory:'));
+
+        // The brand every existing row is backfilled onto. brand-context
+        // creates this table; the state database only needs enough of it to
+        // answer the lookup.
+        $state->getSchemaBuilder()->create('brands', function ($table) {
+            $table->id();
+            $table->string('handle');
+            $table->boolean('is_default')->default(false);
+        });
+
+        $state->table('brands')->insert(['handle' => 'default', 'is_default' => true]);
+
+        // A connection resolves its schema grammar lazily, inside
+        // getSchemaBuilder(). The oracle is constructed directly, so it has to
+        // be asked for explicitly or every Blueprint the probe compiles gets a
+        // null grammar.
+        $probe->useDefaultSchemaGrammar();
+
+        $oracle = new ProbeSchemaBuilder($probe, $state);
+
+        $queries = [];
 
         try {
-            // pretend() short-circuits every statement before a PDO instance is
-            // needed, so this compiles the DDL without a server in sight.
-            $queries = DB::connection('key_length_probe')->pretend(function () {
-                foreach (glob(__DIR__.'/../../database/migrations/*.php') as $file) {
-                    (require $file)->up();
-                }
-            });
+            foreach (glob(__DIR__.'/../../database/migrations/*.php') as $file) {
+                $migration = require $file;
+
+                // 1. What MySQL would be sent, decided on the schema as it stands.
+                DB::setDefaultConnection('key_length_probe');
+                app()->instance('db.schema', $oracle);
+                Schema::clearResolvedInstance('db.schema');
+
+                $queries = array_merge($queries, $probe->pretend(fn () => $migration->up()));
+
+                // 2. Advance the real schema, so the next file branches on truth.
+                DB::setDefaultConnection('key_length_state');
+                app()->forgetInstance('db.schema');
+                Schema::clearResolvedInstance('db.schema');
+
+                $migration->up();
+            }
         } finally {
             DB::setDefaultConnection($previous);
+            app()->forgetInstance('db.schema');
+            Schema::clearResolvedInstance('db.schema');
             DB::purge('key_length_probe');
+            DB::purge('key_length_state');
         }
 
         $columns = [];
         $indexes = [];
 
         foreach (array_column($queries, 'query') as $sql) {
-            if (preg_match('/^create table `(\w+)` \((.*?)\)(?: default character set| collate|$)/s', $sql, $match)) {
+            if (preg_match('/^create table `(\w+)` \((.*)\)(?: default character set| collate|$)/s', $sql, $match)) {
                 foreach ($this->splitTopLevel($match[2]) as $definition) {
                     if (preg_match('/^`(\w+)` (.+)$/', trim($definition), $column)) {
                         $columns[$match[1]][$column[1]] = $this->describeColumn($column[2]);
@@ -211,8 +300,26 @@ class IndexKeyLengthTest extends TestCase
                 continue;
             }
 
+            // Columns added later (`Schema::table(…)->…`) and columns redefined
+            // by `->change()`, which MySQL compiles to `modify`. Both overwrite
+            // what the create-table statement said, so the last word wins —
+            // that is the shape the index is finally built on. Without these
+            // the schema measured would be the one the create migrations
+            // described, and brand_id, this addon's whole tenant boundary,
+            // arrives exactly this way.
+            if (preg_match('/^alter table `(\w+)` ((?:add|modify) .+)$/', $sql, $match)) {
+                foreach ($this->splitTopLevel($match[2]) as $definition) {
+                    if (preg_match('/^(?:add|modify) `(\w+)` (.+)$/', trim($definition), $column)) {
+                        $columns[$match[1]][$column[1]] = $this->describeColumn($column[2]);
+                    }
+                }
+            }
+
+            // Keyed by table and name, so an index that is rebuilt later in the
+            // chain counts once, in the shape the last migration left it —
+            // which is the shape the server ends up holding.
             if (preg_match('/^alter table `(\w+)` add (unique|index) `(\w+)`\((.+)\)$/', $sql, $match)) {
-                $indexes[$match[3]] = [
+                $indexes[$match[1].'.'.$match[3]] = [
                     'table' => $match[1],
                     'name' => $match[3],
                     'unique' => $match[2] === 'unique',
@@ -221,26 +328,10 @@ class IndexKeyLengthTest extends TestCase
                         explode(',', $match[4])
                     ),
                 ];
-
-                continue;
-            }
-
-            // Columns added or retyped by a later migration. Without these the
-            // schema measured would be the one the create migrations described,
-            // not the one that ends up on disk — and brand_id, this addon's
-            // whole tenant boundary, arrives exactly this way.
-            if (preg_match('/^alter table `(\w+)` (add|modify) (`\w+` .+)$/', $sql, $match)) {
-                foreach (explode(', '.$match[2].' ', $match[3]) as $definition) {
-                    if (preg_match('/^`(\w+)` (.+)$/', trim($definition), $column)) {
-                        $columns[$match[1]][$column[1]] = $this->describeColumn($column[2]);
-                    }
-                }
-
-                continue;
             }
 
             if (preg_match('/^alter table `(\w+)` drop index `(\w+)`$/', $sql, $match)) {
-                unset($indexes[$match[2]]);
+                unset($indexes[$match[1].'.'.$match[2]]);
             }
         }
 
@@ -308,5 +399,53 @@ class IndexKeyLengthTest extends TestCase
             // on MySQL.
             default => self::MAX_KEY_BYTES + 1,
         };
+    }
+}
+
+/**
+ * Compiles against MySQL's grammar, answers questions from a real database.
+ *
+ * Everything that writes goes to the probe connection and is measured.
+ * Everything that reads is delegated, because the probe has nothing to read:
+ * it has no schema, and `pretend()` would answer "empty" to every question a
+ * migration asks about the one it is modifying.
+ */
+class ProbeSchemaBuilder extends \Illuminate\Database\Schema\MySqlBuilder
+{
+    public function __construct(
+        \Illuminate\Database\Connection $probe,
+        private \Illuminate\Database\Connection $state,
+    ) {
+        parent::__construct($probe);
+    }
+
+    public function hasTable($table)
+    {
+        return $this->state->getSchemaBuilder()->hasTable($table);
+    }
+
+    public function hasColumn($table, $column)
+    {
+        return $this->state->getSchemaBuilder()->hasColumn($table, $column);
+    }
+
+    public function hasColumns($table, $columns)
+    {
+        return $this->state->getSchemaBuilder()->hasColumns($table, $columns);
+    }
+
+    public function getTables($schema = null)
+    {
+        return $this->state->getSchemaBuilder()->getTables();
+    }
+
+    public function getColumns($table)
+    {
+        return $this->state->getSchemaBuilder()->getColumns($table);
+    }
+
+    public function getIndexes($table)
+    {
+        return $this->state->getSchemaBuilder()->getIndexes($table);
     }
 }

@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.6.2 — 2026-07-28
+
+### Fixed — an interrupted brand-scoping migration could not be repaired by running it again
+
+`2026_07_24_100002_add_brand_id_to_automations_tables` adds `brand_id` to seven tables and then has two places left where it can stop: the `RuntimeException` it raises when `automations` still holds rows with no brand to put them on, and the rework of the handle unique, where the drop and the create are two separate statements and the second can fail on its own.
+
+Neither MySQL nor SQLite rolls DDL back, and a migration that throws is not written to the `migrations` table. So an aborted run leaves a database that is partly converted and a bookkeeping table that says the migration never happened — and, if it stopped inside step 4, a table whose global `handle` unique has been dropped and not replaced, which means the one identifier this addon promises to keep unique is unconstrained from that moment until somebody notices.
+
+The only move available to whoever hits that is `php artisan migrate` again, and unguarded it did not get as far as the problem. It died at the very first statement on `duplicate column name: brand_id` — an error about step 1 that describes nothing that is actually wrong and points whoever reads it at the wrong end of the file. That is the fingerprint `statamic-marketing` documented for its own copy of this migration in 1.6.4.
+
+Correcting the order of the statements would have fixed the next install and left every install that already broke exactly as broken as it is. So the migration is re-runnable rather than merely correctly ordered: the column addition asks each table whether it already has the column, and the unique rework reads the indexes actually on `automations` and does only the part still outstanding — checking the columns and the uniqueness, not just the name, because an index can exist under the right name over the wrong columns and be a promise the database is not keeping. Run on a clean pre-1.5.0 install, on a half-converted one, or twice in a row, `up()` ends with the same schema and raises nothing.
+
+`2026_07_28_000003_require_brand_id_on_automations_table` was reviewed and needed nothing: it was already guarded on `hasTable`, `hasColumn` and a nullability probe.
+
+### Added — the migrations are finally tested against a database with data in it
+
+This is the finding underneath the fix. A sweep across all eight addons in this family, prompted by `statamic-marketing` 1.6.4, looked for a check that runs a migration against tables that already hold rows. It found none, anywhere. Every migration in this addon had only ever met empty tables, because every bed it had was a fresh install — which is the one shape a migration can never be wrong about.
+
+Two properties of `tests/Migrations/` matter more than its individual cases.
+
+It names no migration file. It walks `database/migrations/` and seeds a fresh generation of automations, nodes, edges, runs, node runs, scheduled jobs and audit rows into every table that already exists *before each* migration, so a migration added three years from now is covered the day it is committed without anybody remembering to come back here. A test that lists the two files that were once broken only ever tests the past.
+
+And every assertion about the handle guarantee is behavioural. "The migration ran" and "the constraint is there" are not the same statement, and mistaking one for the other is the entire class of defect — so nothing there checks an exit code or an index name. It writes the row the constraint is supposed to refuse and requires the database to refuse it, together with the counterpart that catches a unique rebuilt over `handle` alone: the same handle in a different brand must still be accepted.
+
+`tests/Fixtures/released-migrations/` holds the migration sets as published in 1.2.0, 1.5.0 and 1.6.1, and the suite installs each of them, puts data in and upgrades forward. `tests/Feature/BrandIdMigrationIsRerunnableTest.php` covers the repair directly, from a populated install stopped halfway through. Reverted against the published migration both of its cases fail, each with the `duplicate column name: brand_id` the fix exists to stop producing.
+
+### Changed — the MySQL key-length probe can read the schema it is measuring
+
+`tests/Unit/IndexKeyLengthTest.php` compiles the migrations through Laravel's MySQL grammar in pretend mode to measure index bytes without a server. Under `pretend()` a `select` returns nothing, so a migration that asks `Schema::hasColumn()` or `Schema::getIndexes()` before deciding what to build is told the table is empty of everything — a state no install is ever in, and now that `2026_07_24_100002` branches on exactly those answers, one that would have had the probe measuring a schema nobody holds.
+
+It now runs two connections interleaved: the probe compiles the DDL through MySQL's grammar, and a real SQLite database one file behind answers every question the migrations ask about the current schema. Same measurements, on the schema that actually results. The same change `statamic-marketing` made in its 1.6.4 for the same reason.
+
+### Notes
+
+- Suite: **378 passed (1379 assertions)** on SQLite, baseline 372. Vitest unchanged at 37, `test:js` unchanged at 81.
+
 ## 1.6.1 — 2026-07-28
 
 ### Fixed — a refusal now says what the server said, and stays on screen

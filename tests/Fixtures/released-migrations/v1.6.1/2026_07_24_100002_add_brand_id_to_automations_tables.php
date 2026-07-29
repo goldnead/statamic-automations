@@ -22,56 +22,9 @@ use Illuminate\Support\Facades\Schema;
  *
  * Schema is identical in single- and multi-brand mode; enabling multi-brand
  * later needs no further migration.
- *
- * ---------------------------------------------------------------------------
- * Why every step below is guarded and re-runnable, rather than merely ordered
- * correctly.
- *
- * This migration can stop in the middle of itself, and it has two places to do
- * it. Step 3 throws a RuntimeException when `automations` still holds rows
- * without a brand_id — the case where brand-context has not been installed, so
- * there is no default brand to backfill onto. Step 4 drops the global
- * `automations_handle_unique` and builds `(brand_id, handle)` in its place, and
- * the second of those two statements can fail on its own (duplicate handles
- * within one brand, an index name already taken, an engine-level refusal).
- * Neither MySQL nor SQLite rolls DDL back, and a migration that throws is not
- * recorded as run — so what an aborted attempt leaves behind is a database that
- * is halfway through this file and a `migrations` table that says the file
- * never ran.
- *
- * Everything up to the point of failure has already happened. Step 1 has added
- * `brand_id` to all seven tables, or to some of them. Step 4 may have dropped
- * the global handle unique without replacing it, which means `handle` — the one
- * identifier this addon promises to keep unique — is unconstrained from that
- * moment until somebody notices.
- *
- * The obvious repair is to run `php artisan migrate` again. With an
- * unconditional `up()` that does not work, and it fails in the most misleading
- * way available: the run dies at step 1 on `duplicate column name: brand_id`,
- * an error about the very first statement, which says nothing about the missing
- * unique and sends whoever reads it looking at the wrong end of the file. The
- * install stays broken and the message actively points away from the breakage.
- * That is the fingerprint statamic-marketing documented for its own copy of
- * this migration in 1.6.4.
- *
- * So correcting the order of the statements is not enough. Ordering alone fixes
- * the next install and leaves every install that already broke exactly as
- * broken as it is, because those installs need this file to run a *second*
- * time and finish what it started. Hence: the column addition asks each table
- * whether it already has the column, and the unique rework reads the indexes
- * that are actually on `automations` and does only the part that is still
- * missing. Run on a clean pre-1.5.0 install, on a half-migrated one, or twice
- * in a row, `up()` ends with the same schema and raises nothing.
- * ---------------------------------------------------------------------------
  */
 return new class extends Migration
 {
-    /** The brand-scoped handle unique this migration exists to build. */
-    private const HANDLE_UNIQUE = 'automations_brand_id_handle_unique';
-
-    /** The global handle unique it replaces, as named by the create-migration. */
-    private const LEGACY_HANDLE_UNIQUE = 'automations_handle_unique';
-
     /** Every stateful automations table gets a brand_id. */
     private array $tables = [
         'automations',
@@ -99,17 +52,7 @@ return new class extends Migration
     public function up(): void
     {
         // 1. Add nullable brand_id + index everywhere.
-        //
-        //    Skipped per table where it is already there. An interrupted run
-        //    leaves some tables with the column and some without, and asking
-        //    each table separately is the only reading that is correct in all
-        //    three states this file has to be correct in at once: never ran,
-        //    ran to completion, stopped halfway.
         foreach ($this->tables as $name) {
-            if (Schema::hasColumn($name, 'brand_id')) {
-                continue;
-            }
-
             Schema::table($name, function (Blueprint $table): void {
                 $table->unsignedBigInteger('brand_id')->nullable()->index();
             });
@@ -163,54 +106,9 @@ return new class extends Migration
         });
 
         // 4. Unique rework — the handle identifier becomes brand-scoped.
-        $this->scopeHandleUniqueToBrand();
-    }
-
-    /**
-     * Move the handle unique from `handle` to `(brand_id, handle)`, from
-     * whatever state the table is currently in.
-     *
-     * Written as a question about the schema rather than as a sequence of
-     * statements, because the sequence has three possible starting points and
-     * only one of them is "the global unique is there and the brand-scoped one
-     * is not". The other two are a table that already carries the finished
-     * index — a completed run, or a second pass over one — and a table that
-     * carries neither, which is what an abort between the drop and the create
-     * leaves behind. `dropUnique()` on an index that is not there is a hard
-     * error on both engines, and so is `unique()` on a name already taken, so
-     * each half is done only if the schema says it is still outstanding.
-     */
-    private function scopeHandleUniqueToBrand(): void
-    {
-        $indexes = collect(Schema::getIndexes('automations'))->keyBy('name');
-
-        $wanted = $indexes->get(self::HANDLE_UNIQUE);
-
-        // Already done. Note that this checks the columns and the uniqueness,
-        // not just the name: an index can exist under the right name over the
-        // wrong columns, or as a plain index, and either would be a promise
-        // the database is not keeping.
-        if ($wanted && $wanted['columns'] === ['brand_id', 'handle'] && ($wanted['unique'] ?? false)) {
-            return;
-        }
-
-        if ($indexes->has(self::LEGACY_HANDLE_UNIQUE)) {
-            Schema::table('automations', function (Blueprint $table): void {
-                $table->dropUnique(self::LEGACY_HANDLE_UNIQUE);
-            });
-        }
-
-        // An index under the wanted name that did not satisfy the check above
-        // is wrong, not absent, and has to go before the right one can be
-        // built under the same name.
-        if ($wanted) {
-            Schema::table('automations', function (Blueprint $table): void {
-                $table->dropIndex(self::HANDLE_UNIQUE);
-            });
-        }
-
         Schema::table('automations', function (Blueprint $table): void {
-            $table->unique(['brand_id', 'handle'], self::HANDLE_UNIQUE);
+            $table->dropUnique(['handle']);
+            $table->unique(['brand_id', 'handle']);
         });
     }
 
