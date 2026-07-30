@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.7.1 — 2026-07-30
+
+### Fixed — `automations:sync` could import over a database it could not see
+
+The command took no brand. A console run has no session, so under multi-brand the global scope failed closed and every query came back empty — and here that is worse than a no-op, because the command asks the database a question before deciding what to do.
+
+`detectDirection()` checks whether the database holds any automations. It saw none, concluded the files must be the source of truth, and a bare `automations:sync` would import them over automations it simply could not read. `--from=db` was the harmless direction: it exported nothing and said so.
+
+**The fix does not iterate brands**, because `resources/automations/` cannot hold more than one. It is a single flat folder of `{handle}.json`, and handles are unique *per brand* — two brands may each own a `welcome-flow`, so exporting both would have the second overwrite the first, and importing cannot know which brand a folder belongs to.
+
+So the command now refuses to guess:
+
+- More than one brand and no `--brand` is **rejected**, naming the brands and the reason. Run it once per brand with `automations.file_storage.path` pointed at a directory of its own.
+- An unknown `--brand` is rejected rather than silently falling back.
+- Single-brand installs are unaffected — no option, no prompt, same behaviour.
+
+`tests/Feature/SyncBrandGuardTest.php` covers it; four of its five cases fail without the fix.
+
+> Same class of defect as the one `RunsForEachBrand` was written for, and the third addon to hit it. The trait was not the answer here: iterating brands is exactly what must **not** happen when the target is one shared directory.
+
 ## 1.7.0 — 2026-07-29
 
 A node's output handles are now declared once, by the node, and read from that one declaration by the canvas, the validator and the node's own `outputs()`. The reason this is a **minor** and not a patch is that it adds public surface — a field in the node-library payload, an extension point third-party nodes are meant to implement, and a documented wire contract with a version on it — and changes one visible behaviour (Duplicate on a loop). The reason it is not a major is that nothing a consumer already depends on was removed or renamed: no stored data, no route, no API response shape, no permission, no output handle string.
