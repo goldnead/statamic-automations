@@ -153,6 +153,14 @@ abstract class TestCase extends AddonTestCase
             'driver' => 'sqlite',
             'database' => ':memory:',
             'prefix' => '',
+            // SQLite ignores foreign keys unless asked to enforce them, and a
+            // suite that runs with them off is blind to a whole class of
+            // defect: it accepts rows a real install would reject, and it
+            // never performs the ON DELETE SET NULL / CASCADE the schema
+            // promises. That is how a test came to assert on an orphaned run
+            // with a dangling automation_id — a row MySQL refuses outright,
+            // and a data shape production can never reach.
+            'foreign_key_constraints' => true,
         ]);
 
         if ($driver === 'mysql') {
