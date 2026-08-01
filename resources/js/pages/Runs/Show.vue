@@ -52,9 +52,11 @@ async function retry() {
 async function retryNode(nodeRun) {
     retryingNodeId.value = nodeRun.id;
     try {
-        await axios.post(
-            props.retryUrl.replace(/\/runs\/.+\/retry$/, `/node-runs/${nodeRun.id}/retry`),
-        );
+        // retry_url comes per node run from RunsPageController. This used to be
+        // a regex rewrite of the run-level retryUrl, which is the same class of
+        // defect as the dead templates link: a URL invented on the client from
+        // the shape of another one.
+        await axios.post(nodeRun.retry_url);
         window.Statamic?.$toast?.success?.(__('Re-queued from :node', { node: nodeRun.node_key }));
     } catch (e) {
         window.Statamic?.$toast?.error?.(firstMessage(e, __('Partial retry failed.')));
@@ -75,7 +77,7 @@ function stringify(value) {
 <template>
     <Head :title="[title, __('Runs'), __('Statamic Automations')]" />
 
-    <div class="max-w-5xl 3xl:max-w-6xl mx-auto" data-max-width-wrapper>
+    <div class="max-w-page mx-auto" data-max-width-wrapper>
         <Header :title="title" icon="history">
             <Link :href="indexUrl" class="text-sm text-gray-500 hover:text-blue-500 mr-2">
                 ← {{ __('All runs') }}

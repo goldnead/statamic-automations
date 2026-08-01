@@ -28,7 +28,7 @@
                         <span class="text-gray-500">{{ nodeRun.node_type }}</span>
                         <Badge :color="statusColor(nodeRun.status)" :text="nodeRun.status" />
                     </header>
-                    <pre v-if="nodeRun.output" class="text-2xs font-mono mt-2 p-2 rounded bg-white dark:bg-gray-800 overflow-x-auto max-h-40">{{ stringify(nodeRun.output) }}</pre>
+                    <pre v-if="nodeRun.output" class="text-2xs font-mono mt-2 p-2 rounded bg-content-bg overflow-x-auto max-h-40">{{ stringify(nodeRun.output) }}</pre>
                     <p v-if="nodeRun.error_message" class="text-xs text-red-600 dark:text-red-400 mt-1">
                         {{ nodeRun.error_message }}
                     </p>

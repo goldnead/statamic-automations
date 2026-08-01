@@ -22,6 +22,13 @@ class AutomationResource extends JsonResource
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
 
+            // Handed out so callers never have to build it themselves. The
+            // templates screen used to derive its post-install redirect with
+            // `location.pathname.replace('/templates', '/automations/'+id+'/edit')`,
+            // which only worked because the create route happens to carry a
+            // doubled `automations/automations` segment.
+            'edit_url' => cp_route('statamic-automations.automations.edit', $this->id),
+
             'nodes' => $this->whenLoaded('nodes', function () {
                 return $this->nodes->map(fn ($node) => [
                     'node_key' => $node->node_key,

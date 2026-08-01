@@ -98,11 +98,11 @@
                         </p>
                     </header>
 
-                    <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800 bg-white shadow-sm">
+                    <div class="sa-email-canvas overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
                         <iframe
                             :srcdoc="preview.html"
                             sandbox="allow-same-origin"
-                            class="block w-full h-[40vh] min-h-72 border-0 bg-white"
+                            class="sa-email-canvas block w-full h-[40vh] min-h-72 border-0"
                             :title="__('Vorschau der Vorlage')"
                             loading="lazy"
                         />

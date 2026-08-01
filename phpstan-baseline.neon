@@ -975,7 +975,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 1
+			count: 2
 			path: src/Http/Controllers/Pages/RunsPageController.php
 
 		-
@@ -1161,7 +1161,7 @@ parameters:
 		-
 			message: '#^Access to an undefined property Goldnead\\StatamicAutomations\\Http\\Resources\\AutomationResource\:\:\$id\.$#'
 			identifier: property.notFound
-			count: 1
+			count: 2
 			path: src/Http/Resources/AutomationResource.php
 
 		-

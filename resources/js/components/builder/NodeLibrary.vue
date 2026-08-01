@@ -174,31 +174,40 @@ const PaletteItem = defineComponent({
     },
     emits: ['select'],
     setup(itemProps, { emit }) {
+        // The clickable element is a real <button>, not the <li>. The <li> with
+        // an onClick that used to sit here was reachable by mouse only: no role,
+        // no tabindex, no key handler. Adding a node is the primary action of
+        // this addon, so that made the whole builder unusable from a keyboard or
+        // a screen reader. A native button brings focus, Enter/Space and the
+        // right role with it — the same shape EmailTemplatePicker already uses.
         return () =>
-            h(
-                'li',
-                {
-                    class: 'group flex items-start gap-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-2.5 py-2 cursor-pointer hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors',
-                    onClick: () => emit('select', itemProps.item.handle),
-                },
-                [
-                    h(
-                        'span',
-                        { class: `sa-icon-chip sa-icon-chip--sm sa-icon-chip--${itemProps.kind}` },
-                        [h(Icon, { name: nodeIcon(itemProps.item.handle, itemProps.kind), class: 'size-3.5' })],
-                    ),
-                    h('div', { class: 'min-w-0' }, [
-                        h('div', { class: 'text-sm font-medium leading-tight truncate' }, itemProps.item.label),
-                        itemProps.item.description
-                            ? h(
-                                'div',
-                                { class: 'text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-snug' },
-                                itemProps.item.description,
-                            )
-                            : null,
-                    ]),
-                ],
-            );
+            h('li', { class: 'w-full' }, [
+                h(
+                    'button',
+                    {
+                        type: 'button',
+                        class: 'group w-full text-start flex items-start gap-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-content-bg px-2.5 py-2 cursor-pointer hover:border-blue-400 hover:bg-gray-50 dark:hover:bg-gray-800 focus-outline transition-colors',
+                        onClick: () => emit('select', itemProps.item.handle),
+                    },
+                    [
+                        h(
+                            'span',
+                            { class: `sa-icon-chip sa-icon-chip--sm sa-icon-chip--${itemProps.kind}` },
+                            [h(Icon, { name: nodeIcon(itemProps.item.handle, itemProps.kind), class: 'size-3.5' })],
+                        ),
+                        h('div', { class: 'min-w-0' }, [
+                            h('div', { class: 'text-sm font-medium leading-tight truncate' }, itemProps.item.label),
+                            itemProps.item.description
+                                ? h(
+                                    'div',
+                                    { class: 'text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-snug' },
+                                    itemProps.item.description,
+                                )
+                                : null,
+                        ]),
+                    ],
+                ),
+            ]);
     },
 });
 </script>

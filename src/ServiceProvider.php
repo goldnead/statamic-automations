@@ -597,16 +597,20 @@ class ServiceProvider extends AddonServiceProvider
             return;
         }
 
-        Permission::group('automations', 'Automations', function () {
-            Permission::register('view automations')->label('View automations');
-            Permission::register('create automations')->label('Create automations');
-            Permission::register('edit automations')->label('Edit automations');
-            Permission::register('delete automations')->label('Delete automations');
-            Permission::register('enable automations')->label('Enable / disable automations');
-            Permission::register('run automation tests')->label('Run automation tests');
-            Permission::register('view automation runs')->label('View automation runs');
-            Permission::register('retry automation runs')->label('Retry automation runs');
-            Permission::register('manage automation settings')->label('Manage automation settings');
+        // Labels go through the addon's own namespaced dictionary, not raw
+        // English and not the shared JSON file. The nav directly below has
+        // always been translated; these nine rows were the one place a German
+        // CP still showed English.
+        Permission::group('automations', __('statamic-automations::automations.permissions.group'), function () {
+            Permission::register('view automations')->label(__('statamic-automations::automations.permissions.view'));
+            Permission::register('create automations')->label(__('statamic-automations::automations.permissions.create'));
+            Permission::register('edit automations')->label(__('statamic-automations::automations.permissions.edit'));
+            Permission::register('delete automations')->label(__('statamic-automations::automations.permissions.delete'));
+            Permission::register('enable automations')->label(__('statamic-automations::automations.permissions.enable'));
+            Permission::register('run automation tests')->label(__('statamic-automations::automations.permissions.test'));
+            Permission::register('view automation runs')->label(__('statamic-automations::automations.permissions.view_runs'));
+            Permission::register('retry automation runs')->label(__('statamic-automations::automations.permissions.retry_runs'));
+            Permission::register('manage automation settings')->label(__('statamic-automations::automations.permissions.settings'));
         });
     }
 

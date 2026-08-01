@@ -10,16 +10,15 @@
     "Success": "Erfolg",
     "Failed": "Fehlgeschlagen",
     "Recent failures": "Letzte Fehler",
-    "No failed runs. ": "Keine fehlgeschlagenen Durchläufe. ",
+    "No failed runs.": "Keine fehlgeschlagenen Durchläufe.",
     "Runs": "Durchläufe",
     "Automation templates": "Automatisierungsvorlagen",
     "Audit log": "Änderungsprotokoll",
-    "Versions": "Versionen",
     "Action": "Aktion",
     "When": "Wann",
-    "Revert": "Zurücksetzen",
-    "Version": "Version",
-    "Nodes": "Knoten",
-    "No audit entries yet.": "Noch keine Protokolleinträge.",
-    "No versions yet.": "Noch keine Versionen."
+    "No audit entries yet": "Noch keine Protokolleinträge",
+    "Browse automations": "Automatisierungen ansehen",
+    "No templates available": "Keine Vorlagen verfügbar",
+    "Build one from scratch": "Selbst eine bauen",
+    "Delete automation": "Automatisierung löschen"
 }

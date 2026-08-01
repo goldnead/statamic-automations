@@ -6,6 +6,8 @@ import {
     Button,
     Badge,
     Icon,
+    EmptyStateMenu,
+    EmptyStateItem,
 } from '@statamic/cms/ui';
 import axios from 'axios';
 import { firstMessage } from '../../support/serverErrors.js';
@@ -13,6 +15,7 @@ import { firstMessage } from '../../support/serverErrors.js';
 const props = defineProps({
     title: { type: String, required: true },
     templates: { type: Array, required: true },
+    automationsUrl: { type: String, required: true },
     canCreate: { type: Boolean, default: false },
 });
 
@@ -24,7 +27,9 @@ async function install(template) {
         const { data } = await axios.post(template.install_url);
         const created = data?.data ?? data;
         window.Statamic?.$toast?.success?.(__('Template installed.'));
-        router.visit(window.location.pathname.replace('/templates', '/automations/' + created.id + '/edit'));
+        // edit_url comes from the server (AutomationResource). Deriving it from
+        // location.pathname worked only by accident of the route layout.
+        router.visit(created.edit_url);
     } catch (e) {
         window.Statamic?.$toast?.error?.(firstMessage(e, __('Install failed.')));
     } finally {
@@ -43,11 +48,20 @@ async function install(template) {
             {{ __('Templates are pre-built automations you can install with one click. Each template is copied into a new automation that you can freely edit afterwards — addon updates do not silently change your installed copies.') }}
         </p>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <EmptyStateMenu v-if="templates.length === 0" :heading="__('No templates available')">
+            <EmptyStateItem
+                :href="automationsUrl"
+                icon="workflow"
+                :heading="__('Build one from scratch')"
+                :description="__('Every built-in template is gated behind the integration it needs. With none installed, the catalog is empty.')"
+            />
+        </EmptyStateMenu>
+
+        <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             <article
                 v-for="template in templates"
                 :key="template.handle"
-                class="rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 flex flex-col gap-2"
+                class="rounded-md border border-gray-200 dark:border-gray-700 bg-content-bg p-4 flex flex-col gap-2"
             >
                 <header class="flex items-start justify-between gap-2">
                     <h3 class="text-base font-semibold m-0">{{ template.name }}</h3>

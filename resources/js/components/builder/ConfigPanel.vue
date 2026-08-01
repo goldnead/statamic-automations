@@ -127,7 +127,7 @@
                 <PropertiesSection :title="__('Properties')" :default-open="false">
                     <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-xs">
                         <dt class="text-gray-500 dark:text-gray-400">{{ __('Type') }}</dt>
-                        <dd class="font-mono text-gray-700 dark:text-gray-300 text-right truncate">{{ node.type }}</dd>
+                        <dd class="font-mono text-gray-900 dark:text-gray-300 text-right truncate">{{ node.type }}</dd>
 
                         <dt class="text-gray-500 dark:text-gray-400">{{ __('Category') }}</dt>
                         <dd class="text-right">
@@ -135,7 +135,7 @@
                         </dd>
 
                         <dt class="text-gray-500 dark:text-gray-400">{{ __('Node key') }}</dt>
-                        <dd class="font-mono text-gray-700 dark:text-gray-300 text-right truncate">{{ node.node_key }}</dd>
+                        <dd class="font-mono text-gray-900 dark:text-gray-300 text-right truncate">{{ node.node_key }}</dd>
 
                         <dt class="text-gray-500 dark:text-gray-400">{{ __('Status') }}</dt>
                         <dd class="text-right">
@@ -151,7 +151,7 @@
             </div>
 
             <!-- Sticky footer actions -->
-            <footer class="flex items-center gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+            <footer class="flex items-center gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-content-bg">
                 <!-- Trigger nodes have no Duplicate here either (same
                      one-trigger-per-flow rule as Delete below): duplicating
                      a trigger would create a second one, which has no

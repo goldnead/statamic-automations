@@ -35,11 +35,11 @@
             </header>
 
             <!-- Device-framed render of the branded HTML (sandboxed, no scripts) -->
-            <div class="mx-auto w-full max-w-[640px] overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800 bg-white shadow-sm">
+            <div class="sa-email-canvas mx-auto w-full max-w-[640px] overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800 shadow-sm">
                 <iframe
                     :srcdoc="preview.html"
                     sandbox="allow-same-origin"
-                    class="block w-full h-[48vh] min-h-80 border-0 bg-white"
+                    class="sa-email-canvas block w-full h-[48vh] min-h-80 border-0"
                     :title="__('E-Mail-Vorschau')"
                     loading="lazy"
                 />

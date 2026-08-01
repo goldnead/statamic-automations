@@ -16,8 +16,8 @@ const cache = new Map();
  * rest of the addon's Vue pages already use for CP requests (no custom
  * axios setup, no separate base URL — same-origin CP routes handle CSRF
  * via the browser's XSRF cookie automatically, same as the addon's
- * existing `axios.post(...)`/`axios.get(...)` calls in
- * `Automations/Edit.vue` and `Automations/Index.vue`).
+ * existing bare-axios calls in `Automations/Edit.vue` and
+ * `Automations/Index.vue`).
  *
  * @param {string|import('vue').Ref<string|null>} source - `options_source`
  *   handle from the field schema (e.g. `statamic.collections`, `entries`).

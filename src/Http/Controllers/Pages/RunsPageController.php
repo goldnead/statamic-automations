@@ -122,6 +122,7 @@ class RunsPageController extends Controller
                     'input' => $n->input,
                     'output' => $n->output,
                     'error_message' => $n->error_message,
+                    'retry_url' => cp_route('statamic-automations.api.node-runs.retry', $n->id),
                 ])->values()->all(),
             ],
             'indexUrl' => cp_route('statamic-automations.runs.index'),

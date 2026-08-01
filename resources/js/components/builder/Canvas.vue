@@ -88,9 +88,15 @@ const emit = defineEmits([
 provide('saPendingTarget', computed(() => props.pendingTarget));
 provide('saStartPick', (target) => emit('toggle-pick', target));
 
-// Vue Flow paints the dots via an SVG `fill` attribute, which does not resolve
-// CSS `var()`. Pass a neutral literal here and re-tint theme-aware from cp.css.
-const dotColor = '#d1d5db';
+// Vue Flow paints the pattern via an SVG presentation attribute (`fill` on the
+// dot variant, `stroke` on the lines variant), and an attribute cannot resolve a
+// CSS `var()`. `currentColor` can: it is resolved by inheritance, so cp.css sets
+// `color` on `.vue-flow__background` and the pattern follows the theme in both
+// modes. This replaces a hard-coded light-grey literal that was rescued only by
+// a `.vue-flow__background circle` override — which would have silently reverted
+// to a light grid on a dark canvas the moment Vue Flow rendered anything but a
+// <circle>, or renamed the class.
+const dotColor = 'currentColor';
 
 function cardProps(slotProps) {
     return {

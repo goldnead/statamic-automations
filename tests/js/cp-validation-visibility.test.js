@@ -113,7 +113,8 @@ function mountIndex() {
             title: 'Automations',
             rows: [{ id: 7, name: 'Nightly', enabled: false, handle: 'nightly' }],
             columns: [{ field: 'name', label: 'Name' }],
-            createUrl: '/cp/automations/create',
+            createUrl: '/cp/automations/automations/create',
+            templatesUrl: '/cp/automations/templates',
             apiBase: '/cp/automations/api',
             canCreate: true,
         },
@@ -209,13 +210,32 @@ describe('Automations/Index — a refused row action', () => {
             message: "Permission 'delete automations' is required.",
         }));
 
-        window.confirm = () => true;
-
+        // Deletion is confirmed in the CP's own ConfirmationModal now, so the
+        // flow is arm-then-confirm. window.confirm is not stubbed on purpose:
+        // if it ever comes back, jsdom throws "not implemented" here.
         const wrapper = mountIndex();
-        await wrapper.vm.$.setupState.destroy({ id: 7, name: 'Nightly' });
+        wrapper.vm.$.setupState.confirmDestroy({ id: 7, name: 'Nightly' });
+        await wrapper.vm.$.setupState.destroy();
         await flushPromises();
 
         expect(shownErrors(wrapper)).toContain("Permission 'delete automations' is required.");
+    });
+
+    it('asks in a CP modal rather than a browser dialog', async () => {
+        const wrapper = mountIndex();
+
+        const modal = () => wrapper.find('[data-stub="ConfirmationModal"]');
+
+        expect(modal().exists()).toBe(true);
+        expect(modal().attributes('data-attr-open')).toBe('false');
+
+        wrapper.vm.$.setupState.confirmDestroy({ id: 7, name: 'Nightly' });
+        await wrapper.vm.$nextTick();
+
+        expect(modal().attributes('data-attr-open')).toBe('true');
+
+        // The prompt text is built from the row, so it is what the modal shows.
+        expect(wrapper.vm.$.setupState.deletePrompt).toContain('Nightly');
     });
 
     it('says what the server said about a refused duplicate', async () => {

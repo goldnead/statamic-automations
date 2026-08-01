@@ -121,7 +121,7 @@ it('translates the source strings its own screens actually pass to __()', functi
     // returns the key. These are the strings the nav and the page titles pass.
     $de = automationsJsonTranslations()['de'];
 
-    foreach (['Automations', 'Runs', 'Audit log', 'Automation templates', 'Versions'] as $source) {
+    foreach (['Automations', 'Runs', 'Audit log', 'Automation templates'] as $source) {
         expect($de)->toHaveKey($source);
     }
 
@@ -129,4 +129,65 @@ it('translates the source strings its own screens actually pass to __()', functi
     foreach (['Templates', 'User', 'Dashboard', 'Settings'] as $surrendered) {
         expect($de)->not->toHaveKey($surrendered);
     }
+});
+
+/**
+ * Every `__('…')` source string this addon's own code passes.
+ *
+ * @return list<string>
+ */
+function automationsSourceStrings(): array
+{
+    $roots = [__DIR__.'/../../resources/js', __DIR__.'/../../src'];
+    $found = [];
+
+    foreach ($roots as $root) {
+        $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS));
+
+        foreach ($files as $file) {
+            if (! in_array($file->getExtension(), ['js', 'vue', 'mjs', 'php'], true)) {
+                continue;
+            }
+
+            $contents = (string) file_get_contents($file->getPathname());
+
+            // __('single') and __("double"), the two forms the tree uses.
+            preg_match_all("/__\\(\\s*'((?:[^'\\\\]|\\\\.)*)'/", $contents, $single);
+            preg_match_all('/__\(\s*"((?:[^"\\\\]|\\\\.)*)"/', $contents, $double);
+
+            foreach (array_merge($single[1], $double[1]) as $match) {
+                $found[] = stripcslashes($match);
+            }
+        }
+    }
+
+    return array_values(array_unique($found));
+}
+
+it('ships no translation for a string nothing passes to __()', function (): void {
+    // `de.json` carried "No failed runs. " with a trailing space while
+    // Dashboard.vue calls __('No failed runs.'). The lookup can never match, so
+    // the German string was dead on arrival and nothing said so — __() just
+    // returns the key and the CP shows English. A dictionary key that no source
+    // string produces is either a typo like that one or a leftover from a
+    // reworded screen; both are silent.
+    $sources = automationsSourceStrings();
+
+    // Guard the extraction itself: an empty or tiny result would pass the check
+    // below for the wrong reason.
+    expect(count($sources))->toBeGreaterThan(100);
+
+    $orphans = [];
+
+    foreach (automationsJsonTranslations() as $locale => $strings) {
+        foreach (array_keys($strings) as $key) {
+            if (! in_array($key, $sources, true)) {
+                $orphans[] = sprintf('%s.json: "%s"', $locale, $key);
+            }
+        }
+    }
+
+    expect($orphans)->toBe([], implode("\n", $orphans)."\n"
+        .'No __() call in resources/js or src passes these strings, so the translations can never '
+        .'resolve. Fix the key to match the source string, or drop it.');
 });

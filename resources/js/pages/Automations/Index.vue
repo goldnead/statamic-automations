@@ -12,6 +12,7 @@ import {
     DocsCallout,
     DropdownItem,
     Alert,
+    ConfirmationModal,
 } from '@statamic/cms/ui';
 import axios from 'axios';
 
@@ -80,17 +81,39 @@ async function duplicate(row) {
     }
 }
 
-async function destroy(row) {
-    if (!window.confirm(__('Are you sure you want to delete ":name"?', { name: row.name }))) {
-        return;
-    }
+// Deletion is confirmed in a native CP modal, not window.confirm. A browser
+// chrome dialog reads as third-party in the middle of a CP flow, cannot be
+// styled or translated consistently, and is suppressed outright in some
+// embedded contexts — where the click then silently does nothing.
+const pendingDelete = ref(null);
+const deleting = ref(false);
+
+const deletePrompt = computed(() =>
+    pendingDelete.value
+        ? __('Are you sure you want to delete ":name"?', { name: pendingDelete.value.name })
+        : '',
+);
+
+function confirmDestroy(row) {
+    pendingDelete.value = row;
+}
+
+async function destroy() {
+    const row = pendingDelete.value;
+    if (!row) return;
+
+    deleting.value = true;
     try {
         await axios.delete(props.apiBase + '/automations/' + row.id);
         actionErrors.value = [];
         window?.Statamic?.$toast?.success?.(__('Deleted.'));
+        pendingDelete.value = null;
         reloadPage();
     } catch (e) {
         report(e, __('Delete failed.'));
+        pendingDelete.value = null;
+    } finally {
+        deleting.value = false;
     }
 }
 
@@ -201,9 +224,21 @@ function exportJson(row) {
                     v-if="row.can_delete"
                     :text="__('Delete')"
                     icon="trash"
-                    @click="destroy(row)"
+                    @click="confirmDestroy(row)"
                 />
             </template>
         </Listing>
+
+        <ConfirmationModal
+            :open="pendingDelete !== null"
+            :title="__('Delete automation')"
+            :body-text="deletePrompt"
+            :button-text="__('Delete')"
+            :busy="deleting"
+            danger
+            @update:open="pendingDelete = $event ? pendingDelete : null"
+            @confirm="destroy"
+            @cancel="pendingDelete = null"
+        />
     </div>
 </template>

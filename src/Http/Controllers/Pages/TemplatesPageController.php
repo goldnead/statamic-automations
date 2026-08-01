@@ -35,6 +35,7 @@ class TemplatesPageController extends Controller
         return Inertia::render('statamic-automations::Templates/Index', [
             'title' => __('Automation templates'),
             'templates' => $templates,
+            'automationsUrl' => cp_route('statamic-automations.automations.index'),
             'canCreate' => $this->userCan('create automations'),
         ]);
     }

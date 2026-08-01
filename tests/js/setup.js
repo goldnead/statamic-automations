@@ -114,7 +114,20 @@ globalThis.__STATAMIC__ = {
 
 // The CP exposes the translator as a global template helper. Templates call
 // `__('Delivery')`; returning the key keeps assertions readable.
-const translate = (key) => (Array.isArray(key) ? key.filter(Boolean).join(' ') : String(key ?? ''));
+//
+// The real translator also substitutes `:placeholders` from the second
+// argument. The stub does too — without it a component that builds a sentence
+// out of data (`__('Delete ":name"?', { name: row.name })`) is untestable: the
+// assertion can only ever see the raw key, so it cannot tell a correct
+// substitution from a missing one.
+const translate = (key, replacements = {}) => {
+    const source = Array.isArray(key) ? key.filter(Boolean).join(' ') : String(key ?? '');
+
+    return Object.entries(replacements ?? {}).reduce(
+        (carry, [token, value]) => carry.split(`:${token}`).join(String(value)),
+        source,
+    );
+};
 
 config.global.mocks = { __: translate };
 

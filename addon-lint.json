@@ -1,0 +1,37 @@
+{
+    "severity": {
+        "ui.inertia-navigation": "minor"
+    },
+
+    "_rationale": {
+        "ui.inertia-navigation": [
+            "Downgraded, not disabled: the twelve remaining hits stay visible in every report.",
+
+            "What the rule is right about: `axios.post(...)` followed by a manual page reload skips the",
+            "Inertia progress bar, flash toasts, the dirty-state guard and the back button. That is a real",
+            "antipattern and this addon does not do it — the two row-action screens already refresh through",
+            "`router.reload()`, so navigation and history stay inside Inertia.",
+
+            "What the twelve hits actually are: calls into this addon's JSON API (routes/cp.php, the",
+            "`api.*` group — 32 routes that never render a page and are documented as such at the top of",
+            "that file). Seven of them are the canvas builder's RPC loop: save/create return the new id,",
+            "validate returns the issue list, test and test-node return a run transcript that is rendered",
+            "inline next to the node. `router.post()` cannot carry a response body back to the caller; it",
+            "expects an Inertia page response and errors on anything else. Converting these means",
+            "redesigning the client/server contract of the whole builder — 32 endpoints, AutomationsApiTest,",
+            "ApiSmokeTest, OptionsEndpointTest and the Vitest component suite. That is a v2 architecture",
+            "decision for Adrian, not a hardening change, and it is filed as one.",
+
+            "Precedent in core: statamic/cms 6 ships the same shape it forbids here —",
+            "resources/js/pages/users/Passkeys.vue:40 is `axios.delete(url).then(() => router.reload())`,",
+            "and pages/users/OAuth.vue:29 is the same. Core has 17 axios mutations against 15 router ones.",
+            "A blanket ban is stricter than core's own practice.",
+
+            "Fixed rather than excused: the docblock false positive in composables/useNodeOptions.js (a",
+            "comment, not a call), and every URL that was invented on the client by rewriting another URL",
+            "(Automations/Index.vue's templates link, Runs/Show.vue's node retry, Templates/Index.vue's",
+            "post-install redirect) — those now come from the server and are pinned by",
+            "tests/Feature/CpLinkTargetsTest.php."
+        ]
+    }
+}

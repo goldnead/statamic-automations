@@ -16,6 +16,19 @@ const props = defineProps({
     license: { type: Object, required: true },
 });
 
+/** Stable ids so each value cell can point at the label that names it. */
+function slug(value) {
+    return String(value).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+function sectionId(title) {
+    return `sa-settings-${slug(title)}`;
+}
+
+function rowId(title, index) {
+    return `${sectionId(title)}-row-${index}`;
+}
+
 const testModeMeta = {
     send_real_webhooks: {
         label: __('Send real webhooks'),
@@ -117,23 +130,30 @@ const sections = computed(() => {
         </Alert>
 
         <div class="space-y-8">
-            <section v-for="section in sections" :key="section.title">
-                <h2 class="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2 px-1">
+            <section v-for="section in sections" :key="section.title" :aria-labelledby="sectionId(section.title)">
+                <h2 :id="sectionId(section.title)" class="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2 px-1">
                     {{ section.title }}
                 </h2>
 
-                <div class="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm divide-y divide-gray-200 dark:divide-gray-800">
+                <!-- A description list rendered as a grid. `dl`/`dt`/`dd` would
+                     collapse the two-column layout, so the roles are declared
+                     instead — otherwise this reads as unrelated text runs. -->
+                <div
+                    class="rounded-xl border border-gray-200 dark:border-gray-800 bg-content-bg shadow-sm divide-y divide-gray-200 dark:divide-gray-800"
+                    role="list"
+                >
                     <div
                         v-for="(row, i) in section.rows"
                         :key="i"
+                        role="listitem"
                         class="grid md:grid-cols-2 items-start gap-x-6 gap-y-1.5 px-5 py-4"
                     >
                         <div class="min-w-0">
-                            <div class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ row.label }}</div>
+                            <div :id="rowId(section.title, i)" class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ row.label }}</div>
                             <div class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{{ row.description }}</div>
                         </div>
 
-                        <div class="text-sm md:pt-0.5">
+                        <div class="text-sm md:pt-0.5" :aria-labelledby="rowId(section.title, i)">
                             <code v-if="row.mono !== undefined" class="text-xs">{{ row.mono }}</code>
                             <span v-else-if="row.text !== undefined">{{ row.text }}</span>
                             <Badge v-else-if="row.badge" :color="row.badge.color" :text="row.badge.text" />

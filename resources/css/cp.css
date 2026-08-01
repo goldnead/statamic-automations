@@ -17,11 +17,12 @@
  * This is load-bearing, not a style preference. `@import "tailwindcss"` pulls in
  * Preflight plus the default theme and utilities in the *shared* `base`, `theme`
  * and `utilities` layers. Because this stylesheet is linked after the CP's
- * app.css, its plain `.bg-white` then lands after every `dark:` variant that the
- * CP (and every other addon) already emitted into that same `utilities` layer,
- * so `bg-white dark:bg-gray-850` renders white in dark mode — across the whole
- * Control Panel, not just this addon. It also overwrote `--color-gray-*` and
- * `--font-sans` on `:root`, re-theming the entire CP.
+ * app.css, its unprefixed light-mode utilities then land after every `dark:`
+ * variant that the CP (and every other addon) already emitted into that same
+ * `utilities` layer, so a light surface utility paired with a dark one renders
+ * light in dark mode — across the whole Control Panel, not just this addon. It
+ * also overwrote `--color-gray-*` and `--font-sans` on `:root`, re-theming the
+ * entire CP.
  *
  * `@statamic/cms/tailwind.css` routes the theme and utilities into the
  * `addon-theme` / `addon-utilities` layers (which Statamic orders *below* its
@@ -51,6 +52,15 @@
     /* Background fill for the SVG branch-label pills on canvas edges. */
     :root { --sa-edge-label-bg: var(--color-white, #ffffff); }
 
+    /* The paper an email preview is rendered on. Deliberately NOT a CP surface
+     * token: the iframe shows what the recipient's mail client will show, and
+     * that is a white page whether or not the editor runs the CP in dark mode.
+     * Tinting it with the CP surface token would misrepresent the email. Named
+     * here rather than repeated as a stock utility at each of the four call
+     * sites, so the intent is stated once instead of reading as forgotten
+     * dark-mode variants. */
+    :root { --sa-email-canvas: var(--color-white, #ffffff); }
+
     .dark {
         --sa-color-trigger: var(--color-blue-400, #60a5fa);
         --sa-color-action: var(--color-emerald-400, #34d399);
@@ -70,7 +80,7 @@
      * every colour is a Statamic CP token — no custom hues.
      * ------------------------------------------------------------------- */
     .sa-node {
-        @apply rounded-xl border bg-white dark:bg-gray-900
+        @apply rounded-xl border bg-content-bg
                border-gray-200 dark:border-gray-700
                shadow-sm w-[240px] text-sm transition-shadow;
     }
@@ -98,11 +108,13 @@
         @apply flex items-start gap-2.5 px-3 pt-3 pb-2;
     }
 
+    /* See --sa-email-canvas above: the email preview's own paper, not CP chrome. */
+    .sa-email-canvas { background-color: var(--sa-email-canvas); }
+
     /* Rounded-square icon chip; tint comes from the kind accent token at a
      * low opacity, so it reads as an accent, never a full-colour block. */
     .sa-icon-chip {
-        @apply flex items-center justify-center size-8 rounded-lg shrink-0
-               text-gray-700 dark:text-gray-200;
+        @apply flex items-center justify-center size-8 rounded-lg shrink-0;
         background-color: color-mix(in srgb, var(--sa-chip-color, var(--sa-color-action)) 14%, transparent);
         color: var(--sa-chip-color, var(--sa-color-action));
     }
@@ -179,7 +191,7 @@
     .sa-edge-insert__btn {
         @apply flex items-center justify-center rounded-full
                border border-dashed border-gray-300 dark:border-gray-600
-               bg-white dark:bg-gray-900 text-gray-400 dark:text-gray-500
+               bg-content-bg text-gray-400 dark:text-gray-500
                shadow-sm transition-colors cursor-pointer;
     }
     .sa-adder__btn {
@@ -190,7 +202,7 @@
     }
     .sa-adder__btn:hover,
     .sa-edge-insert__btn:hover {
-        @apply border-blue-400 border-solid text-blue-600 dark:text-blue-400
+        @apply border-blue-400 border-solid text-ui-accent-text
                bg-blue-50 dark:bg-blue-500/10;
     }
     .sa-adder__hint {
@@ -201,7 +213,7 @@
      * targeting. Solid ring so it reads distinctly from plain :hover. */
     .sa-adder__btn--pending,
     .sa-edge-insert__btn--pending {
-        @apply border-blue-500 border-solid text-blue-600 dark:text-blue-400
+        @apply border-blue-500 border-solid text-ui-accent-text
                bg-blue-50 dark:bg-blue-500/10 ring-2 ring-blue-400/50;
     }
 
@@ -216,7 +228,7 @@
     .sa-edge-branch {
         @apply absolute pointer-events-none rounded-lg px-1.5 py-0.5
                text-[11px] font-semibold leading-none
-               bg-white dark:bg-gray-900 border;
+               bg-content-bg border;
         z-index: 9;
     }
     .sa-edge-branch--true {
@@ -242,7 +254,7 @@
     }
     .sa-library-banner__cancel {
         @apply text-[11px] font-semibold underline underline-offset-2 shrink-0 cursor-pointer
-               text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200;
+               text-ui-accent-text hover:text-blue-800 dark:hover:text-blue-200;
     }
 
     /* Collapsed sidebar shrinks to this slim rail (see Edit.vue's grid
@@ -267,7 +279,7 @@
     .sa-control-bar {
         @apply inline-flex items-center gap-0.5 rounded-xl px-1 py-1
                border border-gray-200 dark:border-gray-700
-               bg-white/90 dark:bg-gray-900/90 shadow-md backdrop-blur;
+               bg-content-bg/90 shadow-md backdrop-blur;
     }
     .sa-control-bar__zoom {
         @apply px-1.5 text-[10px] font-medium tabular-nums text-gray-500 dark:text-gray-400 select-none;
@@ -287,10 +299,13 @@
     .vue-flow__edge-path {
         stroke: var(--color-gray-400, #9ca3af);
     }
-    /* Re-tint the dot grid on CP gray tokens (CSS resolves var(); the SVG
-     * fill attribute passed from Canvas.vue cannot). */
-    .vue-flow__background circle { fill: var(--color-gray-300, #d1d5db); }
-    .dark .vue-flow__background circle { fill: var(--color-gray-700, #374151); }
+    /* The grid pattern. Canvas.vue passes `currentColor` as Vue Flow's
+     * pattern colour, so the shape it happens to render — <circle fill> today,
+     * <path stroke> on the lines variant — inherits from here and follows the
+     * theme. Targeting the shape selector directly (as this used to) broke the
+     * moment that shape changed. */
+    .vue-flow__background { color: var(--color-gray-300, #d1d5db); }
+    .dark .vue-flow__background { color: var(--color-gray-700, #374151); }
     .vue-flow__edge.selected .vue-flow__edge-path,
     .vue-flow__edge:hover .vue-flow__edge-path {
         stroke: var(--sa-color-trigger);
@@ -302,7 +317,7 @@
      * white box, especially in dark mode. */
     .vue-flow__minimap {
         @apply rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden
-               bg-white dark:bg-gray-900;
+               bg-content-bg;
     }
     .vue-flow__minimap svg {
         background: transparent;

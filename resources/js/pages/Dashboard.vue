@@ -64,13 +64,28 @@ function barHeight(value) {
         <!-- 14-day trend -->
         <Panel :heading="__('Runs — last 14 days')" class="mb-6">
             <div class="p-4">
-                <div class="flex items-end gap-1">
-                    <div v-for="day in trend" :key="day.date" class="flex-1 flex flex-col items-center gap-1" :title="`${day.date}: ${day.total} run(s)`">
-                        <div class="w-full h-32 flex flex-col justify-end overflow-hidden rounded-t-sm bg-gray-100 dark:bg-gray-800">
+                <!-- Hand-drawn because core ships no chart component. The bars
+                     carry no text, so the whole thing is announced as a list
+                     with one labelled row per day; without this a screen reader
+                     reads an empty group. -->
+                <div
+                    class="flex items-end gap-1"
+                    role="list"
+                    :aria-label="__('Runs — last 14 days')"
+                >
+                    <div
+                        v-for="day in trend"
+                        :key="day.date"
+                        role="listitem"
+                        class="flex-1 flex flex-col items-center gap-1"
+                        :title="`${day.date}: ${day.total} run(s)`"
+                        :aria-label="__(':date: :success succeeded, :failed failed', { date: day.date, success: day.success, failed: day.failed })"
+                    >
+                        <div class="w-full h-32 flex flex-col justify-end overflow-hidden rounded-t-sm bg-gray-100 dark:bg-gray-800" aria-hidden="true">
                             <div class="w-full bg-red-400 dark:bg-red-500" :style="{ height: barHeight(day.failed) }"></div>
                             <div class="w-full bg-green-500" :style="{ height: barHeight(day.success) }"></div>
                         </div>
-                        <div class="text-[10px] text-gray-400">{{ day.date.slice(5) }}</div>
+                        <div class="text-[10px] text-gray-400" aria-hidden="true">{{ day.date.slice(5) }}</div>
                     </div>
                 </div>
                 <div class="flex items-center gap-4 mt-3 text-xs text-gray-500 dark:text-gray-400">

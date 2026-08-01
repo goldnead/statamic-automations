@@ -719,7 +719,7 @@ watch(() => issues.value.length, scheduleHeightUpdate);
              instead of relying on a hardcoded `100vh - N` guess. -->
         <div
             ref="editorEl"
-            class="grid rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden min-h-[480px] transition-[grid-template-columns] duration-200 ease-in-out"
+            class="grid rounded-xl border border-gray-200 dark:border-gray-800 bg-content-bg shadow-sm overflow-hidden min-h-[480px] transition-[grid-template-columns] duration-200 ease-in-out"
             :style="{
                 gridTemplateColumns: `${showLibrary ? '300px' : '40px'} 1fr ${selectedNode ? '360px' : '0px'}`,
                 height: editorHeight,
@@ -772,7 +772,7 @@ watch(() => issues.value.length, scheduleHeightUpdate);
                  above) when nothing is selected, so the canvas reclaims the
                  space. The panel itself only mounts while a node is selected —
                  no empty "select a node" state sits in a 0-width column. -->
-            <div class="overflow-hidden border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+            <div class="overflow-hidden border-l border-gray-200 dark:border-gray-800 bg-content-bg">
                 <ConfigPanel
                     v-if="selectedNode"
                     :node="selectedNode"
