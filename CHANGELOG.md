@@ -1,5 +1,49 @@
 # Changelog
 
+## 1.8.0 — 2026-08-01
+
+### Fixed — "Start from a template" led nowhere
+
+The button on the automations index built its target by rewriting the *create* URL, and that
+URL carries a doubled `automations/automations` segment. The Templates screen was registered
+and working the whole time at `/cp/automations/templates`; only the link was wrong. The target
+now comes from the controller instead of from string surgery.
+
+Worth knowing for anyone debugging a CP link: Statamic registers two catch-all routes, one for
+the CP (`cp/{segments}` → `statamic.cp.404`) and one for the front end (`{segments?}` →
+`statamic.site`). So *every* `/cp/…` string matches a route on some verb, and "does it match a
+route" tells you nothing. Only the route name distinguishes a live target from a dead one.
+`tests/Feature/CpLinkTargetsTest.php` now walks the Inertia props of every page and checks each
+CP URL against the registered route names, so the next dead link fails in CI.
+
+### Fixed — every host received 415 KB of dist nobody loaded
+
+`resources/dist/{cp.js,cp.css,.vite/manifest.json}` predated the move to `build/` and no
+manifest referenced them, but they shipped in the tarball all the same. Removed, and
+`check-dist-fresh.sh` now fails on any tracked file under `resources/dist` outside `build/`.
+
+### Fixed — listeners and CP routes registered twice under test
+
+Moving to `Statamic\Testing\AddonTestCase` surfaced that the manual `bootAddon()` call had
+become a duplicate: saving one entry ran every listener twice. Both the manual call and the
+hand-mounted routes are gone.
+
+### Changed
+
+- 25 hardcoded colours moved onto theme tokens, so the canvas and the node palette follow
+  Statamic's dark mode instead of approximating it.
+- The node palette is reachable by keyboard.
+- `laravel/framework` narrowed to `^12.0|^13.0`. The 11.x line is withdrawn behind security
+  advisories and cannot be installed, so declaring support for it was untrue rather than
+  generous. `orchestra/testbench` follows to `^10.0|^11.0`, and `pestphp/pest` gains `^4.0`,
+  which is what actually installs on Laravel 13.
+- The README no longer describes a drag-to-canvas flow that was removed, no longer claims the
+  screenshots don't exist while shipping six, and links into the docs site rather than into a
+  `docs/` folder that `.gitattributes` strips from the tarball.
+- The 141 JavaScript tests now run in CI. They existed and were never executed there.
+- Larastan and Pint are wired in as gates; the `repositories` block, which Composer ignores in
+  a dependency anyway, is gone now that the siblings resolve from Packagist.
+
 ## 1.7.1 — 2026-07-30
 
 ### Fixed — `automations:sync` could import over a database it could not see
