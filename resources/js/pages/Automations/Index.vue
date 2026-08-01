@@ -25,6 +25,10 @@ const props = defineProps({
     createUrl: { type: String, required: true },
     templatesUrl: { type: String, required: true },
     apiBase: { type: String, required: true },
+    // How many templates the registry actually offers. Counted server-side so
+    // the empty state cannot drift from the catalog the way a hardcoded
+    // "eight" did while eleven templates shipped.
+    templateCount: { type: Number, default: 0 },
     canCreate: { type: Boolean, default: false },
 });
 
@@ -144,7 +148,7 @@ function exportJson(row) {
                 :href="templatesUrl"
                 icon="duplicate"
                 :heading="__('Start from a template')"
-                :description="__('Pick from eight built-in patterns and customize.')"
+                :description="__(':count built-in patterns to pick from and customize.', { count: templateCount })"
             />
         </EmptyStateMenu>
         <DocsCallout :topic="__('Statamic Automations')" url="https://github.com/goldnead/statamic-automations" />

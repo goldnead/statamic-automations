@@ -17,6 +17,7 @@
 
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
+use Goldnead\StatamicAutomations\Templates\TemplateRegistry;
 use Statamic\Facades\User;
 
 beforeEach(function (): void {
@@ -46,6 +47,20 @@ it('renders the automations index', function (): void {
 
     $response->assertStatus(200);
     expect(inertiaComponent($response))->toBe('statamic-automations::Automations/Index');
+});
+
+it('tells the empty state how many templates the registry actually has', function (): void {
+    // The empty state used to promise "eight built-in patterns" in hardcoded
+    // prose while eleven shipped. The count now comes from the registry, and
+    // this is what keeps the two from drifting apart again.
+    $response = $this->withHeaders(['X-Inertia' => 'true'])
+        ->get(cp_route('statamic-automations.automations.index'));
+
+    $props = json_decode($response->getContent(), true)['props'] ?? [];
+
+    expect($props['templateCount'])
+        ->toBe(count(app(TemplateRegistry::class)->all()))
+        ->toBeGreaterThan(0);
 });
 
 it('renders the create (blank builder) page', function (): void {

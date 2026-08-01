@@ -7,6 +7,7 @@ use Goldnead\StatamicAutomations\Http\Controllers\Controller;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
+use Goldnead\StatamicAutomations\Templates\TemplateRegistry;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Statamic\CP\Column;
@@ -69,6 +70,11 @@ class AutomationsPageController extends Controller
             // itself, so this must NOT be the …/api/automations listing route —
             // that doubled the segment and 404ed every row action.
             'apiBase' => cp_route('statamic-automations.api.index'),
+            // The empty state advertises how many templates are on offer. It
+            // used to say "eight" in hardcoded prose while the registry shipped
+            // eleven; counting the registry is the only version that cannot go
+            // stale when a template is added.
+            'templateCount' => count(app(TemplateRegistry::class)->all()),
             'canCreate' => $this->userCan('create automations'),
         ]);
     }
