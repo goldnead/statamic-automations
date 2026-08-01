@@ -58,19 +58,16 @@ For most Statamic projects an external automation tool is overkill, and custom c
 - 📤 **JSON export / import** for version control, starter kits and cross-environment moves
 - 👨‍💻 Public **developer API** for custom triggers, actions and conditions
 
-## Screenshots
-
-> Screenshots will be added once a reference Statamic project is set up. Until then, the [Architecture overview](docs/architecture.md) gives you the big picture.
-
-| Builder | Run log | Templates |
-|---|---|---|
-| _coming soon_ | _coming soon_ | _coming soon_ |
-
 ## Requirements
 
 - PHP **8.2+**
-- Laravel **11.x**, **12.x** or **13.x**
+- Laravel **12.x** or **13.x**
 - Statamic **6.x**
+- `goldnead/statamic-brand-context` — a hard runtime dependency, not optional. Every
+  automation, run and audit entry is scoped to a brand, and handles are unique per brand
+  rather than per install. Until that package is on Packagist, `composer require` cannot
+  resolve it from this package alone: a `repositories` block declared inside a dependency
+  is ignored by Composer, only the root project's is read.
 
 ## Installation
 
@@ -105,14 +102,20 @@ php artisan queue:work --queue=default
 
 1. Open the Statamic CP and navigate to **Automations**.
 2. Click **New automation**.
-3. Drag a **Trigger** (e.g. _Form Submitted_) onto the canvas from the Node Library.
-4. Add **Filter** or **Branch** nodes if you need conditions.
-5. Add **Action** nodes (e.g. _Send Email_).
-6. Connect the nodes by dragging between handles.
-7. Click **Validate** then **Test** with sample data.
-8. Toggle **Enabled** when ready — the automation now runs against real events.
+3. Click the **+** on the empty canvas, then pick a **Trigger** (e.g. _Form Submitted_)
+   from the node library on the left. The canvas lays nodes out for you — you never drop
+   one onto free space, and you never draw a connection by hand.
+4. Click the **+** below the trigger to add **Filter** or **Branch** nodes if you need
+   conditions, then **Action** nodes (e.g. _Send Email_). Each node is wired to the **+**
+   you clicked, so the flow connects itself.
+5. To insert a node between two existing ones, click the **+** that sits on the edge
+   between them.
+6. Click **Validate** then **Test** with sample data.
+7. Toggle **Enabled** when ready — the automation now runs against real events.
 
-Or skip steps 1–6 and start from a **template**: most common patterns ship as one-click installs.
+Or skip steps 2–5 and start from a **template**: the eight most common patterns ship as
+one-click installs, each copied into an automation of your own that addon updates never
+touch.
 
 ## Built-in nodes
 
@@ -226,7 +229,7 @@ public function boot(): void
 
 Custom **actions** implement `AutomationAction`, **triggers** `AutomationTrigger`, **logic nodes** `AutomationLogicNode` (all extend the shared `AutomationNode`). Event triggers can also be declared config-only in `config/automations.php` under `event_triggers`. A malformed registration throws immediately (`Automations::describe()`), never silently no-ops.
 
-Full documentation — interface definitions, the schema-field vocabulary, option-source reference and worked copy-paste examples for every extension point — lives in [`docs/extending.md`](docs/extending.md).
+Full documentation — interface definitions, the schema-field vocabulary, option-source reference and worked copy-paste examples for every extension point — lives at <https://docs.adriangoldner.dev/automations/extending>.
 
 ## Export & Import
 
@@ -301,39 +304,39 @@ for the run that proves the compiled DDL and the real engine agree.
 
 ## Documentation
 
+The user documentation lives at **<https://docs.adriangoldner.dev/automations/>**.
+
 | Document | Topic |
 |---|---|
-| [Getting started](docs/getting-started.md) | Install, build assets, first automation |
-| [Architecture](docs/architecture.md) | Engine flow, data model, lifecycle |
-| [Extending](docs/extending.md) | Custom triggers, actions, conditions |
-| [API reference](docs/api.md) | The complete CP JSON API |
-| [Templates](docs/templates.md) | Catalog of every built-in template |
-| [File sync](docs/file-sync.md) | `resources/automations/` + `automations:sync` |
-| [Licensing](docs/licensing.md) | Pro tier, license modes, status endpoint |
-| [Autosave](docs/autosave.md) | Builder autosave behavior |
+| [Installation](https://docs.adriangoldner.dev/automations/installation) | Install, requirements, queue setup |
+| [Building an automation](https://docs.adriangoldner.dev/automations/building) | The builder, step by step |
+| [Concepts](https://docs.adriangoldner.dev/automations/concepts) | Triggers, logic, actions, context |
+| [Nodes](https://docs.adriangoldner.dev/automations/nodes) | Every built-in node and its config |
+| [Templates](https://docs.adriangoldner.dev/automations/templates) | Catalog of every built-in template |
+| [Runs](https://docs.adriangoldner.dev/automations/runs) | Run logs, retries, partial retries |
+| [Export / import](https://docs.adriangoldner.dev/automations/export-import) | JSON moves and `automations:sync` |
+| [Configuration](https://docs.adriangoldner.dev/automations/configuration) | Every config key |
+| [Integrations](https://docs.adriangoldner.dev/automations/integrations) | LeadHub, Webhook Manager, Marketing |
+| [Extending](https://docs.adriangoldner.dev/automations/extending) | Custom triggers, actions, conditions |
+| [Reference](https://docs.adriangoldner.dev/automations/reference) | The CP JSON API |
+| [Troubleshooting](https://docs.adriangoldner.dev/automations/troubleshooting) | When something does not fire |
 | [Changelog](CHANGELOG.md) | Versioned release notes |
 
-## Roadmap
+Absolute links on purpose: `/docs` is `export-ignore`d, so a relative `docs/*.md` link is
+dead in the Composer tarball a customer actually installs.
 
-- [x] Phase A — Package skeleton
-- [x] Phase B — Database + Eloquent models
-- [x] Phase C — Registries + Contracts + Facade
-- [x] Phase D — Execution engine (validator, runner, token resolver, conditions, logger)
-- [x] Phase E — Built-in triggers, logic and actions
-- [x] Phase F — Optional Webhook Manager + LeadHub integrations
-- [x] Phase G — Full CP JSON API
-- [x] Phase H — Vue Flow canvas + schema-driven config
-- [x] Phase I — Templates + JSON export / import + file sync
-- [x] Phase J — Polish (empty / loading / error states, toast feedback, marketplace docs)
-- [x] **Sprint 4** — `automations:sync` + `automations:prune` Artisan commands, partial-from-node retry, encrypted run logs (`EncryptedJson` cast), license manager (`config` + `remote` modes), Vue Flow autosave, verified Statamic v6 events
-- [x] **Sprint 5 (CI)** — GitHub Actions workflows green across the full matrix: PHP 8.2 / 8.3 / 8.4 × Laravel 11 / 12 (PHPUnit), Frontend (Vite + Vue 3), and Lint (PHP syntax + `composer validate`)
-- [x] **Sprint 6 (Statamic 6 UI)** — CP frontend rewritten on Statamic 6's native Inertia.js + Vue 3 + Tailwind v4 stack with `@statamic/cms/ui` components. Dark-mode + command-palette + listing-presets all "for free" via the host's design system.
-- [x] **Sprint 7 (test suite)** — full PHPUnit suite passes end-to-end against a real Statamic 6.18 install. 71 tests / 223 assertions / 0 skipped. Diagnosed and fixed the route-model-binding edge case that had blocked one HTTP feature test for several sprints.
+## Status
 
-The PRD-defined roadmap is now complete. Future iterations will focus
-on community feedback, marketplace screenshots, and quality-of-life
-improvements (loop detection in branches, parallel execution, code
-nodes — all explicitly out of scope for v1 per the PRD non-goals).
+Shipping since v1.0.0; see the [changelog](CHANGELOG.md) for what changed when.
+
+The suite is 408 PHP tests (Pest on `orchestra/testbench`, booted through Statamic's
+`AddonTestCase`) plus 141 JS tests (`node --test` for pure composables, Vitest +
+`@vue/test-utils` for mounted components). CI runs Pest across PHP 8.2 / 8.3 / 8.4 ×
+Laravel 12 / 13, a `--prefer-lowest` leg, a MySQL leg, both JS runners, Pint and PHPStan,
+and a job that rebuilds the committed CP bundle and fails if it drifted from source.
+
+Out of scope for v1, per the PRD non-goals: code nodes and arbitrary loop detection inside
+branches.
 
 ## Editions
 

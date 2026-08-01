@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  php-syntax:
+  style:
     runs-on: ubuntu-latest
-    name: PHP syntax check
+    name: Code style (Pint)
 
     steps:
       - name: Checkout
@@ -21,14 +21,40 @@ jobs:
         with:
           php-version: '8.3'
           coverage: none
+          tools: composer:v2
 
-      - name: Lint every PHP file
-        run: |
-          # Fail if any file has a parse error.
-          set -e
-          find src tests config database routes -type f -name '*.php' \
-            | xargs -n1 -P4 php -l > /dev/null
-          echo "✓ no syntax errors"
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      # Check, never fix. Auto-committing style onto a contributor's branch
+      # rewrites their work without asking, and means the repo never actually
+      # enforces "formatted before merge" — it only repairs afterwards.
+      - name: Pint
+        run: vendor/bin/pint --test
+
+  static-analysis:
+    runs-on: ubuntu-latest
+    name: Static analysis (PHPStan / Larastan)
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      # Level 5 with a committed baseline: a ratchet for new code, not a
+      # rewrite of the 18k lines already here. Never regenerate the baseline to
+      # turn a red build green — raise the level and shrink it instead.
+      - name: PHPStan
+        run: vendor/bin/phpstan analyse --error-format=github --no-progress
 
   composer-validate:
     runs-on: ubuntu-latest

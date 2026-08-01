@@ -9,16 +9,33 @@ on:
 
 jobs:
   pest:
-    name: PHP ${{ matrix.php }} · Statamic ${{ matrix.statamic }}
+    # The matrix now varies the two things composer.json actually promises:
+    # PHP and Laravel. It used to vary PHP × Statamic 6.*, which is one value,
+    # so `laravel/framework: ^11|^12|^13` was a claim nothing ever tested.
+    #
+    # Laravel 11 is gone from the constraint entirely — v11.0.0 through
+    # v11.55.0 are covered by security advisories and Composer refuses the
+    # line, so it was never installable, let alone untested.
+    #
+    # Every cell below was resolved with `composer update --dry-run` against a
+    # pinned `config.platform.php` before this file was committed. The one
+    # combination that does not resolve is excluded rather than left to fail.
+    name: PHP ${{ matrix.php }} · Laravel ${{ matrix.laravel }} · ${{ matrix.stability }}
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
         php: ['8.2', '8.3', '8.4']
-        # The CP layer is Statamic 6-native (Inertia + Vue 3 + @statamic/cms
-        # UI components), so the supported surface is Statamic 6.
-        statamic: ['6.*']
+        laravel: ['^12.0', '^13.0']
+        stability: [prefer-lowest, prefer-stable]
+        exclude:
+          # Current Laravel 13 releases need PHP 8.3+. Only the earliest 13.x
+          # tags install on 8.2, which is exactly what the prefer-lowest cell
+          # covers, so the stable cell is dropped instead of being red forever.
+          - php: '8.2'
+            laravel: '^13.0'
+            stability: prefer-stable
 
     steps:
       - name: Checkout
@@ -40,21 +57,105 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: composer-${{ matrix.php }}-${{ matrix.statamic }}-${{ hashFiles('composer.json') }}
+          key: composer-${{ matrix.php }}-${{ matrix.laravel }}-${{ matrix.stability }}-${{ hashFiles('composer.json') }}
           restore-keys: |
-            composer-${{ matrix.php }}-${{ matrix.statamic }}-
+            composer-${{ matrix.php }}-${{ matrix.laravel }}-
             composer-${{ matrix.php }}-
 
-      - name: Pin Statamic version for this matrix cell
-        run: composer require "statamic/cms:${{ matrix.statamic }}" --no-update --no-interaction
+      - name: Pin Laravel for this matrix cell
+        run: composer require "laravel/framework:${{ matrix.laravel }}" --no-update --no-interaction
 
       - name: Install dependencies
-        run: composer update --prefer-dist --no-progress --no-interaction
+        run: composer update --${{ matrix.stability }} --prefer-stable --prefer-dist --no-progress --no-interaction
 
-      - name: Show installed Statamic / Laravel versions
-        run: |
-          composer show statamic/cms | grep -E '^(name|versions)'
-          composer show laravel/framework | grep -E '^(name|versions)' || true
+      - name: Show what was resolved
+        run: composer show laravel/framework statamic/cms | grep -E '^(name|versions)'
 
       - name: Run Pest test suite
         run: vendor/bin/pest --colors=always
+
+  mysql:
+    # phpunit.mysql.xml has existed since 1.5 and no workflow had ever run it.
+    # SQLite cannot see InnoDB's 3072-byte index limit, what `->change()` does
+    # on a typed engine, or a NOT NULL a backfill fails to satisfy — the class
+    # of defect that took statamic-notifications v1.0.3 down on production.
+    name: MySQL (the suite against a real engine)
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_DATABASE: automations_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, mysqli, intl, fileinfo, gd
+          coverage: none
+          tools: composer:v2
+
+      - name: Install dependencies
+        run: composer update --prefer-stable --prefer-dist --no-progress --no-interaction
+
+      - name: Wait for MySQL
+        run: |
+          for i in $(seq 1 30); do
+            if mysqladmin ping -h 127.0.0.1 -P 3306 -u root --silent; then exit 0; fi
+            sleep 2
+          done
+          echo "MySQL never became reachable" >&2
+          exit 1
+
+      - name: Run the suite on MySQL
+        run: vendor/bin/pest -c phpunit.mysql.xml --colors=always
+
+  javascript:
+    # The JS cases existed and no workflow ran them. The Vue layer is the whole
+    # product surface, so its tests were decorative in CI.
+    name: JavaScript (node --test + Vitest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          coverage: none
+
+      # @statamic/cms is a `file:` npm dependency resolved out of the installed
+      # Composer package, so Composer must run before npm.
+      - name: Install Composer dependencies
+        run: composer install --prefer-dist --no-progress --no-interaction
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Pure composables (node --test)
+        run: npm run test:js
+
+      - name: Mounted components (Vitest)
+        run: npm test
