@@ -10,7 +10,7 @@ Source material for the Statamic Marketplace listing.
 
 ## Tagline / Short Description
 
-A visual automation builder for Statamic — turn form submissions, entries, leads and webhooks into multi-step workflows, right inside your Control Panel.
+A visual automation builder for Statamic: turn form submissions, entries, leads and webhooks into multi-step workflows, right inside your Control Panel.
 
 ## Long Description
 
@@ -34,7 +34,7 @@ You shouldn't need Zapier and a glue server to email a team member when a form c
 - Per-run logging with node-by-node status and retry-from-node
 - Built-in template catalog to install common flows in one click
 - Export to JSON + flat-file sync for version control
-- Test mode — dry-run a flow with sample context before enabling
+- Test mode: dry-run a flow with sample context before enabling
 - Granular CP permissions
 - First-class integrations with LeadHub and Webhook Manager when installed
 - Extensible: register your own triggers, actions and logic nodes
