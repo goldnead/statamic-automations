@@ -30,12 +30,17 @@ jobs:
         laravel: ['^12.0', '^13.0']
         stability: [prefer-lowest, prefer-stable]
         exclude:
-          # Current Laravel 13 releases need PHP 8.3+. Only the earliest 13.x
-          # tags install on 8.2, which is exactly what the prefer-lowest cell
-          # covers, so the stable cell is dropped instead of being red forever.
+          # Laravel 13 needs PHP 8.3+. The assumption that the earliest 13.x tags
+          # still install on 8.2 was tested on 01.08.2026 and is wrong — the
+          # prefer-lowest cell fails resolution too ("Your requirements could not
+          # be resolved"). Both 8.2 × ^13.0 cells are dropped rather than left red;
+          # PHP 8.2 stays covered by the whole ^12.0 column.
           - php: '8.2'
             laravel: '^13.0'
             stability: prefer-stable
+          - php: '8.2'
+            laravel: '^13.0'
+            stability: prefer-lowest
 
     steps:
       - name: Checkout
@@ -68,8 +73,15 @@ jobs:
       - name: Install dependencies
         run: composer update --${{ matrix.stability }} --prefer-stable --prefer-dist --no-progress --no-interaction
 
+      # `composer show` nimmt genau ein Paket und optional eine Version -- zwei Pakete
+      # liest es als Paket + Version und bricht mit "Too many arguments" ab. Ein
+      # Diagnoseschritt, der die Zelle rot macht, die er erklaeren soll, ist schlimmer
+      # als keiner.
       - name: Show what was resolved
-        run: composer show laravel/framework statamic/cms | grep -E '^(name|versions)'
+        run: |
+          for pkg in laravel/framework statamic/cms; do
+            composer show "$pkg" | grep -E '^(name|versions)'
+          done
 
       - name: Run Pest test suite
         run: vendor/bin/pest --colors=always
