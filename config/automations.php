@@ -276,6 +276,11 @@ return [
             // "Webhook Received" trigger listens to it. Adjust to match the
             // Webhook Manager version you run.
             'inbound_event' => 'Goldnead\\WebhookManager\\Events\\WebhookReceived',
+            // Outbound failure bridge: the event Webhook Manager fires when a
+            // delivery has exhausted its retries and failed for good. When
+            // this class exists, the "Outbound Webhook Failed" trigger listens
+            // to it. Adjust to match the Webhook Manager version you run.
+            'outbound_failed_event' => 'Goldnead\\WebhookManager\\Events\\DeliveryFailedTerminally',
         ],
         'leadhub' => [
             // The LeadHub addon's PSR-4 namespace is Goldnead\Leadhub

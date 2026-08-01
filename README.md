@@ -131,6 +131,8 @@ touch.
 | Lead Tag Added _(LeadHub)_ | LeadHub | A tag is added to a lead |
 | Lead Note Added _(LeadHub)_ | LeadHub | A note is added to a lead |
 | Lead Follow-up Due _(LeadHub)_ | LeadHub | A scheduled follow-up becomes due |
+| Webhook Received _(Webhook Manager)_ | Webhook Manager | An inbound endpoint receives a validated request |
+| Outbound Webhook Failed _(Webhook Manager)_ | Webhook Manager | A delivery exhausts its retries and fails for good |
 
 ### Logic
 

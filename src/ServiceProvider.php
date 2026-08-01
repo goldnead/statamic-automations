@@ -79,6 +79,7 @@ use Goldnead\StatamicAutomations\Nodes\Triggers\TermSavedTrigger;
 use Goldnead\StatamicAutomations\Nodes\Triggers\UserDeletedTrigger;
 use Goldnead\StatamicAutomations\Nodes\Triggers\UserRegisteredTrigger;
 use Goldnead\StatamicAutomations\Nodes\Triggers\UserSavedTrigger;
+use Goldnead\StatamicAutomations\Nodes\Triggers\WebhookDeliveryFailedTrigger;
 use Goldnead\StatamicAutomations\Nodes\Triggers\WebhookReceivedTrigger;
 use Goldnead\StatamicAutomations\Registries\ActionRegistry;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
@@ -431,9 +432,13 @@ class ServiceProvider extends AddonServiceProvider
             $automations->registerBuiltIn(WebhookManagerSendAction::handle());
             $automations->action(WebhookManagerSendAction::handle(), WebhookManagerSendAction::class);
 
-            $webhookReceived = WebhookReceivedTrigger::class;
-            $automations->registerBuiltIn($webhookReceived::handle());
-            $automations->trigger($webhookReceived::handle(), $webhookReceived);
+            foreach ([
+                WebhookReceivedTrigger::class,
+                WebhookDeliveryFailedTrigger::class,
+            ] as $triggerClass) {
+                $automations->registerBuiltIn($triggerClass::handle());
+                $automations->trigger($triggerClass::handle(), $triggerClass);
+            }
         }
 
         if ($detector->hasLeadHub()) {
@@ -584,6 +589,18 @@ class ServiceProvider extends AddonServiceProvider
             Event::listen($inboundEvent, function ($e) {
                 $this->app->make(TriggerDispatcher::class)
                     ->dispatch('webhook_received', $e);
+            });
+        }
+
+        // Webhook Manager outbound-failure bridge — same shape as the inbound
+        // one. Without it the `webhook_manager.outbound_failed` trigger (and
+        // the "Webhook Failure Alert" template built on it) is selectable in
+        // the CP but never fires.
+        $failedEvent = config('automations.integrations.webhook_manager.outbound_failed_event');
+        if (is_string($failedEvent) && $failedEvent !== '' && class_exists($failedEvent)) {
+            Event::listen($failedEvent, function ($e) {
+                $this->app->make(TriggerDispatcher::class)
+                    ->dispatch(WebhookDeliveryFailedTrigger::handle(), $e);
             });
         }
     }
