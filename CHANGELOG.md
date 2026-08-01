@@ -1,5 +1,58 @@
 # Changelog
 
+## 1.8.1 — 2026-08-01
+
+### Fixed — the "Webhook Failure Alert" template could never fire
+
+The template shipped with the trigger `webhook_manager.outbound_failed`, and nothing registered
+that handle. Installing it produced an automation that looked complete in the builder, stayed
+enabled, and never ran once, no matter how often a destination failed. If you installed it, it
+starts working after this update; nothing to reconfigure.
+
+The trigger now exists (`Outbound Webhook Failed`, under the Webhook Manager group) and is
+bridged to Webhook Manager's `DeliveryFailedTerminally` event — the one it has fired all along
+when a delivery exhausts its retries. Registration is guarded on Webhook Manager being
+installed, exactly like the inbound `webhook_received` bridge, and the event class is
+overridable via `automations.integrations.webhook_manager.outbound_failed_event`.
+
+The template's `min_attempts` field is now a real field on that trigger: the automation only
+runs once the delivery has been tried at least that many times. It previously sat in the
+template as config no code read.
+
+Context exposed to the flow: `webhook.destination`, `webhook.destination_name`, `webhook.url`,
+`webhook.attempts`, `webhook.status`, `webhook.error`, `webhook.delivery_id`.
+
+### Fixed — failure alerts for a deleted automation silenced each other
+
+`FailureAlerter` throttled per `automation_id`. A run whose automation has been deleted has
+`automation_id = null` (the foreign key is `ON DELETE SET NULL`), so every such run in the
+installation shared the single cache key `automations:alert:` and the first failure suppressed
+all the others for the whole throttle window. The throttle now falls back to the run's
+`automation_uuid`, which survives the delete, and the alert text names the automation instead
+of printing a bare `#`.
+
+### Added — a test that holds every template against the registries
+
+`tests/Feature/TemplateNodeCoverageTest.php` walks all eleven built-in templates and checks
+every node handle against the node registry, every config key against that node's schema, every
+edge against the template's own node keys, and every `requires` entry against the integration it
+names. A template is a pile of strings pointing at registrations elsewhere; neither `php -l` nor
+PHPStan can see when one of them points at nothing. This is the third defect of that shape in
+the addon family, and the first one caught by a test rather than by reading.
+
+### Fixed — the test suite ran without foreign keys and hid a real one
+
+SQLite ignores foreign keys unless asked to enforce them, so the suite accepted rows MySQL
+rejects outright and never performed the `ON DELETE SET NULL` the schema promises. One test
+built an orphaned run by inventing `automation_id = 999`, a data shape production cannot reach.
+`foreign_key_constraints` is now on for the SQLite bed, and that test takes the production path:
+create the automation, run it, delete it, let the database null the column.
+
+### Changed
+
+- The automations empty state no longer promises "eight built-in patterns" while eleven ship.
+  The count comes from the registry, so it cannot go stale when a template is added.
+
 ## 1.8.0 — 2026-08-01
 
 ### Fixed — "Start from a template" led nowhere
