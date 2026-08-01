@@ -74,6 +74,11 @@ class RunsPageController extends Controller
                 ['value' => 'queued', 'label' => __('Queued')],
                 ['value' => 'waiting', 'label' => __('Waiting')],
             ],
+            // The empty state used a relative `href="../automations"`, which
+            // only resolved because of where the browser happened to be. Any
+            // trailing slash or extra nesting on this route would have silently
+            // pointed it somewhere else.
+            'automationsUrl' => cp_route('statamic-automations.automations.index'),
             'canRetry' => $this->userCan('retry automation runs'),
         ]);
     }

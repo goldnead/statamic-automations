@@ -22,6 +22,7 @@ const props = defineProps({
     rows: { type: Array, required: true },
     columns: { type: Array, required: true },
     createUrl: { type: String, required: true },
+    templatesUrl: { type: String, required: true },
     apiBase: { type: String, required: true },
     canCreate: { type: Boolean, default: false },
 });
@@ -114,10 +115,10 @@ function exportJson(row) {
                 :href="createUrl"
                 icon="workflow"
                 :heading="__('Create automation')"
-                :description="__('Drag triggers, conditions and actions onto a visual canvas.')"
+                :description="__('Add triggers, conditions and actions to a visual canvas.')"
             />
             <EmptyStateItem
-                :href="createUrl.replace('/create', '/templates')"
+                :href="templatesUrl"
                 icon="duplicate"
                 :heading="__('Start from a template')"
                 :description="__('Pick from eight built-in patterns and customize.')"

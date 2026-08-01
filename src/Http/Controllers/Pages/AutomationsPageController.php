@@ -59,6 +59,12 @@ class AutomationsPageController extends Controller
                 Column::make('updated_at')->label(__('Updated')),
             ])->map->toArray()->all(),
             'createUrl' => cp_route('statamic-automations.automations.create'),
+            // The templates screen, resolved from its own route name. The empty
+            // state used to derive it with `createUrl.replace('/create', '/templates')`,
+            // which produced /cp/automations/automations/templates — the create
+            // route carries the doubled `automations/automations` segment, the
+            // templates route does not. That link 404ed on every fresh install.
+            'templatesUrl' => cp_route('statamic-automations.templates.index'),
             // The API root (…/api). Index.vue appends '/automations/{id}/…'
             // itself, so this must NOT be the …/api/automations listing route —
             // that doubled the segment and 404ed every row action.

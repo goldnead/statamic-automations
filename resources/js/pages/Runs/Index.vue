@@ -19,6 +19,7 @@ const props = defineProps({
     columns: { type: Array, required: true },
     filters: { type: Object, default: () => ({}) },
     statusOptions: { type: Array, required: true },
+    automationsUrl: { type: String, required: true },
     canRetry: { type: Boolean, default: false },
 });
 
@@ -67,7 +68,7 @@ function applyFilters() {
 
         <EmptyStateMenu v-if="rows.length === 0" :heading="__('No runs yet')">
             <EmptyStateItem
-                href="../automations"
+                :href="automationsUrl"
                 icon="workflow"
                 :heading="__('Browse automations')"
                 :description="__('Trigger an automation or run a test to see runs here.')"
