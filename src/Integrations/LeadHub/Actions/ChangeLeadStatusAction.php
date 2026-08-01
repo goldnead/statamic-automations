@@ -62,18 +62,23 @@ class ChangeLeadStatusAction implements AutomationAction
         $leadId = $config['lead_id'] ?? $context->get('lead.id');
         $status = $config['status'] ?? null;
 
-        if (empty($leadId)) {
-            return ActionResult::failed('Lead reference is required.');
-        }
+        // Static configuration — a node without a target status is
+        // misconfigured, and a test run has to say so.
         if (empty($status)) {
             return ActionResult::failed('New status is required.');
         }
 
+        // The lead reference is checked *after* this branch on purpose:
+        // see ActionResult::missingDataReference().
         if ($context->isTestMode() && ! config('automations.test_mode.persist_leadhub_changes', false)) {
             return ActionResult::success([
                 'preview' => ['lead_id' => $leadId, 'status' => $status],
                 'note' => 'Test mode — LeadHub status change skipped.',
             ]);
+        }
+
+        if (empty($leadId)) {
+            return ActionResult::missingDataReference('lead_id', 'Lead', '{{ lead.id }}');
         }
 
         $result = $this->adapter->changeStatus((string) $leadId, (string) $status);

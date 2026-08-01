@@ -94,21 +94,25 @@ class ChangeScoreAction implements AutomationAction
         $rawDelta = $config['delta'] ?? null;
         $reason = $config['reason'] ?? null;
 
-        if (empty($contactRef)) {
-            return ActionResult::failed('Contact reference is required.');
-        }
-
+        // Static configuration — a non-numeric or missing delta is
+        // misconfigured, and a test run has to say so.
         if ($rawDelta === null || $rawDelta === '' || ! is_numeric($rawDelta)) {
             return ActionResult::failed('A numeric score delta is required.');
         }
 
         $delta = (int) $rawDelta;
 
+        // The contact reference is checked *after* this branch on purpose:
+        // see ActionResult::missingDataReference().
         if ($context->isTestMode() && ! config('automations.test_mode.persist_leadhub_changes', false)) {
             return ActionResult::success([
                 'preview' => ['contact_id' => (string) $contactRef, 'delta' => $delta, 'reason' => $reason],
                 'note' => 'Test mode — LeadHub score change skipped.',
             ]);
+        }
+
+        if (empty($contactRef)) {
+            return ActionResult::missingDataReference('contact_id', 'Contact', '{{ contact_id }}');
         }
 
         $result = $this->adapter->adjustScore((string) $contactRef, $delta, $reason !== null ? (string) $reason : null);

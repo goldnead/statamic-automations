@@ -69,9 +69,6 @@ class CreateFollowUpAction implements AutomationAction
     public function execute(AutomationContext $context, array $config): ActionResult
     {
         $leadId = $config['lead_id'] ?? $context->get('lead.id');
-        if (empty($leadId)) {
-            return ActionResult::failed('Lead reference is required.');
-        }
 
         $dueAt = $config['due_at'] ?? null;
         if (empty($dueAt)) {
@@ -84,11 +81,18 @@ class CreateFollowUpAction implements AutomationAction
             'note' => $config['note'] ?? null,
         ], fn ($v) => $v !== null && $v !== '');
 
+        // This action has no static configuration to validate; the lead
+        // reference is checked *after* the test-mode branch on purpose:
+        // see ActionResult::missingDataReference().
         if ($context->isTestMode() && ! config('automations.test_mode.persist_leadhub_changes', false)) {
             return ActionResult::success([
                 'preview' => ['lead_id' => $leadId] + $payload,
                 'note' => 'Test mode — LeadHub follow-up creation skipped.',
             ]);
+        }
+
+        if (empty($leadId)) {
+            return ActionResult::missingDataReference('lead_id', 'Lead', '{{ lead.id }}');
         }
 
         $result = $this->adapter->createFollowUp((string) $leadId, $payload);

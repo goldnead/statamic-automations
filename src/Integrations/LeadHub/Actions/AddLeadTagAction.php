@@ -62,15 +62,23 @@ class AddLeadTagAction implements AutomationAction
         $leadId = $config['lead_id'] ?? $context->get('lead.id');
         $tag = $config['tag'] ?? null;
 
-        if (empty($leadId) || empty($tag)) {
-            return ActionResult::failed('Both lead reference and tag are required.');
+        // Static configuration — a node without a tag is misconfigured, and a
+        // test run has to say so.
+        if (empty($tag)) {
+            return ActionResult::failed('A tag is required.');
         }
 
+        // The lead reference is checked *after* this branch on purpose:
+        // see ActionResult::missingDataReference().
         if ($context->isTestMode() && ! config('automations.test_mode.persist_leadhub_changes', false)) {
             return ActionResult::success([
                 'preview' => ['lead_id' => $leadId, 'tag' => $tag],
                 'note' => 'Test mode — LeadHub tag addition skipped.',
             ]);
+        }
+
+        if (empty($leadId)) {
+            return ActionResult::missingDataReference('lead_id', 'Lead', '{{ lead.id }}');
         }
 
         $result = $this->adapter->addTag((string) $leadId, (string) $tag);

@@ -58,17 +58,20 @@ class CompleteFollowUpAction implements AutomationAction
     public function execute(AutomationContext $context, array $config): ActionResult
     {
         $leadId = $config['lead_id'] ?? $context->get('lead.id');
-        if (empty($leadId)) {
-            return ActionResult::failed('Lead reference is required.');
-        }
-
         $followUpId = $config['follow_up_id'] ?? null;
 
+        // This action has no static configuration to validate; the lead
+        // reference is checked *after* the test-mode branch on purpose:
+        // see ActionResult::missingDataReference().
         if ($context->isTestMode() && ! config('automations.test_mode.persist_leadhub_changes', false)) {
             return ActionResult::success([
                 'preview' => ['lead_id' => $leadId, 'follow_up_id' => $followUpId],
                 'note' => 'Test mode — LeadHub follow-up completion skipped.',
             ]);
+        }
+
+        if (empty($leadId)) {
+            return ActionResult::missingDataReference('lead_id', 'Lead', '{{ lead.id }}');
         }
 
         $result = $this->adapter->completeFollowUp((string) $leadId, $followUpId ? (string) $followUpId : null);

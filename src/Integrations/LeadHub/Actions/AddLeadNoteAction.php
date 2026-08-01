@@ -61,15 +61,23 @@ class AddLeadNoteAction implements AutomationAction
         $leadId = $config['lead_id'] ?? $context->get('lead.id');
         $body = $config['body'] ?? null;
 
-        if (empty($leadId) || empty($body)) {
-            return ActionResult::failed('Both lead reference and note body are required.');
+        // Static configuration — an empty note body is misconfigured, and a
+        // test run has to say so.
+        if (empty($body)) {
+            return ActionResult::failed('A note body is required.');
         }
 
+        // The lead reference is checked *after* this branch on purpose:
+        // see ActionResult::missingDataReference().
         if ($context->isTestMode() && ! config('automations.test_mode.persist_leadhub_changes', false)) {
             return ActionResult::success([
                 'preview' => ['lead_id' => $leadId, 'body' => $body],
                 'note' => 'Test mode — LeadHub note skipped.',
             ]);
+        }
+
+        if (empty($leadId)) {
+            return ActionResult::missingDataReference('lead_id', 'Lead', '{{ lead.id }}');
         }
 
         $result = $this->adapter->addNote((string) $leadId, (string) $body);

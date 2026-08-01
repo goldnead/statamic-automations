@@ -52,6 +52,10 @@ class CreateTaskAction implements AutomationAction
     {
         $title = $config['title'] ?? null;
 
+        // Static configuration — a task without a title is misconfigured, and
+        // a test run has to say so. The optional lead reference below is never
+        // required, so it needs no deferral.
+        // See ActionResult::missingDataReference() for where that line runs.
         if (empty($title)) {
             return ActionResult::failed('A task title is required.');
         }

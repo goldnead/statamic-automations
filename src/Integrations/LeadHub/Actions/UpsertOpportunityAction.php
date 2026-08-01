@@ -55,8 +55,10 @@ class UpsertOpportunityAction implements AutomationAction
         $leadId = $config['lead_id'] ?? $context->get('lead.id');
         $pipeline = $config['pipeline'] ?? null;
 
-        if (empty($leadId) || empty($pipeline)) {
-            return ActionResult::failed('Both lead reference and pipeline are required.');
+        // Static configuration — a node without a target pipeline is
+        // misconfigured, and a test run has to say so.
+        if (empty($pipeline)) {
+            return ActionResult::failed('A pipeline is required.');
         }
 
         $attributes = array_filter([
@@ -68,11 +70,17 @@ class UpsertOpportunityAction implements AutomationAction
             'source_id' => $config['source_id'] ?? null,
         ], fn ($v) => $v !== null && $v !== '');
 
+        // The lead reference is checked *after* this branch on purpose:
+        // see ActionResult::missingDataReference().
         if ($context->isTestMode() && ! config('automations.test_mode.persist_leadhub_changes', false)) {
             return ActionResult::success([
                 'preview' => ['lead_id' => $leadId, 'pipeline' => $pipeline, 'opportunity' => $attributes],
                 'note' => 'Test mode — LeadHub opportunity skipped.',
             ]);
+        }
+
+        if (empty($leadId)) {
+            return ActionResult::missingDataReference('lead_id', 'Lead', '{{ lead.id }}');
         }
 
         $result = $this->adapter->upsertOpportunity((string) $leadId, (string) $pipeline, $attributes);
