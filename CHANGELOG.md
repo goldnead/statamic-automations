@@ -1,5 +1,80 @@
 # Changelog
 
+## 1.8.2 — 2026-08-01
+
+### Fixed — the Test button could never pass for a whole class of automations
+
+A test run starts from an empty context, so `{{ lead.id }}` resolves to nothing. Nine LeadHub
+actions validated their lead / contact / opportunity reference *before* the test-mode
+short-circuit, which meant they returned `failed` in every test run — on correctly configured
+automations. A real case: `waitlist-follow-up-task` reported
+
+```
+leadhub.add_tag   failed :: Both lead reference and tag are required.
+```
+
+with the node configured as `{"lead_id":"{{ lead.id }}","tag":"waitlist"}`. Nothing was wrong
+with the automation. The Test button simply could not be used on any chain that acts on a lead,
+which is most of them.
+
+**Where the line now runs.** Not "skip validation in test mode" — that would let a genuinely
+broken node pass:
+
+- **Static configuration is still validated before the short-circuit.** A missing tag, note
+  body, task title, target status, target stage or pipeline fails a test run, because that node
+  is broken and would be broken in production.
+- **Data references are validated after it.** The fields a schema declares as `data_reference`
+  can only be filled by the run itself, so a test run previews them as empty and carries on. On
+  the live path they are still required, and now fail through
+  `ActionResult::missingDataReference()`, which records the field handle in the node output.
+
+Reordered: `leadhub.add_tag`, `leadhub.remove_tag`, `leadhub.add_note`, `leadhub.change_status`,
+`leadhub.change_score`, `leadhub.create_follow_up`, `leadhub.complete_follow_up`,
+`leadhub.move_stage`, `leadhub.create_or_update_opportunity`. Unaffected, and checked:
+`leadhub.create_task` (its lead reference is optional, and its required `title` is static
+configuration that must keep failing), `leadhub.create_or_update_lead` (`email` is configured,
+not a reference), the three Marketing actions, `webhook_manager.send`, and all seventeen native
+actions — none of them validated a reference ahead of their test-mode branch.
+
+`test_mode.persist_leadhub_changes` is unchanged: with it on, a test run behaves like a live run
+for LeadHub, reference check included.
+
+### Fixed — an error message that accused the wrong field
+
+`Both lead reference and tag are required.` was returned when the tag was set and only the
+reference was missing, which sends the next person to check the wrong half of the node. Messages
+are now split per field and name the reference and the token that should have filled it:
+`No Lead to act on: the "Lead" field is empty and {{ lead.id }} did not resolve in this run.`
+
+### Fixed — `leadhub.move_stage` mislabelled its opportunity field
+
+`opportunity_id` was declared `type: text` while the action read `{{ opportunity.id }}` from the
+run context — a data reference in everything but the declaration, which is why it was missed by
+eye twice. It is now declared `type: data_reference`. The CP renders it identically (both types
+map to a text input with the token inserter); stored automations keep loading, since the handle
+is unchanged.
+
+### Added — a structural test, so the next action cannot repeat this
+
+`tests/Feature/TestModeDataReferenceTest.php` walks every `AutomationAction` class in `src/` off
+the filesystem — not off the registry, since the integration actions only register when the
+sibling addon is installed — builds a config that fills everything except the data references,
+and runs each action in test mode against an empty context. Nothing may fail on an unresolved
+reference. It also asserts the converse: outside a test mode, a required reference still refuses
+to run, and names itself.
+
+Three actions are allowed to fail the sweep, each with its reason recorded in the test
+(`ai_generate` needs a Pro licence, `call_automation` and `marketing.send_campaign` point at
+resources that do not exist in the test app). That list is asserted exactly, so a new action
+that repeats the defect makes the suite red rather than sliding in.
+
+### Documentation
+
+`docs/getting-started.md` gained a "What a test run does (and does not) check" section: the
+reference rule above, the full `test_mode.*` table including `persist_leadhub_changes`, and how
+to hand a test run a real context instead of loosening a flag. The `call_real_ai` flag now has a
+proper label on the Settings screen instead of the generic fallback.
+
 ## 1.8.1 — 2026-08-01
 
 ### Fixed — the "Webhook Failure Alert" template could never fire
