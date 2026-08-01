@@ -6,6 +6,7 @@ use Goldnead\BrandContext\Concerns\HasBrand;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 class AutomationEdge extends Model
 {
@@ -26,7 +27,7 @@ class AutomationEdge extends Model
     {
         static::creating(function (AutomationEdge $edge) {
             if (empty($edge->uuid)) {
-                $edge->uuid = (string) \Illuminate\Support\Str::uuid();
+                $edge->uuid = (string) Str::uuid();
             }
         });
     }

@@ -2,9 +2,9 @@
 
 namespace Goldnead\StatamicAutomations\Console\Commands;
 
+use Goldnead\BrandContext\Concerns\RunsForEachBrand;
 use Goldnead\StatamicAutomations\Jobs\ResumeDelayedRun;
 use Goldnead\StatamicAutomations\Models\AutomationScheduledJob;
-use Goldnead\BrandContext\Concerns\RunsForEachBrand;
 use Illuminate\Console\Command;
 
 /**

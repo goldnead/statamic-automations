@@ -50,7 +50,7 @@ class FailureAlerter
                     $mail->to($to)->subject('Statamic Automations — run failed');
                 });
             } catch (\Throwable $e) {
-                Log::warning('Automations failure alert email could not be sent: ' . $e->getMessage());
+                Log::warning('Automations failure alert email could not be sent: '.$e->getMessage());
             }
         }
     }

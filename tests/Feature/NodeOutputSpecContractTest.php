@@ -19,6 +19,9 @@
  * Regenerate with: UPDATE_NODE_OUTPUT_FIXTURE=1 vendor/bin/pest --filter=NodeOutputSpecContract
  */
 
+use Goldnead\StatamicAutomations\Nodes\Logic\LoopNode;
+use Goldnead\StatamicAutomations\Nodes\Logic\ParallelNode;
+use Goldnead\StatamicAutomations\Nodes\Logic\SwitchNode;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Support\NodeOutputs;
 
@@ -26,7 +29,7 @@ const FIXTURE_HANDLES = ['manual', 'send_email', 'branch', 'switch', 'loop', 'pa
 
 function fixturePath(): string
 {
-    return __DIR__ . '/../js/fixtures/node-output-specs.json';
+    return __DIR__.'/../js/fixtures/node-output-specs.json';
 }
 
 it('ships a spec for every registered node, and the canvas fixture matches it', function (): void {
@@ -38,7 +41,7 @@ it('ships a spec for every registered node, and the canvas fixture matches it', 
         $specs[$handle] = $registry->outputSpec($handle);
     }
 
-    $json = json_encode($specs, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n";
+    $json = json_encode($specs, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)."\n";
 
     if (getenv('UPDATE_NODE_OUTPUT_FIXTURE')) {
         @mkdir(dirname(fixturePath()), 0755, true);
@@ -82,17 +85,17 @@ it('keeps the handles the pre-1.7.0 outputs() methods returned, in the same orde
     // Stored edges name these strings. Rename or reorder one and every
     // automation wired to it breaks, silently — the edge stays in the
     // database and stops being followed.
-    expect(\Goldnead\StatamicAutomations\Nodes\Logic\LoopNode::outputs())->toBe(['loop', 'done']);
+    expect(LoopNode::outputs())->toBe(['loop', 'done']);
 
-    expect(\Goldnead\StatamicAutomations\Nodes\Logic\SwitchNode::outputs([
+    expect(SwitchNode::outputs([
         'cases' => ['a' => 'case_a', 'b' => '', 'c' => 'default'],
     ]))->toBe(['case_a', 'default']);
 
-    expect(\Goldnead\StatamicAutomations\Nodes\Logic\ParallelNode::outputs([
+    expect(ParallelNode::outputs([
         'branches' => ['first' => 'First', 'second' => 'Second'],
     ]))->toBe(['first', 'second']);
 
-    expect(\Goldnead\StatamicAutomations\Nodes\Logic\ParallelNode::outputs([
+    expect(ParallelNode::outputs([
         'mode' => 'automation', 'branches' => ['first' => 'auto.one'],
     ]))->toBe(['default']);
 });

@@ -241,7 +241,7 @@ class LogicNodesSmokeTest extends TestCase
      */
     protected function buildAutomation(array $nodes, array $edges): Automation
     {
-        $automation = Automation::create(['name' => 'Smoke', 'handle' => 'smoke-' . uniqid(), 'enabled' => true]);
+        $automation = Automation::create(['name' => 'Smoke', 'handle' => 'smoke-'.uniqid(), 'enabled' => true]);
 
         foreach ($nodes as $node) {
             AutomationNode::create([

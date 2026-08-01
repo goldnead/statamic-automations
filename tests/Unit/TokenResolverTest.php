@@ -10,7 +10,7 @@ class TokenResolverTest extends TestCase
 {
     private function resolver(): TokenResolver
     {
-        return new TokenResolver();
+        return new TokenResolver;
     }
 
     public function test_resolves_simple_token(): void

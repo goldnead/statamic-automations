@@ -9,6 +9,7 @@ use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * Two inline loops nested inside each other, both using the SAME item
@@ -18,7 +19,7 @@ use Goldnead\StatamicAutomations\Tests\TestCase;
  */
 class LoopNestedTest extends TestCase
 {
-    use \Illuminate\Foundation\Testing\RefreshDatabase;
+    use RefreshDatabase;
 
     public function test_inner_loop_shadows_outer_loop_variables_and_restores_on_exit(): void
     {
@@ -99,7 +100,7 @@ class LoopNestedTest extends TestCase
      */
     protected function buildAutomation(array $nodes, array $edges): Automation
     {
-        $automation = Automation::create(['name' => 'T', 'handle' => 'test-' . uniqid()]);
+        $automation = Automation::create(['name' => 'T', 'handle' => 'test-'.uniqid()]);
 
         foreach ($nodes as $node) {
             AutomationNode::create([

@@ -1,0 +1,14 @@
+includes:
+    - phpstan-baseline.neon
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 5
+
+    paths:
+        - src
+
+    # Statamic's own facades and the optional sibling addons (LeadHub, Webhook
+    # Manager, Email Templates) are reached through class_exists()-guarded
+    # seams, so PHPStan sees calls into classes that are not installed here.
+    treatPhpDocTypesAsCertain: false

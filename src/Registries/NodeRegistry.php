@@ -2,6 +2,8 @@
 
 namespace Goldnead\StatamicAutomations\Registries;
 
+use Goldnead\StatamicAutomations\Contracts\AutomationNode;
+use Goldnead\StatamicAutomations\Nodes\Triggers\EventTrigger;
 use Goldnead\StatamicAutomations\Support\NodeOutputs;
 use InvalidArgumentException;
 use ReflectionMethod;
@@ -24,7 +26,7 @@ class NodeRegistry
      * The optional $meta lets a caller supply a pre-built, schema-rich
      * description directly instead of deriving it from the class's static
      * methods. This is what backs config-driven nodes (e.g. the generic
-     * {@see \Goldnead\StatamicAutomations\Nodes\Triggers\EventTrigger}), where
+     * {@see EventTrigger}), where
      * a single class serves many distinct handles and therefore cannot expose
      * per-handle metadata via static methods. When $meta is null (the default)
      * the description is built from the class as before.
@@ -122,7 +124,7 @@ class NodeRegistry
             ]);
         }
 
-        /** @var class-string<\Goldnead\StatamicAutomations\Contracts\AutomationNode> $class */
+        /** @var class-string<AutomationNode> $class */
         $class = $entry['class'];
 
         $description = [

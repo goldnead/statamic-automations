@@ -25,7 +25,7 @@ it('registers the new built-in nodes', function () {
 });
 
 it('switch routes to the matching case output', function () {
-    $node = new SwitchNode();
+    $node = new SwitchNode;
     $ctx = AutomationContext::make([]);
 
     $result = $node->execute($ctx, ['value' => 'qualified', 'cases' => ['new' => 'a', 'qualified' => 'b']]);
@@ -35,14 +35,14 @@ it('switch routes to the matching case output', function () {
 });
 
 it('switch falls through to default when nothing matches', function () {
-    $node = new SwitchNode();
+    $node = new SwitchNode;
     $result = $node->execute(AutomationContext::make([]), ['value' => 'x', 'cases' => ['new' => 'a']]);
 
     expect($result->outputHandle)->toBe('default');
 });
 
 it('set_variable writes into the vars scope', function () {
-    $node = new SetVariableAction();
+    $node = new SetVariableAction;
     $ctx = AutomationContext::make([]);
 
     $node->execute($ctx, ['variables' => ['greeting' => 'hello', 'count' => 5]]);
@@ -52,7 +52,7 @@ it('set_variable writes into the vars scope', function () {
 });
 
 it('create_entry previews in test mode without persisting', function () {
-    $node = new CreateEntryAction();
+    $node = new CreateEntryAction;
     $ctx = AutomationContext::make([], testMode: true);
 
     $result = $node->execute($ctx, ['collection' => 'pages', 'data' => ['title' => 'Hi']]);
@@ -63,12 +63,12 @@ it('create_entry previews in test mode without persisting', function () {
 });
 
 it('create_entry fails without a collection', function () {
-    $result = (new CreateEntryAction())->execute(AutomationContext::make([]), []);
+    $result = (new CreateEntryAction)->execute(AutomationContext::make([]), []);
     expect($result->isFailed())->toBeTrue();
 });
 
 it('create_user previews in test mode', function () {
-    $node = new CreateUserAction();
+    $node = new CreateUserAction;
     $ctx = AutomationContext::make([], testMode: true);
 
     $result = $node->execute($ctx, ['email' => 'a@b.de', 'name' => 'A B']);
@@ -78,7 +78,7 @@ it('create_user previews in test mode', function () {
 });
 
 it('entry_saved trigger matches by collection scope', function () {
-    $trigger = new EntrySavedTrigger();
+    $trigger = new EntrySavedTrigger;
     $event = ['entry' => ['id' => '1', 'collection' => 'blog']];
 
     expect($trigger->matches($event, ['collection' => 'blog']))->toBeTrue();
@@ -87,19 +87,19 @@ it('entry_saved trigger matches by collection scope', function () {
 });
 
 it('entry_saved trigger builds entry context', function () {
-    $ctx = (new EntrySavedTrigger())->buildContext(['entry' => ['id' => '7', 'collection' => 'blog']], []);
+    $ctx = (new EntrySavedTrigger)->buildContext(['entry' => ['id' => '7', 'collection' => 'blog']], []);
     expect($ctx->get('entry.id'))->toBe('7');
 });
 
 it('scheduled trigger always matches and seeds context', function () {
-    $trigger = new ScheduledTrigger();
+    $trigger = new ScheduledTrigger;
     expect($trigger->matches([], []))->toBeTrue();
     expect($trigger->buildContext(['at' => 'now'], ['frequency' => 'daily'])->get('scheduled.frequency'))
         ->toBe('daily');
 });
 
 it('webhook_received trigger matches by endpoint and maps payload', function () {
-    $trigger = new WebhookReceivedTrigger();
+    $trigger = new WebhookReceivedTrigger;
     $event = ['endpoint' => 'orders', 'payload' => ['x' => 1], 'headers' => ['h' => 'v']];
 
     expect($trigger->matches($event, ['endpoint' => 'orders']))->toBeTrue();

@@ -7,7 +7,6 @@ use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
-use Goldnead\StatamicAutomations\Models\AutomationNodeRun;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -63,7 +62,7 @@ class PartialRetryTest extends TestCase
 
     protected function buildLinearAutomation(): Automation
     {
-        $automation = Automation::create(['name' => 'Linear', 'handle' => 'linear-' . uniqid()]);
+        $automation = Automation::create(['name' => 'Linear', 'handle' => 'linear-'.uniqid()]);
 
         AutomationNode::create([
             'automation_id' => $automation->id,

@@ -6,12 +6,12 @@ use Goldnead\StatamicAutomations\Engine\FlowValidator;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
-use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 class FlowValidatorTest extends TestCase
 {
-    use \Illuminate\Foundation\Testing\RefreshDatabase;
+    use RefreshDatabase;
 
     public function test_requires_exactly_one_trigger_node(): void
     {
@@ -147,6 +147,6 @@ class FlowValidatorTest extends TestCase
         $issues = app(FlowValidator::class)->validate($automation->fresh()->load(['nodes', 'edges']));
 
         $errors = array_filter($issues, fn ($i) => $i['level'] === 'error');
-        $this->assertEmpty($errors, 'expected no errors but got ' . json_encode($issues));
+        $this->assertEmpty($errors, 'expected no errors but got '.json_encode($issues));
     }
 }

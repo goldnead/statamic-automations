@@ -5,6 +5,7 @@ namespace Goldnead\StatamicAutomations\Nodes\Logic;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
 use Goldnead\StatamicAutomations\Engine\ConditionEvaluator;
+use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 
 /**
@@ -45,7 +46,7 @@ class WaitUntilNode implements AutomationLogicNode
      * Wait Until must be RE-EVALUATED when its scheduled recheck fires —
      * the condition may still be false, in which case it should park
      * again for another interval rather than let the run fall through.
-     * Read by {@see \Goldnead\StatamicAutomations\Engine\WorkflowRunner::resumeAfterNode()}.
+     * Read by {@see WorkflowRunner::resumeAfterNode()}.
      */
     public static function reexecuteOnResume(): bool
     {

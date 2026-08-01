@@ -25,7 +25,7 @@ class TriggerRegistry
     {
         if (! is_subclass_of($class, AutomationTrigger::class)) {
             throw new InvalidArgumentException(
-                "{$class} must implement " . AutomationTrigger::class
+                "{$class} must implement ".AutomationTrigger::class
             );
         }
 

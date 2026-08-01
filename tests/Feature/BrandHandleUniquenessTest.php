@@ -18,7 +18,6 @@ use Illuminate\Support\Str;
  * the validator must ask the same question the index answers, which it did
  * not while `Rule::unique()` ran unscoped across every brand's rows.
  */
-
 const UNIQUENESS_MIGRATION = __DIR__
     .'/../../database/migrations/2026_07_28_000003_require_brand_id_on_automations_table.php';
 

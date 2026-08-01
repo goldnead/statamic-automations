@@ -16,7 +16,7 @@ abstract class Controller extends BaseController
         $user = auth()->user();
 
         if ($user === null) {
-            throw new AuthorizationException("Not authenticated.");
+            throw new AuthorizationException('Not authenticated.');
         }
 
         if (method_exists($user, 'can') && ! $user->can($permission)) {

@@ -100,7 +100,7 @@ it('parallel fails fast when a branch is missing and fail_fast is on', function 
 
 it('throttle stops a duplicate within the window', function () {
     Cache::flush();
-    $node = new ThrottleNode();
+    $node = new ThrottleNode;
 
     $first = $node->execute(AutomationContext::make([]), ['key' => 'order-7', 'window_minutes' => 60]);
     expect($first->isSuccess())->toBeTrue();
@@ -111,7 +111,7 @@ it('throttle stops a duplicate within the window', function () {
 
 it('throttle never records in test mode', function () {
     Cache::flush();
-    $node = new ThrottleNode();
+    $node = new ThrottleNode;
     $ctx = AutomationContext::make([], testMode: true);
 
     expect($node->execute($ctx, ['key' => 'x'])->isSuccess())->toBeTrue();

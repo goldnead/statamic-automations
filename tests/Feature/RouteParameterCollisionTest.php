@@ -77,7 +77,7 @@ function automationsRouteParameters(): array
     $found = [];
 
     foreach (['cp.php', 'web.php'] as $file) {
-        $path = __DIR__ . '/../../routes/' . $file;
+        $path = __DIR__.'/../../routes/'.$file;
 
         if (! is_file($path)) {
             continue;
@@ -116,7 +116,7 @@ function automationsBoundParameters(): array
     $calls = 0;
 
     $files = new RecursiveIteratorIterator(
-        new RecursiveDirectoryIterator(__DIR__ . '/../../src', FilesystemIterator::SKIP_DOTS)
+        new RecursiveDirectoryIterator(__DIR__.'/../../src', FilesystemIterator::SKIP_DOTS)
     );
 
     foreach ($files as $file) {
@@ -174,12 +174,12 @@ it('does not swallow a sibling addon\'s generic route parameter', function (): v
     $swallowed = [];
 
     foreach (TestCase::NAMES_A_SIBLING_MIGHT_USE as $name) {
-        $response = $this->get('sibling-probe/' . $name . '/sibling-owned-id-42');
+        $response = $this->get('sibling-probe/'.$name.'/sibling-owned-id-42');
 
         if ($response->status() !== 200 || $response->getContent() !== 'sibling-owned-id-42') {
             $swallowed[] = sprintf(
                 '{%s}: a sibling route with this parameter answered %d instead of echoing its own '
-                    . 'value — this addon resolves the name application-wide and ate it',
+                    .'value — this addon resolves the name application-wide and ate it',
                 $name,
                 $response->status()
             );
@@ -194,7 +194,7 @@ it('binds only parameter names that belong to this addon', function (): void {
 
     expect($bound['unverifiable'])->toBe(0,
         'A Route::bind() whose parameter name is not a string literal cannot be checked here. '
-            . 'Keep the name literal, or this rule stops being enforceable.');
+            .'Keep the name literal, or this rule stops being enforceable.');
 
     $generic = [];
 
@@ -204,10 +204,10 @@ it('binds only parameter names that belong to this addon', function (): void {
         }
     }
 
-    expect($generic)->toBe([], implode("\n", $generic) . "\n"
-        . 'A Route::bind() reaches into every addon installed alongside. Bind only names '
-        . 'prefixed `automation` + a capital (automationFlow, …) so no sibling can pick one '
-        . 'by accident. Generic names are fine as long as they stay UNBOUND.');
+    expect($generic)->toBe([], implode("\n", $generic)."\n"
+        .'A Route::bind() reaches into every addon installed alongside. Bind only names '
+        .'prefixed `automation` + a capital (automationFlow, …) so no sibling can pick one '
+        .'by accident. Generic names are fine as long as they stay UNBOUND.');
 });
 
 it('keeps the bound names and the route files in agreement', function (): void {
@@ -216,7 +216,7 @@ it('keeps the bound names and the route files in agreement', function (): void {
 
     expect(array_values(array_diff($bound, $declared)))->toBe([],
         'Bound but not used by any route in this addon — a binding with no route of its own is '
-            . 'pure exposure for the siblings, delete it.');
+            .'pure exposure for the siblings, delete it.');
 
     $unbound = array_values(array_diff($declared, $bound));
     sort($unbound);
@@ -230,7 +230,7 @@ it('keeps the bound names and the route files in agreement', function (): void {
     expect($unbound)->toBe(
         ['handle', 'nodeRun', 'run', 'source', 'timestamp'],
         'The unbound parameter names changed. Keep them unbound — and if one of these ever needs '
-            . 'a binding, rename it to `automation…` in the same commit.'
+            .'a binding, rename it to `automation…` in the same commit.'
     );
 });
 

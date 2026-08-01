@@ -1,5 +1,6 @@
 <?php
 
+use Goldnead\StatamicAutomations\Casts\MillisecondDateTime;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
@@ -19,7 +20,7 @@ use Illuminate\Support\Facades\Schema;
  * with the connection's format (`Y-m-d H:i:s` on every driver), so the
  * fraction was being dropped in the model, before the column was ever
  * involved. The models now cast these four attributes through
- * {@see \Goldnead\StatamicAutomations\Casts\MillisecondDateTime}. Without that
+ * {@see MillisecondDateTime}. Without that
  * cast this migration would change the schema and nothing else.
  *
  * SQLite is skipped on purpose. It has no typed datetime — Laravel maps

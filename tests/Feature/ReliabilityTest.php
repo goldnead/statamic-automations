@@ -9,16 +9,17 @@ use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Support\AuditLogger;
+use Illuminate\Filesystem\Filesystem;
 use Statamic\Facades\Revision;
 
 afterEach(function () {
     // Revisions are flat files; clear them so runs don't accumulate on disk.
     try {
-        $dir = \Statamic\Facades\Revision::directory();
+        $dir = Revision::directory();
         if (is_dir($dir)) {
-            (new \Illuminate\Filesystem\Filesystem())->deleteDirectory($dir);
+            (new Filesystem)->deleteDirectory($dir);
         }
-    } catch (\Throwable) {
+    } catch (Throwable) {
         // ignore
     }
 });
@@ -30,7 +31,7 @@ function revisionsWritable(): bool
         @mkdir($dir, 0777, true);
 
         return is_dir($dir) && is_writable($dir);
-    } catch (\Throwable) {
+    } catch (Throwable) {
         return false;
     }
 }
@@ -84,7 +85,7 @@ it('snapshots and reverts an automation graph via Statamic revisions', function 
 
     $manager = app(VersionManager::class);
     $rev = $manager->snapshot($automation->fresh(['nodes', 'edges']), 'v1');
-    expect($rev)->toBeInstanceOf(\Statamic\Contracts\Revisions\Revision::class);
+    expect($rev)->toBeInstanceOf(Statamic\Contracts\Revisions\Revision::class);
 
     // Mutate: add a node + bump version.
     AutomationNode::create(['automation_id' => $automation->id, 'node_key' => 'x', 'type' => 'add_log_entry']);

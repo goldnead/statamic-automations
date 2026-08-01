@@ -9,6 +9,7 @@ use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * The Loop node's default "inline" mode iterates the downstream subgraph
@@ -17,7 +18,7 @@ use Goldnead\StatamicAutomations\Tests\TestCase;
  */
 class LoopInlineTest extends TestCase
 {
-    use \Illuminate\Foundation\Testing\RefreshDatabase;
+    use RefreshDatabase;
 
     public function test_inline_loop_runs_body_once_per_item_then_done_once(): void
     {
@@ -235,7 +236,7 @@ class LoopInlineTest extends TestCase
      */
     protected function buildAutomation(array $nodes, array $edges): Automation
     {
-        $automation = Automation::create(['name' => 'T', 'handle' => 'test-' . uniqid()]);
+        $automation = Automation::create(['name' => 'T', 'handle' => 'test-'.uniqid()]);
 
         foreach ($nodes as $node) {
             AutomationNode::create([

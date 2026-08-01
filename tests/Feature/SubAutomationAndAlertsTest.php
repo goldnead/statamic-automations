@@ -4,6 +4,7 @@ use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Engine\ConditionEvaluator;
 use Goldnead\StatamicAutomations\Engine\FailureAlerter;
 use Goldnead\StatamicAutomations\Models\Automation;
+use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Nodes\Actions\CallAutomationAction;
@@ -18,7 +19,7 @@ function makeCallableAutomation(): Automation
         'automation_id' => $automation->id, 'node_key' => 'log', 'type' => 'add_log_entry',
         'config' => ['message' => 'child ran'],
     ]);
-    \Goldnead\StatamicAutomations\Models\AutomationEdge::create([
+    AutomationEdge::create([
         'automation_id' => $automation->id, 'from_node_key' => 't', 'to_node_key' => 'log',
     ]);
 

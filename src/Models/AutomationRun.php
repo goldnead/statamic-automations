@@ -5,20 +5,28 @@ namespace Goldnead\StatamicAutomations\Models;
 use Goldnead\BrandContext\Concerns\HasBrand;
 use Goldnead\StatamicAutomations\Casts\EncryptedJson;
 use Goldnead\StatamicAutomations\Casts\MillisecondDateTime;
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 class AutomationRun extends Model
 {
     use HasBrand;
 
     public const STATUS_QUEUED = 'queued';
+
     public const STATUS_RUNNING = 'running';
+
     public const STATUS_SUCCESS = 'success';
+
     public const STATUS_STOPPED = 'stopped';
+
     public const STATUS_FAILED = 'failed';
+
     public const STATUS_CANCELLED = 'cancelled';
+
     public const STATUS_WAITING = 'waiting';
 
     protected $table = 'automation_runs';
@@ -53,7 +61,7 @@ class AutomationRun extends Model
     {
         static::creating(function (AutomationRun $run) {
             if (empty($run->uuid)) {
-                $run->uuid = (string) \Illuminate\Support\Str::uuid();
+                $run->uuid = (string) Str::uuid();
             }
         });
     }
@@ -72,7 +80,7 @@ class AutomationRun extends Model
      */
     public function resolveAutomation(): ?Automation
     {
-        $repository = app(\Goldnead\StatamicAutomations\Contracts\AutomationRepository::class);
+        $repository = app(AutomationRepository::class);
 
         if ($this->automation_uuid && ($found = $repository->find($this->automation_uuid))) {
             return $found;

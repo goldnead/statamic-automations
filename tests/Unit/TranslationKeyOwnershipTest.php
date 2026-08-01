@@ -57,7 +57,7 @@ function automationsJsonTranslations(): array
 {
     $dictionaries = [];
 
-    foreach (glob(__DIR__ . '/../../resources/lang/*.json') ?: [] as $path) {
+    foreach (glob(__DIR__.'/../../resources/lang/*.json') ?: [] as $path) {
         $dictionaries[basename($path, '.json')] = json_decode((string) file_get_contents($path), true) ?: [];
     }
 
@@ -71,7 +71,7 @@ function automationsJsonTranslations(): array
  */
 function statamicJsonTranslations(string $locale): array
 {
-    $path = __DIR__ . '/../../vendor/statamic/cms/lang/' . $locale . '.json';
+    $path = __DIR__.'/../../vendor/statamic/cms/lang/'.$locale.'.json';
 
     return is_file($path)
         ? (json_decode((string) file_get_contents($path), true) ?: [])
@@ -107,12 +107,12 @@ it('retranslates no string statamic/cms already owns', function (): void {
         }
     }
 
-    expect($collisions)->toBe([], implode("\n", $collisions) . "\n"
-        . 'JSON translations from every package merge into one Control Panel dictionary, so a key '
-        . 'here does not stay inside this addon — it replaces that string for statamic/cms and for '
-        . 'every sibling. Where this addon means something else, make the SOURCE string unambiguous '
-        . '(`Templates` → `Automation templates`); where it means the same thing, drop the key and '
-        . 'let the core translate it.');
+    expect($collisions)->toBe([], implode("\n", $collisions)."\n"
+        .'JSON translations from every package merge into one Control Panel dictionary, so a key '
+        .'here does not stay inside this addon — it replaces that string for statamic/cms and for '
+        .'every sibling. Where this addon means something else, make the SOURCE string unambiguous '
+        .'(`Templates` → `Automation templates`); where it means the same thing, drop the key and '
+        .'let the core translate it.');
 });
 
 it('translates the source strings its own screens actually pass to __()', function (): void {

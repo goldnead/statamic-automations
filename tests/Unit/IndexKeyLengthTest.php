@@ -3,6 +3,8 @@
 namespace Goldnead\StatamicAutomations\Tests\Unit;
 
 use Goldnead\StatamicAutomations\Tests\TestCase;
+use Illuminate\Database\Connection;
+use Illuminate\Database\Schema\MySqlBuilder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -410,11 +412,11 @@ class IndexKeyLengthTest extends TestCase
  * it has no schema, and `pretend()` would answer "empty" to every question a
  * migration asks about the one it is modifying.
  */
-class ProbeSchemaBuilder extends \Illuminate\Database\Schema\MySqlBuilder
+class ProbeSchemaBuilder extends MySqlBuilder
 {
     public function __construct(
-        \Illuminate\Database\Connection $probe,
-        private \Illuminate\Database\Connection $state,
+        Connection $probe,
+        private Connection $state,
     ) {
         parent::__construct($probe);
     }

@@ -2,16 +2,31 @@
 
 namespace Goldnead\StatamicAutomations\Support\OptionSources;
 
+use Goldnead\EmailTemplates\Facades\EmailTemplates;
 use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
 use Goldnead\StatamicAutomations\Integrations\WebhookManager\WebhookManagerAdapter;
+use Goldnead\StatamicAutomations\Registries\OptionSourceRegistry;
 use Illuminate\Http\Request;
+use Statamic\Facades\Asset;
+use Statamic\Facades\AssetContainer;
+use Statamic\Facades\Blueprint;
+use Statamic\Facades\Collection;
+use Statamic\Facades\Entry;
+use Statamic\Facades\Form;
+use Statamic\Facades\GlobalSet;
+use Statamic\Facades\Role;
+use Statamic\Facades\Site;
+use Statamic\Facades\Taxonomy;
+use Statamic\Facades\Term;
+use Statamic\Facades\User;
+use Statamic\Facades\UserGroup;
 
 /**
  * Resolvers for the addon's built-in `options_source` handles.
  *
  * These used to live as a hard-coded `match()` inside NodesController. They
- * are now registered into the {@see \Goldnead\StatamicAutomations\Registries\OptionSourceRegistry}
+ * are now registered into the {@see OptionSourceRegistry}
  * at boot — i.e. the built-ins go through the very same public surface a third
  * party uses (`Automations::registerOptionSource()`). Every method is
  * defensive: a missing facade or any error yields an empty list, never a fatal.
@@ -22,20 +37,19 @@ class NativeOptionSources
         protected LeadHubAdapter $leadHub,
         protected WebhookManagerAdapter $webhookManager,
         protected AutomationRepository $automations,
-    ) {
-    }
+    ) {}
 
     /**
      * @return array<int, array{value: string, label: string}>
      */
     public function forms(Request $request): array
     {
-        if (! class_exists(\Statamic\Facades\Form::class)) {
+        if (! class_exists(Form::class)) {
             return [];
         }
 
         try {
-            return collect(\Statamic\Facades\Form::all())
+            return collect(Form::all())
                 ->map(fn ($form) => [
                     'value' => method_exists($form, 'handle') ? $form->handle() : (string) $form,
                     'label' => method_exists($form, 'title') ? $form->title() : (string) $form,
@@ -52,12 +66,12 @@ class NativeOptionSources
      */
     public function collections(Request $request): array
     {
-        if (! class_exists(\Statamic\Facades\Collection::class)) {
+        if (! class_exists(Collection::class)) {
             return [];
         }
 
         try {
-            return collect(\Statamic\Facades\Collection::all())
+            return collect(Collection::all())
                 ->map(fn ($c) => [
                     'value' => method_exists($c, 'handle') ? $c->handle() : (string) $c,
                     'label' => method_exists($c, 'title') ? $c->title() : (string) $c,
@@ -74,12 +88,12 @@ class NativeOptionSources
      */
     public function sites(Request $request): array
     {
-        if (! class_exists(\Statamic\Facades\Site::class)) {
+        if (! class_exists(Site::class)) {
             return [];
         }
 
         try {
-            return collect(\Statamic\Facades\Site::all())
+            return collect(Site::all())
                 ->map(fn ($s) => [
                     'value' => method_exists($s, 'handle') ? $s->handle() : (string) $s,
                     'label' => method_exists($s, 'name') ? $s->name() : (string) $s,
@@ -98,12 +112,12 @@ class NativeOptionSources
     {
         $collection = $request->query('collection');
 
-        if (! is_string($collection) || $collection === '' || ! class_exists(\Statamic\Facades\Entry::class)) {
+        if (! is_string($collection) || $collection === '' || ! class_exists(Entry::class)) {
             return [];
         }
 
         try {
-            return \Statamic\Facades\Entry::query()
+            return Entry::query()
                 ->where('collection', $collection)
                 ->get()
                 ->map(fn ($entry) => [
@@ -124,12 +138,12 @@ class NativeOptionSources
      */
     public function taxonomies(Request $request): array
     {
-        if (! class_exists(\Statamic\Facades\Taxonomy::class)) {
+        if (! class_exists(Taxonomy::class)) {
             return [];
         }
 
         try {
-            return collect(\Statamic\Facades\Taxonomy::all())
+            return collect(Taxonomy::all())
                 ->map(fn ($t) => [
                     'value' => method_exists($t, 'handle') ? $t->handle() : (string) $t,
                     'label' => method_exists($t, 'title') ? $t->title() : (string) $t,
@@ -148,12 +162,12 @@ class NativeOptionSources
     {
         $taxonomy = $request->query('taxonomy');
 
-        if (! is_string($taxonomy) || $taxonomy === '' || ! class_exists(\Statamic\Facades\Term::class)) {
+        if (! is_string($taxonomy) || $taxonomy === '' || ! class_exists(Term::class)) {
             return [];
         }
 
         try {
-            return \Statamic\Facades\Term::whereTaxonomy($taxonomy)
+            return Term::whereTaxonomy($taxonomy)
                 ->map(fn ($term) => [
                     'value' => method_exists($term, 'id') ? (string) $term->id() : (string) $term,
                     'label' => method_exists($term, 'title') ? (string) $term->title() : (string) $term,
@@ -170,12 +184,12 @@ class NativeOptionSources
      */
     public function users(Request $request): array
     {
-        if (! class_exists(\Statamic\Facades\User::class)) {
+        if (! class_exists(User::class)) {
             return [];
         }
 
         try {
-            return collect(\Statamic\Facades\User::all())
+            return collect(User::all())
                 ->map(fn ($user) => [
                     'value' => method_exists($user, 'id') ? (string) $user->id() : (string) $user,
                     'label' => method_exists($user, 'email')
@@ -194,12 +208,12 @@ class NativeOptionSources
      */
     public function roles(Request $request): array
     {
-        if (! class_exists(\Statamic\Facades\Role::class)) {
+        if (! class_exists(Role::class)) {
             return [];
         }
 
         try {
-            return collect(\Statamic\Facades\Role::all())
+            return collect(Role::all())
                 ->map(fn ($role) => [
                     'value' => method_exists($role, 'handle') ? $role->handle() : (string) $role,
                     'label' => method_exists($role, 'title') ? $role->title() : (string) $role,
@@ -218,12 +232,12 @@ class NativeOptionSources
      */
     public function userGroups(Request $request): array
     {
-        if (! class_exists(\Statamic\Facades\UserGroup::class)) {
+        if (! class_exists(UserGroup::class)) {
             return [];
         }
 
         try {
-            return collect(\Statamic\Facades\UserGroup::all())
+            return collect(UserGroup::all())
                 ->map(fn ($group) => [
                     'value' => method_exists($group, 'handle') ? $group->handle() : (string) $group,
                     'label' => method_exists($group, 'title') ? $group->title() : (string) $group,
@@ -244,11 +258,11 @@ class NativeOptionSources
 
         try {
             if (is_string($collectionHandle) && $collectionHandle !== '') {
-                if (! class_exists(\Statamic\Facades\Collection::class)) {
+                if (! class_exists(Collection::class)) {
                     return [];
                 }
 
-                $collection = \Statamic\Facades\Collection::findByHandle($collectionHandle);
+                $collection = Collection::findByHandle($collectionHandle);
 
                 if ($collection === null) {
                     return [];
@@ -256,11 +270,11 @@ class NativeOptionSources
 
                 $blueprints = $collection->entryBlueprints();
             } else {
-                if (! class_exists(\Statamic\Facades\Blueprint::class)) {
+                if (! class_exists(Blueprint::class)) {
                     return [];
                 }
 
-                $blueprints = \Statamic\Facades\Blueprint::in('collections');
+                $blueprints = Blueprint::in('collections');
             }
 
             return collect($blueprints)
@@ -282,12 +296,12 @@ class NativeOptionSources
     {
         $container = $request->query('container');
 
-        if (! is_string($container) || $container === '' || ! class_exists(\Statamic\Facades\Asset::class)) {
+        if (! is_string($container) || $container === '' || ! class_exists(Asset::class)) {
             return [];
         }
 
         try {
-            return \Statamic\Facades\Asset::whereContainer($container)
+            return Asset::whereContainer($container)
                 ->map(fn ($asset) => [
                     'value' => method_exists($asset, 'id') ? (string) $asset->id() : (string) $asset,
                     'label' => method_exists($asset, 'basename') ? (string) $asset->basename() : (string) $asset,
@@ -304,12 +318,12 @@ class NativeOptionSources
      */
     public function assetContainers(Request $request): array
     {
-        if (! class_exists(\Statamic\Facades\AssetContainer::class)) {
+        if (! class_exists(AssetContainer::class)) {
             return [];
         }
 
         try {
-            return collect(\Statamic\Facades\AssetContainer::all())
+            return collect(AssetContainer::all())
                 ->map(fn ($container) => [
                     'value' => method_exists($container, 'handle') ? $container->handle() : (string) $container,
                     'label' => method_exists($container, 'title') ? $container->title() : (string) $container,
@@ -326,12 +340,12 @@ class NativeOptionSources
      */
     public function globals(Request $request): array
     {
-        if (! class_exists(\Statamic\Facades\GlobalSet::class)) {
+        if (! class_exists(GlobalSet::class)) {
             return [];
         }
 
         try {
-            return collect(\Statamic\Facades\GlobalSet::all())
+            return collect(GlobalSet::all())
                 ->map(fn ($global) => [
                     'value' => method_exists($global, 'handle') ? $global->handle() : (string) $global,
                     'label' => method_exists($global, 'title') ? $global->title() : (string) $global,
@@ -373,13 +387,13 @@ class NativeOptionSources
      */
     public function emailTemplates(Request $request): array
     {
-        if (! class_exists(\Goldnead\EmailTemplates\Facades\EmailTemplates::class)
-            || ! class_exists(\Statamic\Facades\Entry::class)) {
+        if (! class_exists(EmailTemplates::class)
+            || ! class_exists(Entry::class)) {
             return [];
         }
 
         try {
-            return collect(\Statamic\Facades\Entry::query()->where('collection', 'et_templates')->get())
+            return collect(Entry::query()->where('collection', 'et_templates')->get())
                 ->map(fn ($entry) => [
                     'value' => method_exists($entry, 'slug') ? (string) $entry->slug() : '',
                     'label' => method_exists($entry, 'value')

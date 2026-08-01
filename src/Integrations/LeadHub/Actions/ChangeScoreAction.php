@@ -18,9 +18,7 @@ use Goldnead\StatamicAutomations\Support\ActionResult;
  */
 class ChangeScoreAction implements AutomationAction
 {
-    public function __construct(protected LeadHubAdapter $adapter)
-    {
-    }
+    public function __construct(protected LeadHubAdapter $adapter) {}
 
     public static function handle(): string
     {

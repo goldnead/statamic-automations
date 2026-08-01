@@ -2,6 +2,8 @@
 
 namespace Goldnead\StatamicAutomations\Context;
 
+use Statamic\Facades\Site;
+
 /**
  * Helper that assembles an AutomationContext from event data.
  *
@@ -32,9 +34,9 @@ class ContextBuilder
 
     protected function currentSiteHandle(): string
     {
-        if (class_exists(\Statamic\Facades\Site::class)) {
+        if (class_exists(Site::class)) {
             try {
-                return \Statamic\Facades\Site::current()->handle();
+                return Site::current()->handle();
             } catch (\Throwable) {
                 // Fall through to default
             }

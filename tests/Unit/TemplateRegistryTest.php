@@ -9,7 +9,7 @@ class TemplateRegistryTest extends TestCase
 {
     public function test_returns_a_non_empty_catalog(): void
     {
-        $registry = new TemplateRegistry();
+        $registry = new TemplateRegistry;
         $all = $registry->all();
 
         $this->assertNotEmpty($all);
@@ -23,7 +23,7 @@ class TemplateRegistryTest extends TestCase
 
     public function test_get_returns_template_by_handle(): void
     {
-        $registry = new TemplateRegistry();
+        $registry = new TemplateRegistry;
         $template = $registry->get('form_submission_to_webhook');
 
         $this->assertNotNull($template);
@@ -32,13 +32,13 @@ class TemplateRegistryTest extends TestCase
 
     public function test_get_returns_null_for_unknown_handle(): void
     {
-        $registry = new TemplateRegistry();
+        $registry = new TemplateRegistry;
         $this->assertNull($registry->get('does_not_exist'));
     }
 
     public function test_every_template_has_a_trigger_node(): void
     {
-        $registry = new TemplateRegistry();
+        $registry = new TemplateRegistry;
 
         foreach ($registry->all() as $template) {
             $hasTrigger = false;
@@ -67,7 +67,7 @@ class TemplateRegistryTest extends TestCase
 
     public function test_every_edge_references_existing_nodes(): void
     {
-        $registry = new TemplateRegistry();
+        $registry = new TemplateRegistry;
 
         foreach ($registry->all() as $template) {
             $nodeKeys = array_column($template['nodes'], 'node_key');

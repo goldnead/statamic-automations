@@ -3,11 +3,11 @@
 namespace Goldnead\StatamicAutomations\Console\Commands;
 
 use Cron\CronExpression;
+use Goldnead\BrandContext\Concerns\RunsForEachBrand;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
-use Goldnead\BrandContext\Concerns\RunsForEachBrand;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 
@@ -93,8 +93,8 @@ class RunScheduledAutomations extends Command
         return match ($frequency) {
             'hourly' => "{$minute} * * * *",
             'daily' => "{$minute} {$hour} * * *",
-            'weekly' => "{$minute} {$hour} * * " . ((string) ($config['day'] ?? '1')),
-            'monthly' => "{$minute} {$hour} " . ((string) ($config['day'] ?? '1')) . ' * *',
+            'weekly' => "{$minute} {$hour} * * ".((string) ($config['day'] ?? '1')),
+            'monthly' => "{$minute} {$hour} ".((string) ($config['day'] ?? '1')).' * *',
             default => null,
         };
     }

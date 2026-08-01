@@ -2,6 +2,8 @@
 
 namespace Goldnead\StatamicAutomations\Integrations\LeadHub;
 
+use Illuminate\Support\Facades\Facade;
+
 /**
  * Thin adapter that delegates to the LeadHub addon's public API
  * if it is installed.
@@ -255,7 +257,7 @@ class LeadHubAdapter
                 continue;
             }
 
-            if (is_subclass_of($class, \Illuminate\Support\Facades\Facade::class)) {
+            if (is_subclass_of($class, Facade::class)) {
                 try {
                     $root = $class::getFacadeRoot();
                     if (is_object($root)) {

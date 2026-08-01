@@ -19,7 +19,7 @@ class SyncCommandTest extends TestCase
     {
         parent::setUp();
 
-        $this->syncPath = sys_get_temp_dir() . '/statamic-automations-sync-' . uniqid();
+        $this->syncPath = sys_get_temp_dir().'/statamic-automations-sync-'.uniqid();
         File::ensureDirectoryExists($this->syncPath);
         config()->set('automations.file_storage.path', $this->syncPath);
     }

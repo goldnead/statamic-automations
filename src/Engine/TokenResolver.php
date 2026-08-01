@@ -3,6 +3,9 @@
 namespace Goldnead\StatamicAutomations\Engine;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
+use Goldnead\StatamicAutomations\Support\SecretStore;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Str;
 
 /**
  * Replaces {{ token }} expressions in strings and arrays against a
@@ -48,7 +51,7 @@ class TokenResolver
 
         // Single-token shortcut → preserve structured values when there are
         // no filters; otherwise apply the filter chain and return the result.
-        if (preg_match('/^\s*\{\{\s*' . $token . '\}\}\s*$/', $value, $match)) {
+        if (preg_match('/^\s*\{\{\s*'.$token.'\}\}\s*$/', $value, $match)) {
             $resolved = $this->resolveToken($match[1], $context);
             $filters = trim($match[2]);
 
@@ -56,7 +59,7 @@ class TokenResolver
         }
 
         return preg_replace_callback(
-            '/\{\{\s*' . $token . '\}\}/',
+            '/\{\{\s*'.$token.'\}\}/',
             function ($match) use ($context) {
                 $resolved = $this->resolveToken($match[1], $context);
                 $filters = trim($match[2]);
@@ -88,7 +91,7 @@ class TokenResolver
     protected function resolveToken(string $name, AutomationContext $context): mixed
     {
         if (str_starts_with($name, 'secret.')) {
-            return app(\Goldnead\StatamicAutomations\Support\SecretStore::class)
+            return app(SecretStore::class)
                 ->get(substr($name, strlen('secret.')));
         }
 
@@ -119,7 +122,7 @@ class TokenResolver
             'ucfirst' => is_scalar($value) ? ucfirst((string) $value) : $value,
             'title' => is_scalar($value) ? ucwords((string) $value) : $value,
             'trim' => is_scalar($value) ? trim((string) $value) : $value,
-            'slug' => is_scalar($value) ? \Illuminate\Support\Str::slug((string) $value) : $value,
+            'slug' => is_scalar($value) ? Str::slug((string) $value) : $value,
             'length' => is_array($value) ? count($value) : mb_strlen((string) $value),
             'json' => json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'default' => ($value === null || $value === '') ? $arg : $value,
@@ -135,7 +138,7 @@ class TokenResolver
         }
 
         try {
-            return \Illuminate\Support\Carbon::parse($value)->format($format);
+            return Carbon::parse($value)->format($format);
         } catch (\Throwable) {
             return $value;
         }

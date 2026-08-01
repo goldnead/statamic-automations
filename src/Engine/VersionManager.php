@@ -135,7 +135,7 @@ class VersionManager
      */
     public function key(Automation $automation): string
     {
-        return 'automation::' . ($automation->uuid ?: $automation->id);
+        return 'automation::'.($automation->uuid ?: $automation->id);
     }
 
     /**

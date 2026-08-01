@@ -54,12 +54,35 @@ class NodeRegistryTest extends TestCase
 
 class TestCustomAction implements AutomationAction
 {
-    public static function handle(): string { return 'test.custom'; }
-    public static function label(): string { return 'Test Custom'; }
-    public static function description(): ?string { return null; }
-    public static function group(): string { return 'Custom'; }
-    public static function supportsTestMode(): bool { return true; }
-    public static function schema(): array { return []; }
+    public static function handle(): string
+    {
+        return 'test.custom';
+    }
+
+    public static function label(): string
+    {
+        return 'Test Custom';
+    }
+
+    public static function description(): ?string
+    {
+        return null;
+    }
+
+    public static function group(): string
+    {
+        return 'Custom';
+    }
+
+    public static function supportsTestMode(): bool
+    {
+        return true;
+    }
+
+    public static function schema(): array
+    {
+        return [];
+    }
 
     public function execute(AutomationContext $context, array $config): ActionResult
     {

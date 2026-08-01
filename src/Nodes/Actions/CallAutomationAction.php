@@ -4,6 +4,7 @@ namespace Goldnead\StatamicAutomations\Nodes\Actions;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationAction;
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
 use Goldnead\StatamicAutomations\Models\Automation;
@@ -19,9 +20,7 @@ class CallAutomationAction implements AutomationAction
 {
     use NormalizesKeyValue;
 
-    public function __construct(protected WorkflowRunner $runner)
-    {
-    }
+    public function __construct(protected WorkflowRunner $runner) {}
 
     public static function handle(): string
     {
@@ -88,7 +87,7 @@ class CallAutomationAction implements AutomationAction
             return ActionResult::failed("Maximum sub-automation depth ({$max}) reached.");
         }
 
-        $target = app(\Goldnead\StatamicAutomations\Contracts\AutomationRepository::class)->findByRef((string) $ref);
+        $target = app(AutomationRepository::class)->findByRef((string) $ref);
         if ($target === null) {
             return ActionResult::failed("Automation '{$ref}' not found.");
         }

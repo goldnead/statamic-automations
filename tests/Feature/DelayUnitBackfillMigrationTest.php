@@ -16,7 +16,7 @@ use Illuminate\Support\Str;
  * minutes. The migration completes them.
  */
 const DELAY_UNIT_BACKFILL_MIGRATION = __DIR__
-    . '/../../database/migrations/2026_07_28_000001_backfill_delay_node_unit.php';
+    .'/../../database/migrations/2026_07_28_000001_backfill_delay_node_unit.php';
 
 /** Insert a node the way a pre-1.5.2 save left it, bypassing the brand scope. */
 function delayBackfillNode(array $attributes = []): int
@@ -24,7 +24,7 @@ function delayBackfillNode(array $attributes = []): int
     $automationId = DB::table('automations')->insertGetId([
         'uuid' => (string) Str::uuid(),
         'name' => 'Backfill fixture',
-        'handle' => 'backfill-' . Str::random(6),
+        'handle' => 'backfill-'.Str::random(6),
         'enabled' => true,
         'version' => 1,
         // A raw insert is exactly the writer that used to leave brand_id NULL
@@ -39,7 +39,7 @@ function delayBackfillNode(array $attributes = []): int
     return DB::table('automation_nodes')->insertGetId(array_merge([
         'uuid' => (string) Str::uuid(),
         'automation_id' => $automationId,
-        'node_key' => 'delay_' . Str::random(4),
+        'node_key' => 'delay_'.Str::random(4),
         'type' => 'delay',
         'position_x' => 0,
         'position_y' => 0,
@@ -102,7 +102,7 @@ it('writes the unit the node already behaves as, not a nicer one', function () {
     // The migration must record existing behaviour. Prove that behaviour from
     // DelayNode itself rather than trusting the constant: a config without a
     // unit and a config with "minutes" must wait for the same number of seconds.
-    $node = new DelayNode();
+    $node = new DelayNode;
     $context = AutomationContext::make([], testMode: true);
 
     $withoutUnit = $node->execute($context, ['amount' => 7])->output['would_wait_seconds'];

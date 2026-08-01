@@ -19,11 +19,10 @@ use Illuminate\Support\Carbon;
 class ConditionEvaluator
 {
     public const MODE_ALL = 'all';
+
     public const MODE_ANY = 'any';
 
-    public function __construct(protected TokenResolver $tokens)
-    {
-    }
+    public function __construct(protected TokenResolver $tokens) {}
 
     /**
      * @param  array<int, array{field: string, operator: string, value?: mixed}>  $conditions

@@ -21,8 +21,7 @@ class NodeExecutor
         protected NodeRegistry $registry,
         protected TokenResolver $tokens,
         protected ConditionEvaluator $conditions,
-    ) {
-    }
+    ) {}
 
     public function execute(AutomationNode $node, AutomationContext $context): ActionResult
     {

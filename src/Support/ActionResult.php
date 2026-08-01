@@ -18,8 +18,7 @@ class ActionResult
         public readonly ?string $error = null,
         public readonly string $outputHandle = 'default',
         public readonly ?array $waitUntil = null,
-    ) {
-    }
+    ) {}
 
     public static function success(array $output = [], string $outputHandle = 'default'): self
     {

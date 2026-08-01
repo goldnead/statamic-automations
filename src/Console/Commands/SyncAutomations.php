@@ -196,7 +196,7 @@ class SyncAutomations extends Command
             return;
         }
 
-        $this->info("Importing {$dryRun} from " . count($entries) . ' files…');
+        $this->info("Importing {$dryRun} from ".count($entries).' files…');
 
         foreach ($entries as $entry) {
             $existing = Automation::where('handle', $entry['handle'])->first();
@@ -204,16 +204,19 @@ class SyncAutomations extends Command
 
             if (! is_array($payload)) {
                 $this->warn("  · {$entry['handle']}.json — invalid JSON, skipped");
+
                 continue;
             }
 
             if ($existing && $strategy === 'db_wins') {
                 $this->line("  · {$entry['handle']} — DB wins, file ignored");
+
                 continue;
             }
 
             if ($dryRun) {
-                $this->line("  · {$entry['handle']} — would " . ($existing ? 'replace' : 'create'));
+                $this->line("  · {$entry['handle']} — would ".($existing ? 'replace' : 'create'));
+
                 continue;
             }
 
@@ -254,6 +257,7 @@ class SyncAutomations extends Command
         foreach ($automations as $automation) {
             if ($dryRun) {
                 $this->line("  · {$automation->handle} — would write {$sync->path($automation->handle)}");
+
                 continue;
             }
 

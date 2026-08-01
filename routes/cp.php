@@ -1,10 +1,13 @@
 <?php
 
+use Goldnead\StatamicAutomations\Http\Controllers\AuditController;
 use Goldnead\StatamicAutomations\Http\Controllers\AutomationsController;
 use Goldnead\StatamicAutomations\Http\Controllers\EmailTemplatePreviewController;
 use Goldnead\StatamicAutomations\Http\Controllers\ExportImportController;
 use Goldnead\StatamicAutomations\Http\Controllers\NodesController;
+use Goldnead\StatamicAutomations\Http\Controllers\Pages\AuditPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\AutomationsPageController;
+use Goldnead\StatamicAutomations\Http\Controllers\Pages\DashboardPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\ImportPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\RunsPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\SettingsPageController;
@@ -12,6 +15,7 @@ use Goldnead\StatamicAutomations\Http\Controllers\Pages\TemplatesPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\RunsController;
 use Goldnead\StatamicAutomations\Http\Controllers\SettingsController;
 use Goldnead\StatamicAutomations\Http\Controllers\TemplatesController;
+use Goldnead\StatamicAutomations\Http\Controllers\VersionsController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -48,7 +52,7 @@ Route::prefix('automations')
         Route::get('/', [AutomationsPageController::class, 'index'])
             ->name('automations.index');
 
-        Route::get('dashboard', [\Goldnead\StatamicAutomations\Http\Controllers\Pages\DashboardPageController::class, 'index'])
+        Route::get('dashboard', [DashboardPageController::class, 'index'])
             ->name('dashboard');
 
         Route::get('automations/create', [AutomationsPageController::class, 'create'])
@@ -72,7 +76,7 @@ Route::prefix('automations')
         Route::get('settings', [SettingsPageController::class, 'index'])
             ->name('settings');
 
-        Route::get('audit', [\Goldnead\StatamicAutomations\Http\Controllers\Pages\AuditPageController::class, 'index'])
+        Route::get('audit', [AuditPageController::class, 'index'])
             ->name('audit');
 
         // ================================================================
@@ -119,11 +123,11 @@ Route::prefix('automations')
                 ->name('email-templates.preview');
 
             // Versions + audit
-            Route::get('automations/{automationFlow}/versions', [\Goldnead\StatamicAutomations\Http\Controllers\VersionsController::class, 'index'])->name('automations.versions');
-            Route::post('automations/{automationFlow}/versions/{timestamp}/revert', [\Goldnead\StatamicAutomations\Http\Controllers\VersionsController::class, 'revert'])
+            Route::get('automations/{automationFlow}/versions', [VersionsController::class, 'index'])->name('automations.versions');
+            Route::post('automations/{automationFlow}/versions/{timestamp}/revert', [VersionsController::class, 'revert'])
                 ->where('timestamp', '[0-9]+')
                 ->name('automations.versions.revert');
-            Route::get('audit', [\Goldnead\StatamicAutomations\Http\Controllers\AuditController::class, 'index'])->name('audit.list');
+            Route::get('audit', [AuditController::class, 'index'])->name('audit.list');
 
             // Runs
             Route::get('runs', [RunsController::class, 'index'])->name('runs.list');

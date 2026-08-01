@@ -4,6 +4,7 @@ namespace Goldnead\StatamicAutomations\Nodes\Logic;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
@@ -15,7 +16,7 @@ use Goldnead\StatamicAutomations\Support\NormalizesKeyValue;
 /**
  * Fan out to several branches and continue every one of them.
  *
- * Two modes, mirroring {@see \Goldnead\StatamicAutomations\Nodes\Logic\LoopNode}:
+ * Two modes, mirroring {@see LoopNode}:
  * - "automation" (default, legacy): each branch is a named sub-automation
  *   that receives the current context; results are collected under
  *   {{ <node>.branches }} keyed by branch name, so a downstream node sees
@@ -24,7 +25,7 @@ use Goldnead\StatamicAutomations\Support\NormalizesKeyValue;
  * - "inline" (opt-in via `mode: inline`): this node only declares its
  *   configured branch handles and signals which output(s) to take. The
  *   actual fan-out is driven by
- *   {@see \Goldnead\StatamicAutomations\Engine\WorkflowRunner}, which runs
+ *   {@see WorkflowRunner}, which runs
  *   the subgraph reachable from EVERY connected branch output to
  *   completion — not just the first — the same way it drives an inline
  *   Loop's body once per item.
@@ -45,9 +46,7 @@ class ParallelNode implements AutomationLogicNode
      */
     public const OUTPUT_FAN_OUT = 'fan_out';
 
-    public function __construct(protected WorkflowRunner $runner)
-    {
-    }
+    public function __construct(protected WorkflowRunner $runner) {}
 
     /**
      * Legacy automation mode routes via the single default "success" handle
@@ -124,7 +123,7 @@ class ParallelNode implements AutomationLogicNode
                 'required' => true,
                 'key_label' => 'Branch handle',
                 'value_label' => 'Label',
-                'help' => "Inline mode: one row per branch — the handle on the left becomes a connectable output on the canvas, the label on the right is just a display name. Connect an edge from each branch handle to fan out; with no rows this node has no outputs yet. Automation mode (legacy): left = branch name, right = the automation handle/id to run for that branch.",
+                'help' => 'Inline mode: one row per branch — the handle on the left becomes a connectable output on the canvas, the label on the right is just a display name. Connect an edge from each branch handle to fan out; with no rows this node has no outputs yet. Automation mode (legacy): left = branch name, right = the automation handle/id to run for that branch.',
             ],
             [
                 'handle' => 'fail_fast',
@@ -183,7 +182,7 @@ class ParallelNode implements AutomationLogicNode
         $failFast = (bool) ($config['fail_fast'] ?? false);
 
         foreach ($branches as $name => $ref) {
-            $target = app(\Goldnead\StatamicAutomations\Contracts\AutomationRepository::class)->findByRef((string) $ref);
+            $target = app(AutomationRepository::class)->findByRef((string) $ref);
             if ($target === null) {
                 if ($failFast) {
                     return ActionResult::failed("Branch '{$name}': automation '{$ref}' not found.");

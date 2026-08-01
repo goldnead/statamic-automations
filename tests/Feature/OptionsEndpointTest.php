@@ -10,6 +10,7 @@
  * `statamic.`-prefixed spelling for each, without breaking the existing ones.
  */
 
+use Goldnead\StatamicAutomations\Models\Automation;
 use Statamic\Facades\AssetContainer;
 use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Entry;
@@ -219,8 +220,8 @@ it('lists globals', function (): void {
 it('lists other automations', function (): void {
     seedOptionsFixtures();
 
-    \Goldnead\StatamicAutomations\Models\Automation::create(['name' => 'Inquiry', 'handle' => 'inquiry']);
-    \Goldnead\StatamicAutomations\Models\Automation::create(['name' => 'Welcome', 'handle' => 'welcome']);
+    Automation::create(['name' => 'Inquiry', 'handle' => 'inquiry']);
+    Automation::create(['name' => 'Welcome', 'handle' => 'welcome']);
 
     $data = $this->getJson('/cp/automations/api/options/automations')->assertOk()->json('data');
 

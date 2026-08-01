@@ -2,6 +2,7 @@
 
 use Goldnead\StatamicAutomations\Tests\Concerns\DrivesMigrationsOnAnIsolatedDatabase;
 use Goldnead\StatamicAutomations\Tests\Fixtures\AutomationsDataFixture;
+use Goldnead\StatamicAutomations\Tests\MigrationPathTestCase;
 
 /**
  * `2026_07_24_100002_add_brand_id_to_automations_tables` has to survive being
@@ -28,7 +29,7 @@ use Goldnead\StatamicAutomations\Tests\Fixtures\AutomationsDataFixture;
  * because the suite's database has been migrated to head before the test body
  * starts, and a migration that has already run is the one state that cannot be
  * interrupted. The trait rather than
- * {@see \Goldnead\StatamicAutomations\Tests\MigrationPathTestCase} because
+ * {@see MigrationPathTestCase} because
  * `tests/Feature` is already bound to the ordinary TestCase and Pest allows a
  * file only one of those.
  */

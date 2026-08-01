@@ -22,7 +22,7 @@ class IntegrationDetectorTest extends TestCase
             'NotARealClass\\LeadHub',
         ]);
 
-        $detector = new IntegrationDetector();
+        $detector = new IntegrationDetector;
 
         $this->assertFalse($detector->hasWebhookManager());
         $this->assertFalse($detector->hasLeadHub());
@@ -33,7 +33,7 @@ class IntegrationDetectorTest extends TestCase
         config()->set('automations.integrations.webhook_manager.detect', ['NotReal']);
         config()->set('automations.integrations.leadhub.detect', ['NotReal']);
 
-        $detector = new IntegrationDetector();
+        $detector = new IntegrationDetector;
         $snapshot = $detector->snapshot();
 
         $this->assertArrayHasKey('webhook_manager', $snapshot);
@@ -48,7 +48,7 @@ class IntegrationDetectorTest extends TestCase
         // (lowercase "hub"). Detection must probe exactly that casing —
         // a wrong-cased FQCN would silently never match via the autoloader.
         $method = new \ReflectionMethod(IntegrationDetector::class, 'leadHubClasses');
-        $candidates = $method->invoke(new IntegrationDetector());
+        $candidates = $method->invoke(new IntegrationDetector);
 
         $this->assertContains('Goldnead\\Leadhub\\Facades\\LeadHub', $candidates);
         $this->assertContains('Goldnead\\Leadhub\\LeadHubManager', $candidates);
@@ -61,7 +61,7 @@ class IntegrationDetectorTest extends TestCase
     {
         config()->set('automations.integrations.webhook_manager.detect', ['NotReal']);
 
-        $detector = new IntegrationDetector();
+        $detector = new IntegrationDetector;
         $detector->hasWebhookManager(); // primes the cache
 
         config()->set('automations.integrations.webhook_manager.detect', [self::class]);

@@ -7,6 +7,7 @@ use Goldnead\StatamicAutomations\Contracts\AutomationAction;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 use Goldnead\StatamicAutomations\Support\NormalizesKeyValue;
 use Statamic\Facades\Term;
+use Statamic\Support\Str;
 
 /**
  * Creates a taxonomy term from token-resolved data.
@@ -105,7 +106,7 @@ class CreateTermAction implements AutomationAction
 
         if (empty($slug)) {
             $title = $data['title'] ?? null;
-            $slug = is_string($title) && $title !== '' ? \Statamic\Support\Str::slug($title) : null;
+            $slug = is_string($title) && $title !== '' ? Str::slug($title) : null;
         }
 
         if (empty($slug)) {

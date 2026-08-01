@@ -22,6 +22,7 @@ use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Nodes\Actions\SendEmailAction;
+use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
 use Illuminate\Support\Facades\Queue;
 
 // Stand-in for the OPTIONAL email-templates addon (not vendored in this repo).
@@ -32,9 +33,7 @@ function bindFakeClickTracking(?object $contact): void
 {
     app()->instance(LeadHubAdapter::RECIPIENT_RESOLVER, new class($contact)
     {
-        public function __construct(private ?object $contact)
-        {
-        }
+        public function __construct(private ?object $contact) {}
 
         public function resolve(?string $contactId = null, ?string $email = null): ?object
         {
@@ -60,7 +59,7 @@ it('rewrites body links via the LeadHub linker when tracking is opted in and a c
     bindFakeClickTracking((object) ['uuid' => 'c1', 'email' => 'a@b.test']);
     EmailTemplates::$entries = ['welcome' => ['body' => '<a href="https://shop.test">Kaufen</a>']];
 
-    $result = (new SendEmailAction())->execute(
+    $result = (new SendEmailAction)->execute(
         AutomationContext::make(['contact_id' => 'c1'], testMode: true),
         ['to' => 'a@b.test', 'subject' => 'S', 'body' => 'x', 'template' => 'welcome', 'track_clicks' => true],
     );
@@ -74,7 +73,7 @@ it('leaves the HTML untouched when LeadHub click-tracking is absent', function (
     EmailTemplates::reset();
     EmailTemplates::$entries = ['welcome' => ['body' => '<a href="https://shop.test">Kaufen</a>']];
 
-    $result = (new SendEmailAction())->execute(
+    $result = (new SendEmailAction)->execute(
         AutomationContext::make(['contact_id' => 'c1'], testMode: true),
         ['to' => 'a@b.test', 'subject' => 'S', 'body' => 'x', 'template' => 'welcome', 'track_clicks' => true],
     );
@@ -87,7 +86,7 @@ it('leaves the HTML untouched when tracking is not opted in', function () {
     bindFakeClickTracking((object) ['uuid' => 'c1', 'email' => 'a@b.test']);
     EmailTemplates::$entries = ['welcome' => ['body' => '<a href="https://shop.test">Kaufen</a>']];
 
-    $result = (new SendEmailAction())->execute(
+    $result = (new SendEmailAction)->execute(
         AutomationContext::make(['contact_id' => 'c1'], testMode: true),
         ['to' => 'a@b.test', 'subject' => 'S', 'body' => 'x', 'template' => 'welcome'], // no track_clicks
     );
@@ -100,7 +99,7 @@ it('leaves the HTML untouched when the recipient does not resolve to a contact',
     bindFakeClickTracking(null); // resolver returns no contact
     EmailTemplates::$entries = ['welcome' => ['body' => '<a href="https://shop.test">Kaufen</a>']];
 
-    $result = (new SendEmailAction())->execute(
+    $result = (new SendEmailAction)->execute(
         AutomationContext::make([], testMode: true),
         ['to' => 'ghost@b.test', 'subject' => 'S', 'body' => 'x', 'template' => 'welcome', 'track_clicks' => true],
     );
@@ -153,7 +152,7 @@ it('maps the score-changed payload onto the automation context', function () {
     config()->set('automations.integrations.leadhub.score_changed_event', LeadHubScoreChangedTestEvent::class);
     LeadHubEventTriggers::register(app('automations'));
 
-    $trigger = app(\Goldnead\StatamicAutomations\Registries\TriggerRegistry::class)->instance('contact_score_changed');
+    $trigger = app(TriggerRegistry::class)->instance('contact_score_changed');
     $context = $trigger->buildContext(new LeadHubScoreChangedTestEvent('c1', 'a@b.test', 10, 15, 5, 'opened'), []);
 
     expect($context->get('new_score'))->toBe(15);
@@ -165,7 +164,7 @@ it('does not register the score trigger when the LeadHub event class is absent',
     config()->set('automations.integrations.leadhub.score_changed_event', 'Goldnead\\Leadhub\\Events\\DoesNotExist');
     LeadHubEventTriggers::register(app('automations'));
 
-    expect(app(\Goldnead\StatamicAutomations\Registries\TriggerRegistry::class)->instance('contact_score_changed'))->toBeNull();
+    expect(app(TriggerRegistry::class)->instance('contact_score_changed'))->toBeNull();
 });
 
 // ---------------------------------------------------------------------------
@@ -182,7 +181,7 @@ it('calls adjustScore with the resolved delta and returns the new score', functi
     config()->set('automations.integrations.leadhub.facade', [FakeScoringLeadHub::class]);
     FakeScoringLeadHub::$calls = [];
 
-    $action = new ChangeScoreAction(new LeadHubAdapter());
+    $action = new ChangeScoreAction(new LeadHubAdapter);
     $result = $action->execute(
         AutomationContext::make(['contact_id' => 'c1']),
         ['delta' => '5', 'reason' => 'opened'],
@@ -198,7 +197,7 @@ it('defaults the contact reference to the triggering contact_id', function () {
     config()->set('automations.integrations.leadhub.facade', [FakeScoringLeadHub::class]);
     FakeScoringLeadHub::$calls = [];
 
-    $action = new ChangeScoreAction(new LeadHubAdapter());
+    $action = new ChangeScoreAction(new LeadHubAdapter);
     $action->execute(AutomationContext::make(['contact_id' => 'from-context']), ['delta' => '3']);
 
     expect(FakeScoringLeadHub::$calls[0][0])->toBe('from-context');
@@ -207,7 +206,7 @@ it('defaults the contact reference to the triggering contact_id', function () {
 it('degrades gracefully when LeadHub is absent', function () {
     config()->set('automations.integrations.leadhub.facade', []);
 
-    $action = new ChangeScoreAction(new LeadHubAdapter());
+    $action = new ChangeScoreAction(new LeadHubAdapter);
     $result = $action->execute(AutomationContext::make(['contact_id' => 'c1']), ['delta' => '5']);
 
     expect($result->isSuccess())->toBeFalse();
@@ -218,7 +217,7 @@ it('previews without persisting in test mode', function () {
     config()->set('automations.integrations.leadhub.facade', [FakeScoringLeadHub::class]);
     FakeScoringLeadHub::$calls = [];
 
-    $action = new ChangeScoreAction(new LeadHubAdapter());
+    $action = new ChangeScoreAction(new LeadHubAdapter);
     $result = $action->execute(AutomationContext::make(['contact_id' => 'c1'], testMode: true), ['delta' => '7']);
 
     expect($result->isSuccess())->toBeTrue();
@@ -227,7 +226,7 @@ it('previews without persisting in test mode', function () {
 });
 
 it('requires a numeric delta', function () {
-    $action = new ChangeScoreAction(new LeadHubAdapter());
+    $action = new ChangeScoreAction(new LeadHubAdapter);
     $result = $action->execute(AutomationContext::make(['contact_id' => 'c1']), ['delta' => 'abc']);
 
     expect($result->isSuccess())->toBeFalse();
@@ -247,8 +246,7 @@ class LeadHubScoreChangedTestEvent
         public int $newScore,
         public int $delta,
         public ?string $reason = null,
-    ) {
-    }
+    ) {}
 
     /** @return array<string,mixed> */
     public function toArray(): array

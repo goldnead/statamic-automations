@@ -2,6 +2,7 @@
 
 namespace Goldnead\StatamicAutomations\Nodes\Triggers;
 
+use Goldnead\StatamicAutomations\Automations;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationTrigger;
 
@@ -19,16 +20,14 @@ use Goldnead\StatamicAutomations\Contracts\AutomationTrigger;
  * source of truth for a registered event trigger (NodeRegistry meta supplies
  * the per-handle description, the dispatcher calls the instance methods).
  *
- * @see \Goldnead\StatamicAutomations\Automations::registerEventTrigger()
+ * @see Automations::registerEventTrigger()
  */
 class EventTrigger implements AutomationTrigger
 {
     /**
      * @param  array<string, mixed>  $definition
      */
-    public function __construct(protected array $definition = [])
-    {
-    }
+    public function __construct(protected array $definition = []) {}
 
     public static function handle(): string
     {

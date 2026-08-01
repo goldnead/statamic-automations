@@ -30,6 +30,23 @@ DIST="resources/dist/build"
 echo "==> Rebuilding CP bundle (npm run build)"
 npm run build >/dev/null
 
+# Nothing but the build directory belongs under resources/dist. A pre-`build/`
+# layout left 415 KB behind here — resources/dist/{cp.js,cp.css,.vite/manifest.json},
+# in no manifest, never rebuilt, never diffed by the check below, and published
+# into every host's public/vendor on install. The diff alone could not see them
+# because it only ever looked inside $DIST.
+STRAY="$(git ls-files resources/dist | grep -v "^$DIST/" || true)"
+
+if [ -n "$STRAY" ]; then
+  {
+    echo "STRAY: files tracked under resources/dist that no build produces:"
+    echo "$STRAY"
+    echo ""
+    echo "Fix: git rm them. Only $DIST/ ships."
+  } >&2
+  exit 1
+fi
+
 if git diff --quiet HEAD -- "$DIST" && [ -z "$(git status --porcelain -- "$DIST")" ]; then
   echo "OK: committed $DIST matches a fresh build."
   exit 0

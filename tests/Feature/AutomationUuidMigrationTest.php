@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Schema;
 class AutomationUuidMigrationTest extends TestCase
 {
     private const MIGRATION = __DIR__
-        . '/../../database/migrations/2026_01_02_000000_add_automation_uuid_to_automation_runs_table.php';
+        .'/../../database/migrations/2026_01_02_000000_add_automation_uuid_to_automation_runs_table.php';
 
     public function test_it_backfills_automation_uuid_on_a_legacy_table(): void
     {

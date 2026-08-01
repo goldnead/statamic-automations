@@ -140,7 +140,5 @@ class OrderShippedTestEvent
     /**
      * @param  array<string, mixed>  $order
      */
-    public function __construct(public array $order)
-    {
-    }
+    public function __construct(public array $order) {}
 }

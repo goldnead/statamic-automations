@@ -28,8 +28,7 @@ class HandleMarketingEvent
     public function __construct(
         protected TriggerRegistry $triggers,
         protected WorkflowRunner $runner,
-    ) {
-    }
+    ) {}
 
     public function handle(object $event): void
     {

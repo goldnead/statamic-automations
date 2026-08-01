@@ -4,6 +4,7 @@ namespace Goldnead\StatamicAutomations\Licensing;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Statamic\Facades\Addon;
 
 /**
  * Lightweight license manager for the Pro tier.
@@ -28,9 +29,13 @@ use Illuminate\Support\Facades\Http;
 class LicenseManager
 {
     public const STATUS_VALID = 'valid';
+
     public const STATUS_INVALID = 'invalid';
+
     public const STATUS_EXPIRED = 'expired';
+
     public const STATUS_NETWORK_ERROR = 'network_error';
+
     public const STATUS_NO_KEY = 'no_key';
 
     /**
@@ -59,7 +64,7 @@ class LicenseManager
     public function marketplaceEdition(): ?string
     {
         try {
-            $addon = \Statamic\Facades\Addon::get(self::PACKAGE);
+            $addon = Addon::get(self::PACKAGE);
 
             return $addon?->edition();
         } catch (\Throwable) {
@@ -81,7 +86,7 @@ class LicenseManager
                 'features' => $edition === 'pro'
                     ? (array) config('automations.license.features', ['custom_actions', 'custom_triggers'])
                     : [],
-                'message' => 'Edition: ' . $edition,
+                'message' => 'Edition: '.$edition,
             ];
         }
 
@@ -231,6 +236,6 @@ class LicenseManager
 
     protected function cacheKey(): string
     {
-        return 'statamic-automations.license.' . md5((string) config('automations.license.key', ''));
+        return 'statamic-automations.license.'.md5((string) config('automations.license.key', ''));
     }
 }

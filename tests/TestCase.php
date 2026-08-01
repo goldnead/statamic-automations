@@ -3,7 +3,9 @@
 namespace Goldnead\StatamicAutomations\Tests;
 
 use Goldnead\StatamicAutomations\ServiceProvider;
+use Goldnead\StatamicAutomations\Tests\Feature\RouteParameterCollisionTest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 use Orchestra\Testbench\TestCase as OrchestraTestCase;
 use Statamic\Facades\User;
 use Statamic\Providers\StatamicServiceProvider;
@@ -17,7 +19,7 @@ abstract class TestCase extends OrchestraTestCase
     {
         parent::setUp();
 
-        $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
+        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
         // Statamic's AddonServiceProvider runs bootAddon() inside a
         // Statamic::booted(...) callback. orchestra/testbench doesn't fire
@@ -42,7 +44,7 @@ abstract class TestCase extends OrchestraTestCase
     protected function defineEnvironment($app): void
     {
         // Stable APP_KEY so Crypt-based casts (EncryptedJson) work in tests.
-        $app['config']->set('app.key', 'base64:' . base64_encode(random_bytes(32)));
+        $app['config']->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
 
         // The suite runs on SQLite by default — fast, no service required.
         // Hosts run MySQL, and the two databases disagree about things that
@@ -102,8 +104,8 @@ abstract class TestCase extends OrchestraTestCase
         // {automationFlow}, {run}, {nodeRun} resolves to real models.
         $router->name('statamic.cp.')
             ->prefix('cp')
-            ->middleware(\Illuminate\Routing\Middleware\SubstituteBindings::class)
-            ->group(__DIR__ . '/../routes/cp.php');
+            ->middleware(SubstituteBindings::class)
+            ->group(__DIR__.'/../routes/cp.php');
 
         $this->mountStandInSiblingRoutes($router);
     }
@@ -123,15 +125,15 @@ abstract class TestCase extends OrchestraTestCase
      * against this addon's repository first, finds nothing, and aborts 404 —
      * precisely what LeadHub's delete button did.
      *
-     * @see \Goldnead\StatamicAutomations\Tests\Feature\RouteParameterCollisionTest
+     * @see RouteParameterCollisionTest
      */
     protected function mountStandInSiblingRoutes($router): void
     {
-        $router->middleware(\Illuminate\Routing\Middleware\SubstituteBindings::class)
+        $router->middleware(SubstituteBindings::class)
             ->group(function ($router) {
                 foreach (static::NAMES_A_SIBLING_MIGHT_USE as $name) {
                     $router->get(
-                        'sibling-probe/' . $name . '/{' . $name . '}',
+                        'sibling-probe/'.$name.'/{'.$name.'}',
                         fn ($value) => (string) $value
                     );
                 }

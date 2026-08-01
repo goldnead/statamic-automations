@@ -34,7 +34,7 @@ function seedBlogEntry(bool $published): string
     $entry = Entry::make()
         ->collection('blog')
         ->locale('default')
-        ->slug('post-' . uniqid())
+        ->slug('post-'.uniqid())
         ->data(['title' => 'Post'])
         ->published($published);
     $entry->save();
@@ -45,7 +45,7 @@ function seedBlogEntry(bool $published): string
 it('publish_entry publishes an entry', function (): void {
     $id = seedBlogEntry(published: false);
 
-    $result = (new PublishEntryAction())->execute(AutomationContext::make(), ['entry_id' => $id]);
+    $result = (new PublishEntryAction)->execute(AutomationContext::make(), ['entry_id' => $id]);
 
     expect($result->isSuccess())->toBeTrue();
     expect(Entry::find($id)->published())->toBeTrue();
@@ -54,7 +54,7 @@ it('publish_entry publishes an entry', function (): void {
 it('unpublish_entry unpublishes an entry', function (): void {
     $id = seedBlogEntry(published: true);
 
-    $result = (new UnpublishEntryAction())->execute(AutomationContext::make(), ['entry_id' => $id]);
+    $result = (new UnpublishEntryAction)->execute(AutomationContext::make(), ['entry_id' => $id]);
 
     expect($result->isSuccess())->toBeTrue();
     expect(Entry::find($id)->published())->toBeFalse();
@@ -63,7 +63,7 @@ it('unpublish_entry unpublishes an entry', function (): void {
 it('delete_entry deletes an entry', function (): void {
     $id = seedBlogEntry(published: true);
 
-    $result = (new DeleteEntryAction())->execute(AutomationContext::make(), ['entry_id' => $id]);
+    $result = (new DeleteEntryAction)->execute(AutomationContext::make(), ['entry_id' => $id]);
 
     expect($result->isSuccess())->toBeTrue();
     expect(Entry::find($id))->toBeNull();
@@ -72,7 +72,7 @@ it('delete_entry deletes an entry', function (): void {
 it('delete_entry does not delete in test mode', function (): void {
     $id = seedBlogEntry(published: true);
 
-    $result = (new DeleteEntryAction())->execute(AutomationContext::make([], testMode: true), ['entry_id' => $id]);
+    $result = (new DeleteEntryAction)->execute(AutomationContext::make([], testMode: true), ['entry_id' => $id]);
 
     expect($result->isSuccess())->toBeTrue();
     expect($result->output)->toHaveKey('preview');
@@ -84,7 +84,7 @@ it('create_term creates a taxonomy term', function (): void {
     // via the shared file store.
     Taxonomy::make('na_genres')->title('Genres')->save();
 
-    $result = (new CreateTermAction())->execute(AutomationContext::make(), [
+    $result = (new CreateTermAction)->execute(AutomationContext::make(), [
         'taxonomy' => 'na_genres',
         'data' => ['title' => 'Jazz'],
     ]);
@@ -100,7 +100,7 @@ it('update_user merges field data', function (): void {
     $user = User::make()->email('jane@example.com')->data(['name' => 'Jane']);
     $user->save();
 
-    $result = (new UpdateUserAction())->execute(AutomationContext::make(), [
+    $result = (new UpdateUserAction)->execute(AutomationContext::make(), [
         'user_id' => $user->id(),
         'data' => ['name' => 'Janet'],
     ]);
@@ -116,12 +116,12 @@ it('assign_user_role adds and removes a role', function (): void {
     $user = User::make()->email('roled@example.com');
     $user->save();
 
-    (new AssignUserRoleAction())->execute(AutomationContext::make(), [
+    (new AssignUserRoleAction)->execute(AutomationContext::make(), [
         'user_id' => $user->id(), 'role' => 'editor', 'mode' => 'add',
     ]);
     expect(User::find($user->id())->hasRole('editor'))->toBeTrue();
 
-    (new AssignUserRoleAction())->execute(AutomationContext::make(), [
+    (new AssignUserRoleAction)->execute(AutomationContext::make(), [
         'user_id' => $user->id(), 'role' => 'editor', 'mode' => 'remove',
     ]);
     expect(User::find($user->id())->hasRole('editor'))->toBeFalse();
@@ -134,7 +134,7 @@ it('add_user_to_group adds a user to a group', function (): void {
     $user = User::make()->email('grouped@example.com');
     $user->save();
 
-    $result = (new AddUserToGroupAction())->execute(AutomationContext::make(), [
+    $result = (new AddUserToGroupAction)->execute(AutomationContext::make(), [
         'user_id' => $user->id(), 'group' => 'team', 'mode' => 'add',
     ]);
 
@@ -148,7 +148,7 @@ it('add_user_to_group adds a user to a group', function (): void {
 it('set_global_value sets a value on a global set', function (): void {
     tap(GlobalSet::make('social')->title('Social'))->save();
 
-    $result = (new SetGlobalValueAction())->execute(AutomationContext::make(), [
+    $result = (new SetGlobalValueAction)->execute(AutomationContext::make(), [
         'global_set' => 'social',
         'key' => 'twitter',
         'value' => '@acme',

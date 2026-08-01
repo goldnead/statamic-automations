@@ -9,6 +9,7 @@ use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * SwitchNode::execute() already resolves the matching case's output
@@ -21,7 +22,7 @@ use Goldnead\StatamicAutomations\Tests\TestCase;
  */
 class SwitchRoutingTest extends TestCase
 {
-    use \Illuminate\Foundation\Testing\RefreshDatabase;
+    use RefreshDatabase;
 
     public function test_switch_falls_through_to_default_when_nothing_matches(): void
     {
@@ -103,7 +104,7 @@ class SwitchRoutingTest extends TestCase
      */
     protected function buildAutomation(array $nodes, array $edges): Automation
     {
-        $automation = Automation::create(['name' => 'T', 'handle' => 'test-' . uniqid()]);
+        $automation = Automation::create(['name' => 'T', 'handle' => 'test-'.uniqid()]);
 
         foreach ($nodes as $node) {
             AutomationNode::create([

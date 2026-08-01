@@ -17,9 +17,7 @@ class AutomationExporter
 {
     public const SCHEMA_VERSION = 1;
 
-    public function __construct(protected NodeRegistry $registry)
-    {
-    }
+    public function __construct(protected NodeRegistry $registry) {}
 
     /**
      * @return array<string, mixed>

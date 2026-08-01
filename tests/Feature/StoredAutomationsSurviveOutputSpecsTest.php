@@ -28,7 +28,7 @@ use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 function storedAutomations(): array
 {
     return json_decode(
-        file_get_contents(__DIR__ . '/../Fixtures/stored-automations/hub-2026-07-29.json'),
+        file_get_contents(__DIR__.'/../Fixtures/stored-automations/hub-2026-07-29.json'),
         true,
     );
 }

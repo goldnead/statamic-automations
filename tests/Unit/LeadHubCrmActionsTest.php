@@ -26,7 +26,7 @@ class LeadHubCrmActionsTest extends TestCase
     {
         $listener = $this->app->make(HandleLeadHubEvent::class);
         // An event class not in the map must be a silent no-op.
-        $listener->handle(new \stdClass());
+        $listener->handle(new \stdClass);
 
         $this->assertTrue(true);
     }
@@ -46,7 +46,7 @@ class LeadHubCrmActionsTest extends TestCase
 
     public function test_create_task_returns_preview_in_test_mode(): void
     {
-        $action = new CreateTaskAction(new LeadHubAdapter());
+        $action = new CreateTaskAction(new LeadHubAdapter);
         $context = AutomationContext::make(['lead' => ['id' => '42']], testMode: true);
 
         $result = $action->execute($context, ['title' => 'Call back', 'priority' => 'high']);
@@ -57,7 +57,7 @@ class LeadHubCrmActionsTest extends TestCase
 
     public function test_create_task_requires_a_title(): void
     {
-        $action = new CreateTaskAction(new LeadHubAdapter());
+        $action = new CreateTaskAction(new LeadHubAdapter);
         $context = AutomationContext::make([], testMode: true);
 
         $result = $action->execute($context, []);
@@ -72,7 +72,7 @@ class LeadHubCrmActionsTest extends TestCase
         // being present via the configurable detect list using this test class.
         config()->set('automations.integrations.leadhub.detect', [self::class]);
 
-        $this->assertTrue((new IntegrationDetector())->hasLeadHub());
+        $this->assertTrue((new IntegrationDetector)->hasLeadHub());
 
         IntegrationDetector::flush();
     }

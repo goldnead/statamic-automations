@@ -13,9 +13,7 @@ use Illuminate\Support\Carbon;
  */
 class RunLogger
 {
-    public function __construct(protected TokenResolver $tokens)
-    {
-    }
+    public function __construct(protected TokenResolver $tokens) {}
 
     /**
      * Stamp the run as RUNNING.

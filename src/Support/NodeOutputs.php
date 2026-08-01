@@ -2,6 +2,8 @@
 
 namespace Goldnead\StatamicAutomations\Support;
 
+use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
+
 /**
  * The one declaration of a node's output handles, and the resolver both
  * sides read it with.
@@ -91,7 +93,7 @@ final class NodeOutputs
 
     /**
      * The output handle the engine takes when a node fails and is configured
-     * to continue on error ({@see \Goldnead\StatamicAutomations\Engine\WorkflowRunner}).
+     * to continue on error ({@see WorkflowRunner}).
      * Every node has it implicitly, so no spec declares it and nothing may
      * report an edge leaving it as unknown.
      */
@@ -109,7 +111,7 @@ final class NodeOutputs
      */
     public static function fixed(array $outputs, ?string $primary = null): array
     {
-        return static::spec([['outputs' => static::normalizeList($outputs)]], $primary);
+        return self::spec([['outputs' => self::normalizeList($outputs)]], $primary);
     }
 
     /**
@@ -138,7 +140,7 @@ final class NodeOutputs
         // No `primary`: a single output is trivially the continuation, and
         // marking it would put the key on nearly every node in the library
         // for no reader.
-        return static::fixed([['handle' => 'default', 'label' => '']]);
+        return self::fixed([['handle' => 'default', 'label' => '']]);
     }
 
     /**
@@ -151,7 +153,7 @@ final class NodeOutputs
      */
     public static function branchSpec(): array
     {
-        return static::fixed([
+        return self::fixed([
             ['handle' => 'true', 'label' => 'True'],
             ['handle' => 'false', 'label' => 'False'],
         ]);
@@ -171,12 +173,12 @@ final class NodeOutputs
         }
 
         if ((int) ($spec['version'] ?? self::VERSION) > self::VERSION) {
-            return static::resolve(static::defaultSpec(), $config);
+            return self::resolve(self::defaultSpec(), $config);
         }
 
         $clause = null;
         foreach ($spec['clauses'] as $candidate) {
-            if (is_array($candidate) && static::clauseApplies($candidate, $config)) {
+            if (is_array($candidate) && self::clauseApplies($candidate, $config)) {
                 $clause = $candidate;
                 break;
             }
@@ -186,13 +188,13 @@ final class NodeOutputs
             return [];
         }
 
-        $rows = static::normalizeList($clause['outputs'] ?? []);
+        $rows = self::normalizeList($clause['outputs'] ?? []);
 
         if (isset($clause['from']) && is_array($clause['from'])) {
-            $rows = array_merge($rows, static::fromKeyValue($clause['from'], $config));
+            $rows = array_merge($rows, self::fromKeyValue($clause['from'], $config));
         }
 
-        $rows = array_merge($rows, static::normalizeList($clause['append'] ?? []));
+        $rows = array_merge($rows, self::normalizeList($clause['append'] ?? []));
 
         $seen = [];
         $outputs = [];
@@ -228,7 +230,7 @@ final class NodeOutputs
     {
         return array_map(
             fn (array $output) => $output['handle'],
-            static::resolve($spec, $config),
+            self::resolve($spec, $config),
         );
     }
 
@@ -242,7 +244,7 @@ final class NodeOutputs
      */
     public static function continuation(?array $spec, array $config = []): ?string
     {
-        $outputs = static::resolve($spec, $config);
+        $outputs = self::resolve($spec, $config);
 
         foreach ($outputs as $output) {
             if (($output['primary'] ?? false) === true) {
@@ -257,7 +259,6 @@ final class NodeOutputs
      * Coerce whatever a spec (or a legacy `outputs()`) hands back into the
      * canonical `[{handle, label}]` rows.
      *
-     * @param  mixed  $outputs
      * @return array<int, array{handle: string, label: string}>
      */
     public static function normalizeList(mixed $outputs): array
@@ -326,7 +327,7 @@ final class NodeOutputs
      */
     protected static function fromKeyValue(array $from, array $config): array
     {
-        $pairs = static::normalizeKeyValue($config[$from['field'] ?? ''] ?? null);
+        $pairs = self::normalizeKeyValue($config[$from['field'] ?? ''] ?? null);
 
         $handleSide = (string) ($from['handle'] ?? 'key');
         $labelSide = (string) ($from['label'] ?? 'value');

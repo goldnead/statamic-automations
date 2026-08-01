@@ -9,7 +9,7 @@ use Goldnead\StatamicAutomations\Repositories\FlatFileAutomationRepository;
 use Illuminate\Support\Facades\File;
 
 beforeEach(function () {
-    $this->dir = sys_get_temp_dir() . '/automations-flat-' . uniqid();
+    $this->dir = sys_get_temp_dir().'/automations-flat-'.uniqid();
     config()->set('automations.storage.driver', 'flat_file');
     config()->set('automations.storage.flat_file.path', $this->dir);
 
@@ -45,7 +45,7 @@ it('writes a definition to a YAML file and reads it back', function () {
         [['from_node_key' => 't', 'to_node_key' => 'log']],
     );
 
-    expect(File::exists($this->dir . '/flat-one.yaml'))->toBeTrue();
+    expect(File::exists($this->dir.'/flat-one.yaml'))->toBeTrue();
 
     $loaded = flatRepo()->findByRef('flat-one');
     expect($loaded)->not->toBeNull();
@@ -141,8 +141,8 @@ it('lists and searches flat-file definitions via the JSON API', function () {
 
 it('deletes a flat-file definition', function () {
     flatRepo()->save(new Automation(['name' => 'Del', 'handle' => 'del']), [['node_key' => 't', 'type' => 'manual']], []);
-    expect(File::exists($this->dir . '/del.yaml'))->toBeTrue();
+    expect(File::exists($this->dir.'/del.yaml'))->toBeTrue();
 
     flatRepo()->delete(flatRepo()->findByRef('del'));
-    expect(File::exists($this->dir . '/del.yaml'))->toBeFalse();
+    expect(File::exists($this->dir.'/del.yaml'))->toBeFalse();
 });

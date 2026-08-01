@@ -1,5 +1,6 @@
 <?php
 
+use Goldnead\StatamicAutomations\Export\AutomationImporter;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 
@@ -17,7 +18,6 @@ use Goldnead\StatamicAutomations\Models\AutomationEdge;
  * against a handle called `default`) while the source node still shows an
  * unused "+" adder on the output it is in fact already wired to.
  */
-
 it('stores an empty output handle as default', function () {
     $automation = Automation::create(['name' => 'Flow', 'handle' => 'flow']);
 
@@ -65,7 +65,7 @@ it('keeps an imported edge reachable at run time', function () {
     // ConvertEmptyStringsToNull turns the cleared field into null before the
     // FormRequest ever sees it, and `?? 'default'` then catches it. An import
     // reads JSON straight off disk, where `""` stays `""`.
-    $result = app(\Goldnead\StatamicAutomations\Export\AutomationImporter::class)->import([
+    $result = app(AutomationImporter::class)->import([
         'schema_version' => 1,
         'automation' => ['name' => 'Imported Flow', 'handle' => 'imported-flow'],
         'requires' => [],

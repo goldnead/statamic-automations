@@ -1,6 +1,7 @@
 <?php
 
 use Goldnead\StatamicAutomations\Integrations\WebhookManager\WebhookManagerAdapter;
+use Illuminate\Support\Collection;
 
 /**
  * Bug A2: the CP destination picker for the `webhook_manager.send` action
@@ -10,7 +11,6 @@ use Goldnead\StatamicAutomations\Integrations\WebhookManager\WebhookManagerAdapt
  * OutboundWebhookRepositoryInterface::all() collection of OutboundWebhook
  * models (handle / name).
  */
-
 function bindFakeOutboundRepository(array $hooks): string
 {
     $interface = config(
@@ -22,9 +22,9 @@ function bindFakeOutboundRepository(array $hooks): string
 
     app()->bind($interface, fn () => new class($collection)
     {
-        public function __construct(private \Illuminate\Support\Collection $hooks) {}
+        public function __construct(private Collection $hooks) {}
 
-        public function all(): \Illuminate\Support\Collection
+        public function all(): Collection
         {
             return $this->hooks;
         }

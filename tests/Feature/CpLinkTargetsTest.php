@@ -24,6 +24,7 @@
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 beforeEach(function (): void {
     $this->actingAsSuperUser();
@@ -39,7 +40,7 @@ function cpUrlsInProps(array $props, string $prefix = ''): array
     $found = [];
 
     foreach ($props as $key => $value) {
-        $path = $prefix === '' ? (string) $key : $prefix . '.' . $key;
+        $path = $prefix === '' ? (string) $key : $prefix.'.'.$key;
 
         if (is_array($value)) {
             $found += cpUrlsInProps($value, $path);
@@ -90,7 +91,7 @@ function cpPathIsRoutable(string $url): bool
     foreach (['GET', 'POST', 'PATCH', 'PUT', 'DELETE'] as $method) {
         try {
             $route = app('router')->getRoutes()->match(Request::create($path, $method));
-        } catch (\Symfony\Component\HttpKernel\Exception\HttpException) {
+        } catch (HttpException) {
             continue;
         }
 
@@ -122,7 +123,7 @@ dataset('cp pages', function () {
     ];
 });
 
-it('hands Vue only URLs the router can match', function (\Closure $url): void {
+it('hands Vue only URLs the router can match', function (Closure $url): void {
     $response = $this->withHeaders(['X-Inertia' => 'true'])->get($url());
     $response->assertStatus(200);
 

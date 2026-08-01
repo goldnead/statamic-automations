@@ -3,7 +3,11 @@
 namespace Goldnead\StatamicAutomations\Engine;
 
 use Goldnead\StatamicAutomations\Models\Automation;
+use Goldnead\StatamicAutomations\Models\AutomationEdge;
+use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
+use Goldnead\StatamicAutomations\Support\NodeOutputs;
+use Illuminate\Support\Collection;
 
 /**
  * Validates an automation's structure before activation or execution.
@@ -15,9 +19,7 @@ use Goldnead\StatamicAutomations\Registries\NodeRegistry;
  */
 class FlowValidator
 {
-    public function __construct(protected NodeRegistry $nodes)
-    {
-    }
+    public function __construct(protected NodeRegistry $nodes) {}
 
     /**
      * @return array<int, array{level: string, code: string, message: string, node_key?: string}>
@@ -79,6 +81,7 @@ class FlowValidator
                     "Unknown node type '{$node->type}'.",
                     $node->node_key,
                 );
+
                 continue;
             }
 
@@ -121,11 +124,11 @@ class FlowValidator
      * node fails under `_on_error: continue`, so every node has it whether
      * or not its spec says so.
      *
-     * @param  \Illuminate\Support\Collection<int, \Goldnead\StatamicAutomations\Models\AutomationEdge>  $edges
+     * @param  Collection<int, AutomationEdge>  $edges
      * @return array<int, array{level: string, code: string, message: string, node_key?: string}>
      */
     protected function validateOutputs(
-        \Goldnead\StatamicAutomations\Models\AutomationNode $node,
+        AutomationNode $node,
         $edges,
     ): array {
         $issues = [];
@@ -135,7 +138,7 @@ class FlowValidator
         foreach ($edges->where('from_node_key', $node->node_key) as $edge) {
             $output = (string) ($edge->from_output ?: 'default');
 
-            if ($output === \Goldnead\StatamicAutomations\Support\NodeOutputs::ERROR_HANDLE) {
+            if ($output === NodeOutputs::ERROR_HANDLE) {
                 continue;
             }
 
@@ -152,8 +155,8 @@ class FlowValidator
                 : $this->warning(
                     'edge_unknown_output',
                     "Node '{$node->node_key}' has an edge on output handle '{$output}', which it does not declare ("
-                        . ($declared === [] ? 'it declares none' : 'declared: ' . implode(', ', $declared))
-                        . ').',
+                        .($declared === [] ? 'it declares none' : 'declared: '.implode(', ', $declared))
+                        .').',
                     $node->node_key,
                 );
         }
@@ -165,7 +168,7 @@ class FlowValidator
      * @param  class-string  $class
      * @return array<int, array{level: string, code: string, message: string, node_key?: string}>
      */
-    protected function validateConfig(\Goldnead\StatamicAutomations\Models\AutomationNode $node, string $class): array
+    protected function validateConfig(AutomationNode $node, string $class): array
     {
         $issues = [];
         $schema = method_exists($class, 'schema') ? $class::schema() : [];
@@ -195,7 +198,7 @@ class FlowValidator
      * Topological cycle check using DFS coloring.
      *
      * @param  array<int, string>  $nodeKeys
-     * @param  array<int, \Goldnead\StatamicAutomations\Models\AutomationEdge>  $edges
+     * @param  array<int, AutomationEdge>  $edges
      */
     protected function hasCycle(array $nodeKeys, array $edges): bool
     {

@@ -4,8 +4,10 @@ namespace Goldnead\StatamicAutomations\Nodes\Logic;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Models\Automation;
+use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 use Goldnead\StatamicAutomations\Support\DeclaresOutputs;
 use Goldnead\StatamicAutomations\Support\NodeOutputs;
@@ -19,7 +21,7 @@ use Goldnead\StatamicAutomations\Support\NodeOutputs;
  * Two modes:
  * - "inline" (default): this node only resolves + validates the items and
  *   signals which output to take. The actual per-item iteration is driven
- *   by {@see \Goldnead\StatamicAutomations\Engine\WorkflowRunner}, which
+ *   by {@see WorkflowRunner}, which
  *   re-walks the subgraph reachable from the "loop" output once per item
  *   (injecting {{ item }} / {{ index }} / {{ loop.* }} into the run
  *   context for the duration of that pass), then continues via the "done"
@@ -39,9 +41,7 @@ class LoopNode implements AutomationLogicNode
     /** Output handle taken once, after all items have been processed. */
     public const OUTPUT_DONE = 'done';
 
-    public function __construct(protected WorkflowRunner $runner)
-    {
-    }
+    public function __construct(protected WorkflowRunner $runner) {}
 
     /**
      * The body runs once per item off `loop` and the flow continues on
@@ -188,7 +188,7 @@ class LoopNode implements AutomationLogicNode
             return ActionResult::failed("Maximum sub-automation depth ({$max}) reached.");
         }
 
-        $target = app(\Goldnead\StatamicAutomations\Contracts\AutomationRepository::class)->findByRef((string) $ref);
+        $target = app(AutomationRepository::class)->findByRef((string) $ref);
         if ($target === null) {
             return ActionResult::failed("Automation '{$ref}' not found.");
         }
@@ -213,7 +213,7 @@ class LoopNode implements AutomationLogicNode
             $run = $this->runner->createRun($target, $childContext, $trigger);
             $finished = $this->runner->execute($run, $childContext);
 
-            if ($finished->status === \Goldnead\StatamicAutomations\Models\AutomationRun::STATUS_FAILED) {
+            if ($finished->status === AutomationRun::STATUS_FAILED) {
                 $failed++;
             }
 

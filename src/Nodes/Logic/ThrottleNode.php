@@ -71,7 +71,7 @@ class ThrottleNode implements AutomationLogicNode
         }
 
         $window = max(1, (int) ($config['window_minutes'] ?? 60));
-        $cacheKey = 'statamic-automations.throttle.' . md5($key);
+        $cacheKey = 'statamic-automations.throttle.'.md5($key);
 
         if ($context->isTestMode()) {
             return ActionResult::success(['key' => $key, 'duplicate' => false, 'note' => 'Test mode — not recorded.']);

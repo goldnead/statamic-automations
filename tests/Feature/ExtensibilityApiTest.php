@@ -12,11 +12,20 @@ use Goldnead\StatamicAutomations\Contracts\AutomationAction;
 use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
 use Goldnead\StatamicAutomations\Engine\NodeExecutor;
 use Goldnead\StatamicAutomations\Facades\Automations;
-use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationNode as AutomationNodeModel;
+use Goldnead\StatamicAutomations\Nodes\Logic\BranchNode;
+use Goldnead\StatamicAutomations\Nodes\Logic\DelayNode;
+use Goldnead\StatamicAutomations\Nodes\Logic\FilterNode;
+use Goldnead\StatamicAutomations\Nodes\Logic\LoopNode;
+use Goldnead\StatamicAutomations\Nodes\Logic\ParallelNode;
+use Goldnead\StatamicAutomations\Nodes\Logic\StopNode;
+use Goldnead\StatamicAutomations\Nodes\Logic\SwitchNode;
+use Goldnead\StatamicAutomations\Nodes\Logic\ThrottleNode;
+use Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilNode;
 use Goldnead\StatamicAutomations\Registries\OptionSourceRegistry;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 use Illuminate\Http\Request;
+use Statamic\Facades\Collection;
 
 beforeEach(function (): void {
     $this->actingAsSuperUser();
@@ -57,7 +66,7 @@ it('returns an empty list for an unknown option source, never a fatal', function
 });
 
 it('still resolves the built-in statamic option sources through the registry', function (): void {
-    \Statamic\Facades\Collection::make('blog')->title('Blog')->save();
+    Collection::make('blog')->title('Blog')->save();
 
     foreach (['collections', 'statamic.collections'] as $source) {
         $data = $this->getJson("/cp/automations/api/options/{$source}")->assertOk()->json('data');
@@ -113,15 +122,15 @@ it('describe() fails loudly on a malformed registration', function (): void {
 
 it('confirms the built-in logic nodes satisfy the AutomationLogicNode contract', function (): void {
     foreach ([
-        \Goldnead\StatamicAutomations\Nodes\Logic\FilterNode::class,
-        \Goldnead\StatamicAutomations\Nodes\Logic\BranchNode::class,
-        \Goldnead\StatamicAutomations\Nodes\Logic\StopNode::class,
-        \Goldnead\StatamicAutomations\Nodes\Logic\SwitchNode::class,
-        \Goldnead\StatamicAutomations\Nodes\Logic\LoopNode::class,
-        \Goldnead\StatamicAutomations\Nodes\Logic\ParallelNode::class,
-        \Goldnead\StatamicAutomations\Nodes\Logic\DelayNode::class,
-        \Goldnead\StatamicAutomations\Nodes\Logic\ThrottleNode::class,
-        \Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilNode::class,
+        FilterNode::class,
+        BranchNode::class,
+        StopNode::class,
+        SwitchNode::class,
+        LoopNode::class,
+        ParallelNode::class,
+        DelayNode::class,
+        ThrottleNode::class,
+        WaitUntilNode::class,
     ] as $class) {
         expect(is_subclass_of($class, AutomationLogicNode::class))->toBeTrue("{$class} implements AutomationLogicNode");
     }

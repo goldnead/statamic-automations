@@ -76,8 +76,8 @@ it('orders sub-second node runs by stored time, not by insertion order', functio
         AutomationNodeRun::create([
             'automation_run_id' => $run->id,
             'node_key' => $key, 'node_type' => 'log', 'status' => 'success',
-            'started_at' => Carbon::parse('2026-07-28 12:00:0' . $fraction),
-            'finished_at' => Carbon::parse('2026-07-28 12:00:0' . $fraction),
+            'started_at' => Carbon::parse('2026-07-28 12:00:0'.$fraction),
+            'finished_at' => Carbon::parse('2026-07-28 12:00:0'.$fraction),
         ]);
     }
 

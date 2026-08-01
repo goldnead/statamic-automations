@@ -6,6 +6,7 @@ use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
@@ -38,7 +39,7 @@ class FlatFileAutomationRepository implements AutomationRepository
                 // Surface the file's modification time as updated_at so the
                 // CP listing shows a real date instead of the epoch.
                 if ($automation && ($mtime = $file->getMTime())) {
-                    $automation->updated_at = \Illuminate\Support\Carbon::createFromTimestamp($mtime);
+                    $automation->updated_at = Carbon::createFromTimestamp($mtime);
                 }
 
                 return $automation;
@@ -186,7 +187,7 @@ class FlatFileAutomationRepository implements AutomationRepository
      */
     protected function deterministicId(string $uuid): int
     {
-        return (int) (crc32($uuid) & 0x7fffffff);
+        return (int) (crc32($uuid) & 0x7FFFFFFF);
     }
 
     protected function directory(): string
@@ -200,6 +201,6 @@ class FlatFileAutomationRepository implements AutomationRepository
 
     protected function pathFor(string $handle): string
     {
-        return $this->directory() . '/' . $handle . '.yaml';
+        return $this->directory().'/'.$handle.'.yaml';
     }
 }

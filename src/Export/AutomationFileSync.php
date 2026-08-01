@@ -19,8 +19,7 @@ class AutomationFileSync
         protected Filesystem $files,
         protected AutomationExporter $exporter,
         protected AutomationImporter $importer,
-    ) {
-    }
+    ) {}
 
     public function path(?string $handle = null): string
     {
@@ -126,6 +125,6 @@ class AutomationFileSync
             return resource_path('automations');
         }
 
-        return getcwd() . '/resources/automations';
+        return getcwd().'/resources/automations';
     }
 }

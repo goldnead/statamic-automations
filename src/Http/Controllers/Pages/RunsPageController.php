@@ -2,6 +2,7 @@
 
 namespace Goldnead\StatamicAutomations\Http\Controllers\Pages;
 
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Http\Controllers\Controller;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Illuminate\Http\Request;
@@ -32,7 +33,7 @@ class RunsPageController extends Controller
 
         // Resolve names once (uuid → name) so the listing works for both
         // database and flat-file definitions without N lookups.
-        $names = app(\Goldnead\StatamicAutomations\Contracts\AutomationRepository::class)
+        $names = app(AutomationRepository::class)
             ->all()->keyBy('uuid')->map->name;
 
         $runs = $query->limit(200)->get()->map(fn (AutomationRun $r) => [

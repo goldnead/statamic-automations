@@ -9,6 +9,7 @@ use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 
 /**
  * The Parallel node's "inline" mode (opt-in via `mode: inline`, distinct
@@ -19,7 +20,7 @@ use Goldnead\StatamicAutomations\Tests\TestCase;
  */
 class ParallelTest extends TestCase
 {
-    use \Illuminate\Foundation\Testing\RefreshDatabase;
+    use RefreshDatabase;
 
     public function test_inline_parallel_fans_out_to_every_connected_branch(): void
     {
@@ -151,7 +152,7 @@ class ParallelTest extends TestCase
      */
     protected function buildAutomation(array $nodes, array $edges): Automation
     {
-        $automation = Automation::create(['name' => 'T', 'handle' => 'test-' . uniqid()]);
+        $automation = Automation::create(['name' => 'T', 'handle' => 'test-'.uniqid()]);
 
         foreach ($nodes as $node) {
             AutomationNode::create([

@@ -4,8 +4,9 @@ namespace Goldnead\StatamicAutomations\Tests\Unit;
 
 use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
 use Goldnead\StatamicAutomations\Integrations\WebhookManager\WebhookManagerAdapter;
-use Illuminate\Support\Facades\Facade;
 use Goldnead\StatamicAutomations\Tests\TestCase;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Facade;
 
 /**
  * Real Laravel facades proxy calls through __callStatic, so
@@ -23,14 +24,14 @@ class AdapterFacadeResolutionTest extends TestCase
         RealFacadeFakeLeadHubManager::$calls = [];
         Facade::clearResolvedInstances();
 
-        $this->app->singleton('fake-leadhub-manager', fn () => new RealFacadeFakeLeadHubManager());
+        $this->app->singleton('fake-leadhub-manager', fn () => new RealFacadeFakeLeadHubManager);
     }
 
     public function test_create_task_works_through_a_real_laravel_facade(): void
     {
         config()->set('automations.integrations.leadhub.facade', [RealLeadHubFacade::class]);
 
-        $result = (new LeadHubAdapter())->createTask(['title' => 'Call back'], '42');
+        $result = (new LeadHubAdapter)->createTask(['title' => 'Call back'], '42');
 
         $this->assertTrue($result['ok'], $result['error'] ?? '');
         $this->assertSame([['createTask', [['title' => 'Call back'], '42']]], RealFacadeFakeLeadHubManager::$calls);
@@ -40,7 +41,7 @@ class AdapterFacadeResolutionTest extends TestCase
     {
         config()->set('automations.integrations.leadhub.facade', [RealLeadHubFacade::class]);
 
-        $result = (new LeadHubAdapter())->addTag('42', 'vip');
+        $result = (new LeadHubAdapter)->addTag('42', 'vip');
 
         $this->assertTrue($result['ok'], $result['error'] ?? '');
         $this->assertSame([['addTag', ['42', 'vip']]], RealFacadeFakeLeadHubManager::$calls);
@@ -50,7 +51,7 @@ class AdapterFacadeResolutionTest extends TestCase
     {
         config()->set('automations.integrations.leadhub.facade', [RealLeadHubFacade::class]);
 
-        $result = (new LeadHubAdapter())->createOrUpdate(['email' => 'x@example.com']);
+        $result = (new LeadHubAdapter)->createOrUpdate(['email' => 'x@example.com']);
 
         $this->assertTrue($result['ok'], $result['error'] ?? '');
         $this->assertTrue($result['created']);
@@ -60,7 +61,7 @@ class AdapterFacadeResolutionTest extends TestCase
     {
         config()->set('automations.integrations.leadhub.facade', [RealLeadHubFacade::class]);
 
-        $tags = (new LeadHubAdapter())->tags();
+        $tags = (new LeadHubAdapter)->tags();
 
         $this->assertSame([['value' => 'vip', 'label' => 'VIP']], $tags);
     }
@@ -69,7 +70,7 @@ class AdapterFacadeResolutionTest extends TestCase
     {
         config()->set('automations.integrations.leadhub.facade', [RealLeadHubFacade::class]);
 
-        $result = (new LeadHubAdapter())->moveStage('opp-1', 'won');
+        $result = (new LeadHubAdapter)->moveStage('opp-1', 'won');
 
         $this->assertFalse($result['ok']);
         $this->assertSame('LeadHub facade does not implement moveStage().', $result['error']);
@@ -79,7 +80,7 @@ class AdapterFacadeResolutionTest extends TestCase
     {
         config()->set('automations.integrations.leadhub.facade', [StaticFakeLeadHub::class]);
 
-        $result = (new LeadHubAdapter())->addTag('42', 'vip');
+        $result = (new LeadHubAdapter)->addTag('42', 'vip');
 
         $this->assertTrue($result['ok'], $result['error'] ?? '');
         $this->assertSame([['addTag', ['42', 'vip']]], StaticFakeLeadHub::$calls);
@@ -91,9 +92,9 @@ class AdapterFacadeResolutionTest extends TestCase
         // repository, not on the facade root. Bind the repository the way the
         // addon's service provider does and confirm the adapter lists it.
         $interface = config('automations.integrations.webhook_manager.outbound_repository');
-        $this->app->bind($interface, fn () => new RepositoryFakeOutboundWebhooks());
+        $this->app->bind($interface, fn () => new RepositoryFakeOutboundWebhooks);
 
-        $adapter = new WebhookManagerAdapter();
+        $adapter = new WebhookManagerAdapter;
 
         $this->assertSame([['value' => 'crm', 'label' => 'CRM']], $adapter->destinations());
     }
@@ -102,7 +103,7 @@ class AdapterFacadeResolutionTest extends TestCase
     {
         // No repository binding and no Webhook Manager classes autoloaded in
         // the test env: dispatch must fail cleanly rather than fatal.
-        $adapter = new WebhookManagerAdapter();
+        $adapter = new WebhookManagerAdapter;
 
         $result = $adapter->dispatch('crm', ['a' => 1]);
 
@@ -113,7 +114,7 @@ class AdapterFacadeResolutionTest extends TestCase
 
 class RepositoryFakeOutboundWebhooks
 {
-    public function all(): \Illuminate\Support\Collection
+    public function all(): Collection
     {
         return collect([(object) ['handle' => 'crm', 'name' => 'CRM']]);
     }

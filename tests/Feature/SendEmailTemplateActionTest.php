@@ -39,7 +39,7 @@ it('hides the template field when the email-templates addon is absent', function
 it('sends the rendered template html when a managed template is selected', function () {
     EmailTemplates::$entries = ['welcome' => ['body' => '<h1>Willkommen</h1>', 'subject' => 'Hallo']];
 
-    $result = (new SendEmailAction())->execute(
+    $result = (new SendEmailAction)->execute(
         AutomationContext::make([], testMode: true),
         ['to' => 'a@b.test', 'subject' => 'Sub', 'body' => 'plain fallback', 'template' => 'welcome'],
     );
@@ -51,7 +51,7 @@ it('sends the rendered template html when a managed template is selected', funct
 it('dispatches the resolved html body to the mailer as HTML', function () {
     EmailTemplates::$entries = ['welcome' => ['body' => '<p>HTML BODY</p>']];
 
-    $result = (new SendEmailAction())->execute(
+    $result = (new SendEmailAction)->execute(
         AutomationContext::make([]),
         ['to' => 'a@b.test', 'subject' => 'Sub', 'body' => 'plain', 'template' => 'welcome'],
     );
@@ -65,7 +65,7 @@ it('dispatches the resolved html body to the mailer as HTML', function () {
 
 it('falls back to the inline body when the selected template cannot be resolved', function () {
     // No matching managed entry → resolver invokes the inline-body fallback.
-    $result = (new SendEmailAction())->execute(
+    $result = (new SendEmailAction)->execute(
         AutomationContext::make([], testMode: true),
         ['to' => 'a@b.test', 'subject' => 'Sub', 'body' => 'INLINE FALLBACK', 'template' => 'missing'],
     );
@@ -84,7 +84,7 @@ it('resolves tokens in the template body against the flow context', function () 
         testMode: true,
     );
 
-    $result = (new SendEmailAction())->execute(
+    $result = (new SendEmailAction)->execute(
         $context,
         ['to' => 'a@b.test', 'subject' => '(no subject)', 'body' => 'plain fallback', 'template' => 'welcome'],
     );
@@ -101,7 +101,7 @@ it('resolves tokens in the rendered html dispatched to the mailer', function () 
         'body' => '<p>Hallo {{ subscriber.first_name }}</p>',
     ]];
 
-    $result = (new SendEmailAction())->execute(
+    $result = (new SendEmailAction)->execute(
         AutomationContext::make(['subscriber' => ['first_name' => 'Adrian']]),
         ['to' => 'a@b.test', 'subject' => 'Sub', 'body' => 'plain', 'template' => 'welcome'],
     );
@@ -116,8 +116,8 @@ it('sends at most once per recipient when a dedupe key is set', function () {
 
     $config = ['to' => 'dedupe@b.test', 'subject' => 'Sub', 'body' => 'PLAIN', 'dedupe' => 'welcome'];
 
-    $first = (new SendEmailAction())->execute(AutomationContext::make([]), $config);
-    $second = (new SendEmailAction())->execute(AutomationContext::make([]), $config);
+    $first = (new SendEmailAction)->execute(AutomationContext::make([]), $config);
+    $second = (new SendEmailAction)->execute(AutomationContext::make([]), $config);
 
     expect($first->isSuccess())->toBeTrue();
     expect($first->output['skipped'] ?? false)->toBeFalse();
@@ -133,15 +133,15 @@ it('sends at most once per recipient when a dedupe key is set', function () {
 it('does not dedupe across different recipients', function () {
     Cache::flush();
 
-    (new SendEmailAction())->execute(AutomationContext::make([]), ['to' => 'one@b.test', 'subject' => 'S', 'body' => 'B', 'dedupe' => 'welcome']);
-    $other = (new SendEmailAction())->execute(AutomationContext::make([]), ['to' => 'two@b.test', 'subject' => 'S', 'body' => 'B', 'dedupe' => 'welcome']);
+    (new SendEmailAction)->execute(AutomationContext::make([]), ['to' => 'one@b.test', 'subject' => 'S', 'body' => 'B', 'dedupe' => 'welcome']);
+    $other = (new SendEmailAction)->execute(AutomationContext::make([]), ['to' => 'two@b.test', 'subject' => 'S', 'body' => 'B', 'dedupe' => 'welcome']);
 
     expect($other->output['skipped'] ?? false)->toBeFalse();
     expect(Mail::mailer()->getSymfonyTransport()->messages())->toHaveCount(2);
 });
 
 it('remains backward compatible: no template selected sends plain text', function () {
-    $result = (new SendEmailAction())->execute(
+    $result = (new SendEmailAction)->execute(
         AutomationContext::make([]),
         ['to' => 'a@b.test', 'subject' => 'Sub', 'body' => 'PLAIN TEXT'],
     );

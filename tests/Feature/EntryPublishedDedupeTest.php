@@ -6,6 +6,7 @@ use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
+use Statamic\Events\EntrySaved;
 
 /**
  * Semantics under test (matching goldnead/statamic-webhook-manager):
@@ -46,9 +47,7 @@ function fakeStatamicEntry(bool $published): object
 {
     return new class($published)
     {
-        public function __construct(protected bool $isPublished)
-        {
-        }
+        public function __construct(protected bool $isPublished) {}
 
         public function published(): bool
         {
@@ -101,7 +100,7 @@ function dispatchEntrySaved(bool $published): void
 {
     // Dispatch the real event class the ServiceProvider listens on, so the
     // full listener wiring (including Statamic's own subscribers) runs.
-    Event::dispatch(new \Statamic\Events\EntrySaved(fakeStatamicEntry($published)));
+    Event::dispatch(new EntrySaved(fakeStatamicEntry($published)));
 }
 
 beforeEach(function () {

@@ -16,7 +16,7 @@ class ActionRegistry
     {
         if (! is_subclass_of($class, AutomationAction::class)) {
             throw new InvalidArgumentException(
-                "{$class} must implement " . AutomationAction::class
+                "{$class} must implement ".AutomationAction::class
             );
         }
 

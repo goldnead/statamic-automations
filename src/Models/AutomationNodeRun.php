@@ -7,16 +7,22 @@ use Goldnead\StatamicAutomations\Casts\EncryptedJson;
 use Goldnead\StatamicAutomations\Casts\MillisecondDateTime;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 class AutomationNodeRun extends Model
 {
     use HasBrand;
 
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_RUNNING = 'running';
+
     public const STATUS_SUCCESS = 'success';
+
     public const STATUS_SKIPPED = 'skipped';
+
     public const STATUS_STOPPED = 'stopped';
+
     public const STATUS_FAILED = 'failed';
 
     protected $table = 'automation_node_runs';
@@ -49,7 +55,7 @@ class AutomationNodeRun extends Model
     {
         static::creating(function (AutomationNodeRun $run) {
             if (empty($run->uuid)) {
-                $run->uuid = (string) \Illuminate\Support\Str::uuid();
+                $run->uuid = (string) Str::uuid();
             }
         });
     }

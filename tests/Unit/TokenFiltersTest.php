@@ -4,7 +4,7 @@ use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Engine\TokenResolver;
 
 beforeEach(function () {
-    $this->resolver = new TokenResolver();
+    $this->resolver = new TokenResolver;
     $this->context = AutomationContext::make([
         'form' => ['email' => '  Foo@Example.COM ', 'name' => 'jane doe'],
         'lead' => ['tags' => ['a', 'b', 'c']],

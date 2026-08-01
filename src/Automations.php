@@ -13,6 +13,7 @@ use Goldnead\StatamicAutomations\Registries\ActionRegistry;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Registries\OptionSourceRegistry;
 use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
+use Goldnead\StatamicAutomations\Templates\TemplateRegistry;
 use Illuminate\Support\Facades\Event;
 use InvalidArgumentException;
 
@@ -47,8 +48,7 @@ class Automations
         protected NodeRegistry $nodes,
         protected LicenseManager $license,
         protected OptionSourceRegistry $optionSources,
-    ) {
-    }
+    ) {}
 
     /**
      * Mark a node handle as built-in. Built-in nodes are never gated by
@@ -280,7 +280,7 @@ class Automations
 
         if (! is_subclass_of($class, AutomationNode::class)) {
             throw new InvalidArgumentException(
-                "[{$class}] must implement " . AutomationNode::class . '.'
+                "[{$class}] must implement ".AutomationNode::class.'.'
             );
         }
 
@@ -307,7 +307,7 @@ class Automations
      */
     public function template(array $template): self
     {
-        app(\Goldnead\StatamicAutomations\Templates\TemplateRegistry::class)->register($template);
+        app(TemplateRegistry::class)->register($template);
 
         return $this;
     }
@@ -408,8 +408,8 @@ class Automations
             && ! method_exists($class, 'execute')
             && ! method_exists($class, 'evaluate')) {
             throw new InvalidArgumentException(
-                "[{$class}] must implement " . AutomationLogicNode::class
-                . ' or expose an execute()/evaluate() method to register as a logic node.'
+                "[{$class}] must implement ".AutomationLogicNode::class
+                .' or expose an execute()/evaluate() method to register as a logic node.'
             );
         }
     }

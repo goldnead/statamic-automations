@@ -9,9 +9,7 @@ use Goldnead\StatamicAutomations\Support\ActionResult;
 
 class SubscribeToListAction implements AutomationAction
 {
-    public function __construct(protected MarketingAdapter $adapter)
-    {
-    }
+    public function __construct(protected MarketingAdapter $adapter) {}
 
     public static function handle(): string
     {

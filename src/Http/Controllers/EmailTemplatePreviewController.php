@@ -2,11 +2,13 @@
 
 namespace Goldnead\StatamicAutomations\Http\Controllers;
 
+use Goldnead\EmailTemplates\Facades\EmailTemplates;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Engine\TokenResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Statamic\Facades\Entry;
 
 /**
  * Backs the `send_email` node's email affordances in the CP builder: a rendered
@@ -52,7 +54,7 @@ class EmailTemplatePreviewController extends Controller
 
         // Managed entry wins; no fallback callable, so an unknown slug resolves
         // to null (→ 404) rather than echoing back an empty template.
-        $resolved = \Goldnead\EmailTemplates\Facades\EmailTemplates::resolve($slug);
+        $resolved = EmailTemplates::resolve($slug);
 
         if ($resolved === null || (($resolved->body ?? '') === '' && ($resolved->subject ?? '') === '')) {
             return response()->json(['message' => __("Template ':slug' not found.", ['slug' => $slug])], 404);
@@ -93,12 +95,12 @@ class EmailTemplatePreviewController extends Controller
      */
     protected function templates(): Collection
     {
-        if (! $this->addonInstalled() || ! class_exists(\Statamic\Facades\Entry::class)) {
+        if (! $this->addonInstalled() || ! class_exists(Entry::class)) {
             return collect();
         }
 
         try {
-            return collect(\Statamic\Facades\Entry::query()->where('collection', 'et_templates')->get())
+            return collect(Entry::query()->where('collection', 'et_templates')->get())
                 ->map(fn ($entry) => [
                     'slug' => (string) $entry->slug(),
                     'title' => (string) ($entry->value('title') ?? $entry->slug()),
@@ -116,7 +118,7 @@ class EmailTemplatePreviewController extends Controller
      */
     protected function addonInstalled(): bool
     {
-        return class_exists(\Goldnead\EmailTemplates\Facades\EmailTemplates::class);
+        return class_exists(EmailTemplates::class);
     }
 
     /**

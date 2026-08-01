@@ -5,6 +5,8 @@ namespace Goldnead\StatamicAutomations\Http\Controllers;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Engine\FlowValidator;
+use Goldnead\StatamicAutomations\Engine\NodeExecutor;
+use Goldnead\StatamicAutomations\Engine\VersionManager;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Http\Requests\StoreAutomationRequest;
 use Goldnead\StatamicAutomations\Http\Requests\UpdateAutomationRequest;
@@ -13,9 +15,11 @@ use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
+use Goldnead\StatamicAutomations\Registries\NodeRegistry;
+use Goldnead\StatamicAutomations\Support\AuditLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Str;
 
 class AutomationsController extends Controller
@@ -55,7 +59,7 @@ class AutomationsController extends Controller
         $perPage = max(1, $request->integer('per_page', 25));
         $page = max(1, $request->integer('page', 1));
 
-        $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
+        $paginator = new LengthAwarePaginator(
             $items->forPage($page, $perPage)->values(),
             $items->count(),
             $perPage,
@@ -85,7 +89,7 @@ class AutomationsController extends Controller
 
         $automation = new Automation([
             'name' => $data['name'],
-            'handle' => $data['handle'] ?? Str::slug($data['name']) . '-' . Str::lower(Str::random(4)),
+            'handle' => $data['handle'] ?? Str::slug($data['name']).'-'.Str::lower(Str::random(4)),
             'description' => $data['description'] ?? null,
             'enabled' => false,
             'created_by' => optional(auth()->user())->id,
@@ -94,9 +98,9 @@ class AutomationsController extends Controller
         $automation = app(AutomationRepository::class)
             ->save($automation, $data['nodes'] ?? [], $data['edges'] ?? []);
 
-        app(\Goldnead\StatamicAutomations\Engine\VersionManager::class)
+        app(VersionManager::class)
             ->snapshot($automation, 'Initial version');
-        app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)
+        app(AuditLogger::class)
             ->record('created', $automation, ['name' => $automation->name]);
 
         return (new AutomationResource($automation))
@@ -109,7 +113,7 @@ class AutomationsController extends Controller
         $data = $request->validated();
 
         // Snapshot the pre-edit graph so this change can be rolled back.
-        app(\Goldnead\StatamicAutomations\Engine\VersionManager::class)->snapshot($automationFlow);
+        app(VersionManager::class)->snapshot($automationFlow);
 
         $automationFlow->fill(array_filter([
             'name' => $data['name'] ?? null,
@@ -126,7 +130,7 @@ class AutomationsController extends Controller
             $hasGraph ? ($data['edges'] ?? []) : null,
         );
 
-        app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)
+        app(AuditLogger::class)
             ->record('updated', $automationFlow, ['version' => $automationFlow->version]);
 
         return (new AutomationResource($automationFlow))
@@ -138,7 +142,7 @@ class AutomationsController extends Controller
     {
         $this->authorizeAction('delete automations');
 
-        app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)
+        app(AuditLogger::class)
             ->record('deleted', $automationFlow->exists ? $automationFlow : null, ['name' => $automationFlow->name, 'handle' => $automationFlow->handle]);
 
         app(AutomationRepository::class)->delete($automationFlow);
@@ -151,8 +155,8 @@ class AutomationsController extends Controller
         $this->authorizeAction('create automations');
 
         $clone = new Automation([
-            'name' => $automationFlow->name . ' (copy)',
-            'handle' => $automationFlow->handle . '-copy-' . Str::lower(Str::random(4)),
+            'name' => $automationFlow->name.' (copy)',
+            'handle' => $automationFlow->handle.'-copy-'.Str::lower(Str::random(4)),
             'description' => $automationFlow->description,
             'enabled' => false,
             'created_by' => optional(auth()->user())->id,
@@ -214,7 +218,7 @@ class AutomationsController extends Controller
         $automationFlow->enabled = true;
         app(AutomationRepository::class)->save($automationFlow);
 
-        app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)->record('enabled', $automationFlow);
+        app(AuditLogger::class)->record('enabled', $automationFlow);
 
         return response()->json(['ok' => true, 'enabled' => true]);
     }
@@ -226,7 +230,7 @@ class AutomationsController extends Controller
         $automationFlow->enabled = false;
         app(AutomationRepository::class)->save($automationFlow);
 
-        app(\Goldnead\StatamicAutomations\Support\AuditLogger::class)->record('disabled', $automationFlow);
+        app(AuditLogger::class)->record('disabled', $automationFlow);
 
         return response()->json(['ok' => true, 'enabled' => false]);
     }
@@ -240,7 +244,7 @@ class AutomationsController extends Controller
 
         $context = AutomationContext::make($contextData, testMode: true);
         $triggerNode = $automationFlow->nodes->first(
-            fn ($n) => app(\Goldnead\StatamicAutomations\Registries\NodeRegistry::class)
+            fn ($n) => app(NodeRegistry::class)
                 ->kind($n->type) === 'trigger',
         );
 
@@ -272,7 +276,7 @@ class AutomationsController extends Controller
     public function testNode(
         Request $request,
         Automation $automationFlow,
-        \Goldnead\StatamicAutomations\Engine\NodeExecutor $executor,
+        NodeExecutor $executor,
     ): JsonResponse {
         $this->authorizeAction('run automation tests');
 

@@ -100,7 +100,7 @@ class AutomationsPageController extends Controller
             'library' => $this->nodeLibraryPayload(),
             'apiBase' => cp_route('statamic-automations.api.index'),
             'indexUrl' => cp_route('statamic-automations.automations.index'),
-            'runsUrl' => cp_route('statamic-automations.runs.index') . '?automation_id=' . $automationFlow->id,
+            'runsUrl' => cp_route('statamic-automations.runs.index').'?automation_id='.$automationFlow->id,
             'canEdit' => $this->userCan('edit automations'),
             'canEnable' => $this->userCan('enable automations'),
             'canDelete' => $this->userCan('delete automations'),

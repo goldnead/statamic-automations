@@ -36,7 +36,7 @@ class TemplatesController extends Controller
 
             $automation = Automation::create([
                 'name' => $template['name'],
-                'handle' => Str::slug($template['handle']) . '-' . $suffix,
+                'handle' => Str::slug($template['handle']).'-'.$suffix,
                 'description' => $template['description'] ?? null,
                 'enabled' => false,
                 'created_by' => optional(auth()->user())->id,

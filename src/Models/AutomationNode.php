@@ -6,6 +6,7 @@ use Goldnead\BrandContext\Concerns\HasBrand;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 class AutomationNode extends Model
 {
@@ -36,7 +37,7 @@ class AutomationNode extends Model
     {
         static::creating(function (AutomationNode $node) {
             if (empty($node->uuid)) {
-                $node->uuid = (string) \Illuminate\Support\Str::uuid();
+                $node->uuid = (string) Str::uuid();
             }
         });
     }

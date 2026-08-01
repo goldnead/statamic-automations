@@ -2,6 +2,7 @@
 
 namespace Goldnead\StatamicAutomations\Nodes\Actions;
 
+use Goldnead\EmailTemplates\Facades\EmailTemplates;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationAction;
 use Goldnead\StatamicAutomations\Engine\TokenResolver;
@@ -9,12 +10,11 @@ use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
+use Statamic\Facades\Entry;
 
 class SendEmailAction implements AutomationAction
 {
-    public function __construct(protected ?LeadHubAdapter $adapter = null)
-    {
-    }
+    public function __construct(protected ?LeadHubAdapter $adapter = null) {}
 
     public static function handle(): string
     {
@@ -142,7 +142,7 @@ class SendEmailAction implements AutomationAction
         $html = null;
 
         if (! empty($templateSlug) && $this->emailTemplatesAvailable()) {
-            $resolved = \Goldnead\EmailTemplates\Facades\EmailTemplates::resolve(
+            $resolved = EmailTemplates::resolve(
                 $templateSlug,
                 fn () => ['html' => $body, 'subject' => $subject],
             );
@@ -264,7 +264,7 @@ class SendEmailAction implements AutomationAction
      */
     protected static function emailTemplatesInstalled(): bool
     {
-        return class_exists(\Goldnead\EmailTemplates\Facades\EmailTemplates::class);
+        return class_exists(EmailTemplates::class);
     }
 
     /**
@@ -301,12 +301,12 @@ class SendEmailAction implements AutomationAction
      */
     protected static function emailTemplateOptions(): array
     {
-        if (! static::emailTemplatesInstalled() || ! class_exists(\Statamic\Facades\Entry::class)) {
+        if (! static::emailTemplatesInstalled() || ! class_exists(Entry::class)) {
             return [];
         }
 
         try {
-            return collect(\Statamic\Facades\Entry::query()->where('collection', 'et_templates')->get())
+            return collect(Entry::query()->where('collection', 'et_templates')->get())
                 ->map(fn ($entry) => [
                     'value' => (string) $entry->slug(),
                     'label' => (string) ($entry->value('title') ?? $entry->slug()),

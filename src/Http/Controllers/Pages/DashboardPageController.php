@@ -2,8 +2,8 @@
 
 namespace Goldnead\StatamicAutomations\Http\Controllers\Pages;
 
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Http\Controllers\Controller;
-use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -43,8 +43,8 @@ class DashboardPageController extends Controller
         return Inertia::render('statamic-automations::Dashboard', [
             'title' => __('Automations'),
             'stats' => [
-                'automations' => app(\Goldnead\StatamicAutomations\Contracts\AutomationRepository::class)->count(),
-                'enabled' => app(\Goldnead\StatamicAutomations\Contracts\AutomationRepository::class)->enabledCount(),
+                'automations' => app(AutomationRepository::class)->count(),
+                'enabled' => app(AutomationRepository::class)->enabledCount(),
                 'runs_30d' => $total,
                 'success_rate' => $total > 0 ? (int) round(($succeeded / $total) * 100) : null,
                 'failed_30d' => $failed,

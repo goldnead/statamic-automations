@@ -13,8 +13,7 @@ class HandleEntryPublished
         protected TriggerRegistry $triggers,
         protected WorkflowRunner $runner,
         protected AutomationRepository $repository,
-    ) {
-    }
+    ) {}
 
     public function handle(object $event): void
     {

@@ -2,6 +2,7 @@
 
 namespace Goldnead\StatamicAutomations\Tests\Concerns;
 
+use Goldnead\StatamicAutomations\Tests\MigrationPathTestCase;
 use Illuminate\Database\Connection;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Builder;
@@ -29,7 +30,7 @@ use Illuminate\Support\Str;
  * at MySQL (see phpunit.mysql.xml). It is torn down between tests either way.
  *
  * This lives in a trait rather than only in
- * {@see \Goldnead\StatamicAutomations\Tests\MigrationPathTestCase} because a
+ * {@see MigrationPathTestCase} because a
  * Pest file can be given a trait on top of the test case its directory is
  * already bound to, but not a second test case. `tests/Migrations` gets the
  * base class; a migration test that belongs in `tests/Feature` for other

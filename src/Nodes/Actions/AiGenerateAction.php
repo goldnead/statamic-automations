@@ -25,9 +25,7 @@ use Illuminate\Support\Facades\Http;
  */
 class AiGenerateAction implements AutomationAction
 {
-    public function __construct(protected LicenseManager $license)
-    {
-    }
+    public function __construct(protected LicenseManager $license) {}
 
     public static function handle(): string
     {
@@ -172,7 +170,7 @@ class AiGenerateAction implements AutomationAction
                 ->baseUrl(rtrim((string) config('automations.ai.base_url', 'https://api.anthropic.com'), '/'))
                 ->post('/v1/messages', $body);
         } catch (\Throwable $e) {
-            return ActionResult::failed('AI request failed: ' . $e->getMessage());
+            return ActionResult::failed('AI request failed: '.$e->getMessage());
         }
 
         if (! $response->successful()) {

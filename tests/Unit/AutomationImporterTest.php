@@ -70,7 +70,7 @@ class AutomationImporterTest extends TestCase
         $payload['nodes'][1]['node_key'] = 't';
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage("Duplicate node_key");
+        $this->expectExceptionMessage('Duplicate node_key');
 
         app(AutomationImporter::class)->import($payload);
     }

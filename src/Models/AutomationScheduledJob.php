@@ -5,14 +5,18 @@ namespace Goldnead\StatamicAutomations\Models;
 use Goldnead\BrandContext\Concerns\HasBrand;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 class AutomationScheduledJob extends Model
 {
     use HasBrand;
 
     public const STATUS_PENDING = 'pending';
+
     public const STATUS_QUEUED = 'queued';
+
     public const STATUS_DISPATCHED = 'dispatched';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     protected $table = 'automation_scheduled_jobs';
@@ -36,7 +40,7 @@ class AutomationScheduledJob extends Model
     {
         static::creating(function (AutomationScheduledJob $job) {
             if (empty($job->uuid)) {
-                $job->uuid = (string) \Illuminate\Support\Str::uuid();
+                $job->uuid = (string) Str::uuid();
             }
         });
     }

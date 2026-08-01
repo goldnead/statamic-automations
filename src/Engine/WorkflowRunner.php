@@ -3,6 +3,7 @@
 namespace Goldnead\StatamicAutomations\Engine;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
@@ -10,8 +11,11 @@ use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Models\AutomationScheduledJob;
 use Goldnead\StatamicAutomations\Nodes\Logic\LoopNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\ParallelNode;
+use Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilNode;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Support\ActionResult;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 
 /**
  * Walks an automation's graph and executes nodes one after another.
@@ -27,9 +31,8 @@ class WorkflowRunner
         protected NodeRegistry $registry,
         protected RunLogger $logger,
         protected FlowValidator $validator,
-        protected \Goldnead\StatamicAutomations\Contracts\AutomationRepository $repository,
-    ) {
-    }
+        protected AutomationRepository $repository,
+    ) {}
 
     /**
      * Create + return a new run record (without executing yet).
@@ -74,7 +77,7 @@ class WorkflowRunner
             $this->logger->finishRun(
                 $run,
                 AutomationRun::STATUS_FAILED,
-                'Automation failed validation: ' . ($errors[0]['message'] ?? 'unknown'),
+                'Automation failed validation: '.($errors[0]['message'] ?? 'unknown'),
             );
 
             return $run->fresh();
@@ -201,7 +204,7 @@ class WorkflowRunner
      * Some logic nodes need the opposite: a Wait Until must be
      * RE-EVALUATED on resume (its condition may still be false), so its
      * class opts in via a static `reexecuteOnResume(): true` method,
-     * checked here — see {@see \Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilNode}.
+     * checked here — see {@see WaitUntilNode}.
      *
      * Returns the refreshed run model.
      */
@@ -297,8 +300,8 @@ class WorkflowRunner
      * like it would at the top level (it bubbles straight up and ends the
      * whole run, not just the current iteration).
      *
-     * @param  \Illuminate\Support\Collection  $edges
-     * @param  \Illuminate\Support\Collection  $nodes
+     * @param  Collection  $edges
+     * @param  Collection  $nodes
      * @param  array<string, bool>  $visited  Shared safety-net guard (by
      *                                        node_key) against runaway
      *                                        graphs; passed by reference so
@@ -349,7 +352,7 @@ class WorkflowRunner
                 }
 
                 throw new \RuntimeException(
-                    "Node '{$current->node_key}' failed: " . ($result->error ?? 'unknown')
+                    "Node '{$current->node_key}' failed: ".($result->error ?? 'unknown')
                 );
             }
 
@@ -512,7 +515,7 @@ class WorkflowRunner
      *
      * Branches run sequentially against the same shared context (this is
      * a scatter/gather shape, not OS-level concurrency — see
-     * {@see \Goldnead\StatamicAutomations\Nodes\Logic\ParallelNode}'s
+     * {@see ParallelNode}'s
      * class doc), mirroring how {@see driveInlineLoop()} drives one loop
      * pass at a time. A branch output with no wired edge is skipped.
      *
@@ -522,8 +525,8 @@ class WorkflowRunner
      * bubbled up from the first branch that hits one — remaining branches
      * are not started in that case, exactly like a loop pass that bubbles.
      *
-     * @param  \Illuminate\Support\Collection  $edges
-     * @param  \Illuminate\Support\Collection  $nodes
+     * @param  Collection  $edges
+     * @param  Collection  $nodes
      * @param  array<string, bool>  $visited
      */
     protected function driveInlineParallel(
@@ -660,7 +663,7 @@ class WorkflowRunner
     ): void {
         $waitUntil = $result->waitUntil ?? [];
         $dueAt = isset($waitUntil['due_at'])
-            ? \Illuminate\Support\Carbon::parse($waitUntil['due_at'])
+            ? Carbon::parse($waitUntil['due_at'])
             : now()->addSeconds((int) ($waitUntil['seconds'] ?? 60));
 
         AutomationScheduledJob::create([

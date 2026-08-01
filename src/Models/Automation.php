@@ -3,10 +3,10 @@
 namespace Goldnead\StatamicAutomations\Models;
 
 use Goldnead\BrandContext\Concerns\HasBrand;
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class Automation extends Model
 {
@@ -50,7 +50,7 @@ class Automation extends Model
     {
         static::creating(function (Automation $automation) {
             if (empty($automation->uuid)) {
-                $automation->uuid = (string) \Illuminate\Support\Str::uuid();
+                $automation->uuid = (string) Str::uuid();
             }
         });
     }

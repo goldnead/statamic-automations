@@ -22,7 +22,7 @@ class LicenseManagerTest extends TestCase
 
     public function test_status_no_key_when_unset(): void
     {
-        $manager = new LicenseManager();
+        $manager = new LicenseManager;
 
         $this->assertSame(LicenseManager::STATUS_NO_KEY, $manager->status()['status']);
         $this->assertFalse($manager->isPro());
@@ -33,7 +33,7 @@ class LicenseManagerTest extends TestCase
         config()->set('automations.license.key', 'WRONG-KEY');
         config()->set('automations.license.allowed_keys', ['VALID-KEY']);
 
-        $manager = new LicenseManager();
+        $manager = new LicenseManager;
         $this->assertSame(LicenseManager::STATUS_INVALID, $manager->status()['status']);
         $this->assertFalse($manager->isPro());
     }
@@ -43,7 +43,7 @@ class LicenseManagerTest extends TestCase
         config()->set('automations.license.key', 'VALID-KEY');
         config()->set('automations.license.allowed_keys', ['VALID-KEY']);
 
-        $manager = new LicenseManager();
+        $manager = new LicenseManager;
         $this->assertSame(LicenseManager::STATUS_VALID, $manager->status()['status']);
         $this->assertTrue($manager->isPro());
     }
@@ -52,7 +52,7 @@ class LicenseManagerTest extends TestCase
     {
         config()->set('automations.features.custom_actions_requires_pro', false);
 
-        $manager = new LicenseManager();
+        $manager = new LicenseManager;
         $this->assertTrue($manager->gates('custom_actions'));
     }
 
@@ -62,7 +62,7 @@ class LicenseManagerTest extends TestCase
         config()->set('automations.license.key', 'WRONG-KEY');
         config()->set('automations.license.allowed_keys', ['VALID-KEY']);
 
-        $manager = new LicenseManager();
+        $manager = new LicenseManager;
         $this->assertFalse($manager->gates('custom_actions'));
     }
 
@@ -72,13 +72,13 @@ class LicenseManagerTest extends TestCase
         config()->set('automations.license.key', 'VALID-KEY');
         config()->set('automations.license.allowed_keys', ['VALID-KEY']);
 
-        $manager = new LicenseManager();
+        $manager = new LicenseManager;
         $this->assertTrue($manager->gates('custom_actions'));
     }
 
     public function test_unknown_features_are_always_gated_to_true(): void
     {
-        $manager = new LicenseManager();
+        $manager = new LicenseManager;
         $this->assertTrue($manager->gates('made_up_feature'));
     }
 }

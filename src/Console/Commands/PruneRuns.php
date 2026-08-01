@@ -2,8 +2,8 @@
 
 namespace Goldnead\StatamicAutomations\Console\Commands;
 
-use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\BrandContext\Concerns\RunsForEachBrand;
+use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Illuminate\Console\Command;
 
 /**

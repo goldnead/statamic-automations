@@ -23,8 +23,7 @@ class TriggerDispatcher
         protected TriggerRegistry $triggers,
         protected WorkflowRunner $runner,
         protected AutomationRepository $repository,
-    ) {
-    }
+    ) {}
 
     public function dispatch(string $triggerHandle, object|array $event): void
     {

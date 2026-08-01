@@ -17,6 +17,7 @@
 
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
+use Statamic\Facades\User;
 
 beforeEach(function (): void {
     $this->actingAsSuperUser();
@@ -124,7 +125,7 @@ it('renders the audit log page', function (): void {
 });
 
 it('blocks users without the view-automations permission', function (): void {
-    $regular = \Statamic\Facades\User::make()->email('regular@example.com');
+    $regular = User::make()->email('regular@example.com');
     $regular->save();
 
     $response = $this->actingAs($regular)

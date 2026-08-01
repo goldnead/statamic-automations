@@ -26,7 +26,6 @@ interface AutomationTrigger extends AutomationNode
     /**
      * Build the initial AutomationContext for an event.
      *
-     * @param  object|array  $event
      * @param  array<string, mixed>  $config
      */
     public function buildContext(object|array $event, array $config): AutomationContext;

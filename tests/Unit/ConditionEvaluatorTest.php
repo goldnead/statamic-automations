@@ -11,7 +11,7 @@ class ConditionEvaluatorTest extends TestCase
 {
     private function evaluator(): ConditionEvaluator
     {
-        return new ConditionEvaluator(new TokenResolver());
+        return new ConditionEvaluator(new TokenResolver);
     }
 
     public function test_equals_passes(): void

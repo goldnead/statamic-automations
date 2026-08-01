@@ -16,9 +16,7 @@ use Goldnead\StatamicAutomations\Support\ActionResult;
  */
 class WebhookManagerSendAction implements AutomationAction
 {
-    public function __construct(protected WebhookManagerAdapter $adapter)
-    {
-    }
+    public function __construct(protected WebhookManagerAdapter $adapter) {}
 
     public static function handle(): string
     {

@@ -57,7 +57,7 @@ it('deletes an automation from the index page exactly like the frontend does (da
     expect($row)->not->toBeNull();
 
     // Exactly what Index.vue does: axios.delete(apiBase + '/automations/' + row.id)
-    $url = $props['apiBase'] . '/automations/' . $row['id'];
+    $url = $props['apiBase'].'/automations/'.$row['id'];
 
     $response = $this->withHeaders(frontendHeaders())->delete($url);
 
@@ -73,7 +73,7 @@ it('toggles enabled state from the index page exactly like the frontend does', f
     $row = collect($props['rows'])->firstWhere('handle', 'toggler');
 
     // Index.vue: axios.post(apiBase + '/automations/' + row.id + '/disable')
-    $url = $props['apiBase'] . '/automations/' . $row['id'] . ($row['enabled'] ? '/disable' : '/enable');
+    $url = $props['apiBase'].'/automations/'.$row['id'].($row['enabled'] ? '/disable' : '/enable');
 
     $response = $this->withHeaders(frontendHeaders())->post($url);
 
@@ -88,7 +88,7 @@ it('duplicates an automation from the index page exactly like the frontend does'
     $row = collect($props['rows'])->firstWhere('handle', 'original');
 
     // Index.vue: axios.post(apiBase + '/automations/' + row.id + '/duplicate')
-    $url = $props['apiBase'] . '/automations/' . $row['id'] . '/duplicate';
+    $url = $props['apiBase'].'/automations/'.$row['id'].'/duplicate';
 
     $response = $this->withHeaders(frontendHeaders())->post($url);
 
@@ -103,7 +103,7 @@ it('exports an automation from the index page exactly like the frontend does', f
     $row = collect($props['rows'])->firstWhere('handle', 'exportable');
 
     // Index.vue: window.open(apiBase + '/automations/' + row.id + '/export')
-    $url = $props['apiBase'] . '/automations/' . $row['id'] . '/export';
+    $url = $props['apiBase'].'/automations/'.$row['id'].'/export';
 
     $response = $this->get($url);
 
@@ -111,7 +111,7 @@ it('exports an automation from the index page exactly like the frontend does', f
 });
 
 it('deletes an automation from the index page with the flat-file driver', function (): void {
-    $dir = sys_get_temp_dir() . '/automations-flat-' . uniqid();
+    $dir = sys_get_temp_dir().'/automations-flat-'.uniqid();
     config()->set('automations.storage.driver', 'flat_file');
     config()->set('automations.storage.flat_file.path', $dir);
     app()->forgetInstance(AutomationRepository::class);
@@ -121,18 +121,18 @@ it('deletes an automation from the index page with the flat-file driver', functi
         app(AutomationRepository::class)->save(
             new Automation(['name' => 'Flat Delete', 'handle' => 'flat-delete']),
         );
-        expect(File::exists($dir . '/flat-delete.yaml'))->toBeTrue();
+        expect(File::exists($dir.'/flat-delete.yaml'))->toBeTrue();
 
         $props = indexPageProps($this);
         $row = collect($props['rows'])->firstWhere('handle', 'flat-delete');
         expect($row)->not->toBeNull();
 
-        $url = $props['apiBase'] . '/automations/' . $row['id'];
+        $url = $props['apiBase'].'/automations/'.$row['id'];
 
         $response = $this->withHeaders(frontendHeaders())->delete($url);
 
         $response->assertOk();
-        expect(File::exists($dir . '/flat-delete.yaml'))->toBeFalse();
+        expect(File::exists($dir.'/flat-delete.yaml'))->toBeFalse();
     } finally {
         if (is_dir($dir)) {
             File::deleteDirectory($dir);

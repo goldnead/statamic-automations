@@ -31,8 +31,7 @@ class AutomationImporter
     public function __construct(
         protected NodeRegistry $registry,
         protected IntegrationDetector $detector,
-    ) {
-    }
+    ) {}
 
     /**
      * @param  array<string, mixed>  $payload
@@ -48,12 +47,12 @@ class AutomationImporter
         $missingNodeTypes = $this->checkNodeTypes($payload['nodes'] ?? []);
 
         if (! empty($missingIntegrations)) {
-            $warnings[] = 'Missing integrations: ' . implode(', ', $missingIntegrations)
-                . '. The automation will import but may not pass validation until those addons are installed.';
+            $warnings[] = 'Missing integrations: '.implode(', ', $missingIntegrations)
+                .'. The automation will import but may not pass validation until those addons are installed.';
         }
         if (! empty($missingNodeTypes)) {
-            $warnings[] = 'Unknown node types: ' . implode(', ', $missingNodeTypes)
-                . '. They will be imported as-is and need to be replaced before activation.';
+            $warnings[] = 'Unknown node types: '.implode(', ', $missingNodeTypes)
+                .'. They will be imported as-is and need to be replaced before activation.';
         }
 
         $handle = $this->resolveHandle($payload['automation']['handle'] ?? null, $options);
@@ -173,6 +172,7 @@ class AutomationImporter
                 $missing[] = 'leadhub';
             }
         }
+
         return $missing;
     }
 
@@ -188,6 +188,7 @@ class AutomationImporter
                 $missing[] = (string) $node['type'];
             }
         }
+
         return array_values(array_unique($missing));
     }
 
@@ -210,7 +211,7 @@ class AutomationImporter
 
         // Auto strategy → suffix until unique.
         for ($i = 0; $i < 20; $i++) {
-            $candidate2 = $candidate . '-' . Str::lower(Str::random(4));
+            $candidate2 = $candidate.'-'.Str::lower(Str::random(4));
             if (! Automation::where('handle', $candidate2)->exists()) {
                 return $candidate2;
             }

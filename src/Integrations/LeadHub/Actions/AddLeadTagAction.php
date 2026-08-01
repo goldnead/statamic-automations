@@ -9,9 +9,7 @@ use Goldnead\StatamicAutomations\Support\ActionResult;
 
 class AddLeadTagAction implements AutomationAction
 {
-    public function __construct(protected LeadHubAdapter $adapter)
-    {
-    }
+    public function __construct(protected LeadHubAdapter $adapter) {}
 
     public static function handle(): string
     {
