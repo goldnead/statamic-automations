@@ -46,6 +46,10 @@ const testModeMeta = {
         label: __('Persist Statamic changes'),
         description: __('When blocked, test runs do not write changes to Statamic content.'),
     },
+    call_real_ai: {
+        label: __('Call the real AI provider'),
+        description: __('When blocked, test runs return a canned completion instead of calling (and billing) the provider.'),
+    },
 };
 
 const integrationMeta = {

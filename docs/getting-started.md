@@ -83,7 +83,27 @@ The addon registers nine permissions under the **Automations** group. Assign the
 
 That's it. The next form submission will dispatch a queued run, and you'll see it under **Automations → Runs**.
 
-## 7. Try a template
+## 7. What a test run does (and does not) check
+
+**Test** runs the whole chain with the context you supply — which, unless you paste one in, is empty. That shapes what a test run can tell you:
+
+- **Configuration is checked.** A node with no tag, no task title, no target stage fails, and it should: that automation is broken and would be broken in production too.
+- **Data references are not.** Fields that point at a record produced by the run itself (`{{ lead.id }}`, `{{ contact_id }}`, `{{ opportunity.id }}` — the ones labelled as a reference in the config panel) resolve to nothing when the context is empty. A test run previews them as empty and carries on, instead of failing every action that has one. Live runs still refuse to act on an unresolved reference, and say which one it was.
+- **Nothing real happens.** Side effects are gated per category in `config/automations.php`:
+
+  | Flag | Default | When `true` a test run… |
+  |---|---|---|
+  | `test_mode.send_real_emails` | `false` | actually sends mail |
+  | `test_mode.send_real_webhooks` | `false` | actually delivers webhooks |
+  | `test_mode.persist_statamic_changes` | `false` | actually writes entries, terms, users, globals |
+  | `test_mode.persist_leadhub_changes` | `false` | actually writes to LeadHub (tags, notes, tasks, stages, scores) |
+  | `test_mode.call_real_ai` | `false` | actually calls the AI provider (and bills you) |
+
+  The same switches are visible read-only under **Automations → Settings**. Turning any of them on makes a test run behave like a live run for that category — including the data-reference check, which is then enforced again.
+
+To exercise a reference end to end, hand the test run a context instead of turning a flag on: `POST /cp/automations/api/automations/{id}/test` accepts a `context` object, e.g. `{"lead": {"id": "abc"}}`.
+
+## 8. Try a template
 
 Skip steps 3–6 and start from a curated flow:
 
