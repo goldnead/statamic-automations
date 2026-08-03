@@ -41,12 +41,17 @@ class WorkflowRunner
         Automation $automation,
         AutomationContext $context,
         ?AutomationNode $triggerNode = null,
+        ?string $subjectKey = null,
     ): AutomationRun {
         return AutomationRun::create([
             'automation_id' => $automation->exists ? $automation->id : null,
             'automation_uuid' => $automation->uuid,
             'trigger_node_key' => $triggerNode?->node_key,
             'trigger_type' => $triggerNode?->type,
+            // Who this pass is about. Optional, and null for a trigger that
+            // names no person — a scheduled sweep is a run without a subject,
+            // not a run with an unknown one.
+            'subject_key' => $subjectKey,
             'status' => AutomationRun::STATUS_QUEUED,
             'context' => config('automations.runs.store_full_context', true)
                 ? $this->redactedContext($context)
