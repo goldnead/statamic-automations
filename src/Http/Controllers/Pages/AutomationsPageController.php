@@ -7,6 +7,8 @@ use Goldnead\StatamicAutomations\Http\Controllers\Controller;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
+use Goldnead\StatamicAutomations\Sequence\MailListProjection;
+use Goldnead\StatamicAutomations\Support\RunStats;
 use Goldnead\StatamicAutomations\Templates\TemplateRegistry;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -32,7 +34,17 @@ class AutomationsPageController extends Controller
             ->groupBy('automation_uuid')
             ->pluck('c', 'automation_uuid');
 
-        $rows = app(AutomationRepository::class)->all()
+        $automations = app(AutomationRepository::class)->all();
+
+        // The funnel, for every row, in ONE query — see Support\RunStats. Test
+        // runs are left out of it on purpose: an editor pressing "test" is not
+        // a person going through the flow, and `runs_count` above still counts
+        // everything, so nothing an existing screen shows changes.
+        $stats = app(RunStats::class)->forAutomations(
+            $automations->pluck('uuid')->filter()->map('strval')->all(),
+        );
+
+        $rows = $automations
             ->sortByDesc(fn (Automation $a) => optional($a->updated_at)->timestamp ?? optional($a->last_run_at)->timestamp ?? 0)
             ->map(fn (Automation $a) => [
                 'id' => $a->id,
@@ -40,6 +52,11 @@ class AutomationsPageController extends Controller
                 'handle' => $a->handle,
                 'enabled' => (bool) $a->enabled,
                 'runs_count' => (int) ($runCounts[$a->uuid] ?? 0),
+                'enrolled' => (int) ($stats[$a->uuid]['enrolled'] ?? 0),
+                'in_progress' => (int) ($stats[$a->uuid]['in_progress'] ?? 0),
+                'completed' => (int) ($stats[$a->uuid]['completed'] ?? 0),
+                'exited' => (int) ($stats[$a->uuid]['exited'] ?? 0),
+                'failed' => (int) ($stats[$a->uuid]['failed'] ?? 0),
                 'last_run_at' => optional($a->last_run_at)->toIso8601String(),
                 'updated_at' => optional($a->updated_at)->toIso8601String(),
                 'edit_url' => cp_route('statamic-automations.automations.edit', $a->id),
@@ -56,6 +73,11 @@ class AutomationsPageController extends Controller
                 Column::make('name')->label(__('Name')),
                 Column::make('enabled')->label(__('Status')),
                 Column::make('runs_count')->label(__('Runs')),
+                // The three numbers that make a flow readable at a glance:
+                // how many are in it, how many got through, how many left.
+                Column::make('in_progress')->label(__('In progress')),
+                Column::make('completed')->label(__('Completed')),
+                Column::make('exited')->label(__('Exited')),
                 Column::make('last_run_at')->label(__('Last run')),
                 Column::make('updated_at')->label(__('Updated')),
             ])->map->toArray()->all(),
@@ -107,6 +129,12 @@ class AutomationsPageController extends Controller
             'apiBase' => cp_route('statamic-automations.api.index'),
             'indexUrl' => cp_route('statamic-automations.automations.index'),
             'runsUrl' => cp_route('statamic-automations.runs.index').'?automation_id='.$automationFlow->id,
+            // The same automation, read as the list of mails it sends. Always
+            // present: the list is shown for every automation and only its
+            // EDITING is bound to the flow being a straight line.
+            'mailList' => app(MailListProjection::class)->forAutomation($automationFlow),
+            'mailListUrl' => cp_route('statamic-automations.api.automations.mail-list', $automationFlow->id),
+            'stats' => app(RunStats::class)->forAutomation((string) $automationFlow->uuid),
             'canEdit' => $this->userCan('edit automations'),
             'canEnable' => $this->userCan('enable automations'),
             'canDelete' => $this->userCan('delete automations'),
