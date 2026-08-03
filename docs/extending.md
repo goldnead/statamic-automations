@@ -377,6 +377,47 @@ Resolution rules:
 - Multi-token strings always interpolate to strings.
 - Missing tokens render as empty strings.
 
+## Appearing in the mail list
+
+An automation can also be read as the list of mails it sends (see
+[Sequences](sequences.md)). This addon never guesses which nodes those are — a
+node says so itself:
+
+```php
+public static function mailStep(): bool
+{
+    return true;
+}
+
+/**
+ * What the list shows on this row.
+ *
+ * @return array{label: string, reference: string|null}
+ */
+public static function mailSummary(array $config): array
+{
+    return [
+        'label' => $config['subject'] ?? '',
+        'reference' => $config['template'] ?? null,
+    ];
+}
+```
+
+Both are optional and both are found with `method_exists`, so an older release
+of this addon simply does not ask and nothing breaks. A node that declares
+`mailStep()` without `mailSummary()` still gets a row, labelled with its own
+`label` and then with the registered node label.
+
+For a node you cannot edit — one in an application's own codebase, or a webhook
+that happens to post to a mail provider — name its handle in config instead:
+
+```php
+// config/automations.php
+'sequence' => [
+    'mail_nodes' => ['my_app.send_receipt'],
+],
+```
+
 ## Testing your custom nodes
 
 The engine has full unit-test coverage. Mirror the existing tests when adding your own:

@@ -1,5 +1,107 @@
 # Changelog
 
+## Unreleased
+
+<!--
+    Additive, and all four parts ship inert. The re-entry policy defaults to
+    the behaviour every automation has today; the mail list is a second way to
+    read a graph nobody has to open; the funnel counts runs that were already
+    there. A `composer update` changes no run.
+-->
+
+### Added — the enrollment funnel, read out of the runs that were already there
+
+An automation knew how many times it had run. It did not say how many people
+were *in* it right now, how many had come out the far end, and how many had
+left along the way — which are the three numbers that tell you whether a
+sequence works.
+
+`Support\RunStats` answers all three from `automation_runs`, grouped by status,
+in one query for the whole listing. No new table: a run *is* an enrollment, and
+a second table recording the same facts would be a second place for them to
+disagree. Test runs are left out, because an editor pressing "test" is not a
+person going through the flow.
+
+What was genuinely missing was an index. `automation_uuid` and `status` existed
+as two separate single-column indexes, which answers "this automation's runs"
+and "everything that failed" and neither of the questions above. The migration
+adds `(automation_uuid, status)`.
+
+### Added — a re-entry policy, so a repeat sign-up stops meaning a second welcome series
+
+Until now, every matching event created another run. For a webhook that is
+right. For a five-mail sequence it is the most common way to mail somebody
+twice in one morning: they unsubscribed, subscribed again, and now two copies
+of the series are ticking.
+
+A trigger can now carry one of four rules — the field is on every trigger,
+including third-party ones and the config-driven event triggers, because the
+registry appends it rather than each class declaring it:
+
+- **Enroll again every time** — today's behaviour, and still the default. **No
+  existing automation changes.** An unrecognised value reads as this one, so a
+  typo in an imported file cannot start suppressing enrollments.
+- **Ignore** — once per contact, ever. What a welcome series wants.
+- **Restart from the beginning** — cancel the open pass and start fresh. The
+  scheduled job goes with it; a cancelled run whose wake-up call survives
+  resumes days later beside the new pass, which is the exact thing this rule
+  exists to prevent.
+- **Leave the running pass where it is** — an open pass carries on from its own
+  position; nothing new is added.
+
+Runs now carry `subject_key` (normally the lower-cased address) so the three
+rules have somebody to compare against, and so the listing can tell enrollments
+from people. A trigger that names nobody — a scheduled sweep, a webhook with no
+address in it — falls back to the default and says so in the log, because
+treating every subjectless run as the same subject would make one nightly sweep
+block every later one for ever.
+
+### Added — the mail list: the same automation, read as the mails it sends
+
+A sequence is a list of mails with gaps between them. A graph is the right tool
+for building one and the wrong one for reading it back. There is now a second
+view of the same object — no second object, no compile step, no synchronised
+copy.
+
+**Showing it always works.** Even a branched flow has a knowable set of mails
+and knowable gaps; the list marks the ones only some readers get as
+conditional, and names the fork they hang off. It is incomplete as a picture of
+the flow and correct as what it claims to be.
+
+**Editing is bound to the flow being a straight line**, and the rule is written
+out in full on `Sequence\LinearityRule`: one trigger, no node with more than
+one edge in or out, every edge on the `default` output, no Branch / Switch /
+Loop / Parallel node, everything reachable from the trigger, no cycle. Where it
+does not hold, the list stays readable and the canvas is the editing surface —
+erring towards "locked when it need not have been", because the other direction
+rewrites a graph nobody asked to have rewritten.
+
+**Every gap is measured from the mail before it, never from the start.** That
+is what makes reordering lossless: "5 days after the previous mail" travels
+with the mail when it moves, where "day 7" would silently misdescribe every row
+below the one that moved.
+
+Endpoints: `GET`, `POST`, `POST …/reorder` and `DELETE` under
+`api/automations/{automation}/mail-list`. The three writes snapshot a version
+first, refuse a non-linear graph with a 422 that carries the rule's own
+reasons, and rewrite the chain rather than patching four edges around a moved
+node.
+
+A node declares itself a mail with a static `mailStep(): bool` — which is how
+`goldnead/statamic-marketing` contributes its send node from its own side, and
+why this addon still knows nothing about newsletters. Additional handles can be
+named in `automations.sequence.mail_nodes`.
+
+### Changed
+
+- `Nodes\Actions\SendEmailAction` declares itself a mail step and summarises
+  itself for the list. Its behaviour is unchanged.
+- The automations listing carries `in_progress`, `completed` and `exited`
+  columns. `runs_count` still counts everything, including test runs, so
+  nothing an existing screen shows has moved.
+- The models carry `@property` annotations. Static analysis stopped needing
+  164 of the 366 baseline entries, and the baseline shrank accordingly.
+
 ## 1.8.2 — 2026-08-01
 
 ### Fixed — the Test button could never pass for a whole class of automations
