@@ -4,6 +4,7 @@ use Goldnead\StatamicAutomations\Http\Controllers\AuditController;
 use Goldnead\StatamicAutomations\Http\Controllers\AutomationsController;
 use Goldnead\StatamicAutomations\Http\Controllers\EmailTemplatePreviewController;
 use Goldnead\StatamicAutomations\Http\Controllers\ExportImportController;
+use Goldnead\StatamicAutomations\Http\Controllers\MailListController;
 use Goldnead\StatamicAutomations\Http\Controllers\NodesController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\AuditPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\AutomationsPageController;
@@ -99,6 +100,20 @@ Route::prefix('automations')
             Route::post('automations/{automationFlow}/test-node', [AutomationsController::class, 'testNode'])->name('automations.test-node');
             Route::post('automations/{automationFlow}/enable', [AutomationsController::class, 'enable'])->name('automations.enable');
             Route::post('automations/{automationFlow}/disable', [AutomationsController::class, 'disable'])->name('automations.disable');
+
+            // The mail list — the same automation, read as the list of mails
+            // it sends. GET works for every automation; the three writes
+            // answer 422 on anything that is not a straight line. See
+            // Sequence\LinearityRule.
+            Route::get('automations/{automationFlow}/mail-list', [MailListController::class, 'show'])
+                ->name('automations.mail-list');
+            Route::post('automations/{automationFlow}/mail-list', [MailListController::class, 'store'])
+                ->name('automations.mail-list.store');
+            Route::post('automations/{automationFlow}/mail-list/reorder', [MailListController::class, 'reorder'])
+                ->name('automations.mail-list.reorder');
+            Route::delete('automations/{automationFlow}/mail-list/{nodeKey}', [MailListController::class, 'destroy'])
+                ->where('nodeKey', '[A-Za-z0-9_.-]+')
+                ->name('automations.mail-list.destroy');
 
             // Node / trigger / action metadata
             Route::get('nodes', [NodesController::class, 'index'])->name('nodes.index');

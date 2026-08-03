@@ -7,6 +7,7 @@ use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationAction;
 use Goldnead\StatamicAutomations\Engine\TokenResolver;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
+use Goldnead\StatamicAutomations\Sequence\MailSteps;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
@@ -103,6 +104,40 @@ class SendEmailAction implements AutomationAction
         }
 
         return $schema;
+    }
+
+    /**
+     * This node sends a mail, so it appears as a row in the mail list.
+     *
+     * An opt-in rather than something the list infers, because "is this a
+     * mail" is a question only the node can answer — a webhook that posts to a
+     * mail provider is one, and an action whose group happens to be "Email"
+     * might not be. See {@see MailSteps}.
+     */
+    public static function mailStep(): bool
+    {
+        return true;
+    }
+
+    /**
+     * What the mail list shows on this row.
+     *
+     * The subject, because that is what an editor recognises a mail by, with
+     * the template slug as the fallback for a node whose subject comes from
+     * the template rather than from the config.
+     *
+     * @param  array<string, mixed>  $config
+     * @return array{label: string, reference: string|null}
+     */
+    public static function mailSummary(array $config): array
+    {
+        $subject = $config['subject'] ?? null;
+        $template = $config['template'] ?? null;
+
+        return [
+            'label' => is_string($subject) && trim($subject) !== '' ? trim($subject) : '',
+            'reference' => is_string($template) && $template !== '' ? $template : null,
+        ];
     }
 
     /**

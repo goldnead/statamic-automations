@@ -359,4 +359,29 @@ return [
         //
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Mail list
+    |--------------------------------------------------------------------------
+    |
+    | Every automation can also be read as the list of mails it sends, with the
+    | gap before each one. The list is shown for any automation; it can only be
+    | EDITED while the graph is a straight line (see Sequence\LinearityRule) —
+    | otherwise the mapping from a list back onto the graph is not unambiguous
+    | and the canvas stays the editing surface.
+    |
+    | A node declares itself a mail with a static `mailStep(): bool`, which is
+    | how `goldnead/statamic-marketing` contributes its send node without this
+    | addon ever learning what a campaign is. Name additional handles here for
+    | nodes you cannot or would rather not edit — an application's own mailer,
+    | or a webhook that happens to post to a mail provider.
+    |
+    */
+
+    'sequence' => [
+        'mail_nodes' => [
+            //
+        ],
+    ],
+
 ];

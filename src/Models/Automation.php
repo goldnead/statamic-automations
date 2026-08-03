@@ -3,11 +3,24 @@
 namespace Goldnead\StatamicAutomations\Models;
 
 use Goldnead\BrandContext\Concerns\HasBrand;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
+/**
+ * @property string $uuid
+ * @property string $name
+ * @property string $handle
+ * @property string|null $description
+ * @property bool $enabled
+ * @property int $version
+ * @property Carbon|null $last_run_at
+ * @property-read Collection<int, AutomationNode> $nodes
+ * @property-read Collection<int, AutomationEdge> $edges
+ */
 class Automation extends Model
 {
     use HasBrand;
