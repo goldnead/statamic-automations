@@ -92,8 +92,56 @@ A node declares itself a mail with a static `mailStep(): bool` — which is how
 why this addon still knows nothing about newsletters. Additional handles can be
 named in `automations.sequence.mail_nodes`.
 
+### Added — the mail list has a screen now
+
+The endpoints above had no surface. The builder page carries a **Flow / Mails**
+switch: the same automation, the same page, read either as what it does or as
+what it sends. A view and not a second screen, because two screens over one
+object is how the two start disagreeing.
+
+**Showing works for every automation**, branched or not. A mail only some
+readers get carries a `Conditional` badge and the fork it hangs off in words
+underneath it. Anything else sitting in the same gap — a tag, a CRM write — is
+named on the row, so a reorder is never a silent rewrite of what the flow does.
+Each row says how long after the *previous mail* it goes out, and the first row
+says how long after the trigger; no row ever says "day 7".
+
+**Where the list may not be edited, it says which of the seven conditions is
+broken.** "This automation is not linear" is a sentence an editor cannot act
+on: it names no node, no condition and no next step. Instead the notice reads
+*Condition 5 of 7: the automation contains no Branch, Switch, Loop or Parallel
+step* — with what to do about it, the rule's own sentence naming the node
+underneath, and a button back to the canvas. The rule hands out prose, so the
+mapping from its sentences back onto the numbered conditions lives in
+`resources/js/support/mailList.js` and is tested against the sentences the rule
+actually emits.
+
+Reordering is two buttons per row, not a drag handle: a drag is unreachable
+from a keyboard and silent to a screen reader, and focus follows the row it
+moved. Deleting goes through Statamic's `ConfirmationModal` and says that the
+waiting time in front of the mail goes with it while everything else in that
+gap is kept.
+
+Three separate locks, each with its own message, because they call for three
+different actions: the flow is not a straight line (rework it on the canvas),
+the user lacks `edit automations` (ask for it), or the canvas holds unsaved
+changes (press Save first — a list edit writes straight to the stored
+automation, and the next canvas save would otherwise put the old order back).
+After a list edit the page re-reads the stored graph, so the canvas is never
+left showing the order the server has just replaced.
+
+The page also gained the enrollment funnel it was already being handed, as
+badges above the list.
+
 ### Changed
 
+- `Sequence\MailSteps` answers `isMailHandle()` as well as `isMail()`, and the
+  builder page hands the screen a `mailTypes` list built from it. A node only
+  becomes a mail *row* once it is on the canvas, so an automation that sends
+  nothing yet — the one that most needs to add its first mail — could not have
+  read the candidates off its own rows. Asking the registry is what keeps the
+  UI from hardcoding a handle, which is the one thing `MailSteps` exists to
+  prevent.
 - `Nodes\Actions\SendEmailAction` declares itself a mail step and summarises
   itself for the list. Its behaviour is unchanged.
 - The automations listing carries `in_progress`, `completed` and `exited`

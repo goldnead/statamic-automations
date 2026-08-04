@@ -127,6 +127,34 @@ from its own side. An install can also name handles in config:
 ],
 ```
 
+### The screen
+
+The builder page carries a **Flow / Mails** switch. Same automation, same page,
+read either way — a view rather than a second screen, because two screens over
+one object is how the two start disagreeing.
+
+The list shows every mail with the gap in front of it, badges a `conditional`
+mail and names the fork underneath it, and lists whatever else runs in the same
+gap. Where `editable` is false it does not say "not linear": it says which of
+the seven conditions is broken, in words, with what to do about it and the
+rule's own sentence naming the node. The mapping from the rule's prose back onto
+the numbered conditions is in `resources/js/support/mailList.js`.
+
+Reordering is a pair of buttons per row rather than a drag handle — reachable
+from a keyboard, audible to a screen reader, and the list is short by nature.
+
+Editing is refused, with its own message, in three cases: the flow is not a
+straight line, the user lacks `edit automations`, or the canvas has unsaved
+changes. The third exists because `ChainEditor` writes to the stored automation
+directly: reordering under unsaved node edits would let the next canvas save put
+the old order back. After every list write the page re-reads the stored graph,
+so the canvas never keeps showing an order the server has replaced.
+
+Which node types the "add a mail" form may offer comes from the page prop
+`mailTypes`, built with `MailSteps::isMailHandle()`. It has to come from the
+registry: an automation that sends nothing yet has no row to read the answer
+off, and it is the one that most needs to add a mail.
+
 ## Re-entry (`Support\RestartPolicy`)
 
 What happens when somebody enters an automation they have already entered.
