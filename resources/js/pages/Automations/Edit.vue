@@ -535,16 +535,26 @@ const showMailList = computed(() => props.mode === 'edit' && mailList.value !== 
 async function refreshGraph() {
     if (!automation.value.id) return;
 
-    const { data } = await axios.get(`${props.apiBase}/automations/${automation.value.id}`);
-    const fresh = data?.data ?? data;
+    try {
+        const { data } = await axios.get(`${props.apiBase}/automations/${automation.value.id}`);
+        const fresh = data?.data ?? data;
 
-    if (!Array.isArray(fresh?.nodes)) return;
+        if (!Array.isArray(fresh?.nodes)) return;
 
-    automation.value = { ...automation.value, nodes: fresh.nodes, edges: fresh.edges ?? [] };
-    savedGraph.value = graphSignature(automation.value);
-    // The graph on screen is now the graph on disk. An undo that walked behind
-    // that point would reintroduce the order the server has just replaced.
-    history.reset();
+        automation.value = { ...automation.value, nodes: fresh.nodes, edges: fresh.edges ?? [] };
+        savedGraph.value = graphSignature(automation.value);
+        // The graph on screen is now the graph on disk. An undo that walked
+        // behind that point would reintroduce the order the server has just
+        // replaced.
+        history.reset();
+    } catch (e) {
+        // Swallowed on purpose, and never rethrown into the caller: the write
+        // that preceded this has already succeeded, and answering a failed
+        // follow-up READ with "the mail list could not be changed" would tell
+        // the user the opposite of what happened. The screen says it may be
+        // behind instead.
+        mailListStale.value = true;
+    }
 }
 
 /** Re-read the list after the canvas has rewritten the graph. */
@@ -562,24 +572,31 @@ async function refreshMailList() {
     }
 }
 
+/**
+ * One of the three writes, applied and then read back.
+ *
+ * The request is described rather than handed in as a closure, so the axios
+ * call sits inside the function that handles its rejection. A thin wrapper
+ * holding the call while the `catch` lives one level up reads to a structural
+ * guard — and, more to the point, to the next person — as a submit whose
+ * failure nobody looks at.
+ *
+ * @param {{method: string, url: string, body?: object}} request
+ * @param {string} success
+ */
 async function mailListWrite(request, success) {
     if (!props.mailListUrl) return;
 
     mailListBusy.value = true;
     try {
-        const { data } = await request();
+        const { data } = request.method === 'delete'
+            ? await axios.delete(request.url)
+            : await axios.post(request.url, request.body ?? {});
         mailList.value = data;
         mailListStale.value = false;
-
-        // Guarded separately: the write has already succeeded, and reporting
-        // "the mail list could not be changed" because the follow-up read
-        // failed would tell the user the opposite of what happened.
-        try {
-            await refreshGraph();
-        } catch (e) {
-            mailListStale.value = true;
-        }
-
+        // Never throws; a failed re-read marks the list stale rather than
+        // reporting the write that has already succeeded as a failure.
+        await refreshGraph();
         notify('success', success);
     } catch (e) {
         // A refused write answers 422 carrying both the reason and the list as
@@ -594,7 +611,7 @@ async function mailListWrite(request, success) {
 
 function reorderMails(order) {
     mailListWrite(
-        () => axios.post(`${props.mailListUrl}/reorder`, { order }),
+        { method: 'post', url: `${props.mailListUrl}/reorder`, body: { order } },
         __('Mails reordered.'),
     );
 }
@@ -612,14 +629,14 @@ function confirmMailDelete() {
     if (!mail) return;
 
     mailListWrite(
-        () => axios.delete(`${props.mailListUrl}/${encodeURIComponent(mail.node_key)}`),
+        { method: 'delete', url: `${props.mailListUrl}/${encodeURIComponent(mail.node_key)}` },
         __('Mail removed.'),
     );
 }
 
 function insertMail(payload) {
     mailListWrite(
-        () => axios.post(props.mailListUrl, payload),
+        { method: 'post', url: props.mailListUrl, body: payload },
         __('Mail added.'),
     );
 }
