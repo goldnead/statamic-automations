@@ -6,7 +6,13 @@
         class="max-w-4xl!"
         @update:open="$emit('update:open', $event)"
     >
-        <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,17rem)_1fr] gap-4 -mx-1">
+        <!--
+            The single-column grid utility is deliberately absent — see
+            pages/Templates/Index.vue for the reasoning, including why it must
+            not be named in a comment. `*:min-w-0` replaces the `minmax(0,1fr)`
+            its track used to supply.
+        -->
+        <div class="grid sm:grid-cols-[minmax(0,17rem)_1fr] gap-4 -mx-1 *:min-w-0">
             <!-- LEFT · searchable, keyboard-navigable list -->
             <div class="flex flex-col min-h-0 px-1">
                 <Input
