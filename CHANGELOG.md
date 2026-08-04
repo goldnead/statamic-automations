@@ -1,12 +1,15 @@
 # Changelog
 
-## Unreleased
+## 1.9.0 — 2026-08-04
 
 <!--
     Additive, and all four parts ship inert. The re-entry policy defaults to
     the behaviour every automation has today; the mail list is a second way to
     read a graph nobody has to open; the funnel counts runs that were already
     there. A `composer update` changes no run.
+
+    The one thing it does change is the shipped Control Panel bundle, which was
+    three releases out of date. See "Fixed" below.
 -->
 
 ### Added — the enrollment funnel, read out of the runs that were already there
@@ -149,6 +152,24 @@ badges above the list.
   nothing an existing screen shows has moved.
 - The models carry `@property` annotations. Static analysis stopped needing
   164 of the 366 baseline entries, and the baseline shrank accordingly.
+
+### Fixed — the shipped Control Panel bundle was three releases out of date
+
+`3e611e9` (01.08.) added the `call_real_ai` option and its description to
+`resources/js/pages/Settings/Show.vue` without rebuilding `resources/dist`. It
+sits six commits after the last dist commit, in the middle of the hardening run.
+
+So **1.8.0, 1.8.1 and 1.8.2 all shipped a Control Panel in which that option does
+not exist**, while `Nodes\Actions\AiGenerateAction` supported it the whole time.
+Anyone on those versions could not switch an AI step to the real provider,
+because the control was not in the bundle they installed.
+
+The bundle is rebuilt and `npm run build:check` passes again. Nothing else about
+the option changed; it is the same code that has been in the source since 1.8.0.
+
+`scripts/check-dist-fresh.sh` names this exact failure in its own header comment,
+citing the webhook-manager "vue is not defined" incident. The guard existed. It
+was not run, because twelve repositories were being hardened at once.
 
 ## 1.8.2 — 2026-08-01
 
