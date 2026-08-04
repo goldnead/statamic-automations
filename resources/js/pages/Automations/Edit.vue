@@ -14,7 +14,10 @@ import {
     Input,
     Alert,
     Badge,
+    ConfirmationModal,
     Icon,
+    ToggleGroup,
+    ToggleItem,
 } from '@statamic/cms/ui';
 import axios from 'axios';
 
@@ -22,6 +25,7 @@ import Canvas from '../../components/builder/Canvas.vue';
 import NodeLibrary from '../../components/builder/NodeLibrary.vue';
 import ConfigPanel from '../../components/builder/ConfigPanel.vue';
 import RunLogPanel from '../../components/builder/RunLogPanel.vue';
+import MailListPanel from '../../components/mails/MailListPanel.vue';
 import { useAutosave } from '../../composables/useAutosave.js';
 import { useHistory } from '../../composables/useHistory.js';
 import { useGraphMutations } from '../../composables/useGraphMutations.js';
@@ -38,6 +42,13 @@ const props = defineProps({
     apiBase: { type: String, required: true },
     indexUrl: { type: String, required: true },
     runsUrl: { type: String, default: null },
+    // The same automation, read as the mails it sends. Always present on an
+    // edit page: the list is shown for every automation and only its EDITING is
+    // bound to the flow being a straight line (Sequence\LinearityRule).
+    mailList: { type: Object, default: null },
+    mailListUrl: { type: String, default: null },
+    mailTypes: { type: Array, default: () => [] },
+    stats: { type: Object, default: null },
     canEdit: { type: Boolean, default: true },
     canEnable: { type: Boolean, default: true },
     canDelete: { type: Boolean, default: true },
@@ -65,6 +76,29 @@ const selectedNodeKey = ref(null);
 // the header chevron (see fix-picker-sidebar-brief.md § C3).
 const showLibrary = ref(true);
 
+// Two readings of one automation: the canvas, and the list of mails it sends.
+// A second *view*, not a second page — the mail list is the same graph read
+// differently, and putting it behind its own URL would invite the two to drift.
+const view = ref('flow');
+
+function setView(next) {
+    // reka-ui's toggle group hands back `null` when the active item is pressed
+    // again. There is no "neither" state here.
+    if (next) view.value = next;
+}
+
+// The stored graph, as a string, so "has the canvas been edited since the last
+// save" is one comparison. An edit made from the mail list is written straight
+// to the database by ChainEditor; doing that while unsaved node edits sit on
+// screen would let the next Save overwrite the reorder with a stale graph. The
+// list refuses to edit while this says dirty, and says why.
+function graphSignature(graph) {
+    return JSON.stringify({ nodes: graph?.nodes ?? [], edges: graph?.edges ?? [] });
+}
+
+const savedGraph = ref(graphSignature(props.automation));
+const graphDirty = computed(() => graphSignature(automation.value) !== savedGraph.value);
+
 // Fullscreen editor: the canvas + side panels must fill the CP content area
 // down to the bottom edge. Rather than hardcode `100vh - N` (which drifts when
 // the CP chrome, the addon header or the issues Alert change height), we
@@ -78,6 +112,9 @@ const BOTTOM_GUTTER = 24; // breathing room under the editor, in px
 function updateEditorHeight() {
     const el = editorEl.value;
     if (!el) return;
+    // Hidden behind the list view, its top offset reads 0 and the measurement
+    // would be nonsense. The switch back schedules a fresh one.
+    if (view.value !== 'flow' && showMailList.value) return;
     const top = el.getBoundingClientRect().top;
     const available = window.innerHeight - top - BOTTOM_GUTTER;
     editorHeight.value = `${Math.max(480, Math.round(available))}px`;
@@ -330,6 +367,11 @@ async function save({ silent = false } = {}) {
                 payload,
             );
             automation.value = { ...automation.value, ...(data?.data ?? data) };
+            // What is on screen is now what is stored, so the mail list may be
+            // edited again — and has to be re-read, because a canvas save can
+            // have added, removed or reordered mails.
+            savedGraph.value = graphSignature(automation.value);
+            refreshMailList();
             if (!silent) {
                 history.reset();
                 notify('success', __('Automation saved.'));
@@ -338,6 +380,7 @@ async function save({ silent = false } = {}) {
             const { data } = await axios.post(`${props.apiBase}/automations`, payload);
             const created = data?.data ?? data;
             automation.value = { ...automation.value, id: created.id, handle: created.handle };
+            savedGraph.value = graphSignature(automation.value);
             // Move from /create to /edit URL so refreshes keep the same automation.
             router.visit(props.indexUrl + '/automations/' + created.id + '/edit', {
                 replace: true,
@@ -461,6 +504,117 @@ async function exportJson() {
     }
 }
 
+// ---------- The mail list ----------
+//
+// The projection arrives as a page prop and is kept locally from then on: every
+// write endpoint answers with the list as it now is, so the screen is refreshed
+// from the response rather than from a second round trip.
+//
+// These four routes are a JSON API, not Inertia endpoints — they answer with the
+// list, not with a page. `router.post()` would demand an Inertia response and
+// get a 409 back, so they go through axios like every other mutation on this
+// page. It is the one place the page departs from "mutate through Inertia".
+const mailList = ref(props.mailList ? { ...props.mailList } : null);
+const mailListBusy = ref(false);
+const mailListStale = ref(false);
+
+watch(() => props.mailList, (list) => {
+    mailList.value = list ? { ...list } : null;
+    mailListStale.value = false;
+});
+
+const showMailList = computed(() => props.mode === 'edit' && mailList.value !== null);
+
+/**
+ * Re-read the stored graph after the list has rewritten it.
+ *
+ * ChainEditor rebuilds every edge and re-lays the chain out, so the canvas on
+ * screen is stale the moment a reorder succeeds. Without this the next Save
+ * would write the pre-reorder graph straight back over it.
+ */
+async function refreshGraph() {
+    if (!automation.value.id) return;
+
+    const { data } = await axios.get(`${props.apiBase}/automations/${automation.value.id}`);
+    const fresh = data?.data ?? data;
+
+    if (!Array.isArray(fresh?.nodes)) return;
+
+    automation.value = { ...automation.value, nodes: fresh.nodes, edges: fresh.edges ?? [] };
+    savedGraph.value = graphSignature(automation.value);
+    // The graph on screen is now the graph on disk. An undo that walked behind
+    // that point would reintroduce the order the server has just replaced.
+    history.reset();
+}
+
+/** Re-read the list after the canvas has rewritten the graph. */
+async function refreshMailList() {
+    if (!props.mailListUrl) return;
+
+    try {
+        const { data } = await axios.get(props.mailListUrl);
+        mailList.value = data;
+        mailListStale.value = false;
+    } catch (e) {
+        // Not fatal — the save itself succeeded. But a list that silently kept
+        // showing the pre-save order would be worse than saying so.
+        mailListStale.value = true;
+    }
+}
+
+async function mailListWrite(request, success) {
+    if (!props.mailListUrl) return;
+
+    mailListBusy.value = true;
+    try {
+        const { data } = await request();
+        mailList.value = data;
+        mailListStale.value = false;
+        await refreshGraph();
+        notify('success', success);
+    } catch (e) {
+        // A refused write answers 422 carrying both the reason and the list as
+        // it still is — so the screen is corrected, not just complained at.
+        const refused = e?.response?.data?.list;
+        if (refused) mailList.value = refused;
+        notify('error', firstMessage(e, __('The mail list could not be changed.')));
+    } finally {
+        mailListBusy.value = false;
+    }
+}
+
+function reorderMails(order) {
+    mailListWrite(
+        () => axios.post(`${props.mailListUrl}/reorder`, { order }),
+        __('Mails reordered.'),
+    );
+}
+
+// The mail the list has asked to delete, held here until it is confirmed. The
+// confirmation belongs in the same component as the request that carries it
+// out — a delete that asks in one file and fires in another is one refactor
+// away from firing without asking.
+const pendingMailDelete = ref(null);
+
+function confirmMailDelete() {
+    const mail = pendingMailDelete.value;
+    pendingMailDelete.value = null;
+
+    if (!mail) return;
+
+    mailListWrite(
+        () => axios.delete(`${props.mailListUrl}/${encodeURIComponent(mail.node_key)}`),
+        __('Mail removed.'),
+    );
+}
+
+function insertMail(payload) {
+    mailListWrite(
+        () => axios.post(props.mailListUrl, payload),
+        __('Mail added.'),
+    );
+}
+
 // ---------- Canvas mutations ----------
 //
 // Every mutation of the graph itself lives in useGraphMutations.js — the page
@@ -557,6 +711,10 @@ onUnmounted(() => {
 // The issues Alert renders directly above the editor, so toggling it shifts the
 // editor's top offset — remeasure once the DOM reflects the change.
 watch(() => issues.value.length, scheduleHeightUpdate);
+
+// Same reason on the way back from the list view: the canvas was display:none
+// while it was hidden, so its height has to be measured again once it is not.
+watch(view, scheduleHeightUpdate);
 </script>
 
 <template>
@@ -627,6 +785,21 @@ watch(() => issues.value.length, scheduleHeightUpdate);
                  primary Save button — mirroring Statamic's entry-publish header
                  density (title left, primary action + overflow menu right). -->
             <template #actions>
+                <!-- Two readings of the same automation. The canvas is what it
+                     does; the list is what it sends. Neither replaces the
+                     other, which is why this is a view switch and not a
+                     separate screen. -->
+                <ToggleGroup
+                    v-if="showMailList"
+                    :model-value="view"
+                    size="sm"
+                    :aria-label="__('View')"
+                    @update:model-value="setView"
+                >
+                    <ToggleItem value="flow" icon="workflow" :label="__('Flow')" />
+                    <ToggleItem value="mails" icon="mail" :label="__('Mails')" />
+                </ToggleGroup>
+
                 <div class="flex items-center gap-1">
                     <Button
                         variant="ghost"
@@ -717,7 +890,44 @@ watch(() => issues.value.length, scheduleHeightUpdate);
              the viewport bottom (see updateEditorHeight), so it adapts to the CP
              chrome, the addon header, and the optional issues Alert above it
              instead of relying on a hardcoded `100vh - N` guess. -->
+        <!-- The list view. Narrower than the canvas and inside the content
+             card's padding again: it is reading matter, not a canvas tool. -->
+        <div v-if="view === 'mails' && showMailList" class="lg:px-12 pb-8">
+            <MailListPanel
+                :list="mailList"
+                :stats="stats"
+                :types="mailTypes"
+                :can-edit="canEdit"
+                :graph-dirty="graphDirty"
+                :busy="mailListBusy"
+                :stale="mailListStale"
+                @reorder="reorderMails"
+                @request-remove="pendingMailDelete = $event"
+                @insert="insertMail"
+                @open-flow="view = 'flow'"
+            />
+
+            <!-- Statamic's confirmation, never window.confirm: browsers
+                 suppress native dialogs in plenty of contexts, and where they
+                 do not, the dialog steals focus from the CP. -->
+            <ConfirmationModal
+                v-if="pendingMailDelete"
+                :open="true"
+                danger
+                :title="__('Delete this mail?')"
+                :body-text="__('“:label” is removed from the automation, and so is the waiting time in front of it. Anything else in that gap is kept and moves to the next mail.', { label: pendingMailDelete.label || pendingMailDelete.node_key })"
+                :button-text="__('Delete mail')"
+                :busy="mailListBusy"
+                @confirm="confirmMailDelete"
+                @cancel="pendingMailDelete = null"
+                @update:open="(open) => { if (!open) pendingMailDelete = null; }"
+            />
+        </div>
+
+        <!-- `v-show`, not `v-if`: unmounting the canvas would throw away the
+             user's pan and zoom every time they glanced at the list. -->
         <div
+            v-show="view === 'flow' || !showMailList"
             ref="editorEl"
             class="grid rounded-xl border border-gray-200 dark:border-gray-800 bg-content-bg shadow-sm overflow-hidden min-h-[480px] transition-[grid-template-columns] duration-200 ease-in-out"
             :style="{
