@@ -9,8 +9,11 @@ vi.mock('axios', () => ({
         patch: vi.fn(async () => ({ data: { data: {} } })),
         post: vi.fn(async () => ({ data: { data: { id: 1, handle: 'flow' } } })),
         get: vi.fn(async () => ({ data: {} })),
+        delete: vi.fn(async () => ({ data: {} })),
     },
 }));
+
+import axios from 'axios';
 
 import Edit from '../../resources/js/pages/Automations/Edit.vue';
 
@@ -80,7 +83,7 @@ const branchGraph = () => ({
     edges: [edge('t', 'default', 'br'), edge('br', 'true', 'b')],
 });
 
-function mountEditor(graph = linearGraph()) {
+function mountEditor(graph = linearGraph(), extraProps = {}) {
     const wrapper = mount(Edit, {
         props: {
             mode: 'edit',
@@ -96,6 +99,7 @@ function mountEditor(graph = linearGraph()) {
                 enabled: false,
                 ...graph,
             },
+            ...extraProps,
         },
         global: {
             stubs: {
@@ -190,6 +194,103 @@ describe('Automations/Edit', () => {
 
         await editor.button('Undo').trigger('click');
         expect(editor.nodeKeys()).toEqual(['t', 'b']);
+    });
+
+    /**
+     * The mail list is a second reading of the same automation, wired into the
+     * same page. What these two cover is the seam: the view switch, and that an
+     * edit made from the list travels to the list endpoints — with the whole
+     * order, which is the only thing ChainEditor::reorder accepts.
+     */
+    describe('the mail list view', () => {
+        const mailListUrl = '/cp/automations/api/automations/3/mail-list';
+
+        const mailList = () => ({
+            mails: [
+                {
+                    position: 0, node_key: 'm1', type: 'send_email', label: 'One', reference: null,
+                    disabled: false, delay: { seconds: 0, sources: [] }, conditional: false,
+                    condition: null, also_runs: [],
+                },
+                {
+                    position: 1, node_key: 'm2', type: 'send_email', label: 'Two', reference: null,
+                    disabled: false, delay: { seconds: 2 * 86400, sources: ['d1'] }, conditional: false,
+                    condition: null, also_runs: [],
+                },
+            ],
+            editable: true,
+            reasons: [],
+            trigger: 't',
+            tail: [],
+        });
+
+        async function openMailList(editor) {
+            editor.wrapper.findComponent({ name: 'ToggleGroup' }).vm.$emit('update:modelValue', 'mails');
+            await flushPromises();
+        }
+
+        it('reads the mails of the automation it is already showing', async () => {
+            const editor = mountEditor(linearGraph(), { mailList: mailList(), mailListUrl });
+
+            // The canvas is the default view; the list is one press away.
+            expect(editor.wrapper.find('[data-mail-list]').exists()).toBe(false);
+
+            await openMailList(editor);
+
+            expect(editor.wrapper.findAll('[data-mail-row]')).toHaveLength(2);
+            expect(editor.wrapper.find('[data-mail-delay="m2"]').text())
+                .toBe('Sent 2 days after the previous mail');
+        });
+
+        it('sends the whole order to the reorder endpoint', async () => {
+            const editor = mountEditor(linearGraph(), { mailList: mailList(), mailListUrl });
+            await openMailList(editor);
+
+            axios.post.mockResolvedValueOnce({ data: mailList() });
+
+            await editor.wrapper.findAll('[data-attr-icon="arrow-down"]')[0].trigger('click');
+            await flushPromises();
+
+            expect(axios.post).toHaveBeenCalledWith(
+                `${mailListUrl}/reorder`,
+                { order: ['m2', 'm1'] },
+            );
+        });
+
+        it('confirms a delete through the CP modal before it deletes anything', async () => {
+            const editor = mountEditor(linearGraph(), { mailList: mailList(), mailListUrl });
+            await openMailList(editor);
+
+            await editor.wrapper.findAll('[data-attr-icon="trash"]')[1].trigger('click');
+            await flushPromises();
+
+            const modal = editor.wrapper.findComponent({ name: 'ConfirmationModal' });
+            expect(modal.exists()).toBe(true);
+            // It says what travels with the mail, because deleting one also
+            // deletes the waiting time in front of it.
+            expect(modal.attributes('data-attr-body-text')).toContain('“Two”');
+            expect(axios.delete).not.toHaveBeenCalled();
+
+            axios.delete.mockResolvedValueOnce({ data: mailList() });
+            modal.vm.$emit('confirm');
+            await flushPromises();
+
+            expect(axios.delete).toHaveBeenCalledWith(`${mailListUrl}/m2`);
+        });
+
+        it('refuses to edit the list while the canvas holds unsaved changes', async () => {
+            const editor = mountEditor(linearGraph(), { mailList: mailList(), mailListUrl });
+
+            // A list edit is written straight to the stored automation. Doing
+            // that under unsaved node edits means the next Save writes the old
+            // order back over it.
+            editor.canvas().vm.$emit('remove-node', 'a');
+            await flushPromises();
+            await openMailList(editor);
+
+            expect(editor.wrapper.find('[data-mail-list-dirty]').exists()).toBe(true);
+            expect(editor.wrapper.findAll('[data-attr-icon="arrow-down"]')).toHaveLength(0);
+        });
     });
 
     it('duplicates a branch node onto an output the branch has', async () => {
