@@ -8,6 +8,7 @@ use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Sequence\MailListProjection;
+use Goldnead\StatamicAutomations\Sequence\MailSteps;
 use Goldnead\StatamicAutomations\Support\RunStats;
 use Goldnead\StatamicAutomations\Templates\TemplateRegistry;
 use Illuminate\Http\Request;
@@ -134,6 +135,12 @@ class AutomationsPageController extends Controller
             // EDITING is bound to the flow being a straight line.
             'mailList' => app(MailListProjection::class)->forAutomation($automationFlow),
             'mailListUrl' => cp_route('statamic-automations.api.automations.mail-list', $automationFlow->id),
+            // Which node types may be added AS a mail. Read off the registry
+            // rather than off the mails already on the canvas: an automation
+            // that has no mail yet is exactly the one that needs to add its
+            // first, and it is the only screen that could not answer the
+            // question from its own rows. See Sequence\MailSteps.
+            'mailTypes' => $this->mailTypesPayload(),
             'stats' => app(RunStats::class)->forAutomation((string) $automationFlow->uuid),
             'canEdit' => $this->userCan('edit automations'),
             'canEnable' => $this->userCan('enable automations'),
@@ -179,6 +186,29 @@ class AutomationsPageController extends Controller
                 'to_input' => $e->to_input,
             ])->values()->all(),
         ];
+    }
+
+    /**
+     * The node types the mail list may insert, as `{handle, label}`.
+     *
+     * @return list<array{handle: string, label: string}>
+     */
+    protected function mailTypesPayload(): array
+    {
+        $mails = app(MailSteps::class);
+
+        return array_values(array_map(
+            fn (array $node) => [
+                'handle' => (string) $node['handle'],
+                'label' => is_string($node['label'] ?? null) && $node['label'] !== ''
+                    ? $node['label']
+                    : (string) $node['handle'],
+            ],
+            array_filter(
+                app(NodeRegistry::class)->all(),
+                fn (array $node) => isset($node['handle']) && $mails->isMailHandle((string) $node['handle']),
+            ),
+        ));
     }
 
     protected function nodeLibraryPayload(): array

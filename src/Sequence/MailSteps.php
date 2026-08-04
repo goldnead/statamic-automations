@@ -32,11 +32,25 @@ class MailSteps
 
     public function isMail(AutomationNode $node): bool
     {
-        if (in_array($node->type, $this->configuredHandles(), true)) {
+        return $this->isMailHandle($node->type);
+    }
+
+    /**
+     * The same question, asked of a registered handle instead of a placed node.
+     *
+     * The list view needs it to offer an "add a mail" choice at all: a node
+     * only becomes a mail row once it is on the canvas, so a screen with no
+     * mails yet has nothing to read the answer off. Asking the registry
+     * directly is the only way to name the candidates without the UI hardcoding
+     * a handle — which is the one thing {@see MailSteps} exists to prevent.
+     */
+    public function isMailHandle(string $handle): bool
+    {
+        if (in_array($handle, $this->configuredHandles(), true)) {
             return true;
         }
 
-        $class = $this->registry->class($node->type);
+        $class = $this->registry->class($handle);
 
         return $class !== null
             && method_exists($class, 'mailStep')
