@@ -570,7 +570,16 @@ async function mailListWrite(request, success) {
         const { data } = await request();
         mailList.value = data;
         mailListStale.value = false;
-        await refreshGraph();
+
+        // Guarded separately: the write has already succeeded, and reporting
+        // "the mail list could not be changed" because the follow-up read
+        // failed would tell the user the opposite of what happened.
+        try {
+            await refreshGraph();
+        } catch (e) {
+            mailListStale.value = true;
+        }
+
         notify('success', success);
     } catch (e) {
         // A refused write answers 422 carrying both the reason and the list as
