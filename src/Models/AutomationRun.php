@@ -9,6 +9,7 @@ use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
@@ -24,6 +25,9 @@ use Illuminate\Support\Str;
  * @property string $status
  * @property bool $is_test
  * @property string|null $error_message
+ * @property Carbon|null $started_at Millisecond precision, see MillisecondDateTime.
+ * @property Carbon|null $finished_at Millisecond precision, see MillisecondDateTime.
+ * @property int|null $duration_ms
  */
 class AutomationRun extends Model
 {

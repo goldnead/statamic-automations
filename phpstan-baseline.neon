@@ -43,12 +43,6 @@ parameters:
 			path: src/Engine/FlowValidator.php
 
 		-
-			message: '#^Access to an undefined property Goldnead\\StatamicAutomations\\Models\\AutomationRun\:\:\$started_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Engine/RunLogger.php
-
-		-
 			message: '#^Method Goldnead\\StatamicAutomations\\Engine\\WorkflowRunner\:\:resolveAutomation\(\) should return Goldnead\\StatamicAutomations\\Models\\Automation\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
 			identifier: return.type
 			count: 1
@@ -110,12 +104,6 @@ parameters:
 
 		-
 			message: '#^Access to an undefined property Goldnead\\StatamicAutomations\\Models\\Automation\:\:\$updated_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Controllers/AutomationsController.php
-
-		-
-			message: '#^Access to an undefined property Goldnead\\StatamicAutomations\\Models\\AutomationRun\:\:\$duration_ms\.$#'
 			identifier: property.notFound
 			count: 1
 			path: src/Http/Controllers/AutomationsController.php
@@ -247,24 +235,6 @@ parameters:
 			path: src/Http/Controllers/Pages/RunsPageController.php
 
 		-
-			message: '#^Access to an undefined property Goldnead\\StatamicAutomations\\Models\\AutomationRun\:\:\$duration_ms\.$#'
-			identifier: property.notFound
-			count: 2
-			path: src/Http/Controllers/Pages/RunsPageController.php
-
-		-
-			message: '#^Access to an undefined property Goldnead\\StatamicAutomations\\Models\\AutomationRun\:\:\$finished_at\.$#'
-			identifier: property.notFound
-			count: 2
-			path: src/Http/Controllers/Pages/RunsPageController.php
-
-		-
-			message: '#^Access to an undefined property Goldnead\\StatamicAutomations\\Models\\AutomationRun\:\:\$started_at\.$#'
-			identifier: property.notFound
-			count: 2
-			path: src/Http/Controllers/Pages/RunsPageController.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$duration_ms\.$#'
 			identifier: property.notFound
 			count: 1
@@ -321,12 +291,6 @@ parameters:
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
 			identifier: property.notFound
-			count: 1
-			path: src/Http/Controllers/Pages/RunsPageController.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Goldnead\\StatamicAutomations\\Models\\AutomationRun\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
 			count: 1
 			path: src/Http/Controllers/Pages/RunsPageController.php
 
