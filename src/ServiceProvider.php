@@ -650,6 +650,10 @@ class ServiceProvider extends AddonServiceProvider
                     $nav->item(__('Dashboard'))->route('statamic-automations.dashboard'),
                     $nav->item(__('Automations'))->route('statamic-automations.automations.index'),
                     $nav->item(__('Runs'))->route('statamic-automations.runs.index'),
+                    // `Mail rules`, not `Rules`: a bare CP word here would
+                    // replace that string for statamic/cms too. Same reason as
+                    // `Automation templates` below.
+                    $nav->item(__('Mail rules'))->route('statamic-automations.rules.index'),
                     $nav->item(__('Audit log'))->route('statamic-automations.audit'),
                     // `Automation templates`, not `Templates`: JSON string
                     // translations from every package merge into one Control

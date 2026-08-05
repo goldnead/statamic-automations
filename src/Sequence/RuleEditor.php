@@ -4,7 +4,6 @@ namespace Goldnead\StatamicAutomations\Sequence;
 
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
-use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Support\DispatchMode;
 use Goldnead\StatamicAutomations\Support\RestartPolicy;
 use RuntimeException;
@@ -29,25 +28,17 @@ use RuntimeException;
  * *why* the row is locked can decide whether to simplify the flow or go to the
  * canvas, and one told nothing files a bug.
  *
- * **A field is written only where the node declares it.** The recipient goes
- * into `to` and the template into `template`, but only if the mail node's own
- * schema has that field. A node that takes its recipients from a mailing list
- * has no `to`, and writing one anyway would leave a key in its config that
- * nothing reads — an edit that looks applied and does nothing. This is the same
- * boundary {@see MailSteps} keeps: the sequence layer knows "a node that says
- * it sends a mail", never what a campaign is.
+ * **A field is written only where the node declares it** ({@see RuleFields}),
+ * which is the same lookup the row read it through. A node that takes its
+ * recipients from a mailing list has no `to`, and writing one anyway would
+ * leave a key in its config that nothing reads — an edit that looks applied and
+ * does nothing.
  */
 class RuleEditor
 {
-    /** The mail node field a rule's recipient is written to, where the node has one. */
-    public const RECIPIENT_FIELD = 'to';
-
-    /** The mail node field a rule's template is written to, where the node has one. */
-    public const TEMPLATE_FIELD = 'template';
-
     public function __construct(
         protected RuleShape $shape,
-        protected NodeRegistry $registry,
+        protected RuleFields $fields,
     ) {}
 
     /**
@@ -93,11 +84,11 @@ class RuleEditor
         }
 
         if (array_key_exists('recipient', $payload)) {
-            $this->writeMailField($mail, self::RECIPIENT_FIELD, $payload['recipient'], 'a recipient');
+            $this->writeMailField($mail, RuleFields::RECIPIENT, $payload['recipient'], 'a recipient');
         }
 
         if (array_key_exists('template', $payload)) {
-            $this->writeMailField($mail, self::TEMPLATE_FIELD, $payload['template'], 'a template');
+            $this->writeMailField($mail, RuleFields::TEMPLATE, $payload['template'], 'a template');
         }
 
         return $automation->fresh(['nodes', 'edges']) ?? $automation;
@@ -136,7 +127,7 @@ class RuleEditor
      */
     protected function writeMailField(AutomationNode $mail, string $handle, mixed $value, string $what): void
     {
-        if (! $this->declaresField($mail->type, $handle)) {
+        if (! $this->fields->declares($mail->type, $handle)) {
             throw new RuntimeException(
                 "The mail node '{$mail->type}' has no '{$handle}' field, so a rule row cannot set {$what} on it. Edit it on the canvas instead."
             );
@@ -145,7 +136,7 @@ class RuleEditor
         $value = is_scalar($value) ? trim((string) $value) : '';
 
         if ($value === '') {
-            if ($this->fieldIsRequired($mail->type, $handle)) {
+            if ($this->fields->isRequired($mail->type, $handle)) {
                 throw new RuntimeException("A rule needs {$what}.");
             }
 
@@ -177,35 +168,5 @@ class RuleEditor
 
         $node->config = $config;
         $node->save();
-    }
-
-    protected function declaresField(string $type, string $handle): bool
-    {
-        return $this->field($type, $handle) !== null;
-    }
-
-    protected function fieldIsRequired(string $type, string $handle): bool
-    {
-        return (bool) ($this->field($type, $handle)['required'] ?? false);
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    protected function field(string $type, string $handle): ?array
-    {
-        $schema = $this->registry->describe($type)['schema'] ?? [];
-
-        if (! is_array($schema)) {
-            return null;
-        }
-
-        foreach ($schema as $field) {
-            if (is_array($field) && ($field['handle'] ?? null) === $handle) {
-                return $field;
-            }
-        }
-
-        return null;
     }
 }

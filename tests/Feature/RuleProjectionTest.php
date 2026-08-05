@@ -75,6 +75,20 @@ it('still produces a row for a shape it cannot edit', function () {
         ->and($row['recipient'])->toBe('hallo@example.com');
 });
 
+it('reads the template the mail node stores, where the node has one', function () {
+    // Stand-in for the OPTIONAL email-templates addon: without it `send_email`
+    // declares no template field, and a row that showed one would be offering
+    // an edit that goes nowhere.
+    require_once __DIR__.'/../Fixtures/EmailTemplatesStub.php';
+
+    $automation = makeProjectableRule();
+    $mail = $automation->nodes->firstWhere('node_key', 'm');
+    $mail->config = [...$mail->config, 'template' => 'welcome'];
+    $mail->save();
+
+    expect(project($automation->fresh(['nodes', 'edges']))['template'])->toBe('welcome');
+});
+
 it('carries the most recent runs, newest first', function () {
     $automation = makeProjectableRule();
 

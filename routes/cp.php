@@ -10,6 +10,7 @@ use Goldnead\StatamicAutomations\Http\Controllers\Pages\AuditPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\AutomationsPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\DashboardPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\ImportPageController;
+use Goldnead\StatamicAutomations\Http\Controllers\Pages\RulesPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\RunsPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\SettingsPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\TemplatesPageController;
@@ -68,6 +69,12 @@ Route::prefix('automations')
 
         Route::get('runs/{run}', [RunsPageController::class, 'show'])
             ->name('runs.show');
+
+        // Every automation that is one trigger and one mail, as a sentence
+        // each. See Http\Controllers\Pages\RulesPageController for which
+        // automations qualify and why the rest are not listed here.
+        Route::get('rules', [RulesPageController::class, 'index'])
+            ->name('rules.index');
 
         Route::get('templates', [TemplatesPageController::class, 'index'])
             ->name('templates.index');

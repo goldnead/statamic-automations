@@ -20,6 +20,7 @@ import TemplatesIndex from './pages/Templates/Index.vue';
 import ImportPage from './pages/Import.vue';
 import SettingsShow from './pages/Settings/Show.vue';
 import AuditIndex from './pages/Audit/Index.vue';
+import RulesIndex from './pages/Rules/Index.vue';
 
 Statamic.booting(() => {
     Statamic.$inertia.register('statamic-automations::Dashboard', Dashboard);
@@ -31,4 +32,5 @@ Statamic.booting(() => {
     Statamic.$inertia.register('statamic-automations::Import', ImportPage);
     Statamic.$inertia.register('statamic-automations::Settings/Show', SettingsShow);
     Statamic.$inertia.register('statamic-automations::Audit/Index', AuditIndex);
+    Statamic.$inertia.register('statamic-automations::Rules/Index', RulesIndex);
 });

@@ -3,6 +3,7 @@
 namespace Goldnead\StatamicAutomations\Sequence;
 
 use Goldnead\StatamicAutomations\Models\Automation;
+use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Support\DispatchMode;
@@ -30,6 +31,7 @@ class RuleProjection
         protected NodeRegistry $registry,
         protected RuleShape $shape,
         protected MailSteps $mails,
+        protected RuleFields $fields,
     ) {}
 
     /**
@@ -41,6 +43,7 @@ class RuleProjection
      *     trigger: array{handle: string|null, label: string|null},
      *     mail: array{label: string|null, reference: string|null},
      *     recipient: string|null,
+     *     template: string|null,
      *     dispatch_mode: string,
      *     editable: bool,
      *     reasons: list<string>,
@@ -74,8 +77,14 @@ class RuleProjection
             // The recipient is read off the mail node rather than guessed from
             // the trigger: a rule that mails an administrator on every form
             // submission is as common as one that mails the person who
-            // submitted, and only the node knows which this is.
-            'recipient' => $this->stringOrNull($mailConfig['to'] ?? null),
+            // submitted, and only the node knows which this is. Through
+            // {@see RuleFields}, so the row reads the field the row writes.
+            'recipient' => $this->mailField($mail, RuleFields::RECIPIENT, $mailConfig),
+            // The template as the node stores it, next to the human `mail.label`
+            // above. `mail.reference` is what a reader recognises the mail by
+            // and may be a campaign or anything else the node names itself with;
+            // this is the value a rule row is allowed to write back.
+            'template' => $this->mailField($mail, RuleFields::TEMPLATE, $mailConfig),
             'dispatch_mode' => DispatchMode::fromValue(
                 $this->stringOrNull($triggerConfig[DispatchMode::CONFIG_KEY] ?? null)
             )->value,
@@ -102,6 +111,24 @@ class RuleProjection
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * One field of the mail node, but only where the node declares it.
+     *
+     * A key the node has no field for is not a value: it is either left over
+     * from an earlier node type or invented by the reader. Either way, showing
+     * it would offer an edit that goes nowhere.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    protected function mailField(?AutomationNode $mail, string $handle, array $config): ?string
+    {
+        if ($mail === null || ! $this->fields->declares($mail->type, $handle)) {
+            return null;
+        }
+
+        return $this->stringOrNull($config[$handle] ?? null);
     }
 
     protected function stringOrNull(mixed $value): ?string
