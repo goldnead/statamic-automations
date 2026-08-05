@@ -227,8 +227,15 @@ it('keeps the bound names and the route files in agreement', function (): void {
     // parameter to a typed controller argument and is therefore scoped to that
     // one route. Only Route::bind() is application-wide, which is why only that
     // is the subject of the rule above.
+    // `nodeKey` joined the list in 1.9 with the mail-list delete route. It is
+    // and stays a plain string: the controller takes it as `string $nodeKey`
+    // and looks the node up inside the automation the route already bound, so
+    // there is nothing to resolve application-wide and nothing a sibling could
+    // lose. A node key is only unique WITHIN one automation, which is the
+    // reason a global binding for it could not exist even if somebody wanted
+    // one.
     expect($unbound)->toBe(
-        ['handle', 'nodeRun', 'run', 'source', 'timestamp'],
+        ['handle', 'nodeKey', 'nodeRun', 'run', 'source', 'timestamp'],
         'The unbound parameter names changed. Keep them unbound — and if one of these ever needs '
             .'a binding, rename it to `automation…` in the same commit.'
     );

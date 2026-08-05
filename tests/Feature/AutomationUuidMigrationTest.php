@@ -27,6 +27,13 @@ class AutomationUuidMigrationTest extends TestCase
         // (Drop the index first — SQLite refuses to drop an indexed column.)
         Schema::table('automation_runs', function (Blueprint $table) {
             $table->dropIndex(['automation_uuid']);
+            // Every index that mentions the column, not just the one that was
+            // there in 1.2. 1.9 added two composites on it (the funnel and the
+            // re-entry lookup), and SQLite refuses the drop while any index
+            // still names the column — with an error about the index rather
+            // than about the column, which is a slow thing to read backwards.
+            $table->dropIndex('automation_runs_uuid_status_index');
+            $table->dropIndex('automation_runs_uuid_subject_index');
             $table->dropColumn('automation_uuid');
         });
 
@@ -55,6 +62,8 @@ class AutomationUuidMigrationTest extends TestCase
         // After a manual drop, up() re-adds it — and a second call still no-ops.
         Schema::table('automation_runs', function (Blueprint $t) {
             $t->dropIndex(['automation_uuid']);
+            $t->dropIndex('automation_runs_uuid_status_index');
+            $t->dropIndex('automation_runs_uuid_subject_index');
             $t->dropColumn('automation_uuid');
         });
         $migration->up();

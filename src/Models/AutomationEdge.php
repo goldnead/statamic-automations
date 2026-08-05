@@ -8,6 +8,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
+/**
+ * @property string $uuid
+ * @property string $from_node_key
+ * @property string $from_output Never empty — see {@see AutomationEdge::fromOutput()}.
+ * @property string $to_node_key
+ * @property string $to_input
+ */
 class AutomationEdge extends Model
 {
     use HasBrand;

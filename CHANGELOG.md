@@ -1,5 +1,191 @@
 # Changelog
 
+## 1.9.1 — 2026-08-05
+
+### Fixed — the breakpoint-less single-column grid utility is no longer used
+
+Every addon in this family ships its own Tailwind build, and `@statamic/cms/tailwind.css`
+routes all of them into the same `addon-utilities` layer. Media queries add no specificity, so
+the bare single-column grid rule from whichever addon stylesheet loads **last** won against an
+earlier addon's `sm:`/`lg:` variant and pinned that addon's grid to one column at every width.
+
+Invisible when this addon is checked alone. It only appeared once two addons of the family were
+installed together, which is the normal case on a real site.
+
+A grid falls back to one column on its own, so the class bought nothing. The overflow guard its
+`minmax(0,1fr)` track provided is preserved explicitly, because the implicit column is `auto`.
+
+## 1.9.0 — 2026-08-04
+
+<!--
+    Additive, and all four parts ship inert. The re-entry policy defaults to
+    the behaviour every automation has today; the mail list is a second way to
+    read a graph nobody has to open; the funnel counts runs that were already
+    there. A `composer update` changes no run.
+
+    The one thing it does change is the shipped Control Panel bundle, which was
+    three releases out of date. See "Fixed" below.
+-->
+
+### Added — the enrollment funnel, read out of the runs that were already there
+
+An automation knew how many times it had run. It did not say how many people
+were *in* it right now, how many had come out the far end, and how many had
+left along the way — which are the three numbers that tell you whether a
+sequence works.
+
+`Support\RunStats` answers all three from `automation_runs`, grouped by status,
+in one query for the whole listing. No new table: a run *is* an enrollment, and
+a second table recording the same facts would be a second place for them to
+disagree. Test runs are left out, because an editor pressing "test" is not a
+person going through the flow.
+
+What was genuinely missing was an index. `automation_uuid` and `status` existed
+as two separate single-column indexes, which answers "this automation's runs"
+and "everything that failed" and neither of the questions above. The migration
+adds `(automation_uuid, status)`.
+
+### Added — a re-entry policy, so a repeat sign-up stops meaning a second welcome series
+
+Until now, every matching event created another run. For a webhook that is
+right. For a five-mail sequence it is the most common way to mail somebody
+twice in one morning: they unsubscribed, subscribed again, and now two copies
+of the series are ticking.
+
+A trigger can now carry one of four rules — the field is on every trigger,
+including third-party ones and the config-driven event triggers, because the
+registry appends it rather than each class declaring it:
+
+- **Enroll again every time** — today's behaviour, and still the default. **No
+  existing automation changes.** An unrecognised value reads as this one, so a
+  typo in an imported file cannot start suppressing enrollments.
+- **Ignore** — once per contact, ever. What a welcome series wants.
+- **Restart from the beginning** — cancel the open pass and start fresh. The
+  scheduled job goes with it; a cancelled run whose wake-up call survives
+  resumes days later beside the new pass, which is the exact thing this rule
+  exists to prevent.
+- **Leave the running pass where it is** — an open pass carries on from its own
+  position; nothing new is added.
+
+Runs now carry `subject_key` (normally the lower-cased address) so the three
+rules have somebody to compare against, and so the listing can tell enrollments
+from people. A trigger that names nobody — a scheduled sweep, a webhook with no
+address in it — falls back to the default and says so in the log, because
+treating every subjectless run as the same subject would make one nightly sweep
+block every later one for ever.
+
+### Added — the mail list: the same automation, read as the mails it sends
+
+A sequence is a list of mails with gaps between them. A graph is the right tool
+for building one and the wrong one for reading it back. There is now a second
+view of the same object — no second object, no compile step, no synchronised
+copy.
+
+**Showing it always works.** Even a branched flow has a knowable set of mails
+and knowable gaps; the list marks the ones only some readers get as
+conditional, and names the fork they hang off. It is incomplete as a picture of
+the flow and correct as what it claims to be.
+
+**Editing is bound to the flow being a straight line**, and the rule is written
+out in full on `Sequence\LinearityRule`: one trigger, no node with more than
+one edge in or out, every edge on the `default` output, no Branch / Switch /
+Loop / Parallel node, everything reachable from the trigger, no cycle. Where it
+does not hold, the list stays readable and the canvas is the editing surface —
+erring towards "locked when it need not have been", because the other direction
+rewrites a graph nobody asked to have rewritten.
+
+**Every gap is measured from the mail before it, never from the start.** That
+is what makes reordering lossless: "5 days after the previous mail" travels
+with the mail when it moves, where "day 7" would silently misdescribe every row
+below the one that moved.
+
+Endpoints: `GET`, `POST`, `POST …/reorder` and `DELETE` under
+`api/automations/{automation}/mail-list`. The three writes snapshot a version
+first, refuse a non-linear graph with a 422 that carries the rule's own
+reasons, and rewrite the chain rather than patching four edges around a moved
+node.
+
+A node declares itself a mail with a static `mailStep(): bool` — which is how
+`goldnead/statamic-marketing` contributes its send node from its own side, and
+why this addon still knows nothing about newsletters. Additional handles can be
+named in `automations.sequence.mail_nodes`.
+
+### Added — the mail list has a screen now
+
+The endpoints above had no surface. The builder page carries a **Flow / Mails**
+switch: the same automation, the same page, read either as what it does or as
+what it sends. A view and not a second screen, because two screens over one
+object is how the two start disagreeing.
+
+**Showing works for every automation**, branched or not. A mail only some
+readers get carries a `Conditional` badge and the fork it hangs off in words
+underneath it. Anything else sitting in the same gap — a tag, a CRM write — is
+named on the row, so a reorder is never a silent rewrite of what the flow does.
+Each row says how long after the *previous mail* it goes out, and the first row
+says how long after the trigger; no row ever says "day 7".
+
+**Where the list may not be edited, it says which of the seven conditions is
+broken.** "This automation is not linear" is a sentence an editor cannot act
+on: it names no node, no condition and no next step. Instead the notice reads
+*Condition 5 of 7: the automation contains no Branch, Switch, Loop or Parallel
+step* — with what to do about it, the rule's own sentence naming the node
+underneath, and a button back to the canvas. The rule hands out prose, so the
+mapping from its sentences back onto the numbered conditions lives in
+`resources/js/support/mailList.js` and is tested against the sentences the rule
+actually emits.
+
+Reordering is two buttons per row, not a drag handle: a drag is unreachable
+from a keyboard and silent to a screen reader, and focus follows the row it
+moved. Deleting goes through Statamic's `ConfirmationModal` and says that the
+waiting time in front of the mail goes with it while everything else in that
+gap is kept.
+
+Three separate locks, each with its own message, because they call for three
+different actions: the flow is not a straight line (rework it on the canvas),
+the user lacks `edit automations` (ask for it), or the canvas holds unsaved
+changes (press Save first — a list edit writes straight to the stored
+automation, and the next canvas save would otherwise put the old order back).
+After a list edit the page re-reads the stored graph, so the canvas is never
+left showing the order the server has just replaced.
+
+The page also gained the enrollment funnel it was already being handed, as
+badges above the list.
+
+### Changed
+
+- `Sequence\MailSteps` answers `isMailHandle()` as well as `isMail()`, and the
+  builder page hands the screen a `mailTypes` list built from it. A node only
+  becomes a mail *row* once it is on the canvas, so an automation that sends
+  nothing yet — the one that most needs to add its first mail — could not have
+  read the candidates off its own rows. Asking the registry is what keeps the
+  UI from hardcoding a handle, which is the one thing `MailSteps` exists to
+  prevent.
+- `Nodes\Actions\SendEmailAction` declares itself a mail step and summarises
+  itself for the list. Its behaviour is unchanged.
+- The automations listing carries `in_progress`, `completed` and `exited`
+  columns. `runs_count` still counts everything, including test runs, so
+  nothing an existing screen shows has moved.
+- The models carry `@property` annotations. Static analysis stopped needing
+  164 of the 366 baseline entries, and the baseline shrank accordingly.
+
+### Fixed — the shipped Control Panel bundle was three releases out of date
+
+`3e611e9` (01.08.) added the `call_real_ai` option and its description to
+`resources/js/pages/Settings/Show.vue` without rebuilding `resources/dist`. It
+sits six commits after the last dist commit, in the middle of the hardening run.
+
+So **1.8.0, 1.8.1 and 1.8.2 all shipped a Control Panel in which that option does
+not exist**, while `Nodes\Actions\AiGenerateAction` supported it the whole time.
+Anyone on those versions could not switch an AI step to the real provider,
+because the control was not in the bundle they installed.
+
+The bundle is rebuilt and `npm run build:check` passes again. Nothing else about
+the option changed; it is the same code that has been in the source since 1.8.0.
+
+`scripts/check-dist-fresh.sh` names this exact failure in its own header comment,
+citing the webhook-manager "vue is not defined" incident. The guard existed. It
+was not run, because twelve repositories were being hardened at once.
+
 ## 1.8.2 — 2026-08-01
 
 ### Fixed — the Test button could never pass for a whole class of automations

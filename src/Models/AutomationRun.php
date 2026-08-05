@@ -11,6 +11,20 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
+/**
+ * @property string $uuid
+ * @property int|null $automation_id
+ * @property string|null $automation_uuid The canonical reference — the only one
+ *                                        a flat-file definition has.
+ * @property string|null $trigger_node_key
+ * @property string|null $trigger_type
+ * @property string|null $subject_key Who this pass is about, normally a
+ *                                    lower-cased address. Null for a trigger
+ *                                    that names nobody. See Support\RestartPolicy.
+ * @property string $status
+ * @property bool $is_test
+ * @property string|null $error_message
+ */
 class AutomationRun extends Model
 {
     use HasBrand;
@@ -37,6 +51,9 @@ class AutomationRun extends Model
         'automation_uuid',
         'trigger_node_key',
         'trigger_type',
+        // Who this run is about — normally a lower-cased email address. Null
+        // for a trigger that names nobody. See Support\RestartPolicy.
+        'subject_key',
         'status',
         'context',
         'started_at',

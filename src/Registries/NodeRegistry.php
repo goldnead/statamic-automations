@@ -5,6 +5,7 @@ namespace Goldnead\StatamicAutomations\Registries;
 use Goldnead\StatamicAutomations\Contracts\AutomationNode;
 use Goldnead\StatamicAutomations\Nodes\Triggers\EventTrigger;
 use Goldnead\StatamicAutomations\Support\NodeOutputs;
+use Goldnead\StatamicAutomations\Support\RestartPolicy;
 use InvalidArgumentException;
 use ReflectionMethod;
 
@@ -116,6 +117,10 @@ class NodeRegistry
             return array_merge($entry['meta'], [
                 'handle' => $entry['handle'],
                 'kind' => $entry['kind'],
+                'schema' => $this->withCommonFields(
+                    $entry['kind'],
+                    is_array($entry['meta']['schema'] ?? null) ? $entry['meta']['schema'] : [],
+                ),
                 // A meta registration may declare outputs itself; a
                 // config-driven trigger normally has the one continuation.
                 'outputs' => isset($entry['meta']['outputs']) && is_array($entry['meta']['outputs'])
@@ -133,7 +138,7 @@ class NodeRegistry
             'label' => $class::label(),
             'description' => $class::description(),
             'group' => $class::group(),
-            'schema' => $class::schema(),
+            'schema' => $this->withCommonFields($entry['kind'], $class::schema()),
             'supports_test_mode' => $class::supportsTestMode(),
             // The node's output handles, as a spec the canvas resolves
             // against the node's live config. Present on every node, so the
@@ -151,6 +156,43 @@ class NodeRegistry
         }
 
         return $description;
+    }
+
+    /**
+     * Append the fields every node of a kind carries, whoever wrote the node.
+     *
+     * Today that is the two re-entry fields on a trigger. They are appended
+     * here rather than written into each trigger class for three reasons: the
+     * addon ships twenty-two triggers and integrations add more; a third-party
+     * trigger would otherwise silently lack the setting; and the generic
+     * {@see EventTrigger} serves
+     * many handles from one class and has no per-handle static schema to write
+     * them into.
+     *
+     * A node that declares a field of the same handle wins — nothing here
+     * overwrites what a class said about itself.
+     *
+     * @param  array<int, array<string, mixed>>  $schema
+     * @return array<int, array<string, mixed>>
+     */
+    protected function withCommonFields(string $kind, array $schema): array
+    {
+        if ($kind !== 'trigger') {
+            return $schema;
+        }
+
+        $declared = array_filter(array_map(
+            fn ($field) => is_array($field) ? ($field['handle'] ?? null) : null,
+            $schema,
+        ));
+
+        foreach (RestartPolicy::triggerSchema() as $field) {
+            if (! in_array($field['handle'], $declared, true)) {
+                $schema[] = $field;
+            }
+        }
+
+        return $schema;
     }
 
     /**

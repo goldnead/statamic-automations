@@ -23,6 +23,7 @@ class TriggerDispatcher
         protected TriggerRegistry $triggers,
         protected WorkflowRunner $runner,
         protected AutomationRepository $repository,
+        protected ?EnrollmentGate $enrollment = null,
     ) {}
 
     public function dispatch(string $triggerHandle, object|array $event): void
@@ -48,9 +49,33 @@ class TriggerDispatcher
             }
 
             $context = $trigger->buildContext($event, $config);
-            $run = $this->runner->createRun($automation, $context, $triggerNode);
+
+            // The re-entry gate. Default `always`, which is what this method
+            // did before the gate existed — no automation changes behaviour
+            // until somebody sets a policy on its trigger.
+            $verdict = $this->enrollment()->evaluate($automation, $triggerNode, $context);
+
+            if (! $verdict['allowed']) {
+                continue;
+            }
+
+            $run = $this->runner->createRun(
+                $automation,
+                $context,
+                $triggerNode,
+                $verdict['subject_key'],
+            );
 
             RunAutomation::dispatch($run->id, $context->all(), false);
         }
+    }
+
+    /**
+     * Resolved lazily so a hand-constructed dispatcher (tests, an application
+     * wiring one up itself) keeps working without knowing the gate exists.
+     */
+    protected function enrollment(): EnrollmentGate
+    {
+        return $this->enrollment ??= app(EnrollmentGate::class);
     }
 }

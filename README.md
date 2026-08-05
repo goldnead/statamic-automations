@@ -321,6 +321,7 @@ The user documentation lives at **<https://docs.adriangoldner.dev/automations/>*
 | [Integrations](https://docs.adriangoldner.dev/automations/integrations) | LeadHub, Webhook Manager, Marketing |
 | [Extending](https://docs.adriangoldner.dev/automations/extending) | Custom triggers, actions, conditions |
 | [Reference](https://docs.adriangoldner.dev/automations/reference) | The CP JSON API |
+| [Sequences](https://docs.adriangoldner.dev/automations/sequences) | The mail list, the linearity rule, re-entry, enrollment numbers |
 | [Troubleshooting](https://docs.adriangoldner.dev/automations/troubleshooting) | When something does not fire |
 | [Changelog](CHANGELOG.md) | Versioned release notes |
 

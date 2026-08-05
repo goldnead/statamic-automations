@@ -57,7 +57,27 @@ async function install(template) {
             />
         </EmptyStateMenu>
 
-        <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!--
+            The single-column grid utility is deliberately absent: a grid falls
+            back to one column on its own, and every sibling addon shipping a
+            Tailwind build emits that same bare, breakpoint-less rule into the
+            shared `addon-utilities` layer. Media queries add no specificity, so
+            whichever addon stylesheet loads last wins over an earlier `sm:`
+            variant and flattens that addon's grid to one column at every width.
+            Leaving the class off means no foreign rule can match this element.
+
+            Do not name the class in a comment either — Tailwind scans comments
+            as candidates, so writing it here is enough to emit the very rule
+            this avoids. That is why the sibling fix in statamic-activity had no
+            effect until it was reworded.
+
+            `*:min-w-0` on the container keeps what the utility's
+            `minmax(0,1fr)` track provided: the implicit column is `auto`, which
+            a long template handle would push past the container. On the
+            container rather than each child, so it cannot be forgotten when a
+            child is added.
+        -->
+        <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 *:min-w-0">
             <article
                 v-for="template in templates"
                 :key="template.handle"
