@@ -5,6 +5,7 @@ namespace Goldnead\StatamicAutomations\Engine;
 use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
 use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
+use Goldnead\StatamicAutomations\Support\DispatchMode;
 
 /**
  * Generic entry point for event-driven triggers.
@@ -66,7 +67,18 @@ class TriggerDispatcher
                 $verdict['subject_key'],
             );
 
-            RunAutomation::dispatch($run->id, $context->all(), false);
+            // The one place a run becomes a job. Async is the default and stays
+            // it; sync ties this run's outcome to the caller's request, which
+            // is the point — see DispatchMode.
+            $mode = DispatchMode::fromValue(
+                is_string($config[DispatchMode::CONFIG_KEY] ?? null)
+                    ? $config[DispatchMode::CONFIG_KEY]
+                    : null
+            );
+
+            $mode === DispatchMode::Sync
+                ? RunAutomation::dispatchSync($run->id, $context->all(), false)
+                : RunAutomation::dispatch($run->id, $context->all(), false);
         }
     }
 
