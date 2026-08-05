@@ -1,5 +1,53 @@
 # Changelog
 
+## 1.11.0 — 2026-08-05
+
+### Added — Mail-Regeln: eine Ein-Mail-Automation als Satz
+
+Eine Automation, die genau eine Sache tut — wenn etwas passiert, sende eine Mail — liest sich als
+Satz: „Wenn ein Formular abgeschickt wird, sende die Dankesmail an den Absender." Dafür eine
+Leinwand mit zwei Kästen zu öffnen, ist die falsche Oberfläche. Neu ist der Bildschirm
+**Tools → Automations → Mail rules**, der jede Automation mit genau einem Mail-Knoten als Zeile
+zeigt und aus dieser Zeile heraus bearbeitbar macht.
+
+```
+GET   /cp/automations/api/automations/{automation}/rule
+PATCH /cp/automations/api/automations/{automation}/rule
+```
+
+Bearbeitbar sind Empfänger, Template, An/Aus und der Sync-Schalter aus 1.10. Geschrieben wird nur,
+was gesendet wurde — ein Statuswechsel in einer Zeile darf nicht das Template überschreiben, das
+jemand anders gerade gewählt hat.
+
+**Was die Ansicht ausdrücklich nicht kann.**
+
+*Anlegen.* Sie bearbeitet bestehende Automationen, wie die Mail-Listenansicht auch. Eine Automation
+aus einer Zeile zu erzeugen hieße, Trigger, Knotentyp und Handle auf einmal zu entscheiden; das ist
+ein eigener Schnitt. Auf der Leinwand gebaut, erscheint sie hier, sobald sie ein Trigger, eine Mail
+und eine Kante ist.
+
+*Eine Form bearbeiten, die keine Regel ist.* `Sequence\RuleShape` entscheidet das und setzt dafür
+auf `LinearityRule` auf, statt dieselben Graph-Regeln ein zweites Mal zu implementieren: jeder
+Grund, aus dem eine Mail-Liste nicht bearbeitbar ist, ist auch einer für eine Regel. Ein Delay
+zwischen Trigger und Mail, eine zweite Mail, eine Verzweigung — die Zeile wird trotzdem angezeigt,
+mit dem Grund daran und einem Link auf die Leinwand. Das Anzeigen ist der Punkt: „welche Mail geht
+raus, wenn das Kontaktformular abgeschickt wird" verdient eine Antwort, auch wenn der Flow
+dahinter inzwischen ein Delay hat.
+
+*Ein Feld schreiben, das der Mail-Knoten nicht hat.* Empfänger ist `to`, Template ist `template` —
+aber beides wird zuerst im Schema des Knotens nachgesehen (`Sequence\RuleFields`). Ein Mail-Knoten,
+der seine Empfänger aus einer Liste zieht, hat kein `to`; es trotzdem zu schreiben, hinterließe
+einen Config-Key, den nichts liest — eine Änderung, die aussieht, als sei sie angekommen. Lese- und
+Schreibseite nutzen dieselbe Nachschlagestelle, also kann eine Zeile nie ein Feld zeigen und ein
+anderes schreiben.
+
+**Die Warnung am Sync-Schalter sagt jetzt das Richtige.** Nicht „Fehler schlagen in den Request
+durch" (das tun sie nicht, siehe 1.10), sondern: der Request wartet auf den ganzen Lauf.
+
+**`statamic-notifications` bekommt keinen eigenen Sendeweg**, nur einen Nav-Eintrag hierher. Könnten
+beide Addons ein Ereignis in eine Mail verwandeln, hätte „warum kam diese Mail" zwei mögliche
+Antworten und keine Möglichkeit, sie zu unterscheiden.
+
 ## 1.10.0 — 2026-08-05
 
 ### Added — Versand je Trigger synchron schaltbar

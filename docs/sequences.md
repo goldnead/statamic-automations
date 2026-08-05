@@ -155,6 +155,81 @@ Which node types the "add a mail" form may offer comes from the page prop
 registry: an automation that sends nothing yet has no row to read the answer
 off, and it is the one that most needs to add a mail.
 
+## Mail rules — one trigger, one mail
+
+The other end of the same idea. A sequence is many mails in order; a **rule** is
+one: "when a form is submitted, send the thank-you mail to the sender." That
+sentence fits on a row, and a row is a better editing surface for it than a
+canvas with two boxes on it.
+
+```
+GET   /cp/automations/api/automations/{automation}/rule
+PATCH /cp/automations/api/automations/{automation}/rule
+```
+
+The screen is **Tools → Automations → Mail rules**. It lists every automation
+with exactly one mail node. One that sends nothing is not a rule; one that sends
+three is a sequence, and the mail list above is its screen.
+
+`GET` answers the sentence plus what somebody deciding whether it works needs
+beside it:
+
+```json
+{
+  "handle": "contact-reply",
+  "trigger": { "handle": "form_submitted", "label": "Form submitted" },
+  "mail": { "label": "Thanks for writing", "reference": "thank-you" },
+  "recipient": "{{ form.email }}",
+  "template": "thank-you",
+  "enabled": true,
+  "dispatch_mode": "async",
+  "editable": true,
+  "reasons": [],
+  "recent_runs": [{ "id": 91, "status": "success", "finished_at": "…" }]
+}
+```
+
+`PATCH` writes back `recipient`, `template`, `enabled` and `dispatch_mode`.
+Only the keys you send are touched — a status toggle on one row must not
+overwrite a template somebody else just picked.
+
+### What it deliberately cannot do
+
+**Create.** The screen edits automations that already exist, like the mail list.
+Making one from a row would mean choosing a trigger, a node type and a handle,
+and a row is the wrong surface for three decisions at once. Build it on the
+canvas; it appears here as soon as it is a trigger, a mail and one edge.
+
+**Edit a shape that is not a rule.** `Sequence\RuleShape` decides, and it builds
+on `LinearityRule` rather than repeating it: every reason a mail list cannot be
+edited is a reason a rule cannot be either. A delay between the trigger and the
+mail, a second mail, a branch — the row is still shown, with the reason on it
+and a link to the canvas. Showing it matters: "which mail goes out when the
+contact form is submitted" is a question that deserves an answer whether or not
+the flow behind it grew a delay.
+
+**Write a field the mail node does not have.** The recipient is `to` and the
+template is `template`, but both are looked up in the node's own schema first
+(`Sequence\RuleFields`). A mail node that takes its recipients from a mailing
+list has no `to`; writing one anyway would leave a key in its config that
+nothing reads — an edit that looks applied and does nothing. Read side and write
+side use the same lookup, so a row can never show one field and write another.
+
+### The sync switch on the row
+
+`dispatch_mode` is the per-trigger switch from 1.10. On the row it says what it
+actually costs: **the request waits for the whole run.** It does not say that
+errors reach the caller, because they do not — `WorkflowRunner` writes
+`STATUS_FAILED` on the run and returns normally, queued or not. The price is
+time, not error handling.
+
+### Where `statamic-notifications` fits
+
+Nowhere, on purpose. It carries a nav item pointing here when this addon is
+installed and its rules screen exists (`Support\AutomationRules`), and no send
+path of its own. If both addons could turn an event into a mail, "why did this
+mail go out" would have two possible answers and no way to tell them apart.
+
 ## Re-entry (`Support\RestartPolicy`)
 
 What happens when somebody enters an automation they have already entered.
