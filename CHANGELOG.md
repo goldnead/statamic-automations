@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.10.0 — 2026-08-05
+
+### Added — Versand je Trigger synchron schaltbar
+
+Jeder Lauf ging bisher über die Queue, ausnahmslos. Für die meisten Automationen ist das richtig;
+für eine Mail, die raus sein muss, bevor die Seite fertig geladen ist, nicht. Wer so eine Mail aus
+dem eigenen Controller in eine Automation verlagert, macht daraus still einen Queue-Job — die
+Verlagerung ist dann nicht verhaltensneutral, also verlagert sie niemand, und die
+Automations-Ebene bleibt genau für die Mails ungenutzt, denen sie am meisten helfen würde.
+
+Neu: `_dispatch_mode` am Trigger-Knoten, Default `async`. Ein unbekannter Wert wird als `async`
+gelesen — die konservative Richtung ist die, die nichts ändert.
+
+Am Trigger und nicht an der Automation, aus zwei Gründen. Eine Automation kann mehrere Trigger
+tragen, und nur einer davon ist der aus dem Request; ein nächtlicher Sweep derselben Automation
+gehört weiter in die Queue. Und die Einstellung liegt damit dort, wo ihre Nachbarin schon liegt:
+die Re-Entry-Policy wird zwei Zeilen früher aus demselben Node-Config gelesen.
+
+**Was der Schalter nicht tut: er ändert die Fehlerbehandlung nicht.** Ein Fehler landet auch
+synchron als `failed` auf dem Run und nicht beim Aufrufer, weil `WorkflowRunner` grundsätzlich
+nicht wirft. Was sich ändert, ist der Zeitpunkt: synchron ist der Lauf fertig, bevor der Aufrufer
+weitermacht. Der Preis dafür ist Zeit — der Request wartet auf jeden Knoten, jeden HTTP-Aufruf,
+jede Mail.
+
 ## 1.9.1 — 2026-08-05
 
 ### Fixed — the breakpoint-less single-column grid utility is no longer used
