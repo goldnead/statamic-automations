@@ -3,6 +3,7 @@
 namespace Goldnead\StatamicAutomations\Support;
 
 use Goldnead\StatamicAutomations\Engine\TriggerDispatcher;
+use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 
 /**
  * Whether a trigger starts its run in the queue or inside the request.
@@ -20,10 +21,17 @@ use Goldnead\StatamicAutomations\Engine\TriggerDispatcher;
  * into an automation is not behaviour-neutral, so nobody moves it, and the
  * automation layer stays unused for exactly the mails it would help most.
  *
- * **Sync means a failure in the automation surfaces in the request.** That is
- * the price, and it belongs on the switch rather than in a footnote: whoever
- * turns this on ties their page's response time, and its failure modes, to the
- * automation's runtime.
+ * **Sync does not change error handling.** The specification this was built
+ * from assumed it would — that a failure would surface in the request — and it
+ * does not. {@see WorkflowRunner} never
+ * throws: a missing automation, a validation error and a missing trigger node
+ * are each recorded on the run as `failed` with a message, and the runner
+ * returns normally. That predates this switch and is right for a queued run,
+ * which has nobody to throw to.
+ *
+ * **What sync costs is time.** The run happens inside the request, so the
+ * caller waits for it — every node, every HTTP call, every mail. That is the
+ * price, and it belongs on the switch rather than in a footnote.
  *
  * On the trigger node rather than on the automation, for two reasons. An
  * automation may carry several triggers and only one of them is the one that
@@ -81,7 +89,7 @@ enum DispatchMode: string
                 ],
                 'default' => self::Async->value,
                 'required' => false,
-                'help' => 'Background is right for almost everything. Immediate is for a mail that has to be gone before the page finishes loading — and it means a failure in this automation surfaces in the request that triggered it, so the page fails with it.',
+                'help' => 'Background is right for almost everything. Immediate is for a mail that has to be gone before the page finishes loading — the request then waits for the whole automation to run, so its slowest step becomes part of your page load. Failures are recorded on the run either way; they do not surface in the request.',
             ],
         ];
     }
