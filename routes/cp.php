@@ -13,6 +13,7 @@ use Goldnead\StatamicAutomations\Http\Controllers\Pages\ImportPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\RunsPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\SettingsPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\TemplatesPageController;
+use Goldnead\StatamicAutomations\Http\Controllers\RuleController;
 use Goldnead\StatamicAutomations\Http\Controllers\RunsController;
 use Goldnead\StatamicAutomations\Http\Controllers\SettingsController;
 use Goldnead\StatamicAutomations\Http\Controllers\TemplatesController;
@@ -114,6 +115,15 @@ Route::prefix('automations')
             Route::delete('automations/{automationFlow}/mail-list/{nodeKey}', [MailListController::class, 'destroy'])
                 ->where('nodeKey', '[A-Za-z0-9_.-]+')
                 ->name('automations.mail-list.destroy');
+
+            // The rule — the same automation again, read as one sentence:
+            // "when X happens, send Y to Z". GET works for every automation;
+            // the write answers 422 on anything that is not a trigger and a
+            // single mail. See Sequence\RuleShape.
+            Route::get('automations/{automationFlow}/rule', [RuleController::class, 'show'])
+                ->name('automations.rule');
+            Route::patch('automations/{automationFlow}/rule', [RuleController::class, 'update'])
+                ->name('automations.rule.update');
 
             // Node / trigger / action metadata
             Route::get('nodes', [NodesController::class, 'index'])->name('nodes.index');
