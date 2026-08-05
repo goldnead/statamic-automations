@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.9.1 — 2026-08-05
+
+### Fixed — the breakpoint-less single-column grid utility is no longer used
+
+Every addon in this family ships its own Tailwind build, and `@statamic/cms/tailwind.css`
+routes all of them into the same `addon-utilities` layer. Media queries add no specificity, so
+the bare single-column grid rule from whichever addon stylesheet loads **last** won against an
+earlier addon's `sm:`/`lg:` variant and pinned that addon's grid to one column at every width.
+
+Invisible when this addon is checked alone. It only appeared once two addons of the family were
+installed together, which is the normal case on a real site.
+
+A grid falls back to one column on its own, so the class bought nothing. The overflow guard its
+`minmax(0,1fr)` track provided is preserved explicitly, because the implicit column is `auto`.
+
 ## 1.9.0 — 2026-08-04
 
 <!--
