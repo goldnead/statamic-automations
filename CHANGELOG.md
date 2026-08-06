@@ -50,6 +50,10 @@ Antworten und keine Möglichkeit, sie zu unterscheiden.
 
 ## 1.10.0 — 2026-08-05
 
+> Nie separat getaggt. Diese Änderungen sind mit 1.11.0 ausgeliefert worden: der Stand von
+> 1.10.0 hatte keinen eigenen grünen CI-Lauf, und getaggt wird in dieser Familie nur, was
+> vollständig grün war.
+
 ### Added — Versand je Trigger synchron schaltbar
 
 Jeder Lauf ging bisher über die Queue, ausnahmslos. Für die meisten Automationen ist das richtig;
