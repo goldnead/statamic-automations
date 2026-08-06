@@ -7,7 +7,6 @@ use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
 use Goldnead\StatamicAutomations\Contracts\AutomationNode;
 use Goldnead\StatamicAutomations\Contracts\AutomationTrigger;
 use Goldnead\StatamicAutomations\Engine\TriggerDispatcher;
-use Goldnead\StatamicAutomations\Licensing\LicenseManager;
 use Goldnead\StatamicAutomations\Nodes\Triggers\EventTrigger;
 use Goldnead\StatamicAutomations\Registries\ActionRegistry;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
@@ -28,8 +27,7 @@ use InvalidArgumentException;
 class Automations
 {
     /**
-     * Built-in node handles that are exempt from Pro licensing.
-     * Populated via {@see registerBuiltIn()} during boot.
+     * Built-in node handles, populated via {@see registerBuiltIn()} during boot.
      *
      * @var array<string,bool>
      */
@@ -46,13 +44,11 @@ class Automations
         protected TriggerRegistry $triggers,
         protected ActionRegistry $actions,
         protected NodeRegistry $nodes,
-        protected LicenseManager $license,
         protected OptionSourceRegistry $optionSources,
     ) {}
 
     /**
-     * Mark a node handle as built-in. Built-in nodes are never gated by
-     * the Pro license, even if `custom_actions_requires_pro` is true.
+     * Mark a node handle as built-in.
      */
     public function registerBuiltIn(string $handle): self
     {
@@ -67,18 +63,10 @@ class Automations
     }
 
     /**
-     * Register a trigger. Pro license is required for non-built-in
-     * triggers when `features.custom_actions_requires_pro` is true.
-     *
-     * Failed gates simply skip registration — they don't throw — so a
-     * package boot never crashes when the customer's license has lapsed.
+     * Register a trigger.
      */
     public function trigger(string $handle, string $class): self
     {
-        if (! $this->canRegister($handle)) {
-            return $this;
-        }
-
         $this->triggers->register($handle, $class);
         $this->nodes->register($handle, $class, 'trigger');
 
@@ -86,14 +74,10 @@ class Automations
     }
 
     /**
-     * Register an action. Subject to the same Pro gate as triggers.
+     * Register an action.
      */
     public function action(string $handle, string $class): self
     {
-        if (! $this->canRegister($handle)) {
-            return $this;
-        }
-
         $this->actions->register($handle, $class);
         $this->nodes->register($handle, $class, 'action');
 
@@ -107,10 +91,6 @@ class Automations
      */
     public function node(string $handle, string $class): self
     {
-        if (! $this->canRegister($handle)) {
-            return $this;
-        }
-
         $this->nodes->register($handle, $class, 'logic');
 
         return $this;
@@ -325,24 +305,6 @@ class Automations
     public function nodes(): NodeRegistry
     {
         return $this->nodes;
-    }
-
-    public function license(): LicenseManager
-    {
-        return $this->license;
-    }
-
-    /**
-     * Decide whether a handle is allowed to be registered given the
-     * current license state.
-     */
-    protected function canRegister(string $handle): bool
-    {
-        if ($this->isBuiltIn($handle)) {
-            return true;
-        }
-
-        return $this->license->gates('custom_actions');
     }
 
     /**

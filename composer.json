@@ -59,10 +59,6 @@
             "description": "Visual automation builder for Statamic forms, entries, leads and webhooks.",
             "developer": "Adrian Goldner",
             "developer-url": "https://gldnr.studio",
-            "editions": [
-                "free",
-                "pro"
-            ],
             "vite": {
                 "input": [
                     "resources/js/cp.js",

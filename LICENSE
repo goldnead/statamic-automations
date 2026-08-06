@@ -5,51 +5,44 @@ This software ("Statamic Automations", the "Software") is commercial software
 distributed through the Statamic Marketplace. It is licensed, not sold. By
 installing or using the Software you agree to the terms below.
 
-1. EDITIONS
-   The Software is offered in two editions:
-     - "Free"  — the base feature set, usable at no charge.
-     - "Pro"   — additional features that require a valid paid Pro license
-                 obtained through the Statamic Marketplace.
-   The active edition is determined by the Statamic licensing system. Use of
-   Pro features without a valid, current Pro license for the site on which the
-   Software runs is not permitted.
+1. GRANT OF LICENSE
+   Subject to these terms and payment of the applicable fees, the Licensor
+   grants you a non-exclusive, non-transferable license to install and use the
+   Software on the site(s) covered by your license, in accordance with the
+   Statamic Marketplace terms of service (https://statamic.com/terms).
 
-2. GRANT OF LICENSE
-   Subject to these terms and, for Pro features, payment of the applicable
-   fees, the Licensor grants you a non-exclusive, non-transferable license to
-   install and use the Software on the site(s) covered by your license, in
-   accordance with the Statamic Marketplace terms of service
-   (https://statamic.com/terms).
+   The Software has a single feature set. There are no editions and no free
+   tier; entitlement is enforced by the Statamic Marketplace, not by the
+   Software itself.
 
-3. RESTRICTIONS
+2. RESTRICTIONS
    You may NOT, except as expressly permitted by these terms or by mandatory
    law:
      (a) resell, sublicense, rent, lease, or redistribute the Software or any
          part of it, in source or compiled form;
-     (b) remove or circumvent the licensing, edition checks, or any technical
-         protection of the Software in order to access Pro features without a
-         valid Pro license;
+     (b) remove or circumvent any technical protection of the Software in
+         order to use it without a valid license;
      (c) publish the Software's source code publicly or share it outside your
          organisation.
    You MAY modify the Software for your own use on licensed sites and keep
    private copies for backup and version control.
 
-4. OWNERSHIP
+3. OWNERSHIP
    The Software is and remains the intellectual property of the Licensor. No
    ownership rights are transferred by this license.
 
-5. WARRANTY DISCLAIMER
+4. WARRANTY DISCLAIMER
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
 
-6. LIMITATION OF LIABILITY
+5. LIMITATION OF LIABILITY
    IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
    DEALINGS IN THE SOFTWARE.
 
-7. THIRD-PARTY COMPONENTS
+6. THIRD-PARTY COMPONENTS
    The Software depends on third-party packages that are licensed separately
    under their own terms. This license applies only to the Software itself.
 

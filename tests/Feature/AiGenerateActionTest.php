@@ -5,7 +5,6 @@ use Goldnead\StatamicAutomations\Nodes\Actions\AiGenerateAction;
 use Illuminate\Support\Facades\Http;
 
 beforeEach(function (): void {
-    config()->set('automations.features.ai_action_requires_pro', false);
     config()->set('automations.ai.api_key', 'test-key');
     config()->set('automations.ai.model', 'claude-test');
 });
@@ -98,16 +97,4 @@ it('reports an API error as a failed result', function (): void {
 
     expect($result->isFailed())->toBeTrue();
     expect($result->error)->toContain('overloaded');
-});
-
-it('is blocked when Pro gating is on and no license is present', function (): void {
-    config()->set('automations.features.ai_action_requires_pro', true);
-    config()->set('automations.license.key', '');
-    Http::fake();
-
-    $result = aiAction()->execute(AutomationContext::make([]), ['prompt' => 'hi']);
-
-    expect($result->isFailed())->toBeTrue();
-    expect($result->error)->toContain('Pro');
-    Http::assertNothingSent();
 });

@@ -152,7 +152,6 @@ it('finds the action classes it claims to audit', function (): void {
 function expectedTestRunFailures(): array
 {
     return [
-        'ai_generate' => 'Gated on a Pro licence, which the test app does not have.',
         'call_automation' => 'The dummy target automation handle does not exist.',
         'marketing.send_campaign' => 'The dummy campaign handle does not exist (statamic-marketing is not installed).',
     ];

@@ -92,9 +92,8 @@ it('lists runs and shows a run detail', function (): void {
         ->assertJsonPath('data.id', $run->id);
 });
 
-it('returns settings and license status', function (): void {
+it('returns settings', function (): void {
     $this->getJson('/cp/automations/api/settings')->assertOk();
-    $this->getJson('/cp/automations/api/license/status')->assertOk();
 });
 
 it('enables and disables an automation', function (): void {

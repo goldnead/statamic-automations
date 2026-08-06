@@ -67,7 +67,6 @@ describe('the settings screen', () => {
                 features: {},
                 redact_keys: [],
                 integrations: {},
-                license: { edition: 'pro' },
             },
         });
 

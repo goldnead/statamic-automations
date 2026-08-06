@@ -13,7 +13,6 @@ const props = defineProps({
     features: { type: Object, required: true },
     redact_keys: { type: Array, required: true },
     integrations: { type: Object, required: true },
-    license: { type: Object, required: true },
 });
 
 /** Stable ids so each value cell can point at the label that names it. */
@@ -100,16 +99,6 @@ const sections = computed(() => {
             badge: { color: active ? 'green' : 'default', text: active ? __('Detected') : __('Not installed') },
         })),
     });
-
-    const licenseRows = [
-        { label: __('Mode'), description: __('How the license is verified (config or remote).'), mono: props.license.mode },
-        { label: __('Key set'), description: __('Whether a license key is configured.'), badge: { color: props.license.has_key ? 'green' : 'default', text: props.license.has_key ? __('Yes') : __('No') } },
-        { label: __('Validation'), description: __('Current license validation status.'), badge: { color: props.license.is_valid ? 'green' : 'amber', text: props.license.is_valid ? __('Valid') : __('No active license') } },
-    ];
-    if (props.license.features && props.license.features.length) {
-        licenseRows.push({ label: __('Pro features'), description: __('Features unlocked by the active license.'), badges: props.license.features });
-    }
-    s.push({ title: __('License'), rows: licenseRows });
 
     s.push({
         title: __('Payload redaction'),

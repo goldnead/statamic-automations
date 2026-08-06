@@ -4,7 +4,6 @@ namespace Goldnead\StatamicAutomations\Nodes\Actions;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationAction;
-use Goldnead\StatamicAutomations\Licensing\LicenseManager;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 use Illuminate\Support\Facades\Http;
 
@@ -20,13 +19,11 @@ use Illuminate\Support\Facades\Http;
  * downstream as {{ <node>.text }}, and — when "Store as variable" is set —
  * also copied into {{ vars.<name> }}.
  *
- * This is a Pro-tier action. Configure credentials in config/automations.php
- * under the `ai` block (never hard-code an API key in an automation).
+ * Configure credentials in config/automations.php under the `ai` block
+ * (never hard-code an API key in an automation).
  */
 class AiGenerateAction implements AutomationAction
 {
-    public function __construct(protected LicenseManager $license) {}
-
     public static function handle(): string
     {
         return 'ai_generate';
@@ -112,10 +109,6 @@ class AiGenerateAction implements AutomationAction
 
     public function execute(AutomationContext $context, array $config): ActionResult
     {
-        if ($this->isProGated() && ! $this->license->isPro()) {
-            return ActionResult::failed('The AI action requires a Pro license.');
-        }
-
         $prompt = trim((string) ($config['prompt'] ?? ''));
         if ($prompt === '') {
             return ActionResult::failed('AI prompt is required.');
@@ -216,10 +209,5 @@ class AiGenerateAction implements AutomationAction
         }
 
         return ActionResult::success($output);
-    }
-
-    protected function isProGated(): bool
-    {
-        return (bool) config('automations.features.ai_action_requires_pro', false);
     }
 }

@@ -4,12 +4,11 @@ namespace Goldnead\StatamicAutomations\Http\Controllers\Pages;
 
 use Goldnead\StatamicAutomations\Http\Controllers\Controller;
 use Goldnead\StatamicAutomations\Integrations\IntegrationDetector;
-use Goldnead\StatamicAutomations\Licensing\LicenseManager;
 use Inertia\Inertia;
 
 class SettingsPageController extends Controller
 {
-    public function index(IntegrationDetector $detector, LicenseManager $license)
+    public function index(IntegrationDetector $detector)
     {
         $this->authorizeAction('view automations');
 
@@ -23,12 +22,6 @@ class SettingsPageController extends Controller
             'features' => config('automations.features'),
             'redact_keys' => config('automations.security.redact_keys'),
             'integrations' => $detector->snapshot(),
-            'license' => [
-                'mode' => config('automations.license.mode'),
-                'has_key' => ! empty(config('automations.license.key')),
-                'is_valid' => ($license->status()['status'] ?? null) === LicenseManager::STATUS_VALID,
-                'features' => config('automations.license.features', []),
-            ],
         ]);
     }
 }

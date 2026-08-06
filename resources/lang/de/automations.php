@@ -21,7 +21,6 @@ return [
         'settings' => 'Einstellungen verwalten',
     ],
     'errors' => [
-        'ai_requires_pro' => 'Die KI-Aktion erfordert eine Pro-Lizenz.',
         'max_depth' => 'Maximale Verschachtelungstiefe (:max) erreicht.',
         'automation_not_found' => "Automatisierung ':ref' wurde nicht gefunden.",
     ],
