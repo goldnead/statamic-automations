@@ -7,15 +7,29 @@ use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationAction;
 use Goldnead\StatamicAutomations\Engine\TokenResolver;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
+use Goldnead\StatamicAutomations\Sending\BrandMailer;
+use Goldnead\StatamicAutomations\Sending\SenderIdentity;
 use Goldnead\StatamicAutomations\Sequence\MailSteps;
 use Goldnead\StatamicAutomations\Support\ActionResult;
+use Illuminate\Mail\Message;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Mail;
 use Statamic\Facades\Entry;
 
 class SendEmailAction implements AutomationAction
 {
-    public function __construct(protected ?LeadHubAdapter $adapter = null) {}
+    public function __construct(
+        protected ?LeadHubAdapter $adapter = null,
+        protected ?BrandMailer $mailer = null,
+    ) {}
+
+    /**
+     * Resolved lazily so `new SendEmailAction()` — tests, ad-hoc use — keeps
+     * working without a container argument.
+     */
+    protected function mailer(): BrandMailer
+    {
+        return $this->mailer ??= app(BrandMailer::class);
+    }
 
     public static function handle(): string
     {
@@ -259,22 +273,52 @@ class SendEmailAction implements AutomationAction
         }
 
         try {
-            $build = function ($message) use ($to, $subject, $replyTo, $from) {
-                $message->to($to)->subject($subject);
+            // Sender and transport come from the brand this automation is
+            // running for, not from `config('mail.default')`.
+            //
+            // The node's own `from` used to be the only thing this action set,
+            // and the transport was whatever the process had. On a multi-brand
+            // host that pairs one brand's address with another brand's relay
+            // account: a nurture sequence addressed as `hallo@familystack.de`
+            // left through the project that verifies `gldnr.studio`, where the
+            // provider refuses the address or substitutes its own. The two
+            // halves have to be resolved together, which is what BrandMailer
+            // does.
+            $sent = $this->mailer()->sendRaw(
+                null,
+                $html,
+                $body,
+                function (Message $message, SenderIdentity $identity) use ($to, $subject, $replyTo, $from): void {
+                    $message->to($to)->subject($subject);
 
-                if ($replyTo) {
-                    $message->replyTo($replyTo);
-                }
+                    if ($replyTo) {
+                        $message->replyTo($replyTo);
+                    }
 
-                if ($from) {
-                    $message->from($from);
-                }
-            };
+                    // The brand's address is already on the message and wins.
+                    // A brand that declares an identity has told the host which
+                    // address its relay account owns; a per-node override would
+                    // put that guarantee back in the hands of whoever last
+                    // edited the flow. Where no brand declares one — every
+                    // single-brand install — the node's `from` is still the
+                    // only answer there is, and it applies exactly as before.
+                    if ($from && $identity->fromAddress === null) {
+                        $message->from($from);
+                    }
+                },
+            );
 
-            if ($html !== null) {
-                Mail::html($html, $build);
-            } else {
-                Mail::raw($body, $build);
+            if (! $sent) {
+                // Deliberately before the dedupe stamp below. The cache entry
+                // is a record that this recipient has been served, kept for a
+                // year; writing it for a mail that never left would suppress
+                // the retry that fixing the brand's settings is supposed to
+                // enable. The reason is already in the log — BrandMailer wrote
+                // it — so this only has to be a failure the run can see.
+                return ActionResult::failed(
+                    'No usable sender identity for this brand — nothing was sent. See the log.',
+                    $rendered,
+                );
             }
 
             if ($dedupeKey !== null) {

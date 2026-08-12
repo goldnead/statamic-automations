@@ -7,6 +7,7 @@ use Goldnead\StatamicAutomations\Console\Commands\RunDueScheduledJobs;
 use Goldnead\StatamicAutomations\Console\Commands\RunScheduledAutomations;
 use Goldnead\StatamicAutomations\Console\Commands\SyncAutomations;
 use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
+use Goldnead\StatamicAutomations\Contracts\SenderIdentityResolver;
 use Goldnead\StatamicAutomations\Engine\ConditionEvaluator;
 use Goldnead\StatamicAutomations\Engine\FlowValidator;
 use Goldnead\StatamicAutomations\Engine\NodeExecutor;
@@ -87,6 +88,8 @@ use Goldnead\StatamicAutomations\Registries\OptionSourceRegistry;
 use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
 use Goldnead\StatamicAutomations\Repositories\DatabaseAutomationRepository;
 use Goldnead\StatamicAutomations\Repositories\FlatFileAutomationRepository;
+use Goldnead\StatamicAutomations\Sending\BrandMailer;
+use Goldnead\StatamicAutomations\Sending\BrandSenderIdentity;
 use Goldnead\StatamicAutomations\Support\OptionSources\NativeOptionSources;
 use Goldnead\StatamicAutomations\Templates\TemplateRegistry;
 use Illuminate\Console\Scheduling\Schedule;
@@ -139,6 +142,14 @@ class ServiceProvider extends AddonServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/automations.php', 'automations');
 
         // Singleton registries — they hold runtime registration state.
+        // Who a `send_email` node sends as, and over which transport. Bound to
+        // an interface so a host that keeps sender identities somewhere other
+        // than `brands.settings.mail` rebinds it instead of patching the
+        // addon; the shipped implementation leaves a single-brand install
+        // sending exactly as before.
+        $this->app->singleton(SenderIdentityResolver::class, BrandSenderIdentity::class);
+        $this->app->singleton(BrandMailer::class);
+
         $this->app->singleton(TriggerRegistry::class);
         $this->app->singleton(ActionRegistry::class);
         $this->app->singleton(NodeRegistry::class);

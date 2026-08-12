@@ -45,6 +45,19 @@ class FailureAlerter
 
         $to = $config['mail_to'] ?? null;
         if (in_array('mail', $channels, true) && ! empty($to)) {
+            // Deliberately NOT routed through BrandMailer, unlike every other
+            // mail this package sends.
+            //
+            // This is the application talking to its own operator about a
+            // broken run, at an address out of config. It does not speak for a
+            // brand, and picking up whichever brand happened to be in context
+            // when the run failed would be worse than the default: the alert
+            // would leave through that brand's relay account under that
+            // brand's name, so a failing automation for brand A would look
+            // like brand A writing to the host's admin. The configured
+            // identity is the correct one here, and it is the host's own —
+            // the one pairing of address and transport that is always
+            // coherent.
             try {
                 Mail::raw($message, function ($mail) use ($to) {
                     $mail->to($to)->subject('Statamic Automations — run failed');
