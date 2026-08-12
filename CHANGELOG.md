@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.0.0 — 2026-08-09
+
+### Removed — editions and the licence manager
+
+The addon shipped a Free/Pro edition split: `extra.statamic.editions`, a
+`LicenseManager` with a local key list and a remote verification endpoint, a
+Pro gate on the AI action and on custom node registration, and a License panel
+in the Settings screen.
+
+That contradicts how this family is sold. There is one feature set, and
+entitlement is enforced by the Statamic Marketplace rather than by code in the
+package — the Marketplace has no licence-check API to call, and building one
+means shipping a gate a buyer can simply switch off.
+
+Gone with it: `config('automations.license.*')`, the feature flags
+`custom_actions_requires_pro` and `ai_action_requires_pro`, the
+`GET /cp/automations/api/license/status` route, `Automations::license()`, and
+the `STATAMIC_AUTOMATIONS_LICENSE_*` environment variables.
+
+**What changes for a host:** the AI action and custom action/trigger
+registration now work unconditionally. Anything that set those config keys or
+read that route needs updating — hence a major version when this is released.
+
 ## 1.11.0 — 2026-08-05
 
 ### Added — Mail-Regeln: eine Ein-Mail-Automation als Satz

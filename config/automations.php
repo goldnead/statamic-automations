@@ -153,8 +153,6 @@ return [
         'filter_nodes' => true,
         'delay_nodes' => true,
         'custom_actions' => true,
-        'custom_actions_requires_pro' => true,
-        'ai_action_requires_pro' => true,
         'custom_triggers' => true,
         'templates' => true,
         'export_import' => true,
@@ -200,33 +198,6 @@ return [
             'credit_card',
             'card_number',
         ],
-    ],
-
-    /*
-    |--------------------------------------------------------------------------
-    | Licensing
-    |--------------------------------------------------------------------------
-    |
-    | Pro-tier gating. When the addon is installed from the Statamic
-    | Marketplace, licensing is handled natively: the active edition
-    | (free | pro) is read via Addon::edition() and the Statamic licensing
-    | utility validates it — no settings here are required.
-    |
-    | The keys below are a fallback for self-hosted / development use only,
-    | used when no Marketplace edition is detected. "config" trusts the local
-    | allowed_keys; "remote" verifies against a central endpoint.
-    |
-    */
-
-    'license' => [
-        'key' => env('STATAMIC_AUTOMATIONS_LICENSE_KEY', ''),
-        'mode' => env('STATAMIC_AUTOMATIONS_LICENSE_MODE', 'config'), // config | remote
-        'endpoint' => env('STATAMIC_AUTOMATIONS_LICENSE_ENDPOINT', ''),
-        'cache_ttl_minutes' => 360,
-        // Used when mode = config; any of these keys grants Pro access.
-        'allowed_keys' => [],
-        // Default feature handles unlocked for "config" mode validations.
-        'features' => ['custom_actions', 'custom_triggers'],
     ],
 
     /*

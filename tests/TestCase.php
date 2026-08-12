@@ -183,10 +183,6 @@ abstract class TestCase extends AddonTestCase
         // Use Statamic's flat-file user repository so feature tests can create
         // real CP super users and hit the authenticated CP routes.
         $app['config']->set('statamic.users.repository', 'file');
-
-        // Pro gating is opt-in for hosts but interferes with tests that
-        // intentionally register custom actions/triggers. Off by default.
-        $app['config']->set('automations.features.custom_actions_requires_pro', false);
     }
 
     /**

@@ -31,7 +31,6 @@ use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\SubscriberConfi
 use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\SubscriberUnsubscribedTrigger;
 use Goldnead\StatamicAutomations\Integrations\WebhookManager\WebhookManagerAdapter;
 use Goldnead\StatamicAutomations\Integrations\WebhookManager\WebhookManagerSendAction;
-use Goldnead\StatamicAutomations\Licensing\LicenseManager;
 use Goldnead\StatamicAutomations\Listeners\HandleEntryPublished;
 use Goldnead\StatamicAutomations\Listeners\HandleFormSubmitted;
 use Goldnead\StatamicAutomations\Listeners\HandleLeadHubEvent;
@@ -182,9 +181,6 @@ class ServiceProvider extends AddonServiceProvider
             },
         );
 
-        // Licensing.
-        $this->app->singleton(LicenseManager::class);
-
         // Export / import services.
         $this->app->singleton(AutomationExporter::class);
         // Singleton so templates registered by other addons (e.g.
@@ -199,7 +195,6 @@ class ServiceProvider extends AddonServiceProvider
                 $app->make(TriggerRegistry::class),
                 $app->make(ActionRegistry::class),
                 $app->make(NodeRegistry::class),
-                $app->make(LicenseManager::class),
                 $app->make(OptionSourceRegistry::class),
             );
         });

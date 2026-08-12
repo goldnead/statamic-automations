@@ -341,17 +341,6 @@ and a job that rebuilds the committed CP bundle and fails if it drifted from sou
 Out of scope for v1, per the PRD non-goals: code nodes and arbitrary loop detection inside
 branches.
 
-## Editions
-
-Statamic Automations ships in two editions:
-
-- **Free** — the full visual builder, triggers, logic and core actions.
-- **Pro** — premium features (e.g. the AI action and custom node registration),
-  unlocked with a Pro license from the [Statamic Marketplace](https://statamic.com/addons).
-
-The active edition is resolved natively through Statamic's licensing system —
-the Control Panel's licensing utility shows your status.
-
 ## License
 
 Commercial software, licensed (not sold) through the Statamic Marketplace.
