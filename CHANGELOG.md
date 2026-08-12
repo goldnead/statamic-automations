@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.2.0 — 2026-08-12
+### Changed
+
+- **The five sender-identity classes moved to `goldnead/statamic-brand-context` 1.8.0**, which is
+  now required at `^1.8`. They were four byte-identical copies with four namespaces — this package,
+  marketing, notifications and preference-center each grew their own on 12.08.2026 — and copies
+  drift: by the evening the marketing one had stopped refusing a transport without an address, and
+  disagreed with this package about whether a per-message from-address beats the brand's. Both are
+  settled in favour of the stricter reading, which is the one this package already had.
+
+  Behaviour is unchanged here, down to the log lines and the `help` text on the `send_email` node's
+  `from` field. `Goldnead\StatamicAutomations\Contracts\SenderIdentityResolver` and
+  `Sending\BrandMailer` stay as this package's own extension points. `Sending\SenderIdentity` and
+  `Sending\SaidRecently` are gone from this namespace; use the `Goldnead\BrandContext\Sending\`
+  versions.
+
 ## 2.1.0 — 2026-08-12
 
 ### Fixed — der `send_email`-Knoten paarte die Adresse der einen Marke mit dem Relay der anderen

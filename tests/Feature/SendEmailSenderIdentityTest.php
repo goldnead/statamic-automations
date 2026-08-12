@@ -2,11 +2,11 @@
 
 use Goldnead\BrandContext\Facades\BrandContext;
 use Goldnead\BrandContext\Models\Brand;
+use Goldnead\BrandContext\Sending\SaidRecently;
+use Goldnead\BrandContext\Sending\SenderIdentity;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\SenderIdentityResolver;
 use Goldnead\StatamicAutomations\Nodes\Actions\SendEmailAction;
-use Goldnead\StatamicAutomations\Sending\SaidRecently;
-use Goldnead\StatamicAutomations\Sending\SenderIdentity;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 

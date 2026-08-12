@@ -2,14 +2,14 @@
 
 namespace Goldnead\StatamicAutomations\Nodes\Actions;
 
+use Goldnead\BrandContext\Sending\SaidRecently;
+use Goldnead\BrandContext\Sending\SenderIdentity;
 use Goldnead\EmailTemplates\Facades\EmailTemplates;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationAction;
 use Goldnead\StatamicAutomations\Engine\TokenResolver;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
 use Goldnead\StatamicAutomations\Sending\BrandMailer;
-use Goldnead\StatamicAutomations\Sending\SaidRecently;
-use Goldnead\StatamicAutomations\Sending\SenderIdentity;
 use Goldnead\StatamicAutomations\Sequence\MailSteps;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 use Illuminate\Mail\Message;
