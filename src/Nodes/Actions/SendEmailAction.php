@@ -8,11 +8,13 @@ use Goldnead\StatamicAutomations\Contracts\AutomationAction;
 use Goldnead\StatamicAutomations\Engine\TokenResolver;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
 use Goldnead\StatamicAutomations\Sending\BrandMailer;
+use Goldnead\StatamicAutomations\Sending\SaidRecently;
 use Goldnead\StatamicAutomations\Sending\SenderIdentity;
 use Goldnead\StatamicAutomations\Sequence\MailSteps;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 use Illuminate\Mail\Message;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Statamic\Facades\Entry;
 
 class SendEmailAction implements AutomationAction
@@ -93,7 +95,16 @@ class SendEmailAction implements AutomationAction
             'help' => 'Sent as the plain-text body when no template is selected, and used as the fallback if a selected template cannot be resolved.',
         ];
         $schema[] = ['handle' => 'reply_to', 'label' => 'Reply-to', 'type' => 'text', 'required' => false, 'tokenable' => true];
-        $schema[] = ['handle' => 'from', 'label' => 'From', 'type' => 'text', 'required' => false, 'tokenable' => true];
+        $schema[] = [
+            'handle' => 'from',
+            'label' => 'From',
+            'type' => 'text',
+            'required' => false,
+            'tokenable' => true,
+            'help' => 'Optional. Ignored for a brand that declares its own settings.mail.from_address — '
+                .'the sending address has to match the relay account the brand sends through, and only '
+                .'the brand row knows which addresses that account owns.',
+        ];
         $schema[] = [
             'handle' => 'dedupe',
             'label' => 'Dedupe key',
@@ -302,8 +313,31 @@ class SendEmailAction implements AutomationAction
                     // edited the flow. Where no brand declares one — every
                     // single-brand install — the node's `from` is still the
                     // only answer there is, and it applies exactly as before.
-                    if ($from && $identity->fromAddress === null) {
+                    if (! $from) {
+                        return;
+                    }
+
+                    if ($identity->fromAddress === null) {
                         $message->from($from);
+
+                        return;
+                    }
+
+                    // Said out loud, because this is a visible change to
+                    // running mail: a flow whose `from` was honoured yesterday
+                    // has it dropped the moment the brand row is filled in, and
+                    // a change of sender that nobody is told about is one
+                    // nobody can trust. Throttled per pair so a sequence
+                    // fan-out writes it once, notice rather than warning
+                    // because the outcome is correct — only surprising.
+                    if (SaidRecently::shouldSay('node-from:'.$from.'>'.$identity->fromAddress)) {
+                        Log::notice(sprintf(
+                            'The send_email node names the from-address [%s]; the brand sends as [%s] and '
+                            .'that wins, because the address has to belong to the relay account the brand '
+                            .'sends through. Remove the from on the node, or change the brand.',
+                            $from,
+                            $identity->fromAddress,
+                        ));
                     }
                 },
             );

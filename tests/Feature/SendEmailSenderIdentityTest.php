@@ -135,12 +135,31 @@ it('does not let a node from override a brand that declared its own address', fu
         'mailer' => 'marke_a',
     ]]]);
 
+    Log::spy();
+
     BrandContext::runFor($brand, fn () => ($this->run)(['from' => 'hallo@fremde-marke.test']));
 
     $mails = ($this->mails)('marke_a');
 
     expect($mails)->toHaveCount(1)
         ->and($mails[0]->getFrom()[0]->getAddress())->toBe('noreply@marke-a.test');
+
+    // And it is said out loud. A flow whose from was honoured yesterday has it
+    // dropped the moment the brand row is filled in; a change of sender nobody
+    // is told about is one nobody can trust.
+    Log::shouldHaveReceived('notice')
+        ->withArgs(fn (string $message) => str_contains($message, 'hallo@fremde-marke.test')
+            && str_contains($message, 'noreply@marke-a.test'))
+        ->once();
+});
+
+it('names the precedence rule in the field the rule overrides', function (): void {
+    $feld = collect(SendEmailAction::schema())->firstWhere('handle', 'from');
+
+    // The CP is where somebody types the address this rule ignores. A rule that
+    // only exists in a log line is one they find after the mail went out under
+    // a different name than they chose.
+    expect($feld['help'] ?? '')->toContain('settings.mail.from_address');
 });
 
 it('sends nothing for a brand that declares mail settings without a from address', function (): void {
