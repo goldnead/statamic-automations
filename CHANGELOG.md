@@ -1,5 +1,63 @@
 # Changelog
 
+## 2.1.0 — 2026-08-12
+
+### Fixed — der `send_email`-Knoten paarte die Adresse der einen Marke mit dem Relay der anderen
+
+Der Knoten rief `Mail::html()` bzw. `Mail::raw()`. Der Transport war damit immer
+`config('mail.default')`, und der einzige Absender, den er je setzte, war der in den Knoten
+getippte. Auf einem Mehr-Marken-Host trennt das genau das Paar, auf das es ankommt: eine
+Nurture-Strecke, adressiert als `hallo@familystack.de`, ging über das Relay-Projekt raus, das
+`gldnr.studio` verifiziert. Ein Anbieter, der Sendedomains je Konto prüft (Scaleway TEM, Postmark,
+SES), lehnt die Adresse dann ab oder ersetzt sie durch die eigene verifizierte — und beides
+passiert still.
+
+**Absender und Transport kommen jetzt zusammen aus `brands.settings.mail`.**
+`Contracts\SenderIdentityResolver` beantwortet „welcher Mailer, welche Adresse, welche Sprache für
+Brand N", `Sending\BrandMailer` ist die eine Stelle, die die Frage stellt.
+
+| Schlüssel | Bedeutung |
+| --- | --- |
+| `from_address` | Pflicht, sobald `mail` überhaupt gesetzt ist |
+| `from_name` | sonst der Brand-Name |
+| `mailer` | ein Mailer aus `config/mail.php` |
+| `locale` | die Sprache ihrer Post |
+
+Die Antwort steht an der Nachricht, nie in der Config: Laravel liest `mail.from` beim ersten
+Auflösen eines Mailers, brennt es per `alwaysFrom()` in die Instanz und hält die im Singleton
+`mail.manager` fest. Ein `Config::set` überlebt deshalb sein eigenes `finally`, auch mit sauberem
+Rückbau — das wäre derselbe Fehler eine Ebene tiefer.
+
+### Changed — die Brand gewinnt gegen das `from` des Knotens
+
+Nur dort, wo eine Brand eine eigene Adresse deklariert. Eine Brand, die das tut, hat dem Host
+gesagt, welche Adresse ihr Relay-Konto besitzt; ein Knoten-Override gäbe diese Zusage an den
+zurück, der den Flow zuletzt bearbeitet hat. Wo keine Brand etwas deklariert — also in jeder
+Single-Brand-Installation — entscheidet weiterhin allein das `from` des Knotens, unverändert.
+
+### Changed — eine Brand mit kaputter Mail-Identität verschickt nichts
+
+Eine Brand, die `settings.mail` deklariert, aber keine `from_address` trägt, oder die einen Mailer
+nennt, den `config/mail.php` nicht kennt, verschickt **gar nichts**, wird auf Fehler-Ebene
+protokolliert (je Brand gedrosselt) und der Knoten meldet einen Fehlschlag. Die Alternative wäre
+die Zustellung unter der Host-Adresse, auf einem Mehr-Marken-Host also unter fremdem Namen.
+
+**Der Dedupe-Schlüssel wird in diesem Fall nicht gesetzt.** Er ist ein Stempel mit einem Jahr
+Haltbarkeit; für eine Mail, die nie rausging, würde er genau den zweiten Versuch unterdrücken, den
+das Korrigieren der Brand-Einstellungen ermöglichen soll.
+
+### Unverändert, mit Begründung — `FailureAlerter`
+
+Die Störungsmail bleibt am Vorgabe-Transport. Das ist die Anwendung, die ihrem eigenen Betreiber
+von einem kaputten Lauf schreibt, an eine Adresse aus der Config; sie spricht für keine Marke. Die
+Brand aus dem Kontext aufzugreifen wäre schlechter statt besser — eine fehlschlagende Automation
+von Marke A sähe dann aus wie Marke A, die dem Administrator des Hosts schreibt.
+
+**Eine Single-Brand-Installation ändert sich nicht, und das steht als Test da, nicht als Vorsatz.**
+Ebenso eine Mehr-Marken-Installation, deren Brands kein `settings.mail` tragen. Ein Host, der
+Absenderidentitäten anderswo führt, bindet `SenderIdentityResolver` in seinem eigenen Provider neu,
+statt dieses Addon zu ändern.
+
 ## 2.0.0 — 2026-08-09
 
 ### Removed — editions and the licence manager
