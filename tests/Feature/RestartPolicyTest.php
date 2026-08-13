@@ -1,13 +1,18 @@
 <?php
 
+use Goldnead\Marketing\Events\MarketingSubscribed;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Engine\EnrollmentGate;
 use Goldnead\StatamicAutomations\Engine\TriggerDispatcher;
+use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\SubscriberConfirmedTrigger;
+use Goldnead\StatamicAutomations\Listeners\HandleMarketingEvent;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Models\AutomationScheduledJob;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
+use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
 use Goldnead\StatamicAutomations\Support\RestartPolicy;
+use Illuminate\Support\Facades\Queue;
 
 /**
  * What happens when somebody enters an automation they have already entered.
@@ -245,4 +250,56 @@ it('is applied by the dispatcher, not only by the gate', function (): void {
     $source = file_get_contents($reflection->getFileName());
 
     expect($source)->toContain('enrollment()->evaluate');
+});
+
+it('is applied by the listeners too, not only by the dispatcher', function (): void {
+    // The gate lived in TriggerDispatcher, and the four dedicated listeners
+    // (marketing, LeadHub, forms, entries) never went through it — they built
+    // a context and called createRun() straight away. So on the one trigger a
+    // welcome sequence actually starts from, `ignore` was read by nobody: the
+    // field was in the config, the CP showed it, and a second confirmation
+    // started a second pass in parallel with the first.
+    //
+    // The marketing addon is not installed here, so its event class is stubbed
+    // the way EmailTemplatesStub stubs its sibling. The listener only reads the
+    // class name and `toPayload()`.
+    if (! class_exists(MarketingSubscribed::class)) {
+        eval('namespace Goldnead\Marketing\Events; class MarketingSubscribed { public function __construct(public array $data = []) {} public function toPayload(): array { return $this->data; } }');
+    }
+
+    // The marketing trigger is only registered when the addon is present, so
+    // it is registered by hand here — the listener looks it up by handle.
+    app(TriggerRegistry::class)->register(
+        SubscriberConfirmedTrigger::handle(),
+        SubscriberConfirmedTrigger::class,
+    );
+
+    Queue::fake();
+
+    $automation = Automation::create([
+        'name' => 'Willkommen',
+        'handle' => 'willkommen_'.bin2hex(random_bytes(4)),
+        'enabled' => true,
+    ]);
+
+    $automation->nodes()->create([
+        'node_key' => 't',
+        'type' => 'marketing.subscribed',
+        'position_x' => 0,
+        'position_y' => 0,
+        'config' => [RestartPolicy::CONFIG_KEY => RestartPolicy::Ignore->value],
+    ]);
+
+    $listener = app(HandleMarketingEvent::class);
+    $event = new MarketingSubscribed(['email' => 'jane@example.com', 'list' => 'newsletter']);
+
+    $listener->handle($event);
+    $listener->handle($event);
+
+    $runs = AutomationRun::query()->where('automation_uuid', $automation->uuid)->get();
+
+    // One welcome, and it knows whose it is — under the old code this was two
+    // runs, both with subject_key null.
+    expect($runs)->toHaveCount(1)
+        ->and($runs->first()->subject_key)->toBe('jane@example.com');
 });

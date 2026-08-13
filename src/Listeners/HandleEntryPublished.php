@@ -2,6 +2,7 @@
 
 namespace Goldnead\StatamicAutomations\Listeners;
 
+use Goldnead\StatamicAutomations\Concerns\AppliesEnrollmentPolicy;
 use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
@@ -9,6 +10,8 @@ use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
 
 class HandleEntryPublished
 {
+    use AppliesEnrollmentPolicy;
+
     public function __construct(
         protected TriggerRegistry $triggers,
         protected WorkflowRunner $runner,
@@ -45,7 +48,12 @@ class HandleEntryPublished
             }
 
             $context = $trigger->buildContext($event, $triggerNode->config ?? []);
-            $run = $this->runner->createRun($automation, $context, $triggerNode);
+            // The trigger node’s re-entry policy. See {@see AppliesEnrollmentPolicy}.
+            $run = $this->createEnrolledRun($this->runner, $automation, $triggerNode, $context);
+
+            if ($run === null) {
+                continue;
+            }
 
             RunAutomation::dispatch($run->id, $context->all(), false);
         }

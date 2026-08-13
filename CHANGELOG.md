@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.2.1 — 2026-08-13
+
+### Fixed — die Wiedereintrittsregel wurde von vier Auslösern gar nicht gelesen
+
+`EnrollmentGate` war für `TriggerDispatcher` geschrieben, und dort wurde sie auch gefragt. Die
+vier eigenen Listener — Marketing, LeadHub, Formulareinsendung, Eintrag veröffentlicht — bauen
+ihren Kontext selbst und riefen `createRun()` direkt auf. Für jede Automation, die von einem von
+ihnen startet, hat die Regel auf dem Trigger-Knoten **niemand gelesen**.
+
+Der Fehler war still in der schlimmsten Form: das Feld steht in der Konfiguration, das Control
+Panel zeigt die Auswahl, ein Export trägt sie mit, und es passierte nichts. `marketing.subscribed`
+ist der Auslöser, mit dem eine Willkommensstrecke anfängt, und der, bei dem `ignore` am meisten
+zählt: wer sich abmeldet und neu anmeldet, bekam die ganze Strecke ein zweites Mal, parallel zur
+ersten, beide weiterlaufend. Genau das soll die Regel verhindern.
+
+Dazu blieb `automation_runs.subject_key` bei diesen vier Auslösern immer `null` — der Wert, nach
+dem der Funnel verschiedene Personen zählt und an dem das nächste Ereignis derselben Person
+gemessen wird.
+
+Neu: `Concerns\AppliesEnrollmentPolicy`, benutzt von allen vier Listenern. Für jede Automation auf
+der Vorgabe `always` ändert sich nichts, und das ist jede, bis jemand etwas anderes wählt. Der
+Test dazu fällt gegen die vorherige Fassung um (zwei Läufe statt einem).
+
 ## 2.2.0 — 2026-08-12
 ### Changed
 

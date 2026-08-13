@@ -2,6 +2,7 @@
 
 namespace Goldnead\StatamicAutomations\Listeners;
 
+use Goldnead\StatamicAutomations\Concerns\AppliesEnrollmentPolicy;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
 use Goldnead\StatamicAutomations\Models\Automation;
@@ -18,6 +19,8 @@ use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
  */
 class HandleMarketingEvent
 {
+    use AppliesEnrollmentPolicy;
+
     /** Marketing event class => automation trigger handle. */
     public const EVENT_TRIGGERS = [
         'Goldnead\\Marketing\\Events\\MarketingSubscribed' => 'marketing.subscribed',
@@ -66,7 +69,12 @@ class HandleMarketingEvent
             }
 
             $context = $trigger->buildContext($payload, $triggerNode->config ?? []);
-            $run = $this->runner->createRun($automation, $context, $triggerNode);
+            // The trigger node’s re-entry policy. See {@see AppliesEnrollmentPolicy}.
+            $run = $this->createEnrolledRun($this->runner, $automation, $triggerNode, $context);
+
+            if ($run === null) {
+                continue;
+            }
 
             RunAutomation::dispatch($run->id, $context->all(), false);
         }
