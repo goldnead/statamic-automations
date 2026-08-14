@@ -51,6 +51,17 @@ use Statamic\Facades\Entry;
  * unsubscribe alert to the team, the "campaign finished" notice to an admin —
  * is untouched, which is why the check compares addresses rather than looking
  * at the trigger. See {@see self::marketingRecipientRefusal()}.
+ *
+ * **The second way in, which is warned about and not refused.** A run can also
+ * reach a subscriber without a marketing trigger: `form_submitted` →
+ * `marketing.subscribe` → a mail to the address just subscribed. That is the
+ * shipped `marketing_form_to_newsletter` template plus the obvious next node,
+ * and it ends in the same place. It is *also* how a site delivers a requested
+ * file when it happens to subscribe first and hand over second, and that mail
+ * is legitimate. Nothing in the run says which of the two it is, so this shape
+ * gets a warning naming `marketing.send_email` and the mail goes out. A
+ * refusal here would be a guess, and the thing being guessed at is whether to
+ * break somebody's working flow.
  */
 class SendEmailAction implements AutomationAction
 {
@@ -453,51 +464,132 @@ class SendEmailAction implements AutomationAction
      *     `automations.send_email.refuse_marketing_recipients`. The escape
      *     hatch is site-wide and deliberate rather than a checkbox on the
      *     node: a per-node override is ticked in the same minute the mistake
-     *     is made, by the same person, for the same reason.
+     *     is made, by the same person, for the same reason. Switching it off
+     *     is logged on every send it lets through, or the switch would be the
+     *     quietest way back to the original defect.
+     *
+     * **What it deliberately does not refuse**, and why that is not an
+     * oversight: a run that *subscribed* the address itself a node earlier
+     * (`form_submitted` → `marketing.subscribe` → here) is only warned about,
+     * see {@see self::marketingSubjects()}. Both readings of that flow are
+     * real — "welcome them", which is marketing, and "hand them the file they
+     * asked for", which is not — and nothing in the context tells them apart.
+     * Refusing would break the second one for sites that happen to order the
+     * nodes that way round.
      */
     protected function marketingRecipientRefusal(AutomationContext $context, string $to): ?string
     {
-        $list = $context->get('subscriber.list');
-        $subscriberEmail = $context->get('subscriber.email');
+        $subject = $this->marketingSubjects($context, $to);
 
-        if (! is_string($list) || trim($list) === '' || ! is_string($subscriberEmail)) {
+        if ($subject === null) {
             return null;
         }
 
-        if (! $this->sameAddress($to, $subscriberEmail)) {
-            return null;
-        }
+        [$email, $list, $certain] = $subject;
+
+        $reason = 'The run is about '.$email.'\'s subscription to list ['.$list.'], and this node sends to that '
+            .'same person. The transactional sender checks no consent, no suppression list, no opt-out and no '
+            .'frequency cap, and adds neither an unsubscribe link nor the sender details promotional mail must '
+            .'carry. Move this step onto the "Send Marketing Email" node (marketing.send_email), which asks all '
+            .'four first — a genuinely transactional mail to a subscriber belongs there too, with Classification '
+            .'set to "transactional". Mail to anybody else in this flow, e.g. a notice to your own team, is '
+            .'unaffected.';
 
         if (! static::marketingSendNodeInstalled()) {
-            Log::warning(
-                'send_email is sending marketing mail: this run is about '.$subscriberEmail.'\'s subscription to '
-                .'list ['.trim($list).'] and the mail goes to that same person. This node checks no consent, no '
-                .'suppression, no opt-out and no frequency cap, and carries neither an unsubscribe link nor a '
-                .'postal line. Install goldnead/statamic-marketing and move the step onto its "Send Marketing '
-                .'Email" node.'
-            );
+            Log::warning('send_email is sending marketing mail. '.$reason
+                .' Install goldnead/statamic-marketing to get that node.');
+
+            return null;
+        }
+
+        // The run subscribed this address itself rather than being triggered by
+        // the subscription. Said out loud, not refused — see the docblock.
+        if (! $certain) {
+            Log::warning('send_email may be sending marketing mail. '.$reason);
 
             return null;
         }
 
         if (! config('automations.send_email.refuse_marketing_recipients', true)) {
+            Log::warning('send_email is sending marketing mail and the refusal is switched off '
+                .'(automations.send_email.refuse_marketing_recipients). '.$reason);
+
             return null;
         }
 
-        return 'This is marketing mail: the run is about '.$subscriberEmail.'\'s subscription to list ['
-            .trim($list).'], and this node sends to that same person. The transactional sender checks no consent, '
-            .'no suppression list, no opt-out and no frequency cap, and adds neither an unsubscribe link nor the '
-            .'sender details promotional mail must carry. Move this step onto the "Send Marketing Email" node '
-            .'(marketing.send_email), which asks all four first — a genuinely transactional mail to a subscriber '
-            .'belongs there too, with Classification set to "transactional". Mail to anybody else in this flow, '
-            .'e.g. a notice to your own team, is unaffected.';
+        return 'This is marketing mail: '.lcfirst($reason);
+    }
+
+    /**
+     * Is this mail addressed to somebody the run treats as a marketing
+     * subscriber? Returns `[email, list, certain]`, or null.
+     *
+     * Two shapes, and the difference between them is the whole point of the
+     * `certain` flag:
+     *
+     *  - **certain** — a `marketing.subscribed` / `.unsubscribed` trigger put
+     *    the person in the context under `subscriber`. The run exists *because
+     *    of* their subscription, so a mail to them is about that subscription.
+     *    Both historical defects had this shape.
+     *  - **not certain** — a node earlier in this run subscribed (or
+     *    unsubscribed) the address, and left `list` + `email` in its output.
+     *    That is the `marketing_form_to_newsletter` template plus one more
+     *    node, which is the obvious next thing to build and the second way to
+     *    the same defect. It is also how a lead magnet is delivered by sites
+     *    that subscribe first and hand over the file second, and that mail is
+     *    legitimate. Warned about, never blocked.
+     *
+     * @return array{0: string, 1: string, 2: bool}|null
+     */
+    protected function marketingSubjects(AutomationContext $context, string $to): ?array
+    {
+        $list = $context->get('subscriber.list');
+        $email = $context->get('subscriber.email');
+
+        if (is_string($list) && trim($list) !== '' && is_string($email) && $this->sameAddress($to, $email)) {
+            return [$email, trim($list), true];
+        }
+
+        $outputs = $context->get('nodes');
+
+        if (! is_array($outputs)) {
+            return null;
+        }
+
+        foreach ($outputs as $output) {
+            if (! is_array($output)) {
+                continue;
+            }
+
+            // The shape `marketing.subscribe` / `.unsubscribe` return. The
+            // uuid (or the test-mode preview flag) is what separates them from
+            // any other node that happens to carry an address and a list.
+            $isSubscriptionResult = array_key_exists('subscription_uuid', $output)
+                || ($output['preview'] ?? false) === true;
+
+            $list = $output['list'] ?? null;
+            $email = $output['email'] ?? null;
+
+            if (! $isSubscriptionResult || ! is_string($list) || trim($list) === '' || ! is_string($email)) {
+                continue;
+            }
+
+            if ($this->sameAddress($to, $email)) {
+                return [$email, trim($list), false];
+            }
+        }
+
+        return null;
     }
 
     /**
      * Whether the marketing addon's send node is available to hand off to.
      * An overridable seam, like {@see self::emailTemplatesInstalled()}: this
      * repo does not vendor the sibling, so the "addon present" branch is only
-     * reachable in tests through a subclass.
+     * reachable in tests through a subclass. The sibling's own integration
+     * suite is where the class name in {@see self::MARKETING_ACTION} is pinned
+     * against the real class — a rename over there would otherwise degrade the
+     * refusal to a log line without a single test going red.
      */
     protected static function marketingSendNodeInstalled(): bool
     {
@@ -505,14 +597,43 @@ class SendEmailAction implements AutomationAction
     }
 
     /**
-     * Same mailbox? Case and surrounding whitespace only — no plus-address or
-     * dot normalisation, because two addresses that differ there are two
-     * different recipients as far as a refusal is concerned, and guessing
-     * otherwise would block sends nobody asked it to block.
+     * Same mailbox? Case and surrounding whitespace are ignored, a display
+     * name is stripped (`Lea <lea@example.test>` is Lea), and a comma-joined
+     * recipient list is compared member by member — a display name is not a
+     * different recipient, and neither is the second address in a list.
+     *
+     * What is deliberately NOT normalised: plus-addressing and dots. Two
+     * addresses that differ there are two different recipients as far as a
+     * refusal is concerned, and guessing otherwise would block sends nobody
+     * asked it to block.
      */
     protected function sameAddress(string $a, string $b): bool
     {
-        return mb_strtolower(trim($a)) === mb_strtolower(trim($b)) && trim($a) !== '';
+        $needle = $this->mailbox($b);
+
+        if ($needle === '') {
+            return false;
+        }
+
+        foreach (explode(',', $a) as $candidate) {
+            if ($this->mailbox($candidate) === $needle) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The bare address out of `Name <addr>`, `<addr>` or `addr`.
+     */
+    protected function mailbox(string $address): string
+    {
+        if (preg_match('/<([^>]*)>/', $address, $matches) === 1) {
+            $address = $matches[1];
+        }
+
+        return mb_strtolower(trim($address, " \t\n\r\0\x0B\"'"));
     }
 
     /**

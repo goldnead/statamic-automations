@@ -1,5 +1,58 @@
 # Changelog
 
+## 2.4.1 — 2026-08-14
+
+Alles aus der Kritiker-Runde zu 2.4.0. Die Sperre stand, der Katalog daneben
+zeigte weiter auf die Lücke.
+
+### Added — der zweite Weg zum selben Defekt wird benannt
+
+Die Sperre erkannte Werbepost nur am Marketing-Auslöser (`subscriber.*` im
+Kontext). Es gibt einen zweiten Weg zur identischen Mail, und der Katalog führt
+hin: `form_submitted` → `marketing.subscribe` → eine Mail an die eben
+angemeldete Adresse. Das ist die Vorlage „Form Submission to Newsletter" plus
+den naheliegenden nächsten Knoten.
+
+Dieser Fall wird **gewarnt, nicht verweigert**, und das ist der Punkt: derselbe
+Graph ist auch die Auslieferung einer angeforderten Datei an jemanden, den man
+vorher angemeldet hat. Beide Lesarten sind echt, nichts im Lauf trennt sie, und
+eine Verweigerung wäre geraten — geraten würde dabei, ob man jemandem seinen
+laufenden Ablauf zerbricht. Die Warnung nennt `marketing.send_email` beim Namen.
+Die Vorlage selbst sagt es jetzt in ihrer Beschreibung, weil dort entschieden
+wird, was als Nächstes gebaut wird (in `statamic-marketing` 2.7.2).
+
+### Fixed — drei Löcher in der Sperre
+
+- **Anzeigename und Empfängerliste.** `Lea <lea@example.test>` und
+  `team@example.com, lea@example.test` liefen an der Sperre vorbei, weil roh
+  verglichen wurde. Ein Anzeigename ist kein anderer Empfänger. Plus-Adressen
+  und Punkte bleiben absichtlich unnormalisiert — das wären andere Postfächer.
+- **Der Kill-Switch schwieg.** Wer `refuse_marketing_recipients` ausschaltet,
+  bekommt jetzt für jeden durchgelassenen Versand eine Warnung im Log. Ein
+  Schalter, der lautlos zum Ausgangsdefekt zurückführt, ist die stillste Art,
+  ihn wiederzubekommen.
+- **Die Naht zum Marketing-Addon war ungeprüft.** Die Sperre findet den
+  Nachbarn über einen Klassennamen als String; eine Umbenennung drüben hätte sie
+  klanglos zur Logzeile degradiert. Der Pin liegt jetzt in
+  `statamic-marketing`s Integrationssuite, wo beide Pakete wirklich installiert
+  sind.
+
+### Docs — die eine Vorlage, die an eine echte Person mailt, sagt jetzt warum sie darf
+
+`lead_magnet_delivery` ist der einzige mitgelieferte Katalogeintrag, der nicht
+an die eigene Redaktion schreibt, sondern an `{{ form.email }}`. Er darf das:
+die Mail ist die Datei, die vor Sekunden angefordert wurde, und sie meldet
+niemanden zu irgendetwas an. Nur stand das nirgends — und neben einer frischen
+Warnung stand damit eine Vorlage, die wie ihr Gegenbeispiel aussah.
+Beschreibung, README und `docs/templates.md` sagen es jetzt, mitsamt dem Satz,
+auf den es ankommt: die nächste Mail danach ist Werbung und braucht eine
+Anmeldung und `marketing.send_email`.
+
+Dazu ein Hinweis am Fixture `tests/Fixtures/stored-automations/hub-2026-07-29.json`:
+die dortige Nurture-Strecke ist ein Foto des Defekts, den 2.4.0 abstellt, und
+bleibt absichtlich so stehen. Eine Kompatibilitätsprüfung gegen aufgeräumte
+Daten prüft nichts.
+
 ## 2.4.0 — 2026-08-14
 
 ### Changed — „Send Email" ist der transaktionale Knoten, und sagt es jetzt auch

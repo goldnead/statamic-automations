@@ -185,7 +185,15 @@ addressed to the person a marketing run is about (a *Subscriber Confirmed* or
 *Unsubscribed* trigger, sending to that same subscriber) and names the node to use
 instead. A mail to any other address in the same flow — the unsubscribe alert to your
 team, the "campaign finished" notice — is untouched. Sites that need the old behaviour
-can set `automations.send_email.refuse_marketing_recipients` to `false`.
+can set `automations.send_email.refuse_marketing_recipients` to `false`; every send the
+switch then lets through is written to the log.
+
+There is a second route to the same mail: a flow with no marketing trigger that
+**subscribes** an address itself (*Subscribe to List*) and then writes to it. That one is
+only **warned** about, because the identical graph is also how a site delivers a file
+somebody requested when it subscribes them first. Nothing in the run tells the two apart,
+and refusing on a guess would break working flows — so the warning names the node to move
+to and the mail goes out.
 
 ## Templates
 

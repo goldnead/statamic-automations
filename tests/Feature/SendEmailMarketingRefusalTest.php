@@ -120,8 +120,9 @@ it('warns instead of refusing when there is no marketing node to hand off to', f
         ->once();
 });
 
-it('can be switched off site-wide', function () {
+it('can be switched off site-wide, and says so on every send it lets through', function () {
     config(['automations.send_email.refuse_marketing_recipients' => false]);
+    Log::spy();
 
     $result = nodeWithMarketing()->execute(
         subscriberContext(testMode: true),
@@ -129,4 +130,69 @@ it('can be switched off site-wide', function () {
     );
 
     expect($result->isSuccess())->toBeTrue();
+
+    Log::shouldHaveReceived('warning')
+        ->withArgs(fn (string $message) => str_contains($message, 'refusal is switched off'))
+        ->once();
+});
+
+it('sees through a display name and a comma-joined recipient list', function () {
+    foreach (['Lea <leser@example.test>', '"Lea" <LESER@example.test>', 'team@example.com, leser@example.test'] as $to) {
+        $result = nodeWithMarketing()->execute(subscriberContext(), ['to' => $to, 'subject' => 'Hi', 'body' => 'Hi']);
+
+        expect($result->isSuccess())->toBeFalse("[{$to}] ist an der Sperre vorbeigelaufen");
+    }
+});
+
+/**
+ * Der zweite Weg zum selben Defekt: kein Marketing-Auslöser, aber ein Knoten
+ * weiter vorn im Lauf hat genau diese Adresse angemeldet. Gewarnt, nicht
+ * verweigert — derselbe Graph ist auch die Auslieferung einer angeforderten
+ * Datei.
+ */
+it('warns rather than refuses when the run subscribed the address itself', function () {
+    Log::spy();
+
+    $context = AutomationContext::make([
+        'form' => ['email' => 'leser@example.test'],
+        'nodes' => [
+            'subscribe' => [
+                'subscription_uuid' => 'e3f0a0d2-0000-4000-8000-000000000000',
+                'status' => 'subscribed',
+                'list' => 'newsletter',
+                'email' => 'leser@example.test',
+            ],
+        ],
+    ], testMode: true);
+
+    $result = nodeWithMarketing()->execute(
+        $context,
+        ['to' => 'leser@example.test', 'subject' => 'Welcome aboard!', 'body' => 'Hi'],
+    );
+
+    expect($result->isSuccess())->toBeTrue();
+
+    Log::shouldHaveReceived('warning')
+        ->withArgs(fn (string $message) => str_contains($message, 'may be sending marketing mail')
+            && str_contains($message, 'marketing.send_email'))
+        ->once();
+});
+
+it('says nothing about a node output that merely carries an address', function () {
+    Log::spy();
+
+    $context = AutomationContext::make([
+        'nodes' => [
+            'lookup' => ['list' => 'newsletter', 'email' => 'leser@example.test'],
+        ],
+    ], testMode: true);
+
+    $result = nodeWithMarketing()->execute(
+        $context,
+        ['to' => 'leser@example.test', 'subject' => 'Your invoice', 'body' => 'Attached'],
+    );
+
+    expect($result->isSuccess())->toBeTrue();
+
+    Log::shouldNotHaveReceived('warning');
 });
