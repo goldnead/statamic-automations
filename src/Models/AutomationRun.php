@@ -25,11 +25,13 @@ use Illuminate\Support\Str;
  *                                    lower-cased address. Null for a trigger
  *                                    that names nobody. See Support\RestartPolicy.
  * @property string $status
+ * @property array<string, mixed>|null $context
  * @property bool $is_test
  * @property string|null $error_message
  * @property Carbon|null $started_at Millisecond precision, see MillisecondDateTime.
  * @property Carbon|null $finished_at Millisecond precision, see MillisecondDateTime.
  * @property int|null $duration_ms
+ * @property Carbon|null $created_at
  */
 class AutomationRun extends Model
 {

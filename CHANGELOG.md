@@ -1,5 +1,85 @@
 # Changelog
 
+## 2.6.0 — 2026-08-15
+
+### Added — die Aktivitätsansicht
+
+Eine Automation zeigte, ob sie läuft, aber nicht, **was sie tut**. `RunStats`
+lieferte fünf Zahlen für das Ganze, `automation_node_runs` wurde nirgends
+ausgewertet, und einen Zeitraumfilter gab es überhaupt nicht.
+
+Der Builder bekommt eine dritte Ansicht neben Flow und Mails:
+
+- **Zahlen am Knoten**, direkt auf der Leinwand. Ein Knoten ohne Läufe zeigt
+  nichts, keine Null — eine frische Automation soll nicht aussehen wie eine
+  kaputte.
+- **Trichter mit Zeitraum** (7/30/90 Tage oder alles), der zeigt, **wo** Leute
+  hängenbleiben, nicht nur wie viele.
+- **Protokoll** mit Filtern nach Schritt, Ergebnis und Zeitraum, echt
+  serverseitig paginiert, dazu ein CSV-Export derselben Auswahl.
+- **Kontakte im Ablauf**: wer gerade drinsteckt, seit wann und an welchem
+  Schritt. Läufe ohne Person (ein geplanter Lauf, ein Webhook ohne Adresse)
+  werden beziffert statt still geschluckt.
+
+Dafür tragen `automation_node_runs` jetzt `automation_uuid` und `is_test`. Beide
+stehen auf dem Elternlauf und werden bei dessen Erzeugung entschieden; kopiert
+sind sie, weil `is_test` im **Filter** gebraucht wird, nicht zum Beschriften —
+sonst bräuchte jede Kennzahl weiterhin den JOIN. Derselbe Grund, aus dem
+`brand_id` auf den Kindtabellen liegt.
+
+### Fixed — die Zahl am Knoten zählte Durchläufe, nicht Menschen
+
+Der Trichter beschriftete `COUNT(*)` über Knotenläufe als „so viele haben
+diesen Schritt erreicht". Eine Schleife schreibt aber pro Durchlauf eine Zeile
+je Körperknoten, und ein Wait-Until wird beim Fortsetzen erneut geschrieben. Bei
+zehn Schleifendurchläufen meldete der Körperknoten das Zehnfache — und weil die
+Balken gegen den belebtesten Knoten gemessen werden, schrumpften alle anderen
+Schritte auf einen Bruchteil. Die Ansicht zeichnete einen Absturz genau dort, wo
+keiner war, also bei der einen Frage, für die es sie gibt.
+
+Gezählt werden jetzt eigene Läufe (`COUNT(DISTINCT automation_run_id)`), und
+zwar je Knoten statt je Knoten und Ergebnis: ein Lauf, der einen Schritt erst
+verpatzt und beim zweiten Versuch schafft, ist einmal dort angekommen.
+
+Nachgemessen an echten Daten: ein Schritt mit vier Zeilen für eine Person.
+
+### Fixed — der Export
+
+- **Zellen sind sicher zu öffnen.** `subject` kommt aus dem Trigger-Kontext, den
+  ein Fremder über ein Formular oder einen Webhook füllt; der Einschreibungs-
+  Filter trimmt und kleinschreibt ihn, mehr nicht. Excel führt eine Zelle mit
+  führendem `=` beim Öffnen aus, bei der Person mit `view automation runs`.
+- **Backslashes bleiben stehen.** PHPs Standard-Escape gehört nicht zu RFC 4180
+  und zerlegt jeden Wert mit Backslash — also jede Fehlermeldung mit
+  Klassennamen. Dazu ein BOM, damit „Willkommensgruß" nicht als Buchstabensalat
+  ankommt.
+- **Die Datei folgt der Sortierung der Tabelle.** `Listing` merkt sich die Wahl
+  des Lesers; wer einmal aufsteigend sortiert hatte, bekam von da an jede Datei
+  in umgekehrter Reihenfolge zu der Tabelle, als die sie sich ausgibt.
+- Ein Schritt, dessen Knoten gelöscht wurde, ist in der Datei als solcher
+  benannt. Auf dem Schirm gab es dafür ein Kennzeichen, in der Datei nichts.
+
+### Fixed — „Im Ablauf" verschwieg die, auf die es ankommt
+
+Der Zeitraum wurde auch auf diese Liste angewendet. Wer vor 40 Tagen
+eingeschrieben wurde und in einer 60-Tage-Wartezeit parkt, fiel bei der
+Voreinstellung „letzte 30 Tage" heraus — und aus der Zahl daneben gleich mit, so
+dass nichts auf dem Schirm auch nur andeutete, dass jemand fehlt. Die Frage
+lautet „wer steckt jetzt drin", und das ist keine Frage nach einem Zeitraum.
+
+### Fixed — Kleinigkeiten
+
+- Die Statusspalte zeigte `success` und `failed` roh, während das Filtermenü
+  daneben „Erfolg" und „Fehlgeschlagen" anbot. Dieselbe Tatsache in zwei
+  Sprachen auf einem Schirm.
+- Die Kachel „Completed" heißt jetzt „Ran to the end" und hat eine eigene
+  Übersetzung. Der Schlüssel `Completed` gehört LeadHub (für eine erledigte
+  Aufgabe), und CP-weit gemergte Wörterbücher hätten deren Wort überschrieben.
+- Der Satz über den Läufen ohne Person sagte „:n weitere" über einer leeren
+  Tabelle.
+- Ein Knotenlauf ohne `created_at` hätte den Export an dieser Stelle still
+  abbrechen lassen.
+
 ## 2.5.0 — 2026-08-15
 
 ### Added — die Mails einer Automation stehen jetzt am Kontakt

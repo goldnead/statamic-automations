@@ -27,6 +27,12 @@ use Illuminate\Support\Collection;
  * **Test runs are excluded by default**, because an editor pressing "test" is
  * not a person going through the flow, and a completion rate that counted them
  * would read best on the automations nobody ever sent to anybody.
+ *
+ * Since 1.9.1 every reader may also pass an {@see ActivityWindow}. It is the
+ * last parameter and defaults to null, which narrows nothing — the listing
+ * screen and the mail list keep asking the lifetime question they always asked.
+ * The window makes the composite from `2026_08_15_000001`
+ * (`automation_uuid, status, created_at`) the one that answers the query.
  */
 class RunStats
 {
@@ -65,9 +71,9 @@ class RunStats
      *
      * @return array{enrolled: int, in_progress: int, completed: int, exited: int, failed: int}
      */
-    public function forAutomation(string $automationUuid, bool $includeTests = false): array
+    public function forAutomation(string $automationUuid, bool $includeTests = false, ?ActivityWindow $window = null): array
     {
-        return $this->forAutomations([$automationUuid], $includeTests)[$automationUuid]
+        return $this->forAutomations([$automationUuid], $includeTests, $window)[$automationUuid]
             ?? $this->empty();
     }
 
@@ -82,7 +88,7 @@ class RunStats
      * @param  array<int, string>  $automationUuids
      * @return array<string, array{enrolled: int, in_progress: int, completed: int, exited: int, failed: int}>
      */
-    public function forAutomations(array $automationUuids, bool $includeTests = false): array
+    public function forAutomations(array $automationUuids, bool $includeTests = false, ?ActivityWindow $window = null): array
     {
         $uuids = array_values(array_unique(array_filter(
             array_map('strval', $automationUuids),
@@ -101,6 +107,11 @@ class RunStats
         if (! $includeTests) {
             $query->where('is_test', false);
         }
+
+        // A null window narrows nothing, so `forAutomation($uuid)` returns
+        // exactly what it returned before the parameter existed — the listing
+        // screen and the mail list both call it that way.
+        $window?->apply($query);
 
         $totals = [];
 

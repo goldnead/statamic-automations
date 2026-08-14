@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'activity' => [
+        'node_removed_suffix' => '(no longer in the flow)',
+    ],
+
     'nav' => [
         'automations' => 'Automations',
         'dashboard' => 'Dashboard',

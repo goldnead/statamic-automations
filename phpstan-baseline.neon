@@ -211,24 +211,6 @@ parameters:
 			path: src/Http/Controllers/Pages/AutomationsPageController.php
 
 		-
-			message: '#^Access to an undefined property Goldnead\\StatamicAutomations\\Models\\AutomationRun\:\:\$created_at\.$#'
-			identifier: property.notFound
-			count: 2
-			path: src/Http/Controllers/Pages/DashboardPageController.php
-
-		-
-			message: '#^Access to an undefined property Goldnead\\StatamicAutomations\\Models\\AutomationRun\:\:\$context\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Controllers/Pages/RunsPageController.php
-
-		-
-			message: '#^Access to an undefined property Goldnead\\StatamicAutomations\\Models\\AutomationRun\:\:\$created_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Controllers/Pages/RunsPageController.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$duration_ms\.$#'
 			identifier: property.notFound
 			count: 1
@@ -293,60 +275,6 @@ parameters:
 			identifier: argument.unresolvableType
 			count: 1
 			path: src/Http/Controllers/Pages/RunsPageController.php
-
-		-
-			message: '#^Access to an undefined property Goldnead\\StatamicAutomations\\Models\\AutomationNodeRun\:\:\$node_key\.$#'
-			identifier: property.notFound
-			count: 2
-			path: src/Http/Controllers/RunsController.php
-
-		-
-			message: '#^Access to an undefined property Goldnead\\StatamicAutomations\\Models\\AutomationRun\:\:\$context\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Controllers/RunsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$automation_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Controllers/RunsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$automation_uuid\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Controllers/RunsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$context\.$#'
-			identifier: property.notFound
-			count: 2
-			path: src/Http/Controllers/RunsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$is_test\.$#'
-			identifier: property.notFound
-			count: 2
-			path: src/Http/Controllers/RunsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$trigger_node_key\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Controllers/RunsController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$trigger_type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Http/Controllers/RunsController.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:nodeRuns\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: src/Http/Controllers/RunsController.php
 
 		-
 			message: '#^Access to an undefined property Goldnead\\StatamicAutomations\\Http\\Resources\\AutomationResource\:\:\$created_at\.$#'
@@ -587,12 +515,6 @@ parameters:
 			identifier: new.static
 			count: 1
 			path: src/Models/Automation.php
-
-		-
-			message: '#^Access to an undefined property Goldnead\\StatamicAutomations\\Models\\AutomationNodeRun\:\:\$uuid\.$#'
-			identifier: property.notFound
-			count: 1
-			path: src/Models/AutomationNodeRun.php
 
 		-
 			message: '#^Access to an undefined property Goldnead\\StatamicAutomations\\Models\\AutomationScheduledJob\:\:\$uuid\.$#'

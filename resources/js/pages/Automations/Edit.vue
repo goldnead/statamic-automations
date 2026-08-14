@@ -27,6 +27,7 @@ import NodeLibrary from '../../components/builder/NodeLibrary.vue';
 import ConfigPanel from '../../components/builder/ConfigPanel.vue';
 import RunLogPanel from '../../components/builder/RunLogPanel.vue';
 import MailListPanel from '../../components/mails/MailListPanel.vue';
+import ActivityPanel from '../../components/activity/ActivityPanel.vue';
 import { useAutosave } from '../../composables/useAutosave.js';
 import { useHistory } from '../../composables/useHistory.js';
 import { useGraphMutations } from '../../composables/useGraphMutations.js';
@@ -50,6 +51,9 @@ const props = defineProps({
     mailListUrl: { type: String, default: null },
     mailTypes: { type: Array, default: () => [] },
     stats: { type: Object, default: null },
+    // What the automation has been doing — see ActivityPanel. Null when this
+    // user may not read runs, and then the view is not offered at all.
+    activity: { type: Object, default: null },
     canEdit: { type: Boolean, default: true },
     canEnable: { type: Boolean, default: true },
     canDelete: { type: Boolean, default: true },
@@ -77,9 +81,10 @@ const selectedNodeKey = ref(null);
 // the header chevron (see fix-picker-sidebar-brief.md § C3).
 const showLibrary = ref(true);
 
-// Two readings of one automation: the canvas, and the list of mails it sends.
-// A second *view*, not a second page — the mail list is the same graph read
-// differently, and putting it behind its own URL would invite the two to drift.
+// Three readings of one automation: the canvas (what it does), the list of
+// mails it sends, and what it has actually been doing. Views, not pages — all
+// three are the same automation read differently, and putting them behind their
+// own URLs would invite them to drift.
 const view = ref('flow');
 
 function setView(next) {
@@ -87,6 +92,23 @@ function setView(next) {
     // again. There is no "neither" state here.
     if (next) view.value = next;
 }
+
+// The switcher belongs to an automation that exists, not to the mail list: the
+// activity view is offered without one, and a create page has neither. Before
+// this the whole ToggleGroup hung off `showMailList`, which happened to be true
+// on every edit page and would have silently taken the third view with it.
+const showViews = computed(() => props.mode === 'edit');
+const showActivity = computed(() => props.mode === 'edit' && props.activity !== null);
+
+// node_key → `{ reached, completed, failed }` for the window the activity view
+// is set to, handed to the canvas so a card can carry its own numbers. Seeded
+// from the page prop so the first paint already has them, then kept in step
+// with the window by the panel.
+const nodeStats = ref({ ...(props.activity?.nodes ?? {}) });
+
+watch(() => props.activity, (next) => {
+    nodeStats.value = { ...(next?.nodes ?? {}) };
+});
 
 // The stored graph, as a string, so "has the canvas been edited since the last
 // save" is one comparison. An edit made from the mail list is written straight
@@ -113,9 +135,9 @@ const BOTTOM_GUTTER = 24; // breathing room under the editor, in px
 function updateEditorHeight() {
     const el = editorEl.value;
     if (!el) return;
-    // Hidden behind the list view, its top offset reads 0 and the measurement
+    // Hidden behind another view, its top offset reads 0 and the measurement
     // would be nonsense. The switch back schedules a fresh one.
-    if (view.value !== 'flow' && showMailList.value) return;
+    if (view.value !== 'flow') return;
     const top = el.getBoundingClientRect().top;
     const available = window.innerHeight - top - BOTTOM_GUTTER;
     editorHeight.value = `${Math.max(480, Math.round(available))}px`;
@@ -243,6 +265,17 @@ function redo() {
 const selectedNode = computed(() =>
     automation.value.nodes.find((n) => n.node_key === selectedNodeKey.value) ?? null,
 );
+
+// handle → human label, off the registry payload. The canvas resolves this
+// itself (Canvas.labelFor); the activity view needs the same answer for a node
+// the user never renamed, and the library is the one place that has it.
+const typeLabels = computed(() => {
+    const map = {};
+    for (const group of ['triggers', 'logic', 'actions']) {
+        for (const item of props.library[group] ?? []) map[item.handle] = item.label;
+    }
+    return map;
+});
 
 const triggerOutputSchema = computed(() => {
     const trigger = automation.value.nodes.find((n) =>
@@ -864,14 +897,20 @@ watch(view, scheduleHeightUpdate);
                      other, which is why this is a view switch and not a
                      separate screen. -->
                 <ToggleGroup
-                    v-if="showMailList"
+                    v-if="showViews"
                     :model-value="view"
                     size="sm"
                     :aria-label="__('View')"
                     @update:model-value="setView"
                 >
                     <ToggleItem value="flow" icon="workflow" :label="__('Flow')" />
-                    <ToggleItem value="mails" icon="mail" :label="__('Mails')" />
+                    <ToggleItem v-if="showMailList" value="mails" icon="mail" :label="__('Mails')" />
+                    <ToggleItem
+                        v-if="showActivity"
+                        value="activity"
+                        icon="chart-monitoring-indicator"
+                        :label="__('Activity')"
+                    />
                 </ToggleGroup>
 
                 <div class="flex items-center gap-1">
@@ -1047,10 +1086,26 @@ watch(view, scheduleHeightUpdate);
             />
         </div>
 
+        <!-- What the automation has been doing. Reading matter rather than a
+             canvas tool, so it gets the CP's own page measure instead of the
+             full bleed — the same `max-w-page` every listing screen in this
+             addon uses, and wide enough for the two tables inside it.
+             `v-if`, not `v-show`: those tables fetch on mount, and a view
+             nobody has opened should not be asking the server for anything. -->
+        <div v-if="view === 'activity' && showActivity" class="max-w-page mx-auto pb-8">
+            <ActivityPanel
+                :activity="activity"
+                :nodes="automation.nodes"
+                :edges="automation.edges"
+                :type-labels="typeLabels"
+                @update:nodes-stats="nodeStats = $event"
+            />
+        </div>
+
         <!-- `v-show`, not `v-if`: unmounting the canvas would throw away the
-             user's pan and zoom every time they glanced at the list. -->
+             user's pan and zoom every time they glanced at another view. -->
         <div
-            v-show="view === 'flow' || !showMailList"
+            v-show="view === 'flow'"
             ref="editorEl"
             class="grid rounded-xl border border-gray-200 dark:border-gray-800 bg-content-bg shadow-sm overflow-hidden min-h-[480px] transition-[grid-template-columns] duration-200 ease-in-out"
             :style="{
@@ -1089,6 +1144,7 @@ watch(view, scheduleHeightUpdate);
                     :edges="automation.edges"
                     :selected-key="selectedNodeKey"
                     :validation="validationByNode"
+                    :node-stats="nodeStats"
                     :library="library"
                     :pending-target="pendingTarget"
                     @select="selectedNodeKey = $event"

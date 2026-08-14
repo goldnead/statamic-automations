@@ -3,12 +3,14 @@
 namespace Goldnead\StatamicAutomations\Http\Controllers\Pages;
 
 use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
+use Goldnead\StatamicAutomations\Http\Controllers\ActivityController;
 use Goldnead\StatamicAutomations\Http\Controllers\Controller;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Sequence\MailListProjection;
 use Goldnead\StatamicAutomations\Sequence\MailSteps;
+use Goldnead\StatamicAutomations\Support\ActivityWindow;
 use Goldnead\StatamicAutomations\Support\RunStats;
 use Goldnead\StatamicAutomations\Templates\TemplateRegistry;
 use Illuminate\Http\Request;
@@ -142,10 +144,51 @@ class AutomationsPageController extends Controller
             // question from its own rows. See Sequence\MailSteps.
             'mailTypes' => $this->mailTypesPayload(),
             'stats' => app(RunStats::class)->forAutomation((string) $automationFlow->uuid),
+            // The third reading of the same automation: what it has actually
+            // been doing. The numbers travel as a prop rather than being
+            // fetched, because the canvas paints them on its cards the moment
+            // the page opens — an empty first frame followed by numbers
+            // appearing is worse than a prop. Everything that comes AFTER a
+            // click (the protocol, the people, another window) is fetched from
+            // ActivityController; re-rendering this page, which loads the graph,
+            // the node registry and the mail projection, to turn a table page
+            // would cost more than the table.
+            'activity' => $this->activityPayload($automationFlow),
             'canEdit' => $this->userCan('edit automations'),
             'canEnable' => $this->userCan('enable automations'),
             'canDelete' => $this->userCan('delete automations'),
             'canTest' => $this->userCan('run automation tests'),
+        ]);
+    }
+
+    /**
+     * Everything the activity view needs to render its first frame, or null.
+     *
+     * Null when the user may not read runs. The view is a reading of
+     * `automation_runs` and `automation_node_runs`, so it is gated on
+     * `view automation runs` — the same permission the run listing and every
+     * endpoint behind this view ask for — and not on `edit automations`, which
+     * is what got them onto this page.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function activityPayload(Automation $automation): ?array
+    {
+        if (! $this->userCan('view automation runs')) {
+            return null;
+        }
+
+        $window = ActivityWindow::default();
+
+        return array_merge(ActivityController::payload($automation, $window), [
+            'ranges' => ActivityWindow::options(),
+            'statusOptions' => ActivityController::statusOptions(),
+            'logColumns' => ActivityController::logColumns(),
+            'subjectColumns' => ActivityController::subjectColumns(),
+            'overviewUrl' => cp_route('statamic-automations.api.automations.activity', $automation->id),
+            'logUrl' => cp_route('statamic-automations.api.automations.activity.node-runs', $automation->id),
+            'subjectsUrl' => cp_route('statamic-automations.api.automations.activity.subjects', $automation->id),
+            'exportUrl' => cp_route('statamic-automations.api.automations.activity.export', $automation->id),
         ]);
     }
 

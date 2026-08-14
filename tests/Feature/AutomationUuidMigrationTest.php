@@ -25,17 +25,7 @@ class AutomationUuidMigrationTest extends TestCase
         // Simulate an install created by the OLDER create-migration, before
         // `automation_uuid` was added inline: drop it so the table looks legacy.
         // (Drop the index first — SQLite refuses to drop an indexed column.)
-        Schema::table('automation_runs', function (Blueprint $table) {
-            $table->dropIndex(['automation_uuid']);
-            // Every index that mentions the column, not just the one that was
-            // there in 1.2. 1.9 added two composites on it (the funnel and the
-            // re-entry lookup), and SQLite refuses the drop while any index
-            // still names the column — with an error about the index rather
-            // than about the column, which is a slow thing to read backwards.
-            $table->dropIndex('automation_runs_uuid_status_index');
-            $table->dropIndex('automation_runs_uuid_subject_index');
-            $table->dropColumn('automation_uuid');
-        });
+        $this->dropAutomationUuid();
 
         $this->assertFalse(
             Schema::hasColumn('automation_runs', 'automation_uuid'),
@@ -60,15 +50,37 @@ class AutomationUuidMigrationTest extends TestCase
         $this->assertTrue(Schema::hasColumn('automation_runs', 'automation_uuid'));
 
         // After a manual drop, up() re-adds it — and a second call still no-ops.
-        Schema::table('automation_runs', function (Blueprint $t) {
-            $t->dropIndex(['automation_uuid']);
-            $t->dropIndex('automation_runs_uuid_status_index');
-            $t->dropIndex('automation_runs_uuid_subject_index');
-            $t->dropColumn('automation_uuid');
-        });
+        $this->dropAutomationUuid();
         $migration->up();
         $migration->up();
 
         $this->assertTrue(Schema::hasColumn('automation_runs', 'automation_uuid'));
+    }
+
+    /**
+     * Make the table look like a pre-1.2 install: no `automation_uuid` at all.
+     *
+     * Every index that mentions the column has to go first, and they are read
+     * off the schema rather than listed here. SQLite refuses to drop an indexed
+     * column — with an error about the index rather than about the column,
+     * which is a slow thing to read backwards — and this list has already grown
+     * three times: 1.9 added the funnel composite and the re-entry lookup, and
+     * 1.9.1 added the one that carries the date. A hardcoded list makes the
+     * NEXT index fail two unrelated tests with a message about SQLite.
+     */
+    private function dropAutomationUuid(): void
+    {
+        $indexes = collect(Schema::getIndexes('automation_runs'))
+            ->filter(fn (array $index) => in_array('automation_uuid', $index['columns'] ?? [], true))
+            ->pluck('name')
+            ->all();
+
+        Schema::table('automation_runs', function (Blueprint $table) use ($indexes) {
+            foreach ($indexes as $name) {
+                $table->dropIndex($name);
+            }
+
+            $table->dropColumn('automation_uuid');
+        });
     }
 }

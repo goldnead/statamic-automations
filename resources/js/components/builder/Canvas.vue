@@ -67,6 +67,11 @@ const props = defineProps({
     // `{kind:'insert', edge}`. Passed through so adders can render their own
     // active/pending state without prop-drilling through NodeCard/VueFlow slots.
     pendingTarget: { type: Object, default: null },
+    // node_key → `{ reached, completed, failed }`, for the window the activity
+    // view is set to. Travels the same way `validation` does: a map keyed by
+    // node_key, resolved per card in cardProps(). A node missing from the map
+    // has had nothing run through it and its card shows no numbers.
+    nodeStats: { type: Object, default: () => ({}) },
 });
 
 const emit = defineEmits([
@@ -103,6 +108,7 @@ function cardProps(slotProps) {
         data: slotProps.data,
         selected: slotProps.selected,
         status: statusFor(slotProps.id),
+        stats: props.nodeStats[slotProps.id] ?? null,
     };
 }
 

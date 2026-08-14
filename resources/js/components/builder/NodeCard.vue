@@ -106,6 +106,40 @@
             </div>
         </div>
 
+        <!-- What this step has actually done, in the window the activity view
+             is set to: how many reached it, how many got through, how many
+             broke on it.
+
+             Absent, not zero, when nothing has run through this node. A fresh
+             automation whose every card reads "0 / 0 / 0" looks broken rather
+             than new, and the difference between "nobody yet" and "everybody
+             failed" is the one thing this strip exists to make obvious.
+
+             The card is a fixed 240px (cp.css), so the numbers are glyph plus
+             figure with the sentence in the tooltip, and the failure figure only
+             appears when there is a failure to report. -->
+        <div v-if="stats" class="sa-node__stats" data-node-stats>
+            <span class="sa-node__stat" :title="__(':n reached this step', { n: stats.reached })">
+                <Icon name="arrow-down" class="size-3" />
+                <span>{{ formatCount(stats.reached) }}</span>
+            </span>
+            <span
+                class="sa-node__stat sa-node__stat--done"
+                :title="__(':n got through it', { n: stats.completed })"
+            >
+                <Icon name="checkmark" class="size-3" />
+                <span>{{ formatCount(stats.completed) }}</span>
+            </span>
+            <span
+                v-if="stats.failed"
+                class="sa-node__stat sa-node__stat--failed"
+                :title="__(':n failed here', { n: stats.failed })"
+            >
+                <Icon name="warning-diamond" class="size-3" />
+                <span>{{ formatCount(stats.failed) }}</span>
+            </span>
+        </div>
+
         <!-- Footer: status dot + kind label · output legend (one label per
              source handle, e.g. true/false, switch case handles, loop/done,
              parallel branch handles — empty for the plain single-output
@@ -151,7 +185,24 @@ const props = defineProps({
     data: { type: Object, required: true },
     status: { type: String, default: null },
     selected: { type: Boolean, default: false },
+    /**
+     * `{ reached, completed, failed }` for this node in the activity view's
+     * current window, or null when this node has no runs in it. Null is not the
+     * same as zeroes and is rendered as nothing at all — see the template.
+     */
+    stats: { type: Object, default: null },
 });
+
+/**
+ * Four figures and up in thousands, because the card is 240px wide and three of
+ * these sit on one line. `12.4k` is legible where `12437` pushes the failure
+ * count off the edge; the exact number stays in the tooltip.
+ */
+function formatCount(value) {
+    const n = Number(value) || 0;
+    if (n < 1000) return String(n);
+    return `${(n / 1000).toFixed(n < 10000 ? 1 : 0).replace(/\.0$/, '')}k`;
+}
 
 defineEmits(['rename', 'duplicate', 'toggle-disabled', 'delete', 'replace-trigger']);
 

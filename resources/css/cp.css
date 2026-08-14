@@ -175,6 +175,23 @@
     }
     .sa-node__chips { @apply flex flex-wrap gap-1; }
 
+    /* What has run through this step, in the activity view's window. Its own
+     * band between body and footer: the footer's right-hand side already
+     * carries the output legend of a branch, and three figures crowding in
+     * there is what breaks a 240px card. Rendered only when there is something
+     * to report — see NodeCard. */
+    .sa-node__stats {
+        @apply flex items-center gap-3 px-3 py-1.5
+               border-t border-gray-100 dark:border-gray-800
+               bg-gray-50/70 dark:bg-gray-800/40;
+    }
+    .sa-node__stat {
+        @apply inline-flex items-center gap-1 text-[11px] font-medium tabular-nums
+               text-gray-500 dark:text-gray-400;
+    }
+    .sa-node__stat--done   { @apply text-emerald-600 dark:text-emerald-400; }
+    .sa-node__stat--failed { @apply text-red-600 dark:text-red-400; }
+
     .sa-node__footer {
         @apply flex items-center gap-1.5 px-3 py-1.5
                border-t border-gray-100 dark:border-gray-800;

@@ -84,6 +84,46 @@ class LeadHubAdapter
         return true;
     }
 
+    /**
+     * Control Panel links to the contacts behind these addresses, where LeadHub
+     * knows them.
+     *
+     * Everything about this method is guarded, because the whole point is that
+     * the screen calling it works identically without the sibling installed: no
+     * LeadHub, no route, or no contact for an address each produce a missing
+     * key, and the caller renders plain text. Nothing here names a class of the
+     * sibling — the lookup goes through this adapter's own `findByEmail`, and
+     * the URL is built from a route NAME, asked for rather than assumed.
+     *
+     * Bounded by the caller's page, not by its table: it is asked for the
+     * twenty-five addresses on screen, so the cost does not grow with the number
+     * of people the automation has ever enrolled.
+     *
+     * @param  list<string>  $emails
+     * @return array<string, string> address → CP url, missing where unknown
+     */
+    public function contactUrls(array $emails): array
+    {
+        $route = 'statamic.cp.leadhub.contacts.show';
+
+        if ($emails === [] || $this->resolve() === null || ! app('router')->has($route)) {
+            return [];
+        }
+
+        $urls = [];
+
+        foreach (array_unique(array_filter($emails)) as $email) {
+            $contact = $this->findByEmail((string) $email);
+            $key = $contact['uuid'] ?? $contact['id'] ?? null;
+
+            if ($key !== null) {
+                $urls[(string) $email] = route($route, $key);
+            }
+        }
+
+        return $urls;
+    }
+
     public function find(string $id): ?array
     {
         $service = $this->resolve();

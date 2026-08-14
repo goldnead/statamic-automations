@@ -1,5 +1,6 @@
 <?php
 
+use Goldnead\StatamicAutomations\Http\Controllers\ActivityController;
 use Goldnead\StatamicAutomations\Http\Controllers\AuditController;
 use Goldnead\StatamicAutomations\Http\Controllers\AutomationsController;
 use Goldnead\StatamicAutomations\Http\Controllers\EmailTemplatePreviewController;
@@ -131,6 +132,20 @@ Route::prefix('automations')
                 ->name('automations.rule');
             Route::patch('automations/{automationFlow}/rule', [RuleController::class, 'update'])
                 ->name('automations.rule.update');
+
+            // The activity view — what one automation has actually been doing.
+            // Four readings of the same rows, all narrowed by the same window:
+            // the funnel and the per-node numbers, the protocol, the protocol
+            // as a file, and the people currently inside the flow. All four
+            // require `view automation runs`, including the export.
+            Route::get('automations/{automationFlow}/activity', [ActivityController::class, 'overview'])
+                ->name('automations.activity');
+            Route::get('automations/{automationFlow}/activity/node-runs', [ActivityController::class, 'nodeRuns'])
+                ->name('automations.activity.node-runs');
+            Route::get('automations/{automationFlow}/activity/export', [ActivityController::class, 'export'])
+                ->name('automations.activity.export');
+            Route::get('automations/{automationFlow}/activity/subjects', [ActivityController::class, 'subjects'])
+                ->name('automations.activity.subjects');
 
             // Node / trigger / action metadata
             Route::get('nodes', [NodesController::class, 'index'])->name('nodes.index');

@@ -12,6 +12,7 @@ import {
     DropdownItem,
     Icon,
 } from '@statamic/cms/ui';
+import { statusColor } from '../../support/runStatus.js';
 
 const props = defineProps({
     title: { type: String, required: true },
@@ -25,18 +26,6 @@ const props = defineProps({
 
 const status = ref(props.filters.status ?? '');
 const isTest = ref(props.filters.is_test ?? null);
-
-function statusColor(s) {
-    return {
-        success: 'green',
-        failed: 'red',
-        stopped: 'amber',
-        running: 'blue',
-        queued: 'default',
-        waiting: 'blue',
-        cancelled: 'default',
-    }[s] ?? 'default';
-}
 
 function applyFilters() {
     router.get(window.location.pathname, {

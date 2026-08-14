@@ -12,6 +12,7 @@ import {
 } from '@statamic/cms/ui';
 import axios from 'axios';
 import { firstMessage } from '../../support/serverErrors.js';
+import { statusColor } from '../../support/runStatus.js';
 
 const props = defineProps({
     title: { type: String, required: true },
@@ -22,18 +23,6 @@ const props = defineProps({
 });
 
 const retryingNodeId = ref(null);
-
-function statusColor(s) {
-    return {
-        success: 'green',
-        failed: 'red',
-        stopped: 'amber',
-        running: 'blue',
-        queued: 'default',
-        waiting: 'blue',
-        skipped: 'default',
-    }[s] ?? 'default';
-}
 
 function formatDate(value) {
     if (!value) return '—';

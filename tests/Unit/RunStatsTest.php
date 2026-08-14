@@ -2,6 +2,7 @@
 
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
+use Goldnead\StatamicAutomations\Support\ActivityWindow;
 use Goldnead\StatamicAutomations\Support\RunStats;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -97,6 +98,57 @@ it('counts distinct people separately from enrollments', function (): void {
         ->and($this->stats->distinctSubjects($this->automation->uuid))->toBe(2);
 });
 
+it('answers exactly as it always did when no window is given', function (): void {
+    // The listing screen and the mail list both call it without one, and both
+    // mean "ever". A window parameter that quietly became "the last 30 days" by
+    // default would change every number on the index page.
+    $this->travelTo(now()->subYears(2), function (): void {
+        ($this->run)(AutomationRun::STATUS_SUCCESS);
+        ($this->run)(AutomationRun::STATUS_FAILED);
+    });
+
+    ($this->run)(AutomationRun::STATUS_WAITING);
+
+    expect($this->stats->forAutomation($this->automation->uuid))->toBe([
+        'enrolled' => 3,
+        'in_progress' => 1,
+        'completed' => 1,
+        'exited' => 0,
+        'failed' => 1,
+    ]);
+});
+
+it('counts only what falls inside the window when one is given', function (): void {
+    $this->travelTo(now()->subDays(45), function (): void {
+        ($this->run)(AutomationRun::STATUS_SUCCESS);
+    });
+
+    ($this->run)(AutomationRun::STATUS_SUCCESS);
+
+    expect($this->stats->forAutomation($this->automation->uuid, false, ActivityWindow::make('30')))
+        ->toBe([
+            'enrolled' => 1,
+            'in_progress' => 0,
+            'completed' => 1,
+            'exited' => 0,
+            'failed' => 0,
+        ])
+        ->and($this->stats->forAutomation($this->automation->uuid, false, ActivityWindow::make('90'))['completed'])
+        ->toBe(2)
+        ->and($this->stats->forAutomation($this->automation->uuid, false, ActivityWindow::make('all'))['completed'])
+        ->toBe(2);
+});
+
+it('reads a nonsense window as everything rather than refusing it', function (): void {
+    // The range arrives in a URL, and a URL is edited by hand and pasted between
+    // installs. Answering a typo with a 422 in the middle of a builder page
+    // would be worse than showing everything.
+    ($this->run)(AutomationRun::STATUS_SUCCESS);
+
+    expect(ActivityWindow::make('last-tuesday')->range)->toBe('all')
+        ->and(ActivityWindow::make('last-tuesday')->from)->toBeNull();
+});
+
 it('has the composite indexes the two readers need', function (): void {
     // The migration exists because `automation_uuid` and `status` as two
     // separate single-column indexes answer neither question: one narrows to an
@@ -105,5 +157,8 @@ it('has the composite indexes the two readers need', function (): void {
     $indexes = collect(Schema::getIndexes('automation_runs'))->pluck('columns');
 
     expect($indexes)->toContain(['automation_uuid', 'status'])
-        ->and($indexes)->toContain(['automation_uuid', 'subject_key']);
+        ->and($indexes)->toContain(['automation_uuid', 'subject_key'])
+        // And, since the funnel takes a timeframe, the one that carries the
+        // date as well. The pair above is its prefix and stays.
+        ->and($indexes)->toContain(['automation_uuid', 'status', 'created_at']);
 });

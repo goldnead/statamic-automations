@@ -40,20 +40,11 @@
 
 <script setup>
 import { Badge, Alert } from '@statamic/cms/ui';
+import { statusColor } from '../../support/runStatus.js';
 
 defineProps({
     run: { type: Object, default: null },
 });
-
-function statusColor(s) {
-    return {
-        success: 'green',
-        failed: 'red',
-        stopped: 'amber',
-        running: 'blue',
-        skipped: 'default',
-    }[s] ?? 'default';
-}
 
 function stringify(value) {
     try { return JSON.stringify(value, null, 2); }

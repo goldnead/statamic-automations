@@ -1,6 +1,10 @@
 <?php
 
 return [
+    'activity' => [
+        'node_removed_suffix' => '(nicht mehr im Ablauf)',
+    ],
+
     'nav' => [
         'automations' => 'Automatisierungen',
         'dashboard' => 'Übersicht',

@@ -99,6 +99,11 @@ class RunLogger
 
         $nodeRun = AutomationNodeRun::create([
             'automation_run_id' => $run->id,
+            // Handed over rather than looked up: the model would otherwise read
+            // the parent back for these two (see AutomationNodeRun::inheritFromRun),
+            // and this method runs once per node of every run.
+            'automation_uuid' => $run->automation_uuid,
+            'is_test' => (bool) $run->is_test,
             'node_key' => $nodeKey,
             'node_type' => $nodeType,
             'status' => $status,
