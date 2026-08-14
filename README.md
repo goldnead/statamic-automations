@@ -195,7 +195,7 @@ Eight curated templates ship with the addon — each one is **copied** into a us
 - **Form Submission to Webhook** — forward submissions to an external URL
 - **Qualified Lead to CRM** — push qualified leads + add note + schedule follow-up
 - **Workshop Inquiry Flow** — capture, tag, notify, schedule follow-up
-- **Lead Magnet Delivery** — send the file, create a tagged lead, log the delivery
+- **Lead Magnet Delivery** — send the requested file, create a tagged lead, log the delivery. The mail answers the request and nothing more; a follow-up needs a subscription and the marketing send node
 - **Follow-up Reminder** — daily reminders for due follow-ups
 - **Entry Published Notification** — webhook on collection publish (Slack-friendly)
 - **Webhook Failure Alert** — admin email when a destination keeps failing

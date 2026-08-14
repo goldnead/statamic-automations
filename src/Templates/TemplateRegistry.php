@@ -202,7 +202,17 @@ class TemplateRegistry
         return [
             'handle' => 'lead_magnet_delivery',
             'name' => 'Lead Magnet Delivery',
-            'description' => 'Capture an email through a form, deliver the lead magnet by email, and create a tagged LeadHub lead.',
+            // The one built-in that mails a member of the public rather than
+            // the site's own team, and it stays on the transactional node
+            // because the mail *is* the answer to the request that created it:
+            // one file, asked for by name, seconds earlier. Nothing here
+            // subscribes anybody. A second mail — a nudge, a follow-up, an
+            // offer — is marketing and belongs on `marketing.send_email` after
+            // a subscription, which is what the description says out loud so
+            // that the next step somebody adds is the right one.
+            'description' => 'Capture an email through a form, deliver the requested file by email, and create a tagged LeadHub lead. '
+                .'The delivery mail is transactional: it answers the request and nothing more. It does not subscribe anyone, and any '
+                .'follow-up mail needs a subscription and the "Send Marketing Email" node.',
             'requires' => ['leadhub'],
             'nodes' => [
                 ['node_key' => 'trigger', 'type' => 'form_submitted', 'position_x' => 0, 'position_y' => 0, 'config' => [

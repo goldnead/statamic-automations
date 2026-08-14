@@ -58,6 +58,12 @@ POST /cp/automations/api/templates/{handle}/install
 - **Logic**: `filter` (require non-empty email)
 - **Actions**: `send_email`, `leadhub.create_or_update_lead`, `leadhub.add_tag`, `add_log_entry`
 
+The only built-in that mails a member of the public rather than your own team,
+and the only one that may: the mail is the file they just asked for. Nothing
+here subscribes anybody. A nudge, a follow-up or an offer afterwards is
+marketing — it needs a subscription and the `marketing.send_email` node from
+`goldnead/statamic-marketing`, never a second `send_email` here.
+
 ### `follow_up_reminder`
 
 > Email yourself a reminder whenever a LeadHub follow-up becomes due.

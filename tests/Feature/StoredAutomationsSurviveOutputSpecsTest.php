@@ -16,6 +16,16 @@
  * `default` edges, two delay flows, and the branch graph 1.5.5 was built
  * against, wired on `true`. If a stored `from_output` stopped resolving,
  * these are the graphs it would happen to.
+ *
+ * **Do not copy the nurture flow out of that file.** It is a photograph of the
+ * defect 2.4.0 exists to stop: five marketing mails on the domain-neutral
+ * `send_email`, addressed to `{{ subscriber.email }}` under a
+ * `marketing.subscribed` trigger, with no consent, suppression, opt-out or cap
+ * asked and no unsubscribe link on the message. The real flow was moved onto
+ * `marketing.send_email` on 14.08.2026; the fixture keeps the old shape
+ * deliberately, because a compatibility test is worth nothing against data
+ * somebody has tidied up. The node refuses that shape now — which this suite
+ * never notices, since it validates and re-wires graphs and never runs one.
  */
 
 use Goldnead\StatamicAutomations\Engine\FlowValidator;
