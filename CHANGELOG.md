@@ -1,5 +1,40 @@
 # Changelog
 
+## 2.5.0 — 2026-08-15
+
+### Added — die Mails einer Automation stehen jetzt am Kontakt
+
+Die Kontaktseite in LeadHub beantwortet „was hat diese Person von uns bekommen".
+Kampagnen melden sich dort von Marketings Seite selbst; die Mails, die eine
+Automation verschickt — oft die allerersten, die jemand überhaupt bekommt —
+waren der eine fehlende Teil dieser Antwort.
+
+Was der Eintrag **nicht** sagen kann, sagt er selbst: eine Automations-Mail
+geht durch den Mailer, nicht durch Marketings gemessenen Sendepfad. Kein Pixel,
+keine umgeschriebenen Links, also keine Öffnung und kein Klick. Ein Eintrag,
+„versendet", mit dem Hinweis dazu. Eine Zeitleiste, die dazu schweigt, liest
+sich als „nie geöffnet", und das ist eine andere und unwahre Sache.
+
+- **Kein Klassenname des Nachbar-Addons taucht hier auf.** Alles läuft über
+  `Integrations\LeadHub\LeadHubAdapter`, der LeadHub aus dem Container holt
+  und „nicht installiert" ohne Fehler beantwortet. Das ist es, was die
+  Integration optional hält.
+- **Nur für Kontakte, die es schon gibt**, und nie fatal: der Weg hängt hinten
+  an einem bereits erfolgreichen Versand.
+- **Testläufe schreiben nichts.** `automations.test_mode.send_real_emails` ist
+  eine ausgelieferte Option; mit ihr an liefert der Erfolgspfad wieder eine
+  echte Adresse.
+- `marketing.send_email` bleibt außen vor und meldet sich weiter selbst, sonst
+  stünde jede solche Mail zweimal am Kontakt.
+
+Abschaltbar über `automations.timeline.enabled`.
+
+### Fixed
+
+- `AutomationRun::automation()` ist jetzt als Beziehung dokumentiert, die auch
+  leer sein kann: ein Lauf überlebt die Automation, aus der er stammt. Damit
+  fällt ein Altbefund aus der phpstan-Baseline.
+
 ## 2.4.1 — 2026-08-14
 
 Alles aus der Kritiker-Runde zu 2.4.0. Die Sperre stand, der Katalog daneben

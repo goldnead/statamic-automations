@@ -15,6 +15,8 @@ use Illuminate\Support\Str;
 /**
  * @property string $uuid
  * @property int|null $automation_id
+ * @property-read Automation|null $automation The definition this run belongs to,
+ *                when it still exists — a run outlives the automation it came from.
  * @property string|null $automation_uuid The canonical reference — the only one
  *                                        a flat-file definition has.
  * @property string|null $trigger_node_key

@@ -43,12 +43,6 @@ parameters:
 			path: src/Engine/FlowValidator.php
 
 		-
-			message: '#^Method Goldnead\\StatamicAutomations\\Engine\\WorkflowRunner\:\:resolveAutomation\(\) should return Goldnead\\StatamicAutomations\\Models\\Automation\|null but returns Illuminate\\Database\\Eloquent\\Model\|null\.$#'
-			identifier: return.type
-			count: 1
-			path: src/Engine/WorkflowRunner.php
-
-		-
 			message: '#^Parameter &\$visited by\-ref type of method Goldnead\\StatamicAutomations\\Engine\\WorkflowRunner\:\:runFrom\(\) expects array\<string, bool\>, array given\.$#'
 			identifier: parameterByRef.type
 			count: 2

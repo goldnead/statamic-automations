@@ -56,6 +56,34 @@ class LeadHubAdapter
         }
     }
 
+    /**
+     * Hand LeadHub a generic source event for its timeline.
+     *
+     * An array, not a `SourceEvent`: that class belongs to the sibling, and this
+     * addon must keep working where the sibling is absent. `LeadHubManager::ingest()`
+     * accepts either and builds the object on its own side.
+     *
+     * Returns whether the CRM was there to take it. No caller reads that today;
+     * it is here because a silent no-op and a written entry are different
+     * outcomes, and the next caller should not have to guess which happened.
+     *
+     * @param  array<string, mixed>  $event  Keys as `SourceEvent::fromArray()` reads
+     *                                       them: email, type, summary, source_type,
+     *                                       source_id, dedupe_key, payload.
+     */
+    public function ingest(array $event): bool
+    {
+        $service = $this->resolve();
+
+        if ($service === null || ! method_exists($service, 'ingest')) {
+            return false;
+        }
+
+        $this->invoke($service, 'ingest', [$event]);
+
+        return true;
+    }
+
     public function find(string $id): ?array
     {
         $service = $this->resolve();

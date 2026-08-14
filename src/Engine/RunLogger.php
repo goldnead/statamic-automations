@@ -2,6 +2,8 @@
 
 namespace Goldnead\StatamicAutomations\Engine;
 
+use Goldnead\StatamicAutomations\Integrations\LeadHub\TimelineRecorder;
+use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationNodeRun;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Support\ActionResult;
@@ -95,7 +97,7 @@ class RunLogger
             default => AutomationNodeRun::STATUS_SUCCESS,
         };
 
-        return AutomationNodeRun::create([
+        $nodeRun = AutomationNodeRun::create([
             'automation_run_id' => $run->id,
             'node_key' => $nodeKey,
             'node_type' => $nodeType,
@@ -111,5 +113,65 @@ class RunLogger
             'finished_at' => $finished,
             'duration_ms' => static::elapsedMs($started, $finished),
         ]);
+
+        $this->reportMailToTimeline($run, $nodeKey, $nodeType, $status, $result);
+
+        return $nodeRun;
+    }
+
+    /**
+     * A mail this step sent, onto the recipient's LeadHub timeline.
+     *
+     * Hung here rather than inside the action because this is the one place that
+     * knows both the run and its outcome — the action has the address and the
+     * subject, the runner has the automation and the run, and every path that
+     * executes a node comes through this method.
+     *
+     * Only `send_email`, the addon's own node. `marketing.send_email` goes out
+     * through marketing's tracked send path and reports itself from there;
+     * reporting it here as well would put every such mail on the timeline twice.
+     */
+    protected function reportMailToTimeline(
+        AutomationRun $run,
+        string $nodeKey,
+        string $nodeType,
+        string $status,
+        ?ActionResult $result,
+    ): void {
+        if ($nodeType !== 'send_email' || $status !== AutomationNodeRun::STATUS_SUCCESS || $result === null) {
+            return;
+        }
+
+        // A test run must not write to the CRM. Today it happens to be safe —
+        // the action returns a preview without `sent_to` in test mode — but
+        // `automations.test_mode.send_real_emails` is a shipped, supported
+        // option, and with it on the success path returns a real `sent_to`
+        // again. A safeguard that holds only while a *different* class keeps a
+        // key out of its output is not a safeguard. The same line is drawn
+        // explicitly for failure alerts a few methods up.
+        if ($run->is_test) {
+            return;
+        }
+
+        $to = (string) ($result->output['sent_to'] ?? '');
+
+        if ($to === '') {
+            return;
+        }
+
+        // A run outlives the automation it came from, so the definition may be
+        // gone by the time this writes; the uuid is then the only name there is.
+        $definition = $run->automation;
+
+        app(TimelineRecorder::class)->sent(
+            to: $to,
+            subject: (string) ($result->output['subject'] ?? ''),
+            template: $result->output['template'] ?? null,
+            runUuid: (string) $run->uuid,
+            automation: $definition instanceof Automation
+                ? (string) $definition->name
+                : (string) ($run->automation_uuid ?? ''),
+            nodeKey: $nodeKey,
+        );
     }
 }

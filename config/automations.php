@@ -140,6 +140,25 @@ return [
         'refuse_marketing_recipients' => env('STATAMIC_AUTOMATIONS_REFUSE_MARKETING_RECIPIENTS', true),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Timeline — the mails an automation sent, on the contact's record
+    |--------------------------------------------------------------------------
+    |
+    | A `send_email` step writes an entry onto the recipient's LeadHub timeline,
+    | so the contact screen can answer "what has this person had from us"
+    | including the mails that never went out as a campaign.
+    |
+    | Nothing is written for an address with no contact: an automation may
+    | legitimately mail somebody who is not in the CRM, and filing them here
+    | would be the automation quietly creating records.
+    |
+    */
+
+    'timeline' => [
+        'enabled' => true,
+    ],
+
     'test_mode' => [
         'send_real_webhooks' => false,
         'send_real_emails' => false,
