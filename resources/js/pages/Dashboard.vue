@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Head, Link } from '@statamic/cms/inertia';
-import { Header, Button, Listing, Widget, Panel } from '@statamic/cms/ui';
+import { Header, Button, Listing, Card, Panel, Heading, Subheading } from '@statamic/cms/ui';
 
 const props = defineProps({
     title: { type: String, required: true },
@@ -41,7 +41,11 @@ function barHeight(value) {
             <Button v-if="canCreate" :href="createUrl" :text="__('Create automation')" variant="primary" />
         </Header>
 
-        <!-- KPI cards -->
+        <!-- Stat tiles. `Card` + `Subheading` + `Heading`, the same three parts
+             every other dashboard in this addon family is built from — the
+             `Widget` used here before is a dashboard-widget chrome with its own
+             header rule and minimum height, which left each number stranded in
+             the top-left corner of a tall empty box. -->
         <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
             <component
                 :is="card.href ? Link : 'div'"
@@ -50,20 +54,24 @@ function barHeight(value) {
                 :href="card.href"
                 class="block"
             >
-                <Widget :title="card.label" class="h-full">
-                    <div
-                        class="text-2xl font-semibold tabular-nums"
+                <Card class="h-full">
+                    <Subheading :text="card.label" />
+                    <Heading
+                        size="2xl"
+                        class="mt-2 tabular-nums"
                         :class="card.tone === 'danger' && card.value ? 'text-red-600 dark:text-red-400' : ''"
-                    >
-                        {{ card.value }}
-                    </div>
-                </Widget>
+                        :text="String(card.value)"
+                    />
+                </Card>
             </component>
         </div>
 
-        <!-- 14-day trend -->
+        <!-- 14-day trend. The chart sits on a `Card` inside the `Panel`: a Panel
+             is a headed region, not a surface, so its bare body took the page
+             background and the chart read as a grey slab next to the white
+             tiles above it. -->
         <Panel :heading="__('Runs — last 14 days')" class="mb-6">
-            <div class="p-4">
+            <Card>
                 <!-- Hand-drawn because core ships no chart component. The bars
                      carry no text, so the whole thing is announced as a list
                      with one labelled row per day; without this a screen reader
@@ -92,17 +100,16 @@ function barHeight(value) {
                     <span class="flex items-center gap-1.5"><span class="size-2.5 rounded-sm bg-green-500"></span>{{ __('Success') }}</span>
                     <span class="flex items-center gap-1.5"><span class="size-2.5 rounded-sm bg-red-400 dark:bg-red-500"></span>{{ __('Failed') }}</span>
                 </div>
-            </div>
+            </Card>
         </Panel>
 
-        <!-- Recent failures -->
+        <!-- Recent failures — same reason for the Card as the trend above. -->
         <Panel :heading="__('Recent failures')">
-            <div
-                v-if="recentFailures.length === 0"
-                class="p-6 text-center text-sm text-gray-500 dark:text-gray-400"
-            >
-                {{ __('No failed runs.') }}
-            </div>
+            <Card v-if="recentFailures.length === 0">
+                <p class="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                    {{ __('No failed runs.') }}
+                </p>
+            </Card>
             <Listing
                 v-else
                 :items="recentFailures"

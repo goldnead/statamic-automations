@@ -175,6 +175,7 @@ Route::prefix('automations')
 
             // Settings
             Route::get('settings', [SettingsController::class, 'show'])->name('settings.show');
+            Route::patch('settings', [SettingsController::class, 'update'])->name('settings.update');
 
             // Export / Import
             Route::get('automations/{automationFlow}/export', [ExportImportController::class, 'export'])->name('automations.export');

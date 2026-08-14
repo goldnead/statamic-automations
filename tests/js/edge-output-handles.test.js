@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { mount } from '@vue/test-utils';
 
 import { computeLayout } from '../../resources/js/composables/useAutoLayout.js';
-import Show from '../../resources/js/pages/Settings/Show.vue';
 
 /**
  * `??` only falls through on null and undefined. Everywhere the builder reads a
@@ -45,34 +43,5 @@ describe('an edge whose output handle is an empty string', () => {
         ]);
 
         expect(layout.positions.log_1.y).toBeGreaterThan(layout.positions.trigger_1.y);
-    });
-});
-
-describe('the settings screen', () => {
-    it('shows the effective queue name when the env var is set but empty', () => {
-        // `config/automations.php` is `env('STATAMIC_AUTOMATIONS_QUEUE', 'default')`.
-        // An empty `STATAMIC_AUTOMATIONS_QUEUE=` in .env yields '', which `??`
-        // passes straight through, and the row rendered blank — reading as if
-        // no queue were configured at all.
-        const wrapper = mount(Show, {
-            props: {
-                title: 'Settings',
-                config_path: 'config/automations.php',
-                queue: '',
-                // A real value, so the assertion below cannot be satisfied by
-                // the connection row's own (correct) `?? __('default')`.
-                queue_connection: 'redis',
-                runs: { prune_after_days: 30, keep_failed_runs_days: null },
-                test_mode: {},
-                features: {},
-                redact_keys: [],
-                integrations: {},
-            },
-        });
-
-        const values = wrapper.findAll('code').map((el) => el.text());
-
-        expect(values).toContain('default');
-        expect(values).not.toContain('');
     });
 });

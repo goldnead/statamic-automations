@@ -1,5 +1,83 @@
 # Changelog
 
+## 2.3.0 — 2026-08-14
+
+Alles aus Adrians Durchgang durch das Control Panel des Hubs.
+
+### Added — die Einstellungen sind bearbeitbar
+
+Die Seite war ein Ausdruck von `config/automations.php` mit dem Hinweis, die Datei auf dem Server
+zu ändern. Sie ist jetzt ein Formular: Queue, Aufbewahrung der Läufe, Testmodus und die
+Redaktionsliste werden im Control Panel geschrieben (`manage automation settings`).
+
+Gespeichert werden **nur Abweichungen**, eine Zeile je geänderter Schlüssel in
+`automation_settings`. Wer einen Wert auf den Standard zurückstellt, löscht die Zeile — die
+Einstellung folgt danach wieder der Datei, auch wenn ein späteres Release den Standard verschiebt.
+Eine Tabelle, die jeden Schlüssel spiegelt, hätte die Standards des Installationstags eingefroren.
+
+`Support\Settings` ist die einzige Definition: das Formular, die Validierung und das Überschreiben
+beim Booten lesen dieselbe Liste. Die alte Seite hielt ihre Beschriftungen in JavaScript und war
+damit eine zweite Beschreibung der Config-Datei, die ihr widersprechen konnte.
+
+Nicht bearbeitbar und mit Absicht: `storage.driver` (entscheidet, wo Automationen liegen, und ist
+unter laufendem Betrieb nicht umschaltbar), alles aus `env()` — ein Schlüssel in der Datenbank
+läge im Backup statt im Secret-Store — und `integrations`, das keine Einstellung ist, sondern
+eine Erkennung.
+
+Die Tabelle ist **nicht** brand-scoped, anders als jede andere in diesem Addon. Es sind
+Eigenschaften der Installation; ein Queue-Name je Marke hieße, dass der Worker die Jobs der einen
+Marke leert und die der anderen nicht, ohne dass irgendwo etwas dazu stünde.
+
+### Added — eine Mail aus der Liste öffnen und bearbeiten
+
+In der Mails-Ansicht ließ sich eine Mail verschieben, zuweisen und löschen, aber nicht lesen. Ein
+Klick auf den Namen öffnet sie jetzt in einem Stack. Das Formular darin ist `ConfigPanel` — das
+gleiche, das die Canvas in ihrer rechten Spalte zeigt —, damit eine Mail einen Editor hat und
+nicht zwei, die auseinanderlaufen.
+
+### Fixed — der Editor lief nicht über die volle Breite, und sein Kopf war grau
+
+Drei Befunde, eine Ursache. Die Seite trug `bg-body-bg`, also den Seitenhintergrund, obwohl sie
+in der Content-Karte sitzt: daher das graue Band hinter dem Kopf, während jeder andere Schirm des
+Control Panels dort weiß ist. Und sie zog sich mit `lg:-mx-12` aus der Karte heraus, was den Kopf
+mitnahm — der Titel klebte am Fensterrand statt an der Rinne des Control Panels.
+
+Jetzt hebt die Seite die Breitenbegrenzung von innen auf (`[data-sa-full-bleed]`, siehe `cp.css`)
+und behält die Polsterung der Karte. Eine Canvas ist kein Lesetext; die 85rem-Grenze ließ den
+Graphen auf einem breiten Schirm in einer Spalte mit leeren Rändern stehen.
+
+### Fixed — die Menüs mit den drei Punkten hatten einen Rollbalken
+
+`DropdownItem` ist `grid-cols-subgrid`, und `DropdownMenu` ist das Raster, das diese Spalten
+definiert. An drei Stellen — Kopfzeile des Editors, Knotenkarte, Variablen-Einfüger — standen die
+Einträge ohne diesen Rahmen im Menü. Ohne Raster ist jede Zeile ein paar Pixel breiter als das
+Menü, und am unteren Rand erscheint ein waagerechter Rollbalken.
+
+### Fixed — der Stack des Laufprotokolls ging nie auf
+
+`Stack` hat eine kontrollierte `open`-Eigenschaft mit Vorgabe `false`, und `name` ist gar keine
+Eigenschaft. Das Protokoll wurde also gemountet und nie gezeigt. Dazu heißt die Überschrift von
+`StackHeader` `title`, nicht `heading` — `heading` fiel als einfaches HTML-Attribut durch und die
+Leiste blieb leer.
+
+### Changed — das Dashboard sieht aus wie der Rest der Familie
+
+Die Kennzahlen benutzten `Widget`, ein Dashboard-Rahmen mit eigener Kopflinie und Mindesthöhe, in
+dem jede Zahl oben links in einer hohen leeren Kiste hing. Jetzt `Card` + `Subheading` +
+`Heading`, wie in `statamic-marketing`. Die Diagramme lagen direkt in einem `Panel`: ein Panel ist
+ein Bereich mit Überschrift, keine Fläche, deshalb nahm sein Rumpf den Seitenhintergrund an und
+las sich als grauer Klotz neben den weißen Kacheln. Sie liegen jetzt auf einer `Card`.
+
+### Changed — „Mail rules" steht nur im Menü, wenn es welche gibt
+
+Die Seite bearbeitet Automationen, die ein Auslöser und eine Mail sind, aus dem Satz heraus. Wo es
+keine gibt, ist sie leer und ihr einziger Link führt zur Canvas — sie las sich als Menüpunkt, der
+nichts tut außer weiterzuleiten. `Sequence\MailRules` beantwortet die Frage mit einem `exists()`,
+nicht mit dem Laden aller Automationen wie die Seite selbst: die Navigation fragt bei jedem
+Aufruf. Der Eintrag kommt mit der ersten passenden Automation von selbst zurück, und die Seite
+bleibt die ganze Zeit über ihre URL erreichbar.
+
+
 ## 2.2.1 — 2026-08-13
 
 ### Fixed — die Wiedereintrittsregel wurde von vier Auslösern gar nicht gelesen

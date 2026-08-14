@@ -70,6 +70,30 @@
 }
 
 @layer addon-utilities {
+    /* -------------------------------------------------------------------
+     * Full-bleed builder page.
+     *
+     * The CP layout wraps every page in `<div class="max-w-page"
+     * data-max-width-wrapper>` (85rem), and core only lifts that cap through a
+     * user preference it writes to `#main-content[data-max-width-enabled]` —
+     * an element no page component can reach. So the cap is lifted from the
+     * inside: the builder marks its own root, and the wrapper that *contains*
+     * that root stops constraining.
+     *
+     * A canvas is not reading matter. On a wide screen the 85rem cap left the
+     * node graph in a column with empty gutters either side, and every viewport
+     * below it was unaffected anyway — so this only ever gives width back where
+     * there is width to give.
+     *
+     * `:has()` rather than a negative margin: pulling the page out with
+     * `-mx-12` dragged the header along, and the title then sat flush against
+     * the window edge instead of on the CP's gutter.
+     * ------------------------------------------------------------------- */
+    [data-max-width-wrapper]:has(> [data-sa-full-bleed]) {
+        width: 100%;
+        max-width: none;
+    }
+
     /* Vue Flow canvas wrapper — must fill its grid cell. */
     .sa-canvas-frame {
         @apply relative size-full overflow-hidden bg-gray-50 dark:bg-gray-900;

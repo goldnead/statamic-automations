@@ -103,6 +103,30 @@ class MailSteps
     }
 
     /**
+     * Every registered handle that counts as a mail, plus the ones an install
+     * named in config.
+     *
+     * The same question as {@see isMailHandle}, asked the other way round. It
+     * exists so a caller that wants to know *whether any automation is a rule*
+     * can ask the database once, with a `whereIn`, instead of loading every
+     * automation and its nodes to run the per-node check in PHP.
+     *
+     * @return list<string>
+     */
+    public function handles(): array
+    {
+        $registered = array_values(array_filter(
+            array_map(
+                fn (array $node) => (string) ($node['handle'] ?? ''),
+                $this->registry->all(),
+            ),
+            fn (string $handle) => $handle !== '' && $this->isMailHandle($handle),
+        ));
+
+        return array_values(array_unique([...$this->configuredHandles(), ...$registered]));
+    }
+
+    /**
      * @return list<string>
      */
     protected function configuredHandles(): array

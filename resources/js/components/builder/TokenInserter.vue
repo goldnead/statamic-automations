@@ -11,7 +11,11 @@
             />
         </template>
 
-        <div class="sa-token-inserter max-h-72 overflow-y-auto min-w-64">
+        <!-- `DropdownMenu`, not a bare div: the items are `grid-cols-subgrid`
+             and the menu is the grid whose columns they subscribe to. A plain
+             wrapper leaves them a few pixels wider than the menu they sit in,
+             which shows up as a scrollbar along the bottom of the list. -->
+        <DropdownMenu class="sa-token-inserter max-h-72">
             <template v-for="group in groupedVariables" :key="group.source">
                 <DropdownLabel :text="group.source" />
                 <DropdownItem
@@ -29,7 +33,7 @@
                     </span>
                 </DropdownItem>
             </template>
-        </div>
+        </DropdownMenu>
     </Dropdown>
 
     <!-- No upstream variables yet — disabled placeholder, never a crash. -->
@@ -47,7 +51,7 @@
 
 <script setup>
 import { computed, nextTick } from 'vue';
-import { Button, Dropdown, DropdownItem, DropdownLabel } from '@statamic/cms/ui';
+import { Button, Dropdown, DropdownMenu, DropdownItem, DropdownLabel } from '@statamic/cms/ui';
 
 /**
  * Small "{{ }}" button/dropdown that lists the upstream variables a node's

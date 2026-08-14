@@ -19,7 +19,7 @@
             <div>
                 <Heading :text="__('Mails')" icon="mail" />
                 <Description>
-                    {{ __('What this automation sends, in order. Every gap is measured from the mail before it, never from the start.') }}
+                    {{ __('What this automation sends, in order. Click a name to read and edit that mail. Every gap is measured from the mail before it, never from the start.') }}
                 </Description>
             </div>
 
@@ -86,9 +86,20 @@
 
                     <div class="min-w-0 flex-1">
                         <div class="flex flex-wrap items-center gap-2">
-                            <span class="font-medium text-gray-900 dark:text-gray-100">
+                            <!-- The name opens the mail. A button rather than
+                                 the whole row: the row already carries three
+                                 controls of its own, and a click target that
+                                 swallows them would take the reorder arrows
+                                 with it. A button also reaches the keyboard,
+                                 which a clickable div does not. -->
+                            <button
+                                type="button"
+                                class="cursor-pointer truncate text-start font-medium text-gray-900 hover:underline dark:text-gray-100"
+                                :data-mail-open="mail.node_key"
+                                @click="$emit('open', mail)"
+                            >
                                 {{ mail.label || mail.node_key }}
-                            </span>
+                            </button>
                             <Badge v-if="mail.reference" :text="mail.reference" />
                             <Badge
                                 v-if="mail.conditional"
@@ -253,7 +264,7 @@ const props = defineProps({
     stale: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['reorder', 'request-remove', 'insert', 'open-flow']);
+const emit = defineEmits(['reorder', 'request-remove', 'insert', 'open-flow', 'open']);
 
 const mails = computed(() => props.list?.mails ?? []);
 const editable = computed(() => Boolean(props.list?.editable));

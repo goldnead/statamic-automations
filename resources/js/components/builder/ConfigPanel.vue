@@ -5,7 +5,10 @@
              deselecting collapses the whole column instead. -->
         <template v-if="node">
             <!-- Card header: icon chip + node title + close (deselect) -->
-            <header class="flex items-center gap-2.5 px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+            <header
+                v-if="showHeader"
+                class="flex items-center gap-2.5 px-4 py-3 border-b border-gray-200 dark:border-gray-800"
+            >
                 <span class="sa-icon-chip size-8" :class="`sa-icon-chip--${kind}`">
                     <Icon :name="icon" class="size-4" />
                 </span>
@@ -293,6 +296,12 @@ const props = defineProps({
     // picker can show `entry.title → "My Post"`. Absent ⇒ no samples, nothing
     // else changes.
     lastRun: { type: Object, default: null },
+    // The panel names the node it edits — except inside a Stack, where the
+    // stack's own header already does, and two titles above one form read as a
+    // mistake. Only the header is dropped; the form below is the same in both
+    // places, deliberately, so a mail edited from the list and the same mail
+    // edited on the canvas are the same act.
+    showHeader: { type: Boolean, default: true },
 });
 
 const emit = defineEmits(['update:config', 'update:label', 'delete', 'duplicate', 'deselect']);

@@ -100,6 +100,27 @@ describe('MailListPanel', () => {
         expect(notice.text()).toContain("Node 'br' is a branch node");
     });
 
+    it('opens a mail by its name', () => {
+        // Reading and moving are not the same act. Before this the list could
+        // reorder, assign and delete a mail but never show what was in it —
+        // the only way to read one was to find its node on the canvas.
+        const wrapper = mountPanel(linearList());
+
+        wrapper.find('[data-mail-open="m2"]').trigger('click');
+
+        expect(wrapper.emitted('open')?.[0]?.[0]?.node_key).toBe('m2');
+    });
+
+    it('opens a mail even in a list that cannot be rearranged', () => {
+        // Reading is always on. A branched automation refuses reordering, and
+        // that has nothing to do with whether its mails can be read.
+        const wrapper = mountPanel(branchedList());
+
+        wrapper.find('[data-mail-open="m2"]').trigger('click');
+
+        expect(wrapper.emitted('open')?.[0]?.[0]?.node_key).toBe('m2');
+    });
+
     it('marks a mail that only some readers get, and names the fork', () => {
         const wrapper = mountPanel(branchedList());
 

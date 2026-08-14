@@ -52,42 +52,48 @@
                             @click.stop
                         />
                     </template>
-                    <DropdownItem :text="__('Rename')" icon="rename" @click="$emit('rename')" />
-                    <!-- Trigger-only exclusion (one-trigger-per-flow rule):
-                         duplicating a trigger would create a second one, and
-                         a trigger has no Delete to recover from that (see the
-                         "Delete" gate below / Edit.vue's duplicateNode). -->
-                    <DropdownItem
-                        v-if="kind !== 'trigger'"
-                        :text="__('Duplicate')"
-                        icon="duplicate"
-                        @click="$emit('duplicate')"
-                    />
-                    <DropdownItem
-                        :text="data.disabled ? __('Enable') : __('Disable')"
-                        :icon="data.disabled ? 'eye' : 'eye-slash'"
-                        @click="$emit('toggle-disabled')"
-                    />
-                    <!-- Trigger-only: the swap-in-place path (see Edit.vue's
-                         replaceTrigger). A flow always has exactly one trigger
-                         (one-trigger-per-flow rule), so this is the primary way
-                         to change it — "Delete" is hidden below for the same
-                         reason. -->
-                    <DropdownItem
-                        v-if="kind === 'trigger'"
-                        :text="__('Replace trigger')"
-                        icon="replace"
-                        @click="$emit('replace-trigger')"
-                    />
-                    <template v-if="kind !== 'trigger'">
-                        <DropdownSeparator />
+                    <!-- The items live inside a DropdownMenu because they are
+                         `grid-cols-subgrid` and the menu is the grid that
+                         defines the icon/label tracks. Loose items overflow
+                         their own menu and it grows a sideways scrollbar. -->
+                    <DropdownMenu>
+                        <DropdownItem :text="__('Rename')" icon="rename" @click="$emit('rename')" />
+                        <!-- Trigger-only exclusion (one-trigger-per-flow rule):
+                             duplicating a trigger would create a second one, and
+                             a trigger has no Delete to recover from that (see the
+                             "Delete" gate below / Edit.vue's duplicateNode). -->
                         <DropdownItem
-                            :text="__('Delete')"
-                            icon="trash"
-                            variant="destructive"
-                            @click="$emit('delete')"
+                            v-if="kind !== 'trigger'"
+                            :text="__('Duplicate')"
+                            icon="duplicate"
+                            @click="$emit('duplicate')"
                         />
-                    </template>
+                        <DropdownItem
+                            :text="data.disabled ? __('Enable') : __('Disable')"
+                            :icon="data.disabled ? 'eye' : 'eye-slash'"
+                            @click="$emit('toggle-disabled')"
+                        />
+                        <!-- Trigger-only: the swap-in-place path (see Edit.vue's
+                             replaceTrigger). A flow always has exactly one trigger
+                             (one-trigger-per-flow rule), so this is the primary way
+                             to change it — "Delete" is hidden below for the same
+                             reason. -->
+                        <DropdownItem
+                            v-if="kind === 'trigger'"
+                            :text="__('Replace trigger')"
+                            icon="replace"
+                            @click="$emit('replace-trigger')"
+                        />
+                        <template v-if="kind !== 'trigger'">
+                            <DropdownSeparator />
+                            <DropdownItem
+                                :text="__('Delete')"
+                                icon="trash"
+                                variant="destructive"
+                                @click="$emit('delete')"
+                            />
+                        </template>
+                    </DropdownMenu>
                 </Dropdown>
             </div>
         </div>
@@ -136,7 +142,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Handle, Position } from '@vue-flow/core';
-import { Badge, Button, Dropdown, DropdownItem, DropdownSeparator, Icon } from '@statamic/cms/ui';
+import { Badge, Button, Dropdown, DropdownMenu, DropdownItem, DropdownSeparator, Icon } from '@statamic/cms/ui';
 import { nodeIcon } from '../../composables/useNodeIcon.js';
 import { outputsFor, handleY } from '../../composables/useAutoLayout.js';
 

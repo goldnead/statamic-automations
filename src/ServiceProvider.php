@@ -89,7 +89,9 @@ use Goldnead\StatamicAutomations\Repositories\DatabaseAutomationRepository;
 use Goldnead\StatamicAutomations\Repositories\FlatFileAutomationRepository;
 use Goldnead\StatamicAutomations\Sending\BrandMailer;
 use Goldnead\StatamicAutomations\Sending\BrandSenderIdentity;
+use Goldnead\StatamicAutomations\Sequence\MailRules;
 use Goldnead\StatamicAutomations\Support\OptionSources\NativeOptionSources;
+use Goldnead\StatamicAutomations\Support\Settings;
 use Goldnead\StatamicAutomations\Templates\TemplateRegistry;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Event;
@@ -158,6 +160,12 @@ class ServiceProvider extends AddonServiceProvider
         // Integration helpers (cheap singletons; the underlying sister
         // addons are detected lazily).
         $this->app->singleton(IntegrationDetector::class);
+
+        // Singleton because it holds the pre-override snapshot of the config
+        // files. A second instance created after `apply()` would take the
+        // already-overridden config for the baseline, and then read every
+        // stored value as "equal to the default" and delete it on the next save.
+        $this->app->singleton(Settings::class);
         $this->app->singleton(WebhookManagerAdapter::class);
         $this->app->singleton(LeadHubAdapter::class);
 
@@ -206,6 +214,13 @@ class ServiceProvider extends AddonServiceProvider
     public function bootAddon(): void
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+
+        // Settings changed in the Control Panel are pushed onto the live config
+        // before anything reads it. First thing in boot, and in every process
+        // — a queue worker resolves `automations.runs.*` too, and a setting
+        // that held only for web requests would be a setting that appears to
+        // work and silently does not where the work happens.
+        $this->app->make(Settings::class)->apply();
 
         // Resolve the {automationFlow} route parameter through the active
         // storage driver so flat-file definitions (which have no DB row) bind
@@ -647,19 +662,33 @@ class ServiceProvider extends AddonServiceProvider
         }
 
         Nav::extend(function ($nav) {
+            $children = [
+                $nav->item(__('Dashboard'))->route('statamic-automations.dashboard'),
+                $nav->item(__('Automations'))->route('statamic-automations.automations.index'),
+                $nav->item(__('Runs'))->route('statamic-automations.runs.index'),
+            ];
+
+            // `Mail rules`, not `Rules`: a bare CP word here would replace that
+            // string for statamic/cms too. Same reason as `Automation
+            // templates` below.
+            //
+            // Listed only while at least one automation actually is a rule. The
+            // screen edits the automations that are one trigger and one mail;
+            // where there are none, it is an empty page whose only link goes to
+            // the canvas — so it read as a menu entry that does nothing but
+            // redirect, and Adrian reported it as exactly that. It returns by
+            // itself the moment a rule-shaped automation exists.
+            if ($this->hasMailRules()) {
+                $children[] = $nav->item(__('Mail rules'))->route('statamic-automations.rules.index');
+            }
+
             $nav->create(__('Automations'))
                 ->section(__('Tools'))
                 ->route('statamic-automations.automations.index')
                 ->icon('workflow')
                 ->can('view automations')
                 ->children([
-                    $nav->item(__('Dashboard'))->route('statamic-automations.dashboard'),
-                    $nav->item(__('Automations'))->route('statamic-automations.automations.index'),
-                    $nav->item(__('Runs'))->route('statamic-automations.runs.index'),
-                    // `Mail rules`, not `Rules`: a bare CP word here would
-                    // replace that string for statamic/cms too. Same reason as
-                    // `Automation templates` below.
-                    $nav->item(__('Mail rules'))->route('statamic-automations.rules.index'),
+                    ...$children,
                     $nav->item(__('Audit log'))->route('statamic-automations.audit'),
                     // `Automation templates`, not `Templates`: JSON string
                     // translations from every package merge into one Control
@@ -673,5 +702,11 @@ class ServiceProvider extends AddonServiceProvider
                     $nav->item(__('Settings'))->route('statamic-automations.settings'),
                 ]);
         });
+    }
+
+    /** Is any automation shaped like a rule? See {@see MailRules}. */
+    protected function hasMailRules(): bool
+    {
+        return $this->app->make(MailRules::class)->any();
     }
 }

@@ -5,6 +5,7 @@ import {
     Header,
     Button,
     Dropdown,
+    DropdownMenu,
     DropdownItem,
     DropdownSeparator,
     Stack,
@@ -641,6 +642,46 @@ function insertMail(payload) {
     );
 }
 
+// ---------- One mail, opened from the list ----------
+//
+// The stack edits the node through `selectedNodeKey`, the same handle the canvas
+// selects with, so `updateNodeConfig` / `updateNodeLabel` need no second path
+// and an edit made here is the same edit made there. Switching back to the
+// canvas therefore lands on the node that was just being read, which is what
+// somebody who came from the list is looking for.
+const mailStackOpen = ref(false);
+const mailBeingEdited = ref(null);
+
+function openMail(mail) {
+    mailBeingEdited.value = mail;
+    selectedNodeKey.value = mail.node_key;
+    mailStackOpen.value = true;
+}
+
+function closeMail() {
+    mailStackOpen.value = false;
+    mailBeingEdited.value = null;
+}
+
+/**
+ * Delete, asked for from inside the stack. It goes through the list's own
+ * confirmation rather than removing the node from the graph directly: deleting
+ * a mail also closes the gap in front of it, and that arithmetic lives in
+ * ChainEditor on the server, not in the canvas' node removal.
+ */
+function requestMailDeleteFromStack() {
+    const mail = mailBeingEdited.value;
+    closeMail();
+    if (mail) pendingMailDelete.value = mail;
+}
+
+// A stack whose node is gone — deleted here, or undone away, or removed by the
+// refresh after a list write — would render an empty panel over the list. The
+// selection is dropped in those paths already; this follows it.
+watch(selectedNode, (node) => {
+    if (!node) closeMail();
+});
+
 // ---------- Canvas mutations ----------
 //
 // Every mutation of the graph itself lives in useGraphMutations.js — the page
@@ -755,15 +796,22 @@ watch(view, scheduleHeightUpdate);
      *
      * Fixes:
      *  - ONE root element, so the slot has an unambiguous node to swap on nav.
-     *  - `relative isolate` + an opaque `bg-body-bg`, so the builder is its own
-     *    stacking context and opaque layer inside the content card — no stale
-     *    layer from the previous page can composite over it.
+     *  - `relative isolate` + an opaque `bg-content-bg`, so the builder is its
+     *    own stacking context and opaque layer inside the content card — no
+     *    stale layer from the previous page can composite over it. The token is
+     *    the *card* background, not `bg-body-bg`: the builder sits inside the
+     *    content card, and painting the page background there put a grey band
+     *    behind the header while every other CP screen has a white one.
      *  - `<Head>` and the run-log `<Stack>` are nested here; both render
      *    out-of-flow (head manager / teleport) so nesting is safe.
      *
-     * The builder is a canvas tool, so it still breaks out of the CP content
-     * card's horizontal padding (px-12 at lg) to use the full width. -->
-    <div class="relative isolate lg:-mx-12 bg-body-bg" data-max-width-wrapper>
+     * `data-sa-full-bleed` lifts the CP's page-width cap for this screen (see
+     * cp.css). The builder is a canvas tool: it needs the whole content area at
+     * every viewport width, not 85rem of it. It does *not* break out of the
+     * content card's own horizontal padding — an earlier `lg:-mx-12` here
+     * dragged the header out with it, so the title sat flush against the
+     * window edge while the rest of the CP kept its gutter. -->
+    <div class="relative isolate bg-content-bg" data-sa-full-bleed>
         <Head :title="[title, __('Statamic Automations')]" />
 
         <Header :title="title">
@@ -851,30 +899,38 @@ watch(view, scheduleHeightUpdate);
                     <template #trigger>
                         <Button variant="ghost" icon="dots" :aria-label="__('More actions')" />
                     </template>
-                    <DropdownItem
-                        :text="__('Validate')"
-                        icon="clipboard-check"
-                        @click="validate"
-                    />
-                    <DropdownItem
-                        :text="__('Test run')"
-                        icon="labs-idea-experimental-flask"
-                        :disabled="!canTest"
-                        @click="testRun"
-                    />
-                    <DropdownItem
-                        :text="__('Export JSON')"
-                        icon="download"
-                        :disabled="!automation.id"
-                        @click="exportJson"
-                    />
-                    <DropdownSeparator />
-                    <DropdownItem
-                        :text="automation.enabled ? __('Disable') : __('Enable')"
-                        icon="fieldtype-toggle"
-                        :disabled="!canEnable || !automation.id"
-                        @click="toggleEnabled"
-                    />
+                    <!-- `DropdownMenu` is not optional chrome: a DropdownItem is
+                         `grid-cols-subgrid`, and the menu is the grid that
+                         defines those columns. Without it the icon and label
+                         tracks have nothing to subscribe to, every row is a few
+                         pixels wider than the menu, and the menu grows a
+                         horizontal scrollbar along its bottom edge. -->
+                    <DropdownMenu>
+                        <DropdownItem
+                            :text="__('Validate')"
+                            icon="clipboard-check"
+                            @click="validate"
+                        />
+                        <DropdownItem
+                            :text="__('Test run')"
+                            icon="labs-idea-experimental-flask"
+                            :disabled="!canTest"
+                            @click="testRun"
+                        />
+                        <DropdownItem
+                            :text="__('Export JSON')"
+                            icon="download"
+                            :disabled="!automation.id"
+                            @click="exportJson"
+                        />
+                        <DropdownSeparator />
+                        <DropdownItem
+                            :text="automation.enabled ? __('Disable') : __('Enable')"
+                            icon="fieldtype-toggle"
+                            :disabled="!canEnable || !automation.id"
+                            @click="toggleEnabled"
+                        />
+                    </DropdownMenu>
                 </Dropdown>
 
                 <Button
@@ -916,9 +972,9 @@ watch(view, scheduleHeightUpdate);
              the viewport bottom (see updateEditorHeight), so it adapts to the CP
              chrome, the addon header, and the optional issues Alert above it
              instead of relying on a hardcoded `100vh - N` guess. -->
-        <!-- The list view. Narrower than the canvas and inside the content
-             card's padding again: it is reading matter, not a canvas tool. -->
-        <div v-if="view === 'mails' && showMailList" class="lg:px-12 pb-8">
+        <!-- The list view. Reading matter rather than a canvas tool, so it gets
+             a comfortable measure instead of the full bleed the canvas uses. -->
+        <div v-if="view === 'mails' && showMailList" class="max-w-5xl pb-8">
             <MailListPanel
                 :list="mailList"
                 :stats="stats"
@@ -931,7 +987,48 @@ watch(view, scheduleHeightUpdate);
                 @request-remove="pendingMailDelete = $event"
                 @insert="insertMail"
                 @open-flow="view = 'flow'"
+                @open="openMail"
             />
+
+            <!-- One mail, opened from the list. The form is ConfigPanel — the
+                 same one the canvas puts in its right-hand column — so a mail
+                 has one editor, not two that drift. It writes into the graph in
+                 memory like every other node edit, which is why this is Save-ed
+                 from the header and not on close: half a mail written to the
+                 database while the canvas holds the other half is the one state
+                 this screen must never reach. -->
+            <Stack
+                v-if="mailStackOpen && selectedNode"
+                :open="true"
+                size="half"
+                @update:open="(open) => { if (! open) closeMail(); }"
+                @closed="closeMail"
+            >
+                <!-- `title`, not `heading`: StackHeader has no `heading` prop,
+                     so it fell through as a plain HTML attribute and the bar
+                     rendered empty. -->
+                <StackHeader
+                    icon="mail"
+                    :title="selectedNode.label || selectedNode.node_key"
+                />
+                <StackContent>
+                    <ConfigPanel
+                        :node="selectedNode"
+                        :library="library"
+                        :trigger-output-schema="triggerOutputSchema"
+                        :api-base="apiBase"
+                        :automation="automation"
+                        :last-run="lastRun"
+                        :field-errors="selectedNodeFieldErrors"
+                        :show-header="false"
+                        @update:config="updateNodeConfig"
+                        @update:label="updateNodeLabel"
+                        @duplicate="duplicateNode(selectedNodeKey)"
+                        @delete="requestMailDeleteFromStack"
+                        @deselect="closeMail"
+                    />
+                </StackContent>
+            </Stack>
 
             <!-- Statamic's confirmation, never window.confirm: browsers
                  suppress native dialogs in plenty of contexts, and where they
@@ -1027,8 +1124,16 @@ watch(view, scheduleHeightUpdate);
             </div>
         </div>
 
-        <Stack v-if="drawerOpen" :name="'sa-runlog'" @closed="drawerOpen = false">
-            <StackHeader :heading="__('Run log')" />
+        <!-- `open` is a controlled prop that defaults to false, and `name` is
+             not a prop at all: without the first, mounting this never opened
+             it, so the run log had no way of ever being seen. -->
+        <Stack
+            v-if="drawerOpen"
+            :open="true"
+            @update:open="(open) => { if (! open) drawerOpen = false; }"
+            @closed="drawerOpen = false"
+        >
+            <StackHeader icon="list-bullets" :title="__('Run log')" />
             <StackContent>
                 <RunLogPanel :run="lastRun" />
             </StackContent>
