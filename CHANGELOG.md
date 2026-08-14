@@ -1,5 +1,43 @@
 # Changelog
 
+## 2.4.0 — 2026-08-14
+
+### Changed — „Send Email" ist der transaktionale Knoten, und sagt es jetzt auch
+
+Der Knoten beschrieb sich selbst als geeignet für „a transactional **or
+marketing** email". Er ist für das Zweite nicht geeignet und kann es nicht
+werden: er fragt niemanden nach Einwilligung, Sperrliste, Opt-out oder
+Frequenz-Deckel — ein Passwort-Reset muss trotz aller vier raus — und trägt aus
+demselben Grund weder Abmeldelink noch Anbieterkennzeichnung. Zwei echte
+Willkommensstrecken sind auf ihm gebaut worden, beide sahen richtig aus, beide
+verschickten ungeprüft.
+
+Beschreibung, `help` am Empfängerfeld, README und `docs/sequences.md` sagen
+jetzt, wofür der Knoten da ist und wofür `marketing.send_email` aus
+`goldnead/statamic-marketing` da ist. Eine transaktionale Mail an jemanden, der
+zufällig Abonnent ist, gehört ebenfalls dorthin, mit Klassifizierung
+`transactional`: das nimmt sie vom Deckel aus und behält die Tore.
+
+### Added — der Knoten verweigert Werbepost, statt nur vor ihr zu warnen
+
+Worte haben es zweimal nicht gehalten. Ist `statamic-marketing` installiert,
+verweigert `send_email` **einen** Versand: eine Mail an genau die Person, um
+deren Abo der Lauf geht (`marketing.subscribed` / `.unsubscribed` legen sie als
+`subscriber.email` auf einer benannten Liste in den Kontext). Das ist die Form,
+die beide historischen Defekte hatten.
+
+Verglichen werden **Adressen**, nicht Auslöser. Der Abmelde-Alarm und die
+„Kampagne verschickt"-Nachricht laufen auf denselben Auslösern, schreiben aber
+an die eigene Redaktion — sie sind unberührt und müssen es bleiben. Ohne das
+Marketing-Addon gibt es keinen Knoten, auf den zu verweisen wäre: dann bleibt es
+bei einer Warnung im Log und die Mail geht wie bisher raus. Die Prüfung läuft
+vor dem Testmodus-Kurzschluss, damit sie auf „Test" sichtbar wird und nicht drei
+Tage später.
+
+Abschaltbar über `automations.send_email.refuse_marketing_recipients`
+(Standard: an) — bewusst site-weit und nicht als Häkchen am Knoten, weil ein
+Häkchen am Knoten in derselben Minute gesetzt wird, in der der Fehler passiert.
+
 ## 2.3.0 — 2026-08-14
 
 Alles aus Adrians Durchgang durch das Control Panel des Hubs.

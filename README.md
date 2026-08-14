@@ -147,7 +147,7 @@ touch.
 
 | Action | Group | Notes |
 |---|---|---|
-| Send Email Notification | Notifications | Token-resolved subject + body |
+| Send Email | Email | **Transactional only** — token-resolved subject + body, or a managed template. See below |
 | Send Webhook (Simple) | HTTP | Direct POST/PUT/PATCH |
 | Send Webhook _(via Webhook Manager)_ | Webhook Manager | Inherits transport, signing, retry, logs |
 | Add Log Entry | Utilities | Writes to your Laravel log channel |
@@ -163,6 +163,29 @@ touch.
 | Add / Remove Lead Tag _(LeadHub)_ | LeadHub | |
 | Add Lead Note _(LeadHub)_ | LeadHub | Token-resolved body |
 | Create / Complete Follow-up _(LeadHub)_ | LeadHub | |
+
+### Send Email is the transactional node
+
+It takes an address, a subject and a body, and sends them. It asks nobody whether the
+recipient agreed to be mailed, whether the address is suppressed, whether the person has
+opted out, or how much mail they have already had this week — because a password reset,
+a booking confirmation and an alert to your own team must go out regardless of all four.
+For the same reason it adds no unsubscribe link and no sender identification.
+
+**Marketing mail needs all of that**, so it needs a different node.
+[`goldnead/statamic-marketing`](https://github.com/goldnead/statamic-marketing) contributes
+**Send Marketing Email** (`marketing.send_email`), which runs the send through consent,
+suppression, opt-out and the frequency cap in that order and whose mails carry the
+unsubscribe link and postal line from the campaign layout. A mail that is genuinely
+transactional but happens to go to a subscriber belongs there too, classified
+`transactional` — that exempts it from the cap and keeps the gates.
+
+This is not only advice. With the marketing addon installed, Send Email **refuses** a mail
+addressed to the person a marketing run is about (a *Subscriber Confirmed* or
+*Unsubscribed* trigger, sending to that same subscriber) and names the node to use
+instead. A mail to any other address in the same flow — the unsubscribe alert to your
+team, the "campaign finished" notice — is untouched. Sites that need the old behaviour
+can set `automations.send_email.refuse_marketing_recipients` to `false`.
 
 ## Templates
 

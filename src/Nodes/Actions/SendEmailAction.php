@@ -17,8 +17,49 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Statamic\Facades\Entry;
 
+/**
+ * The domain-neutral mail node: an address, a subject, a body, optionally the
+ * rendered HTML of a managed template. It is how a site sends a password
+ * reset, a booking confirmation, a receipt, an alert to its own team.
+ *
+ * **It is not how a site sends marketing mail, and it cannot be made into
+ * one.** It asks nobody whether the recipient consented, whether the address
+ * is on a suppression list, whether the person opted out, or how much mail
+ * they have already had this week — because a password reset must go out
+ * regardless of all four. It also carries no unsubscribe link and no sender
+ * identification, both of which promotional mail is required to have. That is
+ * the correct design for a transactional sender and exactly the wrong one for
+ * a newsletter, and the description this node gave of itself until 2.4.0
+ * ("transactional *or marketing*") invited the mistake twice: a welcome series
+ * on adriangoldner.com and the FamilyStack nurture sequence were both built
+ * here, both correct-looking, both sending unchecked.
+ *
+ * `goldnead/statamic-marketing` contributes `marketing.send_email` for that
+ * job. It runs the same send through consent, suppression, opt-out and the
+ * frequency cap, in that order, and its mails carry the unsubscribe link and
+ * the postal line from the campaign layout. A *transactional* mail to somebody
+ * who happens to be a subscriber belongs there too, with its classification
+ * set to `transactional` — that exempts it from the cap while keeping the
+ * gates that no mail should skip.
+ *
+ * **The refusal.** Words alone did not hold the last two times, so when the
+ * marketing addon is installed this node refuses one specific send: a mail to
+ * the very person a marketing run is about (a `marketing.subscribed` /
+ * `marketing.unsubscribed` trigger puts them in the context as
+ * `subscriber.email` on a named list). That, and only that, is the shape both
+ * historical defects had. A mail to anybody else in the same flow — the
+ * unsubscribe alert to the team, the "campaign finished" notice to an admin —
+ * is untouched, which is why the check compares addresses rather than looking
+ * at the trigger. See {@see self::marketingRecipientRefusal()}.
+ */
 class SendEmailAction implements AutomationAction
 {
+    /**
+     * The marketing node this one hands off to. A string rather than an
+     * import: the sibling addon is optional and must stay so.
+     */
+    protected const MARKETING_ACTION = 'Goldnead\\Marketing\\Integrations\\Automations\\Actions\\SendMarketingEmailAction';
+
     public function __construct(
         protected ?LeadHubAdapter $adapter = null,
         protected ?BrandMailer $mailer = null,
@@ -45,7 +86,9 @@ class SendEmailAction implements AutomationAction
 
     public static function description(): ?string
     {
-        return 'Sends a transactional or marketing email with token-resolved fields — plain text, or the rendered HTML of a managed email template (et_templates).';
+        return 'Sends one transactional email — a confirmation, a receipt, a password reset, a notice to your own team — with token-resolved fields, as plain text or the rendered HTML of a managed email template (et_templates). '
+            .'NOT for marketing mail: this node checks no consent, no suppression list, no opt-out and no frequency cap, and adds neither an unsubscribe link nor the sender details promotional mail has to carry. '
+            .'For anything a reader could unsubscribe from, use “Send Marketing Email” (marketing.send_email).';
     }
 
     public static function group(): string
@@ -61,7 +104,17 @@ class SendEmailAction implements AutomationAction
     public static function schema(): array
     {
         $schema = [
-            ['handle' => 'to', 'label' => 'To', 'type' => 'text', 'required' => true, 'tokenable' => true],
+            [
+                'handle' => 'to',
+                'label' => 'To',
+                'type' => 'text',
+                'required' => true,
+                'tokenable' => true,
+                'help' => 'Who receives this transactional mail. Addressing the person a marketing run is about '
+                    .'(e.g. {{ subscriber.email }} under a Subscriber Confirmed trigger) is refused: that mail is '
+                    .'marketing, and it belongs on the “Send Marketing Email” node, which asks for consent, '
+                    .'suppression, opt-out and the cap first. A team address in the same flow is fine.',
+            ],
             ['handle' => 'subject', 'label' => 'Subject', 'type' => 'text', 'required' => true, 'tokenable' => true],
         ];
 
@@ -192,6 +245,14 @@ class SendEmailAction implements AutomationAction
 
         if (empty($to)) {
             return ActionResult::failed('Email "to" is required.');
+        }
+
+        // Before anything is rendered, and before the test-mode short-circuit
+        // below: pressing Test is how an editor finds out a node is wrong, and
+        // "this is marketing mail on the transactional node" is the one wrong
+        // thing this node has actually been used for. See the class docblock.
+        if (($refusal = $this->marketingRecipientRefusal($context, (string) $to)) !== null) {
+            return ActionResult::failed($refusal);
         }
 
         // When a template is selected AND the email-templates addon is present,
@@ -368,6 +429,90 @@ class SendEmailAction implements AutomationAction
         } catch (\Throwable $e) {
             return ActionResult::failed($e->getMessage(), $rendered);
         }
+    }
+
+    /**
+     * The one send this node refuses: marketing mail to the person the run is
+     * about. Returns the reason, or null when the send is none of its business.
+     *
+     * Four conditions, all of them narrow on purpose:
+     *
+     *  1. **The run is about a marketing subscription.** `subscriber.list` and
+     *     `subscriber.email` are what the `marketing.subscribed` and
+     *     `.unsubscribed` triggers put in the context, and nothing else does.
+     *     A form submission, a webhook, a scheduled sweep never gets here.
+     *  2. **This mail goes to that same person.** Compared as addresses, not
+     *     inferred from the trigger — because the unsubscribe alert and the
+     *     "campaign sent" notice are built on exactly this trigger, address
+     *     the team, and are perfectly correct. They must keep working.
+     *  3. **`marketing.send_email` exists to hand off to.** Refusing a send
+     *     while naming a node the install does not have would leave an editor
+     *     with no way forward at all, so without the marketing addon this is
+     *     a warning in the log and the mail goes out as before.
+     *  4. **The site has not opted out** via
+     *     `automations.send_email.refuse_marketing_recipients`. The escape
+     *     hatch is site-wide and deliberate rather than a checkbox on the
+     *     node: a per-node override is ticked in the same minute the mistake
+     *     is made, by the same person, for the same reason.
+     */
+    protected function marketingRecipientRefusal(AutomationContext $context, string $to): ?string
+    {
+        $list = $context->get('subscriber.list');
+        $subscriberEmail = $context->get('subscriber.email');
+
+        if (! is_string($list) || trim($list) === '' || ! is_string($subscriberEmail)) {
+            return null;
+        }
+
+        if (! $this->sameAddress($to, $subscriberEmail)) {
+            return null;
+        }
+
+        if (! static::marketingSendNodeInstalled()) {
+            Log::warning(
+                'send_email is sending marketing mail: this run is about '.$subscriberEmail.'\'s subscription to '
+                .'list ['.trim($list).'] and the mail goes to that same person. This node checks no consent, no '
+                .'suppression, no opt-out and no frequency cap, and carries neither an unsubscribe link nor a '
+                .'postal line. Install goldnead/statamic-marketing and move the step onto its "Send Marketing '
+                .'Email" node.'
+            );
+
+            return null;
+        }
+
+        if (! config('automations.send_email.refuse_marketing_recipients', true)) {
+            return null;
+        }
+
+        return 'This is marketing mail: the run is about '.$subscriberEmail.'\'s subscription to list ['
+            .trim($list).'], and this node sends to that same person. The transactional sender checks no consent, '
+            .'no suppression list, no opt-out and no frequency cap, and adds neither an unsubscribe link nor the '
+            .'sender details promotional mail must carry. Move this step onto the "Send Marketing Email" node '
+            .'(marketing.send_email), which asks all four first — a genuinely transactional mail to a subscriber '
+            .'belongs there too, with Classification set to "transactional". Mail to anybody else in this flow, '
+            .'e.g. a notice to your own team, is unaffected.';
+    }
+
+    /**
+     * Whether the marketing addon's send node is available to hand off to.
+     * An overridable seam, like {@see self::emailTemplatesInstalled()}: this
+     * repo does not vendor the sibling, so the "addon present" branch is only
+     * reachable in tests through a subclass.
+     */
+    protected static function marketingSendNodeInstalled(): bool
+    {
+        return class_exists(self::MARKETING_ACTION);
+    }
+
+    /**
+     * Same mailbox? Case and surrounding whitespace only — no plus-address or
+     * dot normalisation, because two addresses that differ there are two
+     * different recipients as far as a refusal is concerned, and guessing
+     * otherwise would block sends nobody asked it to block.
+     */
+    protected function sameAddress(string $a, string $b): bool
+    {
+        return mb_strtolower(trim($a)) === mb_strtolower(trim($b)) && trim($a) !== '';
     }
 
     /**

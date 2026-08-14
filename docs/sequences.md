@@ -5,6 +5,21 @@ no separate sequence object in this addon and there is not going to be one. What
 1.9 adds is three things that make an ordinary automation readable and safe to
 run as a sequence: a list view, a re-entry rule, and the enrollment numbers.
 
+## Which node sends the mails
+
+`marketing.send_email`, from `goldnead/statamic-marketing` — not this addon's own
+`send_email`. A sequence is marketing mail, and marketing mail may only go out
+after consent, suppression, opt-out and the frequency cap have been asked, with
+an unsubscribe link and a postal line on the message. The neutral `send_email`
+asks none of them and carries neither, because it is also how a password reset
+goes out.
+
+Building a welcome series on the neutral node produces something that looks
+right and sends unchecked; it happened twice before the node started refusing
+it. It refuses one case only — a mail to the person the marketing run is about —
+so a notice to your own team in the same flow still uses `send_email` and still
+works. See the addon's own `docs/sequences.md` for the marketing node's fields.
+
 ## The mail list
 
 Every automation can be read as the list of mails it sends, with the gap before

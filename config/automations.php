@@ -113,6 +113,33 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | Send Email
+    |--------------------------------------------------------------------------
+    |
+    | The "Send Email" node is the transactional sender: an address, a subject,
+    | a body. It checks no consent, no suppression list, no opt-out and no
+    | frequency cap, and it carries neither an unsubscribe link nor a postal
+    | line — as a password reset must not, and as a newsletter must.
+    |
+    | With `refuse_marketing_recipients` on (the default) and
+    | goldnead/statamic-marketing installed, the node refuses exactly one send:
+    | a mail to the person a marketing run is about (a Subscriber Confirmed /
+    | Unsubscribed trigger, addressed to that same subscriber). That step
+    | belongs on the "Send Marketing Email" node, which asks all four gates
+    | first. Mail to anyone else in the same flow — an alert to your own team —
+    | is never affected.
+    |
+    | Turn it off only if your install has a transactional mail that genuinely
+    | has to go to a subscriber from this node, and say why in your own notes.
+    |
+    */
+
+    'send_email' => [
+        'refuse_marketing_recipients' => env('STATAMIC_AUTOMATIONS_REFUSE_MARKETING_RECIPIENTS', true),
+    ],
+
     'test_mode' => [
         'send_real_webhooks' => false,
         'send_real_emails' => false,
