@@ -149,3 +149,35 @@ it('applies stored settings on a fresh boot', function (): void {
 
     expect(config('automations.runs.prune_after_days'))->toBe(45);
 });
+
+it('does not bake overrides into a cached config', function (): void {
+    // `config:cache` boots the app and dumps the resolved config to disk. An
+    // override written into that dump outlives the row it came from: deleting
+    // the setting afterwards has no effect at all until somebody runs
+    // `config:clear`. It also poisons the "back to default" rule — the next
+    // boot reads the baked file as the packaged default, so a value reset to
+    // the file's own default is stored as a row instead of being deleted, and
+    // that key is then stuck for good.
+    //
+    // The two sibling addons that copied this class got the guard when the
+    // trap was found; this one, the original, did not. Found by writing the
+    // README against the code.
+    AutomationSetting::create(['key' => 'runs.prune_after_days', 'value' => 999]);
+
+    $packaged = config('automations.runs.prune_after_days');
+
+    $settings = app(Settings::class);
+    $settings->forget();
+
+    // What the config-cache build looks like from in here.
+    $argv = $_SERVER['argv'] ?? [];
+    $_SERVER['argv'] = ['artisan', 'config:cache'];
+
+    try {
+        $settings->apply();
+    } finally {
+        $_SERVER['argv'] = $argv;
+    }
+
+    expect(config('automations.runs.prune_after_days'))->toBe($packaged);
+});

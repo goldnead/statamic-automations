@@ -3,6 +3,7 @@
 namespace Goldnead\StatamicAutomations\Support;
 
 use Goldnead\StatamicAutomations\Models\AutomationSetting;
+use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -31,6 +32,8 @@ use Illuminate\Support\Facades\Cache;
  */
 class Settings
 {
+    public function __construct(protected Application $app) {}
+
     /** Cache key for the stored overrides. */
     public const CACHE_KEY = 'statamic-automations.settings.overrides';
 
@@ -76,6 +79,13 @@ class Settings
                         'type' => 'integer',
                         'label' => __('Retention'),
                         'description' => __('How many days completed runs are kept before they are pruned.'),
+                        // Deliberately narrower than the config file, which can
+                        // switch pruning off entirely (`PruneRuns` bails at
+                        // `days <= 0`, and `null` casts to zero). The screen
+                        // will not: unbounded run growth is a foot-gun, and
+                        // somebody editing the file by hand is in a different
+                        // position from somebody clicking through a form.
+                        // Pinned by "it refuses a retention of zero days".
                         'nullable' => false,
                         'min' => 1,
                     ],
@@ -219,6 +229,26 @@ class Settings
      */
     public function apply(): void
     {
+        // `config:cache` boots the app fully and then dumps the whole
+        // resolved config to `bootstrap/cache/config.php`. Applying here
+        // during that build would bake the overrides into the cached file,
+        // and a baked override outlives the row it came from: deleting a
+        // setting would then have no effect at all until somebody ran
+        // `config:clear`.
+        //
+        // It would also poison the baseline below. On the next boot
+        // `mergeConfigFrom` is skipped (the config is cached), so
+        // `config('automations')` *is* the baked file — the snapshot would
+        // record the override as the packaged default, and a value reset to
+        // the file's default would be stored as a row instead of deleted,
+        // which is precisely the property this class promises.
+        //
+        // Skipping is safe: the cached config keeps the file values, and
+        // every process that reads it applies the overrides on its own boot.
+        if (method_exists($this->app, 'runningConsoleCommand') && $this->app->runningConsoleCommand('config:cache')) {
+            return;
+        }
+
         // Snapshot what the config *files* say, before anything stored covers
         // it. This is what "back to default" means on this install: the
         // package config as the host published and edited it, not the copy

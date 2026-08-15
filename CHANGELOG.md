@@ -1,5 +1,41 @@
 # Changelog
 
+## 2.6.1 — 2026-08-15
+
+### Fixed — `config:cache` hätte die Einstellungen eingefroren
+
+`config:cache` bootet die Anwendung vollständig und schreibt danach den
+aufgelösten Config-Baum auf die Platte. Die gespeicherten Overrides landeten
+mit darin, und ein eingebackener Override überlebt die Zeile, aus der er
+stammt: eine gelöschte Einstellung hätte bis zum nächsten `config:clear`
+weitergewirkt. Schlimmer, der nächste Boot hätte die eingebackene Datei als
+„ausgelieferten Default" gelesen — ein auf den Dateiwert zurückgesetzter Wert
+wäre dann als Zeile gespeichert statt gelöscht worden, also genau die
+Eigenschaft, die diese Klasse verspricht.
+
+Während des Cache-Baus wird jetzt nichts mehr angewendet. Die gecachte Datei
+trägt die Dateiwerte, und jeder Prozess legt seine Overrides beim eigenen Boot
+darüber.
+
+Dieselbe Falle steckte in den beiden Addons, die diese Bauform übernommen
+haben; dort wurde sie am 15.08. behoben. **Hier, im Original, war sie noch
+offen** — gefunden beim Schreiben des README gegen den Code, nicht von einem
+Test. Jetzt hält ein Test sie fest, der ohne den Fix umfällt.
+
+### Docs — das README beschreibt wieder, was das Addon tut
+
+Ergänzt: die Aktivitätsansicht, die Mails einer Automation auf der
+Kontakt-Zeitleiste, die im Control Panel bearbeitbaren Einstellungen (seit
+v2.3.0 undokumentiert), `timeline.enabled` und
+`send_email.refuse_marketing_recipients` in der Config-Tabelle, und ein erster
+Datenschutz-Abschnitt (`subject_key`, Lauf-Kontexte, Zeitleisten-Einträge, und
+wie man das löscht).
+
+Korrigiert: die Zeile zu `runs.prune_after_days` sagte, `null` schalte das
+Aufräumen ab, ohne zu erwähnen, dass das Feld im Control Panel bewusst nicht
+unter 1 geht. Die feste Angabe „408 PHP tests / 141 JS tests" ist raus; eine
+Zahl im README ist Wartungsschuld.
+
 ## 2.6.0 — 2026-08-15
 
 ### Added — die Aktivitätsansicht

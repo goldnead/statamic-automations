@@ -53,6 +53,7 @@ For most Statamic projects an external automation tool is overkill, and custom c
 - 🪄 **Token picker** for using event data in actions (`{{ form.email }}`, `{{ lead.full_name }}` …)
 - 🧪 **Test runs** with real sample data — no real side-effects in test mode
 - 📋 **Node-by-node execution logs** with redacted sensitive payloads
+- 📊 **Activity view** — per-step numbers on the canvas, a funnel over a timeframe, a filterable log with CSV export, and who is inside the flow right now
 - 🧩 Optional **Webhook Manager** + **LeadHub** integrations (auto-detected, never required)
 - 📦 **Templates** that copy into user-owned automations
 - 📤 **JSON export / import** for version control, starter kits and cross-environment moves
@@ -208,6 +209,52 @@ Eight curated templates ship with the addon — each one is **copied** into a us
 - **Entry Published Notification** — webhook on collection publish (Slack-friendly)
 - **Webhook Failure Alert** — admin email when a destination keeps failing
 
+## Activity
+
+For a saved automation, the builder has a third view next to **Flow** and **Mails** (the
+list of what a sequence sends), on the same switch in its header: **Activity**. It answers
+where people are in the flow, what each step did, and who is still inside it. It needs the
+`view automation runs` permission, the export included. Before the first real run it says
+so, rather than showing a wall of zeroes.
+
+- **Numbers on the canvas.** Every node card carries how many runs reached it, got through
+  it and failed on it. A node nothing has run through yet shows nothing at all — not a
+  zero. A fresh automation should not look like a broken one.
+- **A funnel with a timeframe** (last 7 / 30 / 90 days, or all time): enrolled, in progress,
+  ran to the end, exited, failed. It shows **where** people stop, not only how many did.
+- **A log** of node runs, filtered by step, outcome and timeframe, paginated on the server
+  rather than truncated at a fixed row count — plus a **CSV export** of the same selection.
+- **In the workflow** — who is inside the automation right now, since when, and at which
+  step. Runs that are about nobody (a scheduled run, a webhook that carried no address) are
+  counted below the list instead of being dropped from it silently.
+
+Two things about what the numbers mean, because they decide how the screen reads:
+
+**Runs are counted, not rows.** A run is one enrolment: one subject, one pass through the
+automation. A loop writes one row per body node per iteration, and a wait-until node is
+written again when the run resumes — counted as rows, a step reported many times over, and
+since the bars are drawn against the busiest node, every other step shrank against it. That
+drew a collapse exactly where none had happened.
+
+**"In the workflow" has no timeframe.** The question is who is in the flow *now*, and that
+is not a question about a period. Windowed, somebody enrolled 40 days ago and parked in a
+60-day wait fell out of the list at the default "last 30 days", and out of the count beside
+it, so nothing on screen suggested anyone was missing.
+
+Four endpoints answer with data, never with a page, all under the automation:
+
+```
+GET /cp/automations/api/automations/{id}/activity             # funnel + per-node numbers
+GET /cp/automations/api/automations/{id}/activity/node-runs   # the log, paginated
+GET /cp/automations/api/automations/{id}/activity/export      # the same selection as CSV
+GET /cp/automations/api/automations/{id}/activity/subjects    # who is in the flow now
+```
+
+The migration that comes with this adds `automation_uuid` and `is_test` to
+`automation_node_runs`. Both are decided on the parent run and copied down when it is
+created: `is_test` is needed in the **filter**, not as a label, and without the copies every
+one of these figures would need a join back to the parent.
+
 ## Works with
 
 Automations is the **orchestration layer** in a small family of addons. Each one owns a different concern:
@@ -228,6 +275,30 @@ Sister addons are detected automatically through `class_exists`. The package kee
 | LeadHub | `Goldnead\Leadhub\Facades\LeadHub` | 5 LeadHub triggers + 7 LeadHub actions |
 
 Class names are configurable in `config/automations.php` under `integrations`, so you can swap implementations or use a fork.
+
+### Sent mail on the contact's timeline
+
+With LeadHub installed, a **Send Email** step writes an entry onto the recipient's contact
+timeline, so the contact screen can answer "what has this person had from us" including the
+mails that never went out as a campaign — often the first ones somebody ever gets.
+
+What the entry **cannot** say, it says itself: an automation's mail goes out through the
+mailer, not through marketing's tracked send path. No pixel, no rewritten links, so there is
+no open and no click to report. One entry, _sent_, with that note on it. A timeline that
+stayed quiet about it would read as "never opened", which is a different and untrue thing.
+
+- **Only for contacts that already exist.** A mail to an address with no contact leaves no
+  trace; creating a record here would be the automation quietly filing people.
+- **Never fatal.** It hangs off the end of a send that has already succeeded, so a CRM
+  mid-upgrade cannot turn a delivered mail into a failed step.
+- **Test runs write nothing**, including with `test_mode.send_real_emails` turned on.
+- **No class name of the sibling addon appears in this path.** It all goes through
+  `Integrations\LeadHub\LeadHubAdapter`, which answers "not installed" without an error —
+  that is what keeps the integration optional.
+- `marketing.send_email` stays out of it and reports itself, or every such mail would stand
+  on the contact twice.
+
+Turn it off with `automations.timeline.enabled`.
 
 ## Extending Automations
 
@@ -279,11 +350,72 @@ Imports always create new automations (never silently overwrite), start disabled
 See [`config/automations.php`](config/automations.php). Highlights:
 
 - `queue` / `queue_connection` — dedicated queue for automation runs
-- `runs.prune_after_days` — default 30, override or set to `null` to disable pruning
+- `runs.prune_after_days` — default 30. Setting it to `null` in the file disables pruning entirely; the Control Panel field will not go below 1, on purpose
 - `test_mode.*` — fine-grained switches for what runs during a test (default: nothing real)
 - `security.redact_keys` — patterns redacted in run logs
 - `integrations.*` — class names for sister addon detection
 - `file_storage.path` — where exported JSON files are written
+- `send_email.refuse_marketing_recipients` — default `true`; see [Send Email](#send-email-is-the-transactional-node)
+- `timeline.enabled` — default `true`; whether a sent mail is written onto the recipient's LeadHub timeline
+
+### Settings in the Control Panel
+
+Part of that file can also be changed under **Automations → Settings** in the Control Panel
+(permission: `manage automation settings`): queue name and connection, run retention and how
+long failed runs are kept, whether the full context is stored and encrypted, all five
+test-mode switches, and the redaction list.
+
+Only the **difference** to the config file is stored, one row per changed key in
+`automation_settings`. A value set back to what the file says deletes its row again, so the
+config file stays the default and a later release can still move it. An install that never
+opens the screen behaves exactly as before. The other side of that: if a value in
+`config/automations.php` does not match what the site actually does, look here first —
+editing the file will not move a key somebody has already overridden.
+
+The overrides are pushed onto the live config **in the addon's `boot()`**, not in a CP
+middleware. A queue worker that starts hours later boots the same way and sees them; a
+setting that held only for web requests would be one that appears to work and does not where
+the work happens.
+
+Nothing is applied while `config:cache` builds its file. A baked override would outlive the
+row it came from — deleting a setting would have no effect until somebody ran `config:clear`
+— and it would also make the next boot read the baked value as the packaged default, so a
+value reset to the file's own default would be stored rather than deleted. Caching your
+config is safe; every process applies the overrides on its own boot.
+
+Not editable there, on purpose:
+
+- anything resolved from `env()` — a key in the database would sit in a backup instead of the
+  secret store.
+- `storage.driver` — it decides where automations live, and cannot be switched under a
+  running install without moving them first.
+- `integrations` — not a setting but a detection: whether a sibling addon is installed is
+  decided by Composer, so a control here would be a switch that does nothing. It is shown on
+  the screen, read-only.
+
+The table is **not** brand-scoped, unlike every other table in this addon. These are
+properties of the installation; one queue name per brand would mean a worker draining one
+brand's jobs and not the other's, with nothing anywhere saying so.
+
+## Personal data
+
+The addon stores personal data as a by-product of running automations, and it is worth
+knowing where before a deletion request arrives.
+
+| What | Where | Removed by |
+|---|---|---|
+| The address a run is about, lower-cased (`subject_key`) | `automation_runs` | `php artisan automations:prune`, per `runs.prune_after_days` |
+| Trigger context and node input / output payloads — whatever the form, entry or webhook carried | `automation_runs.context`, `automation_node_runs.input` / `.output` | the same pruning; node runs are deleted with their run |
+| One entry per mail an automation sent | the contact's timeline **in LeadHub**, not in a table here | deleting the contact or the entry in LeadHub |
+
+Before a payload is written, keys matching `security.redact_keys` are replaced with
+`[REDACTED]`, and `runs.encrypt_context` encrypts the stored context at rest.
+`runs.store_full_context` set to `false` keeps only what a run needs to be read back, and
+`timeline.enabled` set to `false` stops the timeline entry being written at all.
+
+Deletion is `php artisan automations:prune` (default 30 days, `--dry-run` first to see the
+count, `--days` to override); schedule it if you want it to happen without being asked.
+Nothing leaves the site except through integrations you configured yourself.
 
 ## Testing
 
@@ -363,9 +495,10 @@ dead in the Composer tarball a customer actually installs.
 
 Shipping since v1.0.0; see the [changelog](CHANGELOG.md) for what changed when.
 
-The suite is 408 PHP tests (Pest on `orchestra/testbench`, booted through Statamic's
-`AddonTestCase`) plus 141 JS tests (`node --test` for pure composables, Vitest +
-`@vue/test-utils` for mounted components). CI runs Pest across PHP 8.2 / 8.3 / 8.4 ×
+The PHP suite is Pest on `orchestra/testbench`, booted through Statamic's `AddonTestCase`;
+the JS side is `node --test` for the pure composables and Vitest + `@vue/test-utils` for
+mounted components. What each covers, and how to run them, is under
+[Testing](#testing). CI runs Pest across PHP 8.2 / 8.3 / 8.4 ×
 Laravel 12 / 13, a `--prefer-lowest` leg, a MySQL leg, both JS runners, Pint and PHPStan,
 and a job that rebuilds the committed CP bundle and fails if it drifted from source.
 
