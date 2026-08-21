@@ -234,8 +234,21 @@ it('keeps the bound names and the route files in agreement', function (): void {
     // lose. A node key is only unique WITHIN one automation, which is the
     // reason a global binding for it could not exist even if somebody wanted
     // one.
+    // `sequence` und `token` kamen mit dem oeffentlichen Serien-Ausstieg dazu
+    // (routes/web.php). Beide bleiben ungebunden, und zwar bewusst:
+    //
+    //   `token` ist der Marketing-Token einer fremden Tabelle. Ihn hier zu
+    //   binden hiesse, dass dieses Addon einen Namen belegt, den das
+    //   Marketing-Addon fuer seine eigenen Routen braucht.
+    //
+    //   `sequence` heisst nicht `automation`, obwohl es eine Automation
+    //   adressiert. `automation` waere der Name, den dieses Addon binden
+    //   wuerde, wenn es je einen bindet — ein ungebundener Parameter mit genau
+    //   diesem Namen ist eine Stolperfalle fuer den naechsten, der eine
+    //   Bindung ergaenzt. Die Marke kommt stattdessen ueber
+    //   SetBrandFromRouteValue, das den Parameter liest, ohne ihn zu binden.
     expect($unbound)->toBe(
-        ['handle', 'nodeKey', 'nodeRun', 'run', 'source', 'timestamp'],
+        ['handle', 'nodeKey', 'nodeRun', 'run', 'sequence', 'source', 'timestamp', 'token'],
         'The unbound parameter names changed. Keep them unbound — and if one of these ever needs '
             .'a binding, rename it to `automation…` in the same commit.'
     );

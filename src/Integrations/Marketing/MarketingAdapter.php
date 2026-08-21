@@ -15,6 +15,36 @@ class MarketingAdapter
     }
 
     /**
+     * Die E-Mail-Adresse hinter einem Marketing-Token.
+     *
+     * Der Token ist der dauerhafte Schluessel einer Anmeldung — derselbe, den
+     * der Abmelde-Link und die Selbstbedienungs-Seite tragen. Fuer den
+     * Serien-Ausstieg ist er die einzige Kennung, die eine Mail mitbringen
+     * kann: sie kennt keinen angemeldeten Benutzer, und eine E-Mail-Adresse
+     * offen in der URL waere eine Einladung, fremde Leute auszutragen.
+     *
+     * `null`, wenn Marketing nicht installiert ist oder der Token zu nichts
+     * gehoert. Der Aufrufer macht daraus ein 404 — nicht die Auskunft, ob es
+     * den Token gibt.
+     */
+    public function emailForToken(string $token): ?string
+    {
+        if (! static::available() || trim($token) === '') {
+            return null;
+        }
+
+        $model = 'Goldnead\\Marketing\\Models\\Subscription';
+
+        if (! class_exists($model)) {
+            return null;
+        }
+
+        $subscription = $model::query()->where('token', $token)->first();
+
+        return $subscription?->email;
+    }
+
+    /**
      * @return array<int, array{value: string, label: string}>
      */
     public function listOptions(): array

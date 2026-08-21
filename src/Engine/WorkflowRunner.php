@@ -283,6 +283,28 @@ class WorkflowRunner
         AutomationContext $context,
         bool $executeFirst = false,
     ): string {
+        /*
+         * Ein Knoten muss wissen koennen, wovon er Teil ist.
+         *
+         * Der Kontext ist sonst reine Nutzlast — was der Ausloeser hineingelegt
+         * hat und was Knoten daraus gemacht haben. Fuer den Serien-Ausstieg
+         * reicht das nicht: der Sendeknoten muss vor jedem Schritt fragen
+         * koennen "will diese Person diese Serie noch?", und dafuer braucht er
+         * die UUID der Automation, in der er gerade steckt.
+         *
+         * Hier und nicht in den drei Einstiegen (execute, executeFromNode,
+         * resumeAfterNode), weil alle drei durch walk() laufen — und ein
+         * fortgesetzter Lauf nach zwei Tagen Wartezeit braucht es genauso wie
+         * ein frischer.
+         *
+         * Unterstrich wie bei `_subject_key`: Motor-Daten, keine Nutzlast.
+         */
+        $context->set('_automation', [
+            'uuid' => (string) $automation->uuid,
+            'name' => (string) $automation->name,
+        ]);
+        $context->set('_subject_key', (string) ($run->subject_key ?? ''));
+
         $edges = $automation->edges;
         $nodes = $automation->nodes->keyBy('node_key');
 

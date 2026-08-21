@@ -132,6 +132,11 @@ class ServiceProvider extends AddonServiceProvider
      */
     protected $routes = [
         'cp' => __DIR__.'/../routes/cp.php',
+
+        // Oeffentliche Routen: der Serien-Ausstieg aus dem Fuss einer Mail.
+        // Statamic haengt sie in die `web`-Gruppe; das Praefix setzt die
+        // Datei selbst, damit es konfigurierbar bleibt.
+        'web' => __DIR__.'/../routes/web.php',
     ];
 
     /**
@@ -241,6 +246,10 @@ class ServiceProvider extends AddonServiceProvider
         // Translations: PHP keys (backend) under the "statamic-automations"
         // namespace, plus JSON strings consumed by the Vue CP via __().
         $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'statamic-automations');
+
+        // Die oeffentliche Seite des Serien-Ausstiegs. Bisher brachte das Addon
+        // keine eigenen Blade-Ansichten mit.
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'statamic-automations');
         $this->loadJsonTranslationsFrom(__DIR__.'/../resources/lang');
 
         $this->publishes([

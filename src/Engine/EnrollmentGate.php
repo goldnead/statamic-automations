@@ -6,6 +6,7 @@ use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
+use Goldnead\StatamicAutomations\Services\SequenceOptOut;
 use Goldnead\StatamicAutomations\Models\AutomationScheduledJob;
 use Goldnead\StatamicAutomations\Support\RestartPolicy;
 use Illuminate\Database\Eloquent\Builder;
@@ -26,7 +27,10 @@ use Illuminate\Support\Facades\Log;
  */
 class EnrollmentGate
 {
-    public function __construct(protected TokenResolver $tokens) {}
+    public function __construct(
+        protected TokenResolver $tokens,
+        protected SequenceOptOut $optOuts,
+    ) {}
 
     /**
      * May this event start a run, and under which subject?
@@ -48,6 +52,23 @@ class EnrollmentGate
         );
 
         $subjectKey = $this->subjectKey($triggerNode, $context);
+
+        /*
+         * Der Ausstieg aus einer Serie schlaegt jede Wiedereintritts-Regel.
+         *
+         * Bewusst VOR der Always-Abkuerzung: `always` ist die Vorgabe und damit
+         * der Fall fast aller Automationen. Stuende die Pruefung darunter,
+         * gaelte ein Ausstieg genau dort nicht, wo er am haeufigsten gebraucht
+         * wird — und niemand haette es gemerkt, weil die Serie ja weiterlaeuft
+         * wie immer.
+         *
+         * Der Sendeknoten prueft dasselbe noch einmal. Das ist keine Doppelung:
+         * hier geht es um Laeufe, die gar nicht erst beginnen, dort um solche,
+         * die schon warten, waehrend jemand aussteigt.
+         */
+        if ($subjectKey !== null && $this->optOuts->has((string) $automation->uuid, $subjectKey)) {
+            return $this->verdict(false, $subjectKey, $policy, 'sequence_opt_out');
+        }
 
         if ($policy === RestartPolicy::Always) {
             return $this->verdict(true, $subjectKey, $policy);
