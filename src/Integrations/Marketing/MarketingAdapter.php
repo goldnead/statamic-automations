@@ -15,19 +15,28 @@ class MarketingAdapter
     }
 
     /**
-     * Die E-Mail-Adresse hinter einem Marketing-Token.
+     * Die Anmeldung hinter einem Marketing-Token: Adresse und Marke.
      *
      * Der Token ist der dauerhafte Schluessel einer Anmeldung — derselbe, den
      * der Abmelde-Link und die Selbstbedienungs-Seite tragen. Fuer den
      * Serien-Ausstieg ist er die einzige Kennung, die eine Mail mitbringen
      * kann: sie kennt keinen angemeldeten Benutzer, und eine E-Mail-Adresse
-     * offen in der URL waere eine Einladung, fremde Leute auszutragen.
+     * offen in der URL waere eine Einladung, Fremde auszutragen.
      *
-     * `null`, wenn Marketing nicht installiert ist oder der Token zu nichts
-     * gehoert. Der Aufrufer macht daraus ein 404 — nicht die Auskunft, ob es
-     * den Token gibt.
+     * **Ohne Marken-Scope gelesen, und die Marke kommt mit zurueck.** Der
+     * Aufrufer steht unter der Marke der Automation, nicht unter der der
+     * Anmeldung; mit Scope faende er den Token nie, sobald beide auseinander
+     * liegen — und im CLI, wo gar keine Marke aktiv ist, ueberhaupt nie. Die
+     * Pruefung, ob beide zusammengehoeren, gehoert dahin, wo beide bekannt
+     * sind (SequenceOptOutController::resolve), nicht in eine Abfrage, die
+     * dann einfach nichts findet und wie ein unbekannter Token aussieht.
+     *
+     * Ein Token adressiert genau eine Zeile ueber alle Marken hinweg — das ist
+     * es, was das Lesen ohne Scope sicher macht und nicht zu einem Loch.
+     *
+     * @return array{email: string, brand_id: int}|null
      */
-    public function emailForToken(string $token): ?string
+    public function subscriptionForToken(string $token): ?array
     {
         if (! static::available() || trim($token) === '') {
             return null;
@@ -39,9 +48,16 @@ class MarketingAdapter
             return null;
         }
 
-        $subscription = $model::query()->where('token', $token)->first();
+        $subscription = $model::query()->withoutGlobalScopes()->where('token', $token)->first();
 
-        return $subscription?->email;
+        if (! $subscription || ! $subscription->email) {
+            return null;
+        }
+
+        return [
+            'email' => (string) $subscription->email,
+            'brand_id' => (int) ($subscription->brand_id ?? 0),
+        ];
     }
 
     /**

@@ -76,9 +76,9 @@ class SequenceOptOutController
      */
     protected function resolve(string $token, string $sequence): array
     {
-        $email = $this->marketing->emailForToken($token);
+        $anmeldung = $this->marketing->subscriptionForToken($token);
 
-        abort_if($email === null || $email === '', 404);
+        abort_if($anmeldung === null, 404);
 
         $flow = Automation::query()
             ->where('uuid', $sequence)
@@ -86,6 +86,18 @@ class SequenceOptOutController
 
         abort_if($flow === null, 404);
 
-        return [$email, $flow];
+        /*
+         * Anmeldung und Serie muessen zur selben Marke gehoeren.
+         *
+         * Der Token wird bewusst ohne Marken-Scope gelesen (siehe
+         * MarketingAdapter::subscriptionForToken), sonst faende ihn diese
+         * Seite nie: die Marke kommt hier aus der Automation. Damit liegt die
+         * Pruefung, ob beide zusammengehoeren, aber genau hier — und ohne sie
+         * koennte der Token der einen Marke einen Ausstieg bei der anderen
+         * ausloesen.
+         */
+        abort_if((int) $anmeldung['brand_id'] !== (int) ($flow->brand_id ?? 0), 404);
+
+        return [$anmeldung['email'], $flow];
     }
 }

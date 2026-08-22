@@ -147,4 +147,28 @@ class SequenceOptOutTest extends TestCase
         $this->assertNull($this->service()->add($flow->uuid, '   '));
         $this->assertSame(0, AutomationOptOut::query()->count());
     }
+
+    public function test_die_seite_verraet_nicht_ob_ein_token_echt_ist(): void
+    {
+        // Ein 404 fuer beide Faelle — unbekannter Token, unbekannte Serie.
+        // Eine Seite, die "diesen Token gibt es, aber die Serie nicht" sagt,
+        // beantwortet einem Fremden die Frage, ob ein Token echt ist.
+        $flow = $this->automation();
+
+        $this->get("/!/automations/serie/gibtesnicht/{$flow->uuid}")->assertNotFound();
+        $this->get('/!/automations/serie/gibtesnicht/auch-nicht')->assertNotFound();
+    }
+
+    public function test_ohne_marketing_gibt_es_keine_adresse_zum_token(): void
+    {
+        /*
+         * Der Token gehoert dem Marketing-Addon. Ohne das Paket gibt es keine
+         * Anmeldung, zu der er passen koennte — und `null` ist die ehrliche
+         * Antwort darauf, nicht eine leere Zeichenkette, die weiter unten wie
+         * eine Adresse aussaehe.
+         */
+        $adapter = app(\Goldnead\StatamicAutomations\Integrations\Marketing\MarketingAdapter::class);
+
+        $this->assertNull($adapter->subscriptionForToken('   '));
+    }
 }

@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.7.1 — 2026-08-22
+
+### Fixed — der Serien-Ausstieg lief unter Mehrmarken-Betrieb ins 404
+
+Die Marke der Seite kommt aus der Automation, die Anmeldung dahinter ist
+aber selbst markengebunden. Sobald beide auseinanderlagen, fand die Seite den
+Token nie und antwortete 404 — was aussah wie „diesen Token gibt es nicht",
+tatsächlich aber die fail-closed-Trennung war. Auf der Kommandozeile, wo gar
+keine Marke aktiv ist, schlug dieselbe Abfrage immer fehl.
+
+Der Token wird jetzt ohne Marken-Scope gelesen. Er adressiert genau eine Zeile
+über alle Marken hinweg, was das sicher macht; die Prüfung, ob Anmeldung und
+Serie zusammengehören, steht dafür ausdrücklich im Controller — dort, wo beide
+bekannt sind. Ohne sie könnte der Token der einen Marke einen Ausstieg bei der
+anderen auslösen.
+
+Gefunden beim Prüfen am laufenden System, nicht von einem Test: in einer
+Einzelmarken-Installation tritt der Fall nicht auf.
+
 ## 2.7.0 — 2026-08-22
 
 ### Added — aus einer Serie aussteigen, ohne alles abzubestellen
