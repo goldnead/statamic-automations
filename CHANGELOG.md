@@ -1,5 +1,49 @@
 # Changelog
 
+## 2.7.0 — 2026-08-22
+
+### Added — aus einer Serie aussteigen, ohne alles abzubestellen
+
+Bis hierher gab es nur ganz oder gar nicht. Die Abmeldung von einer Liste
+stoppt zwar auch laufende Serien — der Sendeknoten prüft vor jedem Schritt, ob
+noch eine Anmeldung besteht —, aber sie kostet denjenigen eben auch den
+Newsletter. Wer eine fünfteilige Willkommensstrecke nicht zu Ende lesen will,
+sonst aber gerne Post bekommt, hatte keine Wahl außer der, die ihn ganz
+verliert.
+
+Neu ist die Zwischenstufe: eine Zeile in `automation_opt_outs` heißt „diese
+Person will von dieser Automation nichts mehr". Nicht mehr und nicht weniger —
+die Listen-Anmeldung bleibt unberührt.
+
+**Geprüft wird an zwei Punkten, und beide sind nötig.** Im `EnrollmentGate`,
+damit ein Ausstieg auch für einen späteren zweiten Durchlauf gilt; sonst hätte
+sich jemand aus der Willkommensstrecke abgemeldet und bekäme sie beim nächsten
+Anlass wieder. Und vor jedem Sendeschritt, weil eine Serie tagelang zwischen
+den Mails wartet: wer an Tag 3 aussteigt, darf Mail 4 nicht mehr bekommen, und
+zwischen den Wartezeiten läuft nichts außer diesem Knoten.
+
+Die öffentliche Seite trennt Zeigen und Handeln wie das Double-Opt-in, und aus
+demselben Grund: der Link-Scanner eines Mailservers ruft jeden Link in einer
+Mail auf, bevor der Mensch sie überhaupt sieht. Ein GET, das schon austrägt,
+würde Leute aus Serien werfen, die nie geklickt haben. Der Weg zurück steht auf
+derselben Seite, damit ein versehentlicher Ausstieg nicht endgültig ist.
+
+### Changed — der Kontext weiß jetzt, zu welcher Automation er gehört
+
+`WorkflowRunner` legt `_automation` in den Kontext, bevor der Graph läuft. Der
+Kontext war bisher reine Nutzlast; ein Knoten konnte nicht wissen, wovon er
+Teil ist. Der Sendeknoten braucht genau das, um zu fragen „will diese Person
+diese Serie noch?" — und ein nach zwei Tagen fortgesetzter Lauf braucht es
+genauso wie ein frischer, weshalb es in `walk()` steht und nicht in den drei
+Einstiegen darüber.
+
+### Notes
+
+Der Routen-Parameter heißt `sequence`, nicht `automation`. Letzteres wäre der
+Name, den dieses Addon binden würde, wenn es je einen bindet — ein ungebundener
+Parameter mit genau diesem Namen ist eine Stolperfalle für den nächsten, der
+eine Bindung ergänzt. `RouteParameterCollisionTest` hält das fest.
+
 ## 2.6.1 — 2026-08-15
 
 ### Fixed — `config:cache` hätte die Einstellungen eingefroren
