@@ -540,6 +540,7 @@ class ServiceProvider extends AddonServiceProvider
             foreach ([
                 PT\PaymentPaidTrigger::class,
                 PT\PaymentFailedTrigger::class,
+                PT\CheckoutAbandonedTrigger::class,
             ] as $triggerClass) {
                 $automations->registerBuiltIn($triggerClass::handle());
                 $automations->trigger($triggerClass::handle(), $triggerClass);

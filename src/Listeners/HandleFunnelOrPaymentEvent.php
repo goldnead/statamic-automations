@@ -36,6 +36,7 @@ class HandleFunnelOrPaymentEvent
     public const PAYMENT_TRIGGERS = [
         'Goldnead\\StatamicPayments\\Events\\PaymentPaid' => 'payments.paid',
         'Goldnead\\StatamicPayments\\Events\\PaymentFailed' => 'payments.failed',
+        'Goldnead\\StatamicPayments\\Events\\CheckoutAbandoned' => 'payments.checkout_abandoned',
     ];
 
     public function __construct(

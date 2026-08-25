@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.9.0 — 2026-08-25
+
+### What's new
+
+- **Trigger `payments.checkout_abandoned`.** Somebody started a checkout and did not finish it.
+  Requires `statamic-payments` 1.7, which does the once-only claim and the sweep; this side is the
+  trigger, filterable by product like its two siblings.
+
+  A sequence built on it should end on `payments.paid` — a payment arriving afterwards clears the
+  claim on the other side, and that is the honest signal that they bought it.
+
+  **A mail step on this trigger is a consent question**, not a configuration one: the address on an
+  unfinished checkout was given to complete a purchase. Put the suppression list in front of the send.
+
 ## 2.8.0 — 2026-08-25
 
 ### Neu — sechs Auslöser für Funnel- und Zahlungs-Ereignisse

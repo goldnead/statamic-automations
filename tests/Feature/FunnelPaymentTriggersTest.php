@@ -2,6 +2,7 @@
 
 use Goldnead\StatamicAutomations\Integrations\Funnels\Triggers\FunnelOfferAcceptedTrigger;
 use Goldnead\StatamicAutomations\Integrations\Funnels\Triggers\FunnelStepEnteredTrigger;
+use Goldnead\StatamicAutomations\Integrations\Payments\Triggers\CheckoutAbandonedTrigger;
 use Goldnead\StatamicAutomations\Integrations\Payments\Triggers\PaymentPaidTrigger;
 use Goldnead\StatamicAutomations\Listeners\HandleFunnelOrPaymentEvent;
 
@@ -18,7 +19,7 @@ it('maps every funnel and payment event to a trigger handle', function () {
     // A typo in one of these maps is silent: the event fires, nothing matches,
     // and nobody finds out until an automation "just never runs".
     expect(HandleFunnelOrPaymentEvent::FUNNEL_TRIGGERS)->toHaveCount(4)
-        ->and(HandleFunnelOrPaymentEvent::PAYMENT_TRIGGERS)->toHaveCount(2)
+        ->and(HandleFunnelOrPaymentEvent::PAYMENT_TRIGGERS)->toHaveCount(3)
         ->and(array_values(HandleFunnelOrPaymentEvent::FUNNEL_TRIGGERS))->toBe([
             'funnels.completed',
             'funnels.form_submitted',
@@ -28,6 +29,7 @@ it('maps every funnel and payment event to a trigger handle', function () {
         ->and(array_values(HandleFunnelOrPaymentEvent::PAYMENT_TRIGGERS))->toBe([
             'payments.paid',
             'payments.failed',
+            'payments.checkout_abandoned',
         ]);
 });
 
@@ -98,4 +100,30 @@ it('flattens a real object-shaped event into context', function () {
         ->and($context['visit']['email'])->toBe('k@example.com')
         ->and($context['step']['key'])->toBe('angebot')
         ->and($context['payment']['amount_cent'])->toBe(600);
+});
+
+it('filters an abandoned checkout by product like its siblings do', function () {
+    $trigger = new CheckoutAbandonedTrigger;
+    $event = ['payment' => ['product' => 'kurs', 'email' => 'wer@example.com']];
+
+    expect($trigger->matches($event, []))->toBeTrue()
+        ->and($trigger->matches($event, ['product' => 'kurs']))->toBeTrue()
+        ->and($trigger->matches($event, ['product' => 'etwas-anderes']))->toBeFalse();
+});
+
+it('survives an abandoned event shape it was not expecting', function () {
+    // These classes load on sites where statamic-payments is not installed, and
+    // an event without a payment must not take the run down.
+    $trigger = new CheckoutAbandonedTrigger;
+
+    expect($trigger->matches([], ['product' => 'kurs']))->toBeFalse()
+        ->and($trigger->matches((object) [], []))->toBeTrue()
+        ->and($trigger->buildContext([], [])->toArray())->toBe(['payment' => []]);
+});
+
+it('offers the abandoned trigger under Payments, testable like the others', function () {
+    expect(CheckoutAbandonedTrigger::handle())->toBe('payments.checkout_abandoned')
+        ->and(CheckoutAbandonedTrigger::group())->toBe('Payments')
+        ->and(CheckoutAbandonedTrigger::supportsTestMode())->toBeTrue()
+        ->and(CheckoutAbandonedTrigger::outputSchema()['payment'])->toHaveKey('email');
 });

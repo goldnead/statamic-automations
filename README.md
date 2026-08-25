@@ -138,6 +138,7 @@ touch.
 | Funnel Completed _(Funnels)_ | Funnels | A visitor reaches the end of a funnel |
 | Payment Paid _(Payments)_ | Payments | The provider confirmed the money. Once per payment, however often the webhook arrives. |
 | Payment Failed _(Payments)_ | Payments | Failed, expired or cancelled. Reported once, not per redelivery. |
+| Checkout Abandoned _(Payments)_ | Payments | Started and left unpaid past the waiting period. Reported once; a later payment ends it. |
 | Webhook Received _(Webhook Manager)_ | Webhook Manager | An inbound endpoint receives a validated request |
 | Outbound Webhook Failed _(Webhook Manager)_ | Webhook Manager | A delivery exhausts its retries and fails for good |
 
