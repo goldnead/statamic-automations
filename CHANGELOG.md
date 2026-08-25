@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.8.0 — 2026-08-25
+
+### Neu — sechs Auslöser für Funnel- und Zahlungs-Ereignisse
+
+Beide Nachbar-Addons feuerten diese längst, und niemand konnte sie hören: es gab keinen
+Trigger-Knoten dafür. „Schick den Kurs, wenn die Zahlung durch ist" brauchte einen selbst
+geschriebenen Listener.
+
+- **Funnels** (mit `goldnead/statamic-funnels`): Schritt betreten, Formular abgeschickt, Angebot
+  angenommen, Funnel abgeschlossen. Filterbar nach Funnel; „Schritt betreten" zusätzlich nach
+  Schritt, weil dieser Auslöser sonst bei jedem Seitenaufruf feuert.
+- **Payments** (mit `goldnead/statamic-payments`): bezahlt, fehlgeschlagen. Filterbar nach Produkt.
+  Beide genau einmal je Zahlung, egal wie oft der Anbieter zustellt.
+
+„Angebot angenommen" feuert **nach** der Zahlung, nicht auf den Klick.
+
+Registriert nur, wenn der jeweilige Nachbar installiert ist, wie bei LeadHub.
+
+### Geändert
+
+- Der Zahlen-Streifen auf einer Knotenkarte nimmt jetzt eine Liste vom Wirt entgegen
+  (`goldnead/statamic-flow-canvas` ^1.1), statt drei fest benannte englische Zahlen mitzubringen.
+  Die alte Form wird weiter unverändert gezeichnet.
+
 ## 2.7.1 — 2026-08-22
 
 ### Fixed — der Serien-Ausstieg lief unter Mehrmarken-Betrieb ins 404
