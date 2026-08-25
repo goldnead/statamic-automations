@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 
+import { NODE_KINDS, nodeIcon } from '../../resources/js/support/nodeKinds.js';
 import Canvas from '../../resources/js/components/builder/Canvas.vue';
 import { computeLayout, fractionForOutput, handleY } from '../../resources/js/composables/useAutoLayout.js';
 import { clearNodeOutputSpecs } from '../../resources/js/composables/useNodeOutputs.js';
@@ -63,7 +64,10 @@ if (!globalThis.SVGElement.prototype.getBBox) {
  */
 async function canvas(nodes, edges = []) {
     const wrapper = mount(Canvas, {
-        props: { nodes, edges, library: { triggers: [], logic: [], actions: [] } },
+        // `kinds` is what turns the shared canvas into an automation canvas.
+        // It is required, deliberately: a canvas with no kinds would render
+        // boxes with no meaning.
+        props: { nodes, edges, kinds: NODE_KINDS, nodeIcon, library: { triggers: [], logic: [], actions: [] } },
         attachTo: document.body,
     });
     await flushPromises();

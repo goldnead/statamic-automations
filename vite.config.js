@@ -48,6 +48,17 @@ import statamic from '@statamic/cms/vite-plugin';
 const isTest = !!process.env.VITEST;
 
 export default defineConfig({
+    resolve: {
+        // `@goldnead/flow-canvas` is installed from a Composer path repository,
+        // so npm links it and its files resolve from outside this project. Then
+        // `vue`, `@vue-flow/*` and `@statamic/cms` cannot be found from there
+        // and every import in the shared editor fails. Keeping the symlinked
+        // path means resolution walks this project's node_modules, which is
+        // where those live — and where they must stay, so there is one Vue on
+        // the page and one flow library.
+        preserveSymlinks: true,
+    },
+
     plugins: isTest
         ? [vue()]
         : [
@@ -65,6 +76,15 @@ export default defineConfig({
 
     test: {
         environment: 'jsdom',
+        // The shared editor lives outside this project's root, so Vite would
+        // hand its `.vue` files to Node untransformed and Node has never heard
+        // of `.vue`. Inlining puts them back through the transform pipeline,
+        // which is what makes the shared components testable from here at all.
+        server: {
+            deps: {
+                inline: [/statamic-flow-canvas/, /@goldnead\/flow-canvas/],
+            },
+        },
         // The node:test suite in tests/js/*.test.mjs stays where it is: it
         // covers pure functions and needs no DOM, no compiler and no CP. Vitest
         // takes the `.test.js` files, which mount components.

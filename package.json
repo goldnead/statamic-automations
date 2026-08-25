@@ -2,7 +2,7 @@
     "name": "@goldnead/statamic-automations",
     "version": "0.1.0",
     "private": true,
-    "description": "Frontend assets for the Statamic Automations addon \u2014 Inertia-driven CP pages + Vue Flow canvas.",
+    "description": "Frontend assets for the Statamic Automations addon — Inertia-driven CP pages + Vue Flow canvas.",
     "type": "module",
     "scripts": {
         "dev": "vite",
@@ -18,7 +18,8 @@
         "@vue-flow/controls": "^1.1.2",
         "@vue-flow/core": "^1.41.0",
         "@vue-flow/minimap": "^1.5.0",
-        "axios": "^1.7.0"
+        "axios": "^1.7.0",
+        "@goldnead/flow-canvas": "file:./vendor/goldnead/statamic-flow-canvas/resources/js"
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",

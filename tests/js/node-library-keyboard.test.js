@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mount } from '@vue/test-utils';
 
+import { NODE_KINDS, nodeIcon } from '../../resources/js/support/nodeKinds.js';
 import NodeLibrary from '../../resources/js/components/builder/NodeLibrary.vue';
 
 /**
@@ -21,7 +22,7 @@ const library = {
 };
 
 function mountLibrary(props = {}) {
-    return mount(NodeLibrary, { props: { library, ...props } });
+    return mount(NodeLibrary, { props: { library, kinds: NODE_KINDS, nodeIcon, ...props } });
 }
 
 describe('node library palette', () => {

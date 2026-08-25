@@ -22,6 +22,7 @@ import {
 } from '@statamic/cms/ui';
 import axios from 'axios';
 
+import { ADDER_LABELS, NODE_KINDS, PICK_LABELS, nodeIcon } from '../../support/nodeKinds.js';
 import Canvas from '../../components/builder/Canvas.vue';
 import NodeLibrary from '../../components/builder/NodeLibrary.vue';
 import ConfigPanel from '../../components/builder/ConfigPanel.vue';
@@ -1121,6 +1122,9 @@ watch(view, scheduleHeightUpdate);
                 <NodeLibrary
                     v-if="showLibrary"
                     :library="library"
+                    :kinds="NODE_KINDS"
+                    :node-icon="nodeIcon"
+                    :pick-labels="PICK_LABELS"
                     :pick-mode="pickMode"
                     :pick-kind="pickKind"
                     @add="onLibraryPick"
@@ -1140,6 +1144,9 @@ watch(view, scheduleHeightUpdate);
 
             <div class="sa-canvas-frame">
                 <Canvas
+                    :kinds="NODE_KINDS"
+                    :node-icon="nodeIcon"
+                    :adder-labels="ADDER_LABELS"
                     :nodes="automation.nodes"
                     :edges="automation.edges"
                     :selected-key="selectedNodeKey"

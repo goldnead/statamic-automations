@@ -28,7 +28,8 @@
         "laravel/framework": "^12.0|^13.0",
         "statamic/cms": "^6.0",
         "inertiajs/inertia-laravel": "^1.0|^2.0",
-        "goldnead/statamic-brand-context": "^1.8"
+        "goldnead/statamic-brand-context": "^1.8",
+        "goldnead/statamic-flow-canvas": "^1.0"
     },
     "suggest": {
         "goldnead/statamic-leadhub": "Trigger automations from LeadHub CRM events (contacts, follow-ups, opportunities)",
@@ -91,5 +92,14 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../statamic-flow-canvas",
+            "options": {
+                "symlink": true
+            }
+        }
+    ]
 }
