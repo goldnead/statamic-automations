@@ -62,6 +62,12 @@ Workflow · Forms · Integrations · Utility · Developer Tools
 
 ## Suggested Pricing Tiers
 
+> **Not implemented, and deliberately so.** 2.0.0 removed `extra.statamic.editions`, the `LicenseManager` and every Pro gate from this addon, on the reasoning that the Statamic Marketplace has no licence-check API to call and a gate shipped inside the package is one a buyer can simply switch off (see `CHANGELOG.md`, 2.0.0). Everything below therefore ships to everyone.
+>
+> The **Pro** row is stale on top of that: custom triggers and custom actions have run unconditionally since 2.0.0, and "remote license features" no longer exist in the package at all. The `features.*` block in `config/automations.php` is not a gate either — all nine flags are `true` and the only code that reads them is `SettingsController`, which passes them to the screen for display.
+>
+> This table is a pricing proposal, not a description of the package. Nothing may be sold as tier-exclusive until an edition gate exists — and reinstating one would reverse the 2.0.0 decision, which is a call for Adrian, not a listing detail.
+
 | Tier | Price | Includes |
 |---|---|---|
 | **Automations Core** | $79–129 | Visual builder, built-in triggers/logic/actions, runs + retry, templates, export/sync |
