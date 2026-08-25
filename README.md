@@ -132,6 +132,12 @@ touch.
 | Lead Tag Added _(LeadHub)_ | LeadHub | A tag is added to a lead |
 | Lead Note Added _(LeadHub)_ | LeadHub | A note is added to a lead |
 | Lead Follow-up Due _(LeadHub)_ | LeadHub | A scheduled follow-up becomes due |
+| Funnel Step Entered _(Funnels)_ | Funnels | A visitor arrives on a step. Filterable by funnel **and** step — this one is busy. |
+| Funnel Form Submitted _(Funnels)_ | Funnels | Somebody hands over their address inside a funnel |
+| Funnel Offer Accepted _(Funnels)_ | Funnels | An offer was accepted **and paid**, not merely clicked |
+| Funnel Completed _(Funnels)_ | Funnels | A visitor reaches the end of a funnel |
+| Payment Paid _(Payments)_ | Payments | The provider confirmed the money. Once per payment, however often the webhook arrives. |
+| Payment Failed _(Payments)_ | Payments | Failed, expired or cancelled. Reported once, not per redelivery. |
 | Webhook Received _(Webhook Manager)_ | Webhook Manager | An inbound endpoint receives a validated request |
 | Outbound Webhook Failed _(Webhook Manager)_ | Webhook Manager | A delivery exhausts its retries and fails for good |
 
@@ -273,6 +279,8 @@ Sister addons are detected automatically through `class_exists`. The package kee
 |---|---|---|
 | Webhook Manager | `Goldnead\WebhookManager\Facades\WebhookManager` | "Send Webhook (via Webhook Manager)" action with Webhook Manager destinations |
 | LeadHub | `Goldnead\Leadhub\Facades\LeadHub` | 5 LeadHub triggers + 7 LeadHub actions |
+| Funnels | `Goldnead\StatamicFunnels\Models\Funnel` | 4 funnel triggers |
+| Payments | `Goldnead\StatamicPayments\Models\Payment` | 2 payment triggers |
 
 Class names are configurable in `config/automations.php` under `integrations`, so you can swap implementations or use a fork.
 

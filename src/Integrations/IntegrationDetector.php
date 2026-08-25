@@ -33,6 +33,16 @@ class IntegrationDetector
         return $this->detect('marketing', $this->marketingClasses());
     }
 
+    public function hasFunnels(): bool
+    {
+        return $this->detect('funnels', $this->funnelsClasses());
+    }
+
+    public function hasPayments(): bool
+    {
+        return $this->detect('payments', $this->paymentsClasses());
+    }
+
     /**
      * Reset the cache — primarily used by tests.
      */
@@ -97,6 +107,32 @@ class IntegrationDetector
             // The addon's PSR-4 namespace is Goldnead\Leadhub (lowercase "hub").
             'Goldnead\\Leadhub\\Facades\\LeadHub',
             'Goldnead\\Leadhub\\LeadHubManager',
+        ]));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function funnelsClasses(): array
+    {
+        $configured = config('automations.integrations.funnels.detect', []);
+
+        return array_filter(array_merge((array) $configured, [
+            'Goldnead\\StatamicFunnels\\Models\\Funnel',
+            'Goldnead\\StatamicFunnels\\ServiceProvider',
+        ]));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function paymentsClasses(): array
+    {
+        $configured = config('automations.integrations.payments.detect', []);
+
+        return array_filter(array_merge((array) $configured, [
+            'Goldnead\\StatamicPayments\\Models\\Payment',
+            'Goldnead\\StatamicPayments\\ServiceProvider',
         ]));
     }
 

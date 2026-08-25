@@ -18,6 +18,7 @@ use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Export\AutomationExporter;
 use Goldnead\StatamicAutomations\Export\AutomationFileSync;
 use Goldnead\StatamicAutomations\Export\AutomationImporter;
+use Goldnead\StatamicAutomations\Integrations\Funnels\Triggers as FT;
 use Goldnead\StatamicAutomations\Integrations\IntegrationDetector;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\Actions as LH;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
@@ -29,10 +30,12 @@ use Goldnead\StatamicAutomations\Integrations\Marketing\Actions\UnsubscribeFromL
 use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\CampaignSentTrigger;
 use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\SubscriberConfirmedTrigger;
 use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\SubscriberUnsubscribedTrigger;
+use Goldnead\StatamicAutomations\Integrations\Payments\Triggers as PT;
 use Goldnead\StatamicAutomations\Integrations\WebhookManager\WebhookManagerAdapter;
 use Goldnead\StatamicAutomations\Integrations\WebhookManager\WebhookManagerSendAction;
 use Goldnead\StatamicAutomations\Listeners\HandleEntryPublished;
 use Goldnead\StatamicAutomations\Listeners\HandleFormSubmitted;
+use Goldnead\StatamicAutomations\Listeners\HandleFunnelOrPaymentEvent;
 use Goldnead\StatamicAutomations\Listeners\HandleLeadHubEvent;
 use Goldnead\StatamicAutomations\Listeners\HandleMarketingEvent;
 use Goldnead\StatamicAutomations\Nodes\Actions\AddLogEntryAction;
@@ -511,6 +514,40 @@ class ServiceProvider extends AddonServiceProvider
             foreach (array_keys(HandleLeadHubEvent::EVENT_TRIGGERS) as $eventClass) {
                 if (class_exists($eventClass)) {
                     Event::listen($eventClass, HandleLeadHubEvent::class);
+                }
+            }
+        }
+
+        if ($detector->hasFunnels()) {
+            foreach ([
+                FT\FunnelCompletedTrigger::class,
+                FT\FunnelFormSubmittedTrigger::class,
+                FT\FunnelStepEnteredTrigger::class,
+                FT\FunnelOfferAcceptedTrigger::class,
+            ] as $triggerClass) {
+                $automations->registerBuiltIn($triggerClass::handle());
+                $automations->trigger($triggerClass::handle(), $triggerClass);
+            }
+
+            foreach (array_keys(HandleFunnelOrPaymentEvent::FUNNEL_TRIGGERS) as $eventClass) {
+                if (class_exists($eventClass)) {
+                    Event::listen($eventClass, HandleFunnelOrPaymentEvent::class);
+                }
+            }
+        }
+
+        if ($detector->hasPayments()) {
+            foreach ([
+                PT\PaymentPaidTrigger::class,
+                PT\PaymentFailedTrigger::class,
+            ] as $triggerClass) {
+                $automations->registerBuiltIn($triggerClass::handle());
+                $automations->trigger($triggerClass::handle(), $triggerClass);
+            }
+
+            foreach (array_keys(HandleFunnelOrPaymentEvent::PAYMENT_TRIGGERS) as $eventClass) {
+                if (class_exists($eventClass)) {
+                    Event::listen($eventClass, HandleFunnelOrPaymentEvent::class);
                 }
             }
         }
