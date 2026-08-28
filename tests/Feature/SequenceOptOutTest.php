@@ -2,11 +2,13 @@
 
 namespace Goldnead\StatamicAutomations\Tests\Feature;
 
+use Goldnead\StatamicAutomations\Integrations\Marketing\MarketingAdapter;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationOptOut;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Services\SequenceOptOut;
 use Goldnead\StatamicAutomations\Tests\TestCase;
+use Illuminate\Support\Str;
 
 /**
  * Aus einer Serie aussteigen, ohne alles abzubestellen.
@@ -22,7 +24,7 @@ class SequenceOptOutTest extends TestCase
     {
         return Automation::create([
             'name' => $name,
-            'handle' => \Illuminate\Support\Str::slug($name),
+            'handle' => Str::slug($name),
             'enabled' => true,
         ]);
     }
@@ -167,7 +169,7 @@ class SequenceOptOutTest extends TestCase
          * Antwort darauf, nicht eine leere Zeichenkette, die weiter unten wie
          * eine Adresse aussaehe.
          */
-        $adapter = app(\Goldnead\StatamicAutomations\Integrations\Marketing\MarketingAdapter::class);
+        $adapter = app(MarketingAdapter::class);
 
         $this->assertNull($adapter->subscriptionForToken('   '));
     }

@@ -4,6 +4,7 @@ namespace Goldnead\StatamicAutomations\Models;
 
 use Goldnead\BrandContext\Concerns\HasBrand;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
@@ -17,7 +18,7 @@ use Illuminate\Support\Str;
  * @property string $uuid
  * @property string $automation_uuid
  * @property string $subject_key
- * @property \Illuminate\Support\Carbon $opted_out_at
+ * @property Carbon $opted_out_at
  * @property string $source
  */
 class AutomationOptOut extends Model
