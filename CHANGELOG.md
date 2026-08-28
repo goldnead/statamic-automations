@@ -1,5 +1,106 @@
 # Changelog
 
+## 2.10.0 (2026-08-29)
+
+### Neu: sechzehn Auslöser und vier Aktionen für die Handels-Addons
+
+Vier Nachbar-Addons feuern zusammen neunzehn Ereignisse. Drei davon hatten einen Trigger-Knoten,
+die übrigen sechzehn feuerten ins Leere. Wer wollte, dass beim Widerruf eines Zugangs jemand
+Bescheid bekommt, oder dass eine gekündigte Ratenzahlung anders behandelt wird als eine
+abbezahlte, musste den Listener selbst schreiben. Genau diese Arbeit soll dieses Addon abnehmen.
+
+**Payments** (mit `goldnead/statamic-payments`), sechs neue Auslöser: Erstattung, Abo gestartet,
+Abo verlängert, Abo gekündigt, Abo beendet, Abo-Start fehlgeschlagen. Alle filterbar nach Produkt,
+wie ihre drei Geschwister.
+
+Zwei Unterscheidungen stecken darin, die im Ablauf zählen. „Gekündigt" und „beendet" sind nicht
+dasselbe: das eine ist jemand, der geht, das andere jemand, der die letzte Rate bezahlt hat, und
+ein gemeinsamer Ablauf für beide schickt „schade, dass du gehst" an einen Kunden, der gerade
+fertig abbezahlt hat. Und die Erstattung trägt getrennt, wie viel diesmal zurückging und ob damit
+alles zurück ist. Nur die zweite Angabe darf einen Zugangsentzug auslösen, deshalb gibt es dafür
+den Filter „nur vollständige Erstattungen" direkt am Auslöser.
+
+„Abo-Start fehlgeschlagen" ist der Fall, den ein Betrieb sonst erst erfährt, wenn der Kunde
+schreibt: Das Geld ist da, die Vereinbarung dahinter existiert nicht. Dahinter gehört eine
+Meldung an einen Menschen, keine Kundenmail.
+
+**Entitlements** (mit `goldnead/statamic-entitlements`), fünf neue Auslöser: Zugang gewährt,
+entzogen, abgelaufen, verlängert, wartet auf Bestätigung. Filterbar nach Produkt und nach Quelle.
+Derselbe Kurs per Opt-in gewonnen und derselbe Kurs gekauft sind zwei verschiedene Sachverhalte
+und verdienen zwei verschiedene Mails.
+
+„Zugang entzogen" trägt den Grund und den Verursacher mit. Eine Rückbuchung, die ein Webhook
+verarbeitet hat, und eine Erstattung, die ein Mensch bewilligt hat, sind dieselbe Datenzeile und
+sehr verschiedene Tatsachen.
+
+Dazu zwei Aktionen: **Zugang gewähren** und **Zugang entziehen**. Beide vertragen einen zweiten
+Lauf. Ein Zugang ist über (Subjekt, Produkt, Quelle, Quellreferenz) eindeutig, das Addon hält
+diese Kombination mit einem Unique-Index, und ein zweiter Lauf mit denselben Werten gibt den
+vorhandenen Zugang zurück, statt einen zweiten anzulegen.
+
+Das Ergebnis führt drei Angaben, weil „der Aufruf hat geklappt" und „diese Person hat Zugang"
+zwei verschiedene Tatsachen sind. `grants_access` beantwortet die zweite. `created` sagt nur, ob
+dieser Lauf die Zeile geschrieben hat, was enger ist, als es aussieht: Eine bestätigte
+Doppel-Anmeldung schaltet einen vorhandenen Zugang frei, ohne etwas zu schreiben. Wer eine
+Willkommensmail genau einmal verschicken will, hängt sie deshalb an den Auslöser
+„Zugang gewährt", den das Addon je Zustandswechsel genau einmal feuert.
+
+Ein entzogener Zugang bleibt entzogen, absichtlich, damit ein erneut zugestellter Webhook keine
+Erstattung rückgängig macht. Ein zweiter Gewähren-Lauf ändert daran nichts, und deshalb **färbt
+die Aktion ihren Knoten in diesem Fall rot**, statt Erfolg zu melden. Andernfalls liefe der
+Ablauf zufrieden weiter über einen Menschen, der keinen Zugang hat. Ein Zugang, dessen Startdatum
+noch in der Zukunft liegt, ist kein Fehler und sagt das über `provisional`.
+
+„Zugang entziehen" entzieht jeden Zugang, den das Subjekt für dieses Produkt hält, nicht den
+ersten gefundenen. `revoked` sagt, wie viele dieser Lauf wirklich geändert hat, `matched`, wie
+viele Zeilen es überhaupt gibt.
+
+**Booking** (mit `goldnead/statamic-booking`), drei neue Auslöser: gebucht, storniert, verschoben.
+Filterbar nach Endpunkt, und dieser Filter ist keine Zierde: Eine Website betreibt mehrere
+Endpunkte nebeneinander, ein kostenloses Gespräch und eine bezahlte Stunde, und alle feuern
+dieselben drei Ereignisse.
+
+„Verschoben" ist der einzige der drei, der sich wiederholen kann. Das Booking-Addon schreibt und
+meldet eine Verschiebung, ohne zu prüfen, ob sich etwas geändert hat, also feuert eine erneut
+zugestellte Verschiebung ein zweites Mal. Steht etwas Teures dahinter, gehört eine Entdopplung
+davor. Das steht auch am Knoten selbst.
+
+**Invoices** (mit `goldnead/statamic-invoices`), zwei neue Auslöser: Rechnung ausgestellt,
+Gutschrift ausgestellt. Die Gutschrift trägt beide Dokumente, weil eine Gutschrift für sich
+gelesen nichts darüber sagt, was sie aufhebt.
+
+Dazu zwei Aktionen: **Rechnung ausstellen** und **Gutschrift ausstellen**. Auch beide vertragen
+einen zweiten Lauf, gehalten von einem Unique-Index auf (Zahlung, Art) im Rechnungs-Addon. Und
+auch hier ist `created` das Feld, an dem ein Folgeschritt hängen sollte: Die Aktion gelingt auch
+dann, wenn sie nur das schon vorhandene Dokument zurückgibt.
+
+Die Gutschrift storniert immer die ganze Rechnung, unabhängig davon, wie viel Geld tatsächlich
+zurückgeflossen ist. Bei einer Teilerstattung ist sie das falsche Dokument. Sie gehört hinter eine
+Bedingung auf vollständige Erstattung oder hinter den Payments-Auslöser mit eingeschaltetem Filter.
+
+### Was bewusst nicht dabei ist
+
+**Keine Erstattungs-Aktion.** `statamic-payments` kann beim Zahlungsanbieter keine Erstattung
+auslösen; es kann nur nachbuchen, was jemand im Dashboard des Anbieters getan hat. Eine Aktion
+namens „Erstattung auslösen" würde also kein Geld bewegen, aber den erstatteten Betrag schreiben
+und das Erstattungs-Ereignis feuern, woraufhin das Rechnungs-Addon eine Gutschrift für nie
+zurückgeflossenes Geld ausstellt. Solange das Addon keine echte Erstattung anbietet, gibt es hier
+keine.
+
+**Keine Booking-Aktionen.** Das Booking-Addon bietet nach außen keinen Weg, eine Buchung
+anzulegen, zu verschieben oder zu stornieren; seine einzige öffentliche Methode nimmt einen
+Anbieter-Webhook entgegen. Direkt in die Tabelle zu schreiben würde seinen Eindeutigkeitsschlüssel
+umgehen und keines seiner Ereignisse feuern. Eine Aktion, die still das Falsche tut, ist schlechter
+als keine.
+
+### Ohne die Nachbar-Addons ändert sich nichts
+
+Alle neuen Knoten hängen wie bisher an der Erkennung: Ist das jeweilige Addon nicht installiert,
+erscheint kein Knoten in der Bibliothek und es wird kein Listener registriert. Eine Installation
+ohne `statamic-booking` verhält sich exakt wie vorher. Das ist jetzt auch als Test festgehalten,
+zusammen mit dem Fall, dass eine Aktion scheitert: Sie färbt ihren Knoten rot und beendet den Lauf
+als fehlgeschlagen, statt eine Ausnahme in einen Queue-Worker zu werfen, in den niemand schaut.
+
 ## 2.9.0 — 2026-08-25
 
 ### What's new

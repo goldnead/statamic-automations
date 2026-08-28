@@ -43,6 +43,21 @@ class IntegrationDetector
         return $this->detect('payments', $this->paymentsClasses());
     }
 
+    public function hasEntitlements(): bool
+    {
+        return $this->detect('entitlements', $this->entitlementsClasses());
+    }
+
+    public function hasBooking(): bool
+    {
+        return $this->detect('booking', $this->bookingClasses());
+    }
+
+    public function hasInvoices(): bool
+    {
+        return $this->detect('invoices', $this->invoicesClasses());
+    }
+
     /**
      * Reset the cache — primarily used by tests.
      */
@@ -62,6 +77,11 @@ class IntegrationDetector
             'webhook_manager' => $this->hasWebhookManager(),
             'leadhub' => $this->hasLeadHub(),
             'marketing' => $this->hasMarketing(),
+            'funnels' => $this->hasFunnels(),
+            'payments' => $this->hasPayments(),
+            'entitlements' => $this->hasEntitlements(),
+            'booking' => $this->hasBooking(),
+            'invoices' => $this->hasInvoices(),
         ];
     }
 
@@ -133,6 +153,52 @@ class IntegrationDetector
         return array_filter(array_merge((array) $configured, [
             'Goldnead\\StatamicPayments\\Models\\Payment',
             'Goldnead\\StatamicPayments\\ServiceProvider',
+        ]));
+    }
+
+    /**
+     * The entitlements addon's PSR-4 namespace is `Goldnead\\Entitlements`, with
+     * no `Statamic` in it — unlike its package name, `statamic-entitlements`.
+     * Probing the name that reads more naturally would silently never match.
+     *
+     * @return array<int, string>
+     */
+    protected function entitlementsClasses(): array
+    {
+        $configured = config('automations.integrations.entitlements.detect', []);
+
+        return array_filter(array_merge((array) $configured, [
+            'Goldnead\\Entitlements\\EntitlementManager',
+            'Goldnead\\Entitlements\\ServiceProvider',
+        ]));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected function bookingClasses(): array
+    {
+        $configured = config('automations.integrations.booking.detect', []);
+
+        return array_filter(array_merge((array) $configured, [
+            'Goldnead\\StatamicBooking\\Models\\Booking',
+            'Goldnead\\StatamicBooking\\ServiceProvider',
+        ]));
+    }
+
+    /**
+     * Same trap as entitlements: the namespace is `Goldnead\\Invoices`, not
+     * `Goldnead\\StatamicInvoices`.
+     *
+     * @return array<int, string>
+     */
+    protected function invoicesClasses(): array
+    {
+        $configured = config('automations.integrations.invoices.detect', []);
+
+        return array_filter(array_merge((array) $configured, [
+            'Goldnead\\Invoices\\InvoiceWriter',
+            'Goldnead\\Invoices\\ServiceProvider',
         ]));
     }
 

@@ -7,29 +7,34 @@ use Goldnead\StatamicAutomations\Contracts\AutomationTrigger;
 use Goldnead\StatamicAutomations\Integrations\Payments\Concerns\FlattensPayments;
 
 /**
- * Money did not arrive.
+ * Somebody paid for a subscription and did not get one.
  *
- * Reported once per payment, not once per webhook: the addon keeps its own
- * column for that, so a recovery email is sent once rather than every time the
- * provider re-announces the same failure.
+ * The money arrived, the payment row says so, and the agreement behind it does
+ * not exist. This is the trigger a site uses to find out on the day rather than
+ * on the day the customer writes in, so the flow behind it should reach a human:
+ * an alert, not a customer mail.
+ *
+ * `reason` is the provider's or the addon's explanation, carried through as
+ * text. There is no filter on it, deliberately — the point of this trigger is
+ * that nothing gets swallowed.
  */
-class PaymentFailedTrigger implements AutomationTrigger
+class SubscriptionStartFailedTrigger implements AutomationTrigger
 {
     use FlattensPayments;
 
     public static function handle(): string
     {
-        return 'payments.failed';
+        return 'payments.subscription_start_failed';
     }
 
     public static function label(): string
     {
-        return 'Payment Failed';
+        return 'Subscription Start Failed';
     }
 
     public static function description(): ?string
     {
-        return 'Triggered when a payment is reported failed, expired or cancelled.';
+        return 'Triggered when a subscription payment succeeded but no subscription was created behind it.';
     }
 
     public static function group(): string
@@ -51,6 +56,7 @@ class PaymentFailedTrigger implements AutomationTrigger
     {
         return [
             'payment' => self::paymentOutputSchema(),
+            'reason' => 'string',
         ];
     }
 
@@ -61,8 +67,11 @@ class PaymentFailedTrigger implements AutomationTrigger
 
     public function buildContext(object|array $event, array $config): AutomationContext
     {
+        $reason = $this->propertyOf($event, 'reason');
+
         return AutomationContext::make([
             'payment' => $this->paymentOf($event),
+            'reason' => is_string($reason) ? $reason : null,
         ]);
     }
 }

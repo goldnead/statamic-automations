@@ -2,27 +2,29 @@
 
 namespace Goldnead\StatamicAutomations\Listeners;
 
-use Goldnead\StatamicAutomations\Concerns\AppliesEnrollmentPolicy;
-use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
-use Goldnead\StatamicAutomations\Jobs\RunAutomation;
-use Goldnead\StatamicAutomations\Models\Automation;
-use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
+use Goldnead\StatamicAutomations\Concerns\RunsAutomationsForEvent;
 
 /**
  * Brings the funnel and payment addons' events into the engine.
  *
- * Both addons already fired these — four in funnels, two in payments — and
- * nothing could hear them. The trigger nodes existed nowhere, so a site that
- * wanted "send the course when the payment goes through" had to write a
- * listener by hand, which is exactly the work the automations addon exists to
- * remove.
+ * Both addons already fired these and nothing could hear them: the trigger
+ * nodes existed nowhere, so a site that wanted "send the course when the
+ * payment goes through" had to write a listener by hand, which is exactly the
+ * work the automations addon exists to remove.
+ *
+ * Thirteen events, all of them: four funnel events and the payments addon's
+ * full nine. The payments map covered three of those nine for a while, and the
+ * six it left out were the ones about money going back and about subscriptions
+ * starting, renewing and ending.
  *
  * Same shape as {@see HandleLeadHubEvent}, deliberately: an event class mapped
- * to a trigger handle, registered only when the sibling is installed.
+ * to a trigger handle, registered only when the sibling is installed. The loop
+ * that turns a handle into runs lives in {@see RunsAutomationsForEvent}, shared
+ * with {@see HandleCommerceEvent}.
  */
 class HandleFunnelOrPaymentEvent
 {
-    use AppliesEnrollmentPolicy;
+    use RunsAutomationsForEvent;
 
     /** Funnel event class => automation trigger handle. */
     public const FUNNEL_TRIGGERS = [
@@ -37,50 +39,26 @@ class HandleFunnelOrPaymentEvent
         'Goldnead\\StatamicPayments\\Events\\PaymentPaid' => 'payments.paid',
         'Goldnead\\StatamicPayments\\Events\\PaymentFailed' => 'payments.failed',
         'Goldnead\\StatamicPayments\\Events\\CheckoutAbandoned' => 'payments.checkout_abandoned',
+        'Goldnead\\StatamicPayments\\Events\\PaymentRefunded' => 'payments.refunded',
+        'Goldnead\\StatamicPayments\\Events\\SubscriptionStarted' => 'payments.subscription_started',
+        'Goldnead\\StatamicPayments\\Events\\SubscriptionRenewed' => 'payments.subscription_renewed',
+        'Goldnead\\StatamicPayments\\Events\\SubscriptionCancelled' => 'payments.subscription_cancelled',
+        'Goldnead\\StatamicPayments\\Events\\SubscriptionEnded' => 'payments.subscription_ended',
+        'Goldnead\\StatamicPayments\\Events\\SubscriptionStartFailed' => 'payments.subscription_start_failed',
     ];
-
-    public function __construct(
-        protected TriggerRegistry $triggers,
-        protected WorkflowRunner $runner,
-    ) {}
 
     public function handle(object $event): void
     {
-        $handle = self::FUNNEL_TRIGGERS[$event::class]
-            ?? self::PAYMENT_TRIGGERS[$event::class]
-            ?? null;
+        $handle = $this->handleForEvent(
+            $event,
+            self::FUNNEL_TRIGGERS,
+            self::PAYMENT_TRIGGERS,
+        );
 
         if ($handle === null) {
             return;
         }
 
-        $trigger = $this->triggers->instance($handle);
-
-        if ($trigger === null || ! Automation::schemaReady()) {
-            return;
-        }
-
-        $automations = Automation::query()
-            ->where('enabled', true)
-            ->whereHas('nodes', fn ($q) => $q->where('type', $handle))
-            ->with('nodes')
-            ->get();
-
-        foreach ($automations as $automation) {
-            $node = $automation->nodes->first(fn ($n) => $n->type === $handle);
-
-            if ($node === null || ! $trigger->matches($event, $node->config ?? [])) {
-                continue;
-            }
-
-            $context = $trigger->buildContext($event, $node->config ?? []);
-            $run = $this->createEnrolledRun($this->runner, $automation, $node, $context);
-
-            if ($run === null) {
-                continue;
-            }
-
-            RunAutomation::dispatch($run->id, $context->all(), false);
-        }
+        $this->runFor($handle, $event);
     }
 }

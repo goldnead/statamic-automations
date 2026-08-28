@@ -18,8 +18,15 @@ use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Export\AutomationExporter;
 use Goldnead\StatamicAutomations\Export\AutomationFileSync;
 use Goldnead\StatamicAutomations\Export\AutomationImporter;
+use Goldnead\StatamicAutomations\Integrations\Booking\Triggers as BT;
+use Goldnead\StatamicAutomations\Integrations\Entitlements\Actions as EA;
+use Goldnead\StatamicAutomations\Integrations\Entitlements\EntitlementsAdapter;
+use Goldnead\StatamicAutomations\Integrations\Entitlements\Triggers as ET;
 use Goldnead\StatamicAutomations\Integrations\Funnels\Triggers as FT;
 use Goldnead\StatamicAutomations\Integrations\IntegrationDetector;
+use Goldnead\StatamicAutomations\Integrations\Invoices\Actions as IA;
+use Goldnead\StatamicAutomations\Integrations\Invoices\InvoicesAdapter;
+use Goldnead\StatamicAutomations\Integrations\Invoices\Triggers as IT;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\Actions as LH;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubEventTriggers;
@@ -33,6 +40,7 @@ use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\SubscriberUnsub
 use Goldnead\StatamicAutomations\Integrations\Payments\Triggers as PT;
 use Goldnead\StatamicAutomations\Integrations\WebhookManager\WebhookManagerAdapter;
 use Goldnead\StatamicAutomations\Integrations\WebhookManager\WebhookManagerSendAction;
+use Goldnead\StatamicAutomations\Listeners\HandleCommerceEvent;
 use Goldnead\StatamicAutomations\Listeners\HandleEntryPublished;
 use Goldnead\StatamicAutomations\Listeners\HandleFormSubmitted;
 use Goldnead\StatamicAutomations\Listeners\HandleFunnelOrPaymentEvent;
@@ -176,6 +184,8 @@ class ServiceProvider extends AddonServiceProvider
         $this->app->singleton(Settings::class);
         $this->app->singleton(WebhookManagerAdapter::class);
         $this->app->singleton(LeadHubAdapter::class);
+        $this->app->singleton(EntitlementsAdapter::class);
+        $this->app->singleton(InvoicesAdapter::class);
 
         // Engine services. Most are stateless or use injected registries.
         $this->app->singleton(TokenResolver::class);
@@ -511,11 +521,7 @@ class ServiceProvider extends AddonServiceProvider
 
             // Fire LeadHub triggers from LeadHub's domain events. Without this,
             // the LeadHub trigger nodes are selectable but never actually run.
-            foreach (array_keys(HandleLeadHubEvent::EVENT_TRIGGERS) as $eventClass) {
-                if (class_exists($eventClass)) {
-                    Event::listen($eventClass, HandleLeadHubEvent::class);
-                }
-            }
+            $this->listenForSisterEvents(HandleLeadHubEvent::EVENT_TRIGGERS, HandleLeadHubEvent::class);
         }
 
         if ($detector->hasFunnels()) {
@@ -529,11 +535,10 @@ class ServiceProvider extends AddonServiceProvider
                 $automations->trigger($triggerClass::handle(), $triggerClass);
             }
 
-            foreach (array_keys(HandleFunnelOrPaymentEvent::FUNNEL_TRIGGERS) as $eventClass) {
-                if (class_exists($eventClass)) {
-                    Event::listen($eventClass, HandleFunnelOrPaymentEvent::class);
-                }
-            }
+            $this->listenForSisterEvents(
+                HandleFunnelOrPaymentEvent::FUNNEL_TRIGGERS,
+                HandleFunnelOrPaymentEvent::class,
+            );
         }
 
         if ($detector->hasPayments()) {
@@ -541,16 +546,21 @@ class ServiceProvider extends AddonServiceProvider
                 PT\PaymentPaidTrigger::class,
                 PT\PaymentFailedTrigger::class,
                 PT\CheckoutAbandonedTrigger::class,
+                PT\PaymentRefundedTrigger::class,
+                PT\SubscriptionStartedTrigger::class,
+                PT\SubscriptionRenewedTrigger::class,
+                PT\SubscriptionCancelledTrigger::class,
+                PT\SubscriptionEndedTrigger::class,
+                PT\SubscriptionStartFailedTrigger::class,
             ] as $triggerClass) {
                 $automations->registerBuiltIn($triggerClass::handle());
                 $automations->trigger($triggerClass::handle(), $triggerClass);
             }
 
-            foreach (array_keys(HandleFunnelOrPaymentEvent::PAYMENT_TRIGGERS) as $eventClass) {
-                if (class_exists($eventClass)) {
-                    Event::listen($eventClass, HandleFunnelOrPaymentEvent::class);
-                }
-            }
+            $this->listenForSisterEvents(
+                HandleFunnelOrPaymentEvent::PAYMENT_TRIGGERS,
+                HandleFunnelOrPaymentEvent::class,
+            );
         }
 
         if ($detector->hasMarketing()) {
@@ -573,10 +583,88 @@ class ServiceProvider extends AddonServiceProvider
             }
 
             // Fire marketing triggers from the addon's domain events.
-            foreach (array_keys(HandleMarketingEvent::EVENT_TRIGGERS) as $eventClass) {
-                if (class_exists($eventClass)) {
-                    Event::listen($eventClass, HandleMarketingEvent::class);
-                }
+            $this->listenForSisterEvents(HandleMarketingEvent::EVENT_TRIGGERS, HandleMarketingEvent::class);
+        }
+
+        if ($detector->hasEntitlements()) {
+            foreach ([
+                ET\EntitlementGrantedTrigger::class,
+                ET\EntitlementRevokedTrigger::class,
+                ET\EntitlementExpiredTrigger::class,
+                ET\EntitlementRenewedTrigger::class,
+                ET\EntitlementPendingTrigger::class,
+            ] as $triggerClass) {
+                $automations->registerBuiltIn($triggerClass::handle());
+                $automations->trigger($triggerClass::handle(), $triggerClass);
+            }
+
+            foreach ([
+                EA\GrantEntitlementAction::class,
+                EA\RevokeEntitlementAction::class,
+            ] as $actionClass) {
+                $automations->registerBuiltIn($actionClass::handle());
+                $automations->action($actionClass::handle(), $actionClass);
+            }
+
+            $this->listenForSisterEvents(HandleCommerceEvent::ENTITLEMENT_TRIGGERS, HandleCommerceEvent::class);
+        }
+
+        if ($detector->hasBooking()) {
+            foreach ([
+                BT\BookingMadeTrigger::class,
+                BT\BookingCancelledTrigger::class,
+                BT\BookingRescheduledTrigger::class,
+            ] as $triggerClass) {
+                $automations->registerBuiltIn($triggerClass::handle());
+                $automations->trigger($triggerClass::handle(), $triggerClass);
+            }
+
+            // No booking actions. The booking addon exposes no public way to
+            // create, move or cancel a booking — its one public method takes a
+            // provider webhook payload — and writing to the model directly
+            // would skip its idempotency key and fire none of its events. An
+            // action that quietly does the wrong thing is worse than none.
+            $this->listenForSisterEvents(HandleCommerceEvent::BOOKING_TRIGGERS, HandleCommerceEvent::class);
+        }
+
+        if ($detector->hasInvoices()) {
+            foreach ([
+                IT\InvoiceIssuedTrigger::class,
+                IT\CreditNoteIssuedTrigger::class,
+            ] as $triggerClass) {
+                $automations->registerBuiltIn($triggerClass::handle());
+                $automations->trigger($triggerClass::handle(), $triggerClass);
+            }
+
+            foreach ([
+                IA\IssueInvoiceAction::class,
+                IA\IssueCreditNoteAction::class,
+            ] as $actionClass) {
+                $automations->registerBuiltIn($actionClass::handle());
+                $automations->action($actionClass::handle(), $actionClass);
+            }
+
+            $this->listenForSisterEvents(HandleCommerceEvent::INVOICE_TRIGGERS, HandleCommerceEvent::class);
+        }
+    }
+
+    /**
+     * Subscribe a listener to the sister-addon event classes that actually exist.
+     *
+     * The `class_exists` check is the whole safety net for an optional
+     * integration: a site without the sibling addon registers no listener at
+     * all and behaves exactly as it did before this code existed. It used to be
+     * written out at every call site, which is five copies of the one check
+     * that must not be forgotten.
+     *
+     * @param  array<string, string>  $map  event class-string => trigger handle
+     * @param  class-string  $listener
+     */
+    protected function listenForSisterEvents(array $map, string $listener): void
+    {
+        foreach (array_keys($map) as $eventClass) {
+            if (class_exists($eventClass)) {
+                Event::listen($eventClass, $listener);
             }
         }
     }

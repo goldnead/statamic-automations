@@ -139,6 +139,22 @@ touch.
 | Payment Paid _(Payments)_ | Payments | The provider confirmed the money. Once per payment, however often the webhook arrives. |
 | Payment Failed _(Payments)_ | Payments | Failed, expired or cancelled. Reported once, not per redelivery. |
 | Checkout Abandoned _(Payments)_ | Payments | Started and left unpaid past the waiting period. Reported once; a later payment ends it. |
+| Payment Refunded _(Payments)_ | Payments | Money went back. Carries what moved **and** whether everything is now repaid; only the second is safe to withdraw access on. |
+| Subscription Started _(Payments)_ | Payments | Provider confirmed **and** the first cycle is paid. Not the place to grant access, that already happened on Payment Paid. |
+| Subscription Renewed _(Payments)_ | Payments | Once per charged cycle. `times_charged` against `times` is "instalment 3 of 12". |
+| Subscription Cancelled _(Payments)_ | Payments | Somebody left. Cancelled is not over: `ended_at` says when access stops. |
+| Subscription Ended _(Payments)_ | Payments | It ran to its end, for example a payment plan paid off. Deliberately not the same as cancelled. |
+| Subscription Start Failed _(Payments)_ | Payments | The money arrived and no subscription exists. Put an alert to a person behind this, not a customer mail. |
+| Access Granted _(Entitlements)_ | Entitlements | A grant became active. Where the welcome mail belongs; the entitlements addon sends nothing itself. |
+| Access Revoked _(Entitlements)_ | Entitlements | Withdrawn deliberately, with the reason and **who did it**. A chargeback and a goodwill refund are the same row. |
+| Access Expired _(Entitlements)_ | Entitlements | The window closed on its own. Comes from a scheduled pass, so it can arrive after the fact. |
+| Access Renewed _(Entitlements)_ | Entitlements | An existing grant runs longer. Not a second Access Granted, or you greet the same person every month. |
+| Access Pending Confirmation _(Entitlements)_ | Entitlements | Parked awaiting a double opt-in. Nobody has access yet, so do not deliver here. |
+| Booking Made _(Booking)_ | Booking | A slot is taken. Filterable by endpoint, which a site with more than one needs. |
+| Booking Cancelled _(Booking)_ | Booking | Cancelled or rejected; `status` tells the two apart. |
+| Booking Rescheduled _(Booking)_ | Booking | Moved to a different time. The only one here that can repeat on a redelivery. |
+| Invoice Issued _(Invoices)_ | Invoices | A document was written. Fires only on a real write, never when an existing invoice is handed back. |
+| Credit Note Issued _(Invoices)_ | Invoices | Carries both documents, because a credit note alone says nothing about what it undid. |
 | Webhook Received _(Webhook Manager)_ | Webhook Manager | An inbound endpoint receives a validated request |
 | Outbound Webhook Failed _(Webhook Manager)_ | Webhook Manager | A delivery exhausts its retries and fails for good |
 
@@ -171,6 +187,10 @@ touch.
 | Add / Remove Lead Tag _(LeadHub)_ | LeadHub | |
 | Add Lead Note _(LeadHub)_ | LeadHub | Token-resolved body |
 | Create / Complete Follow-up _(LeadHub)_ | LeadHub | |
+| Grant Access _(Entitlements)_ | Entitlements | Idempotent by (subject, product, source, reference). Branch on `grants_access`; **fails** when the grant it finds is revoked or expired, because re-granting does not reopen one. |
+| Revoke Access _(Entitlements)_ | Entitlements | Withdraws **every** grant the subject holds for the product; reports how many actually changed. |
+| Issue Invoice _(Invoices)_ | Invoices | Writes the invoice for a paid payment, or returns the one already written. Branch on `created`. |
+| Issue Credit Note _(Invoices)_ | Invoices | Reverses the **whole** invoice. Put a full-refund condition in front of it. |
 
 ### Send Email is the transactional node
 
@@ -281,9 +301,20 @@ Sister addons are detected automatically through `class_exists`. The package kee
 | Webhook Manager | `Goldnead\WebhookManager\Facades\WebhookManager` | "Send Webhook (via Webhook Manager)" action with Webhook Manager destinations |
 | LeadHub | `Goldnead\Leadhub\Facades\LeadHub` | 5 LeadHub triggers + 7 LeadHub actions |
 | Funnels | `Goldnead\StatamicFunnels\Models\Funnel` | 4 funnel triggers |
-| Payments | `Goldnead\StatamicPayments\Models\Payment` | 2 payment triggers |
+| Payments | `Goldnead\StatamicPayments\Models\Payment` | 9 payment triggers |
+| Entitlements | `Goldnead\Entitlements\EntitlementManager` | 5 entitlement triggers + 2 actions |
+| Booking | `Goldnead\StatamicBooking\Models\Booking` | 3 booking triggers |
+| Invoices | `Goldnead\Invoices\InvoiceWriter` | 2 invoice triggers + 2 actions |
 
 Class names are configurable in `config/automations.php` under `integrations`, so you can swap implementations or use a fork.
+
+Two actions you might expect are deliberately missing. **There is no refund action**: the payments
+addon cannot ask a provider for a refund, it can only record one that already happened in the
+provider's own dashboard, so an action by that name would move no money while writing a refunded
+amount and firing the refund event, which makes the invoices addon issue a credit note for money
+that never went back. **There are no booking actions**: the booking addon exposes no public way to
+create, move or cancel a booking, and writing to its table directly would bypass its idempotency
+key and fire none of its events.
 
 ### Sent mail on the contact's timeline
 

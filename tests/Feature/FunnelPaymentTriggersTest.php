@@ -18,8 +18,12 @@ use Goldnead\StatamicAutomations\Listeners\HandleFunnelOrPaymentEvent;
 it('maps every funnel and payment event to a trigger handle', function () {
     // A typo in one of these maps is silent: the event fires, nothing matches,
     // and nobody finds out until an automation "just never runs".
+    //
+    // The payments map covers all nine events the addon fires. It used to
+    // cover three, and the six that were missing — every refund and every
+    // subscription transition — went nowhere at all.
     expect(HandleFunnelOrPaymentEvent::FUNNEL_TRIGGERS)->toHaveCount(4)
-        ->and(HandleFunnelOrPaymentEvent::PAYMENT_TRIGGERS)->toHaveCount(3)
+        ->and(HandleFunnelOrPaymentEvent::PAYMENT_TRIGGERS)->toHaveCount(9)
         ->and(array_values(HandleFunnelOrPaymentEvent::FUNNEL_TRIGGERS))->toBe([
             'funnels.completed',
             'funnels.form_submitted',
@@ -30,6 +34,12 @@ it('maps every funnel and payment event to a trigger handle', function () {
             'payments.paid',
             'payments.failed',
             'payments.checkout_abandoned',
+            'payments.refunded',
+            'payments.subscription_started',
+            'payments.subscription_renewed',
+            'payments.subscription_cancelled',
+            'payments.subscription_ended',
+            'payments.subscription_start_failed',
         ]);
 });
 

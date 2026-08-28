@@ -164,6 +164,11 @@ return [
         'send_real_emails' => false,
         'persist_leadhub_changes' => false,
         'persist_statamic_changes' => false,
+        // Granting access and writing an invoice are both real, hard to undo
+        // and visible to a customer. A test run previews them and writes
+        // nothing unless these are switched on deliberately.
+        'persist_entitlement_changes' => false,
+        'persist_invoice_changes' => false,
         'call_real_ai' => false,
     ],
 
@@ -269,6 +274,42 @@ return [
     */
 
     'integrations' => [
+        'entitlements' => [
+            // Class names checked by IntegrationDetector. Note the namespace:
+            // the package is `statamic-entitlements` but its PSR-4 root is
+            // `Goldnead\\Entitlements`, with no `Statamic` in it.
+            'detect' => [
+                'Goldnead\\Entitlements\\EntitlementManager',
+                'Goldnead\\Entitlements\\ServiceProvider',
+            ],
+            // The service the grant/revoke actions call.
+            'manager' => 'Goldnead\\Entitlements\\EntitlementManager',
+            // The `(type, id)` value object a grant is written against. A grant
+            // may belong to somebody with no user record, which is why the pair
+            // is passed rather than a model.
+            'subject_reference' => 'Goldnead\\Entitlements\\Support\\SubjectReference',
+        ],
+
+        'booking' => [
+            'detect' => [
+                'Goldnead\\StatamicBooking\\Models\\Booking',
+                'Goldnead\\StatamicBooking\\ServiceProvider',
+            ],
+        ],
+
+        'invoices' => [
+            // Same namespace trap as entitlements: `Goldnead\\Invoices`.
+            'detect' => [
+                'Goldnead\\Invoices\\InvoiceWriter',
+                'Goldnead\\Invoices\\ServiceProvider',
+            ],
+            'writer' => 'Goldnead\\Invoices\\InvoiceWriter',
+            'model' => 'Goldnead\\Invoices\\Models\\Invoice',
+            // An invoice is always written for a payment, so the invoice
+            // actions need the payments addon's model as well.
+            'payment_model' => 'Goldnead\\StatamicPayments\\Models\\Payment',
+        ],
+
         'webhook_manager' => [
             // Class names checked by IntegrationDetector. The first
             // class that exists wins — leave the defaults in place

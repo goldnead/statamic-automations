@@ -7,29 +7,33 @@ use Goldnead\StatamicAutomations\Contracts\AutomationTrigger;
 use Goldnead\StatamicAutomations\Integrations\Payments\Concerns\FlattensPayments;
 
 /**
- * Money did not arrive.
+ * Somebody stopped it, and the provider agreed.
  *
- * Reported once per payment, not once per webhook: the addon keeps its own
- * column for that, so a recovery email is sent once rather than every time the
- * provider re-announces the same failure.
+ * Deliberately separate from `payments.subscription_ended`, and the separation
+ * is the point: one is somebody leaving, the other is somebody finishing their
+ * last instalment. A single flow across both would send "sorry to see you go"
+ * to a customer who just paid everything they owed.
+ *
+ * Cancelled is not the same as over. `subscription.ended_at` says when access
+ * actually stops; until then the agreement is cancelled and still running.
  */
-class PaymentFailedTrigger implements AutomationTrigger
+class SubscriptionCancelledTrigger implements AutomationTrigger
 {
     use FlattensPayments;
 
     public static function handle(): string
     {
-        return 'payments.failed';
+        return 'payments.subscription_cancelled';
     }
 
     public static function label(): string
     {
-        return 'Payment Failed';
+        return 'Subscription Cancelled';
     }
 
     public static function description(): ?string
     {
-        return 'Triggered when a payment is reported failed, expired or cancelled.';
+        return 'Triggered when the provider confirms that a subscription was cancelled.';
     }
 
     public static function group(): string
@@ -50,7 +54,7 @@ class PaymentFailedTrigger implements AutomationTrigger
     public static function outputSchema(): array
     {
         return [
-            'payment' => self::paymentOutputSchema(),
+            'subscription' => self::subscriptionOutputSchema(),
         ];
     }
 
@@ -62,7 +66,7 @@ class PaymentFailedTrigger implements AutomationTrigger
     public function buildContext(object|array $event, array $config): AutomationContext
     {
         return AutomationContext::make([
-            'payment' => $this->paymentOf($event),
+            'subscription' => $this->subscriptionOf($event),
         ]);
     }
 }

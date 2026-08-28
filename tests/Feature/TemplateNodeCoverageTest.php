@@ -28,7 +28,10 @@ class TemplateNodeCoverageTest extends TestCase
     /**
      * The integration keys a template may legitimately declare in `requires`.
      */
-    private const KNOWN_INTEGRATIONS = ['webhook_manager', 'leadhub', 'marketing'];
+    private const KNOWN_INTEGRATIONS = [
+        'webhook_manager', 'leadhub', 'marketing', 'funnels', 'payments',
+        'entitlements', 'booking', 'invoices',
+    ];
 
     /**
      * Node handle prefix -> the integration key a template using it must require.
@@ -37,6 +40,11 @@ class TemplateNodeCoverageTest extends TestCase
         'webhook_manager.' => 'webhook_manager',
         'leadhub.' => 'leadhub',
         'marketing.' => 'marketing',
+        'funnels.' => 'funnels',
+        'payments.' => 'payments',
+        'entitlements.' => 'entitlements',
+        'booking.' => 'booking',
+        'invoices.' => 'invoices',
     ];
 
     protected function defineEnvironment($app): void

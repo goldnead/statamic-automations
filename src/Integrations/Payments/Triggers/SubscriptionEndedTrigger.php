@@ -7,29 +7,28 @@ use Goldnead\StatamicAutomations\Contracts\AutomationTrigger;
 use Goldnead\StatamicAutomations\Integrations\Payments\Concerns\FlattensPayments;
 
 /**
- * Money did not arrive.
+ * It ran to its end on its own: a payment plan that paid its last instalment.
  *
- * Reported once per payment, not once per webhook: the addon keeps its own
- * column for that, so a recovery email is sent once rather than every time the
- * provider re-announces the same failure.
+ * The counterpart to `payments.subscription_cancelled`, kept apart on purpose.
+ * See that trigger for why. This is the one to hang "you have paid it off" on.
  */
-class PaymentFailedTrigger implements AutomationTrigger
+class SubscriptionEndedTrigger implements AutomationTrigger
 {
     use FlattensPayments;
 
     public static function handle(): string
     {
-        return 'payments.failed';
+        return 'payments.subscription_ended';
     }
 
     public static function label(): string
     {
-        return 'Payment Failed';
+        return 'Subscription Ended';
     }
 
     public static function description(): ?string
     {
-        return 'Triggered when a payment is reported failed, expired or cancelled.';
+        return 'Triggered when a subscription reaches its own end, for example a payment plan that is paid off.';
     }
 
     public static function group(): string
@@ -50,7 +49,7 @@ class PaymentFailedTrigger implements AutomationTrigger
     public static function outputSchema(): array
     {
         return [
-            'payment' => self::paymentOutputSchema(),
+            'subscription' => self::subscriptionOutputSchema(),
         ];
     }
 
@@ -62,7 +61,7 @@ class PaymentFailedTrigger implements AutomationTrigger
     public function buildContext(object|array $event, array $config): AutomationContext
     {
         return AutomationContext::make([
-            'payment' => $this->paymentOf($event),
+            'subscription' => $this->subscriptionOf($event),
         ]);
     }
 }

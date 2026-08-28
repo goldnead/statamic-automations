@@ -7,29 +7,31 @@ use Goldnead\StatamicAutomations\Contracts\AutomationTrigger;
 use Goldnead\StatamicAutomations\Integrations\Payments\Concerns\FlattensPayments;
 
 /**
- * Money did not arrive.
+ * A cycle was charged and paid.
  *
- * Reported once per payment, not once per webhook: the addon keeps its own
- * column for that, so a recovery email is sent once rather than every time the
- * provider re-announces the same failure.
+ * Fires once per cycle, claimed with a conditional update on the addon's side,
+ * so a redelivered webhook does not announce the same month twice. A flow here
+ * may therefore count: `subscription.times_charged` against
+ * `subscription.times` is "instalment 3 of 12", and that is the difference
+ * between "thank you" and "that was the last one".
  */
-class PaymentFailedTrigger implements AutomationTrigger
+class SubscriptionRenewedTrigger implements AutomationTrigger
 {
     use FlattensPayments;
 
     public static function handle(): string
     {
-        return 'payments.failed';
+        return 'payments.subscription_renewed';
     }
 
     public static function label(): string
     {
-        return 'Payment Failed';
+        return 'Subscription Renewed';
     }
 
     public static function description(): ?string
     {
-        return 'Triggered when a payment is reported failed, expired or cancelled.';
+        return 'Triggered once per subscription cycle that is charged and paid.';
     }
 
     public static function group(): string
@@ -50,6 +52,7 @@ class PaymentFailedTrigger implements AutomationTrigger
     public static function outputSchema(): array
     {
         return [
+            'subscription' => self::subscriptionOutputSchema(),
             'payment' => self::paymentOutputSchema(),
         ];
     }
@@ -62,6 +65,7 @@ class PaymentFailedTrigger implements AutomationTrigger
     public function buildContext(object|array $event, array $config): AutomationContext
     {
         return AutomationContext::make([
+            'subscription' => $this->subscriptionOf($event),
             'payment' => $this->paymentOf($event),
         ]);
     }
