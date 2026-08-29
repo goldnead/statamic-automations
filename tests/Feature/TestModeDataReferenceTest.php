@@ -50,7 +50,18 @@ function allActionClasses(): array
         $relative = substr($file->getPathname(), strlen($root) + 1, -4);
         $class = 'Goldnead\\StatamicAutomations\\'.str_replace(DIRECTORY_SEPARATOR, '\\', $relative);
 
-        if (! class_exists($class)) {
+        // Asked inside a try, because `class_exists()` loads the file to
+        // answer — and a file whose parent class belongs to an optional
+        // sibling throws instead of returning false. That is what
+        // `src/Integrations/Insights` is: it extends the analytics addon's
+        // base class and is only ever reached when that addon is installed.
+        // Either way it is not an action, so it is skipped like anything else
+        // that cannot be loaded here.
+        try {
+            if (! class_exists($class)) {
+                continue;
+            }
+        } catch (Throwable) {
             continue;
         }
 

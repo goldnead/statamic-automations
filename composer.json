@@ -32,6 +32,7 @@
         "goldnead/statamic-flow-canvas": "^1.1"
     },
     "suggest": {
+        "goldnead/statamic-insights": "Report runs, failures, success rate, median run time and series opt-outs on the shared Insights dashboard",
         "goldnead/statamic-leadhub": "Trigger automations from LeadHub CRM events (contacts, follow-ups, opportunities)",
         "goldnead/statamic-webhook-manager": "Delegate webhook delivery (retries, auth, logging) to Webhook Manager"
     },

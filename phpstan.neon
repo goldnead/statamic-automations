@@ -12,3 +12,14 @@ parameters:
     # Manager, Email Templates) are reached through class_exists()-guarded
     # seams, so PHPStan sees calls into classes that are not installed here.
     treatPhpDocTypesAsCertain: false
+
+    # Das Analytics-Addon ist ein `suggest`, kein `require`: die Kennzahlen
+    # unter src/Integrations/Insights erweitern seinen Vertrag, und es liegt
+    # nicht in vendor/. Gelesen wird der Stellvertreter aus der Testsuite —
+    # dieselben Deklarationen, Byte fuer Byte —, damit die Kennzahlen gegen die
+    # echten Signaturen geprueft werden statt als unbekannte Klassen zu gelten.
+    # Gescannt, nicht analysiert: die Datei ist kein Code, den dieses Paket
+    # ausliefert.
+    scanFiles:
+        - tests/Fakes/insights-contracts.php
+        - tests/Fakes/insights-table-metric.php

@@ -25,6 +25,11 @@ use Goldnead\StatamicAutomations\Integrations\Entitlements\Actions as EA;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\EntitlementsAdapter;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\Triggers as ET;
 use Goldnead\StatamicAutomations\Integrations\Funnels\Triggers as FT;
+use Goldnead\StatamicAutomations\Integrations\Insights\DurationP50;
+use Goldnead\StatamicAutomations\Integrations\Insights\Failures;
+use Goldnead\StatamicAutomations\Integrations\Insights\OptOuts;
+use Goldnead\StatamicAutomations\Integrations\Insights\Runs;
+use Goldnead\StatamicAutomations\Integrations\Insights\SuccessRate;
 use Goldnead\StatamicAutomations\Integrations\IntegrationDetector;
 use Goldnead\StatamicAutomations\Integrations\Invoices\Actions as IA;
 use Goldnead\StatamicAutomations\Integrations\Invoices\InvoicesAdapter;
@@ -111,10 +116,12 @@ use Goldnead\StatamicAutomations\Templates\TemplateRegistry;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Foundation\CachesRoutes;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
 use Statamic\Providers\AddonServiceProvider;
+use Throwable;
 
 class ServiceProvider extends AddonServiceProvider
 {
@@ -300,6 +307,84 @@ class ServiceProvider extends AddonServiceProvider
         $this->registerPermissions();
         $this->registerNavigation();
         $this->registerCommands();
+        $this->registerInsightsMetrics();
+    }
+
+    /**
+     * Die Handles, die dieses Addon beisteuert, und die Klassen dahinter.
+     *
+     * Beides, damit die Registry den Klassennamen ablegen kann, ohne ein Objekt
+     * zu bauen, nur um zu erfahren, wie es heisst. Den Handle zweimal zu
+     * schreiben ist der Preis dafuer und die guenstigere Haelfte des Tauschs:
+     * eine Installation mit zwanzig Addons wuerde sonst bei jedem Aufruf jede
+     * Kennzahl jedes Addons instanziieren, auch auf Seiten, die keine davon
+     * zeigen.
+     *
+     * Die Handles sind ab der Registrierung eingefroren — sie landen in
+     * gespeicherten Ansichten und in URLs. Einen umzubenennen ist ein Bruch.
+     *
+     * @var array<class-string, string>
+     */
+    protected const INSIGHTS_METRICS = [
+        Runs::class => 'automations.runs',
+        Failures::class => 'automations.failures',
+        SuccessRate::class => 'automations.success_rate',
+        DurationP50::class => 'automations.duration_p50',
+        OptOuts::class => 'automations.opt_outs',
+    ];
+
+    /**
+     * Die Betriebszahlen dem Analytics-Addon anbieten, falls es da ist.
+     *
+     * Aus einem `app->booted()`-Rueckruf und nicht aus `bootAddon()`: die
+     * Container-Bindungen des Geschwisters entstehen erst, wenn dessen eigener
+     * Provider gebootet hat, und dieser hier kann vorher dran sein. Wer frueher
+     * registriert, registriert ins Leere — ohne Fehler, mit einem leeren Schirm
+     * als einzigem Hinweis, was die schlechteste Form dieses Fehlschlags ist.
+     *
+     * **Hier wirft nichts, nie.** Ein fehlendes, halb installiertes oder gerade
+     * aktualisiertes Analytics-Addon darf ein paar Kacheln kosten, niemals einen
+     * Lauf. Die drei Absicherungen sind je eine reale Spielart von „installiert,
+     * aber nicht ganz": die Klasse kann fehlen, der Container kann die
+     * Verwaltung nicht bauen, und eine aeltere Fassung des Geschwisters kann die
+     * Fassade ohne diese Methode haben.
+     *
+     * Die Kennzahl-Klassen nennen den fremden Vertrag in ihrem `extends` und in
+     * ihren Typangaben, was genau wegen der ersten Absicherung sicher ist: PHP
+     * laedt eine Klasse, wenn etwas sie anfasst, und nichts fasst diese an,
+     * solange die Fassade fehlt. Daher `suggest` in der composer.json und nicht
+     * `require` — wer nur dieses Addon installiert, soll kein Analytics-Paket
+     * mitgeschleppt bekommen.
+     */
+    protected function registerInsightsMetrics(): void
+    {
+        $this->app->booted(function (): void {
+            $facade = '\Goldnead\StatamicInsights\Facades\Insights';
+
+            if (! class_exists($facade)) {
+                return;
+            }
+
+            try {
+                $manager = $facade::getFacadeRoot();
+
+                // Am Objekt gefragt, nie an der Fassade: eine Fassade reicht
+                // ueber `__callStatic` weiter und deklariert nichts von dem,
+                // was sie weiterreicht — die Probe an der Fassade selbst ist
+                // immer falsch.
+                if (! is_object($manager) || ! method_exists($manager, 'registerMetric')) {
+                    return;
+                }
+
+                foreach (self::INSIGHTS_METRICS as $class => $handle) {
+                    $manager->registerMetric($class, $handle);
+                }
+            } catch (Throwable $e) {
+                Log::warning('statamic-automations: the insights metrics could not be registered.', [
+                    'exception' => $e->getMessage(),
+                ]);
+            }
+        });
     }
 
     /**
