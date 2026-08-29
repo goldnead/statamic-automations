@@ -155,6 +155,11 @@ touch.
 | Booking Rescheduled _(Booking)_ | Booking | Moved to a different time. The only one here that can repeat on a redelivery. |
 | Invoice Issued _(Invoices)_ | Invoices | A document was written. Fires only on a real write, never when an existing invoice is handed back. |
 | Credit Note Issued _(Invoices)_ | Invoices | Carries both documents, because a credit note alone says nothing about what it undid. |
+| Booking Created _(cal.com)_ | cal.com | Somebody booked and it stands. Filterable by event type slug or ID. |
+| Booking Requested _(cal.com)_ | cal.com | Booked but still awaiting confirmation. Not the place for a confirmation mail. |
+| Booking Cancelled _(cal.com)_ | cal.com | An appointment that stood was called off, with the reason. |
+| Booking Rejected _(cal.com)_ | cal.com | A request was turned down. Not the same as a cancellation, and it carries its own reason. |
+| Booking Rescheduled _(cal.com)_ | cal.com | Moved. cal.com replaces rather than edits: `uid` is the new booking, `rescheduled_from_uid` the old. |
 | Webhook Received _(Webhook Manager)_ | Webhook Manager | An inbound endpoint receives a validated request |
 | Outbound Webhook Failed _(Webhook Manager)_ | Webhook Manager | A delivery exhausts its retries and fails for good |
 
@@ -305,6 +310,13 @@ Sister addons are detected automatically through `class_exists`. The package kee
 | Entitlements | `Goldnead\Entitlements\EntitlementManager` | 5 entitlement triggers + 2 actions |
 | Booking | `Goldnead\StatamicBooking\Models\Booking` | 3 booking triggers |
 | Invoices | `Goldnead\Invoices\InvoiceWriter` | 2 invoice triggers + 2 actions |
+
+**cal.com is the exception**: not an addon, not detected, no dependency. The connector brings its
+own route, signature check, replay guard and redelivery guard, and registers its five triggers like
+any other built-in node. It needs one thing to work: `STATAMIC_AUTOMATIONS_CALCOM_SECRET`. Without
+it the route accepts nothing rather than everything. Triggers only for now; a cal.com action would
+need an API key, which is a different credential in a different place.
+See [docs/integrations.md](docs/integrations.md#calcom).
 
 Class names are configurable in `config/automations.php` under `integrations`, so you can swap implementations or use a fork.
 

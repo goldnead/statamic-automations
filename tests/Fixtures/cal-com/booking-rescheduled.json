@@ -1,0 +1,70 @@
+{
+  "triggerEvent": "BOOKING_RESCHEDULED",
+  "createdAt": "2026-08-29T12:45:00.000Z",
+  "payload": {
+    "bookerUrl": "https://cal.com",
+    "title": "Erstgespraech zwischen Adrian Goldner und Nina Weber",
+    "startTime": "2026-09-10T14:30:00Z",
+    "endTime": "2026-09-10T15:00:00Z",
+    "type": "erstgespraech",
+    "description": "",
+    "eventTypeId": 123,
+    "organizer": {
+      "id": 1,
+      "name": "Adrian Goldner",
+      "email": "info@adriangoldner.com",
+      "username": "adriangoldner",
+      "timeZone": "Europe/Berlin",
+      "language": {
+        "locale": "de"
+      },
+      "timeFormat": "HH:mm",
+      "utcOffset": 120
+    },
+    "attendees": [
+      {
+        "email": "nina.weber@example.com",
+        "name": "Nina Weber",
+        "firstName": "Nina",
+        "lastName": "Weber",
+        "timeZone": "Europe/Vienna",
+        "language": {
+          "locale": "de"
+        },
+        "utcOffset": 120
+      }
+    ],
+    "responses": {
+      "name": {
+        "label": "your_name",
+        "value": "Nina Weber",
+        "isHidden": false
+      },
+      "email": {
+        "label": "email_address",
+        "value": "nina.weber@example.com",
+        "isHidden": false
+      },
+      "rescheduleReason": {
+        "label": "reason_for_reschedule",
+        "value": "Termin kollidiert mit der Chorprobe",
+        "isHidden": false
+      }
+    },
+    "location": "integrations:daily",
+    "uid": "cGxNRHhTNVJ2VDdo",
+    "bookingId": 201,
+    "rescheduleId": 100,
+    "rescheduleUid": "aWtGKzZ1MnNkQjZ5",
+    "rescheduleStartTime": "2026-09-03T10:00:00Z",
+    "rescheduleEndTime": "2026-09-03T10:30:00Z",
+    "eventTitle": "Erstgespraech",
+    "length": 30,
+    "price": 0,
+    "currency": "eur",
+    "metadata": {
+      "videoCallUrl": "https://app.cal.com/video/cGxNRHhTNVJ2VDdo"
+    },
+    "status": "ACCEPTED"
+  }
+}

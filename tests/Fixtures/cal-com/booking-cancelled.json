@@ -1,0 +1,59 @@
+{
+  "triggerEvent": "BOOKING_CANCELLED",
+  "createdAt": "2026-08-29T11:12:00.000Z",
+  "payload": {
+    "title": "Erstgespraech zwischen Adrian Goldner und Nina Weber",
+    "startTime": "2026-09-03T10:00:00+00:00",
+    "endTime": "2026-09-03T10:30:00+00:00",
+    "type": "erstgespraech",
+    "description": "",
+    "eventTypeId": 123,
+    "organizer": {
+      "id": 1,
+      "name": "Adrian Goldner",
+      "email": "info@adriangoldner.com",
+      "username": "adriangoldner",
+      "timeZone": "Europe/Berlin",
+      "language": {
+        "locale": "de"
+      },
+      "timeFormat": "HH:mm",
+      "utcOffset": 120
+    },
+    "attendees": [
+      {
+        "email": "nina.weber@example.com",
+        "name": "Nina Weber",
+        "phoneNumber": null,
+        "timeZone": "Europe/Vienna",
+        "language": {
+          "locale": "de"
+        },
+        "utcOffset": 120
+      }
+    ],
+    "responses": {
+      "name": {
+        "label": "name",
+        "value": "Nina Weber",
+        "isHidden": false
+      },
+      "email": {
+        "label": "email",
+        "value": "nina.weber@example.com",
+        "isHidden": false
+      }
+    },
+    "location": "integrations:daily",
+    "destinationCalendar": [],
+    "cancellationReason": "Bin an dem Tag doch auf Probenfahrt",
+    "requestReschedule": false,
+    "uid": "aWtGKzZ1MnNkQjZ5",
+    "bookingId": 100,
+    "eventTitle": "Erstgespraech",
+    "length": 30,
+    "price": null,
+    "currency": "eur",
+    "status": "CANCELLED"
+  }
+}

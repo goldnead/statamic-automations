@@ -54,6 +54,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Oeffentliche Routen
+    |--------------------------------------------------------------------------
+    |
+    | Das Praefix, unter dem die Routen liegen, die von aussen aufgerufen
+    | werden: der Serien-Ausstieg aus dem Fuss einer Mail und die Webhook-
+    | Empfaenger. Statamics Konvention fuer Addon-Endpunkte ist `!/`.
+    |
+    | Wer das aendert, aendert Adressen, die anderswo eingetragen sind: Links in
+    | schon verschickten Mails und die Subscriber-URL im cal.com-Konto.
+    |
+    | Achtung bei `route:cache`: die Adresse wird beim Bauen des Caches
+    | eingefroren. Eine Aenderung an der Env wirkt erst nach `route:clear`.
+    */
+
+    'routes' => [
+        'prefix' => env('STATAMIC_AUTOMATIONS_ROUTE_PREFIX', '!/automations'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Failure Alerts
     |--------------------------------------------------------------------------
     | Notify someone when a run fails. Channels: "log" and/or "mail".
@@ -295,6 +315,66 @@ return [
                 'Goldnead\\StatamicBooking\\Models\\Booking',
                 'Goldnead\\StatamicBooking\\ServiceProvider',
             ],
+        ],
+
+        /*
+        | cal.com
+        |
+        | Kein Nachbar-Addon, sondern ein Dienst ausserhalb von Statamic. Der
+        | Anschluss bringt deshalb seine eigene Route mit und haengt an nichts
+        | weiter.
+        |
+        | `secret` ist das Secret des Webhooks, wie cal.com es beim Anlegen
+        | zeigt. Ohne diesen Wert nimmt die Route nichts an — sie steht dann
+        | nicht offen, sondern antwortet 503. Ein Anschluss ohne Zugangsdaten
+        | tut nichts, statt alles anzunehmen.
+        |
+        | Die Adresse, die bei cal.com eingetragen wird, setzt sich aus
+        | `automations.routes.prefix` und `path` zusammen, also
+        | `https://beispiel.de/!/automations/cal-com`.
+        |
+        | `dedupe_minutes` ist das Fenster, in dem eine schon verarbeitete
+        | Zustellung als bekannt gilt. cal.com wiederholt binnen Minuten; ein
+        | Tag ist reichlich.
+        */
+        'cal_com' => [
+            'secret' => env('STATAMIC_AUTOMATIONS_CALCOM_SECRET'),
+            'path' => env('STATAMIC_AUTOMATIONS_CALCOM_PATH', 'cal-com'),
+
+            // Das Fenster, in dem eine schon verarbeitete Zustellung als
+            // bekannt gilt. cal.com wiederholt binnen Minuten; ein Tag ist
+            // reichlich.
+            //
+            // Diese Schranke haengt am Cache. Steht `cache.default` auf `null`
+            // oder `array`, kann sie nicht wirken; das Addon merkt das und
+            // schreibt eine Warnung ins Log, statt still nichts mehr zu tun.
+            'dedupe_minutes' => env('STATAMIC_AUTOMATIONS_CALCOM_DEDUPE_MINUTES', 1440),
+
+            // Wie alt der Umschlag hoechstens sein darf, gemessen an seinem
+            // eigenen `createdAt`. Der Wert schuetzt davor, dass jemand einen
+            // einmal mitgeschnittenen, gueltig signierten Rumpf spaeter erneut
+            // einspielt: cal.com legt keinen Zeitstempel in die Kopfzeilen, der
+            // im Rumpf ist aber mitsigniert.
+            //
+            // Sinnvoll ist derselbe Wert wie `dedupe_minutes`. Sonst entsteht
+            // zwischen den beiden ein Fenster, in dem weder das eine noch das
+            // andere greift. 0 schaltet die Pruefung ab.
+            'max_age_minutes' => env('STATAMIC_AUTOMATIONS_CALCOM_MAX_AGE_MINUTES', 1440),
+
+            // Groesste Anfrage, die ueberhaupt angesehen wird. Eine
+            // cal.com-Nutzlast ist wenige Kilobyte gross; alles darueber wird
+            // abgewiesen, bevor die Pruefsumme darueber laeuft.
+            'max_body_bytes' => env('STATAMIC_AUTOMATIONS_CALCOM_MAX_BODY_BYTES', 262144),
+
+            // Middleware auf der Webhook-Route. Bewusst kurz: die Route hat
+            // keine Sitzung und kein CSRF-Token, weil ein fremder Server beides
+            // nicht hat. Was bleibt, ist die Bremse gegen jemanden, der die URL
+            // kennt und sie ohne Secret in Dauerschleife aufruft.
+            //
+            // 120 Anfragen je Minute sind fuer jeden normalen Betrieb weit
+            // ausreichend. Wer sehr viele Termine gleichzeitig bewegt, setzt
+            // den Wert hoch oder leert die Liste.
+            'middleware' => ['throttle:120,1'],
         ],
 
         'invoices' => [

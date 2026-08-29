@@ -1,0 +1,152 @@
+{
+  "triggerEvent": "BOOKING_CREATED",
+  "createdAt": "2026-08-29T08:00:00.000Z",
+  "payload": {
+    "bookerUrl": "https://cal.com",
+    "title": "Erstgespraech zwischen Adrian Goldner und Nina Weber",
+    "startTime": "2026-09-03T10:00:00Z",
+    "endTime": "2026-09-03T10:30:00Z",
+    "additionalNotes": "Ich moechte vor allem an der Hoehe arbeiten.",
+    "type": "erstgespraech",
+    "description": "",
+    "eventTypeId": 123,
+    "hideCalendarNotes": false,
+    "hideCalendarEventDetails": false,
+    "hideOrganizerEmail": false,
+    "schedulingType": null,
+    "seatsPerTimeSlot": null,
+    "seatsShowAttendees": true,
+    "seatsShowAvailabilityCount": true,
+    "customReplyToEmail": null,
+    "disableRescheduling": false,
+    "disableCancelling": false,
+    "organizer": {
+      "id": 1,
+      "name": "Adrian Goldner",
+      "email": "info@adriangoldner.com",
+      "username": "adriangoldner",
+      "usernameInOrg": "adriangoldner",
+      "timeZone": "Europe/Berlin",
+      "language": {
+        "locale": "de"
+      },
+      "timeFormat": "HH:mm",
+      "utcOffset": 120
+    },
+    "attendees": [
+      {
+        "email": "nina.weber@example.com",
+        "name": "Nina Weber",
+        "firstName": "Nina",
+        "lastName": "Weber",
+        "timeZone": "Europe/Vienna",
+        "language": {
+          "locale": "de"
+        },
+        "utcOffset": 120
+      },
+      {
+        "email": "chorvorstand@example.com",
+        "name": "Chorvorstand",
+        "firstName": "",
+        "lastName": "",
+        "timeZone": "Europe/Berlin",
+        "language": {
+          "locale": "de"
+        },
+        "utcOffset": 120
+      }
+    ],
+    "customInputs": {},
+    "responses": {
+      "name": {
+        "label": "your_name",
+        "value": "Nina Weber",
+        "isHidden": false
+      },
+      "email": {
+        "label": "email_address",
+        "value": "nina.weber@example.com",
+        "isHidden": false
+      },
+      "attendeePhoneNumber": {
+        "label": "phone_number",
+        "value": "+49 171 1234567",
+        "isHidden": false
+      },
+      "location": {
+        "label": "location",
+        "value": {
+          "optionValue": "",
+          "value": "integrations:daily"
+        },
+        "isHidden": false
+      },
+      "title": {
+        "label": "what_is_this_meeting_about",
+        "isHidden": true
+      },
+      "notes": {
+        "label": "additional_notes",
+        "value": "Ich moechte vor allem an der Hoehe arbeiten.",
+        "isHidden": false
+      },
+      "guests": {
+        "label": "additional_guests",
+        "value": [
+          "chorvorstand@example.com"
+        ],
+        "isHidden": false
+      },
+      "rescheduleReason": {
+        "label": "reason_for_reschedule",
+        "isHidden": false
+      },
+      "chor": {
+        "label": "In welchem Chor singst du?",
+        "value": "Kammerchor Bonn",
+        "isHidden": false
+      }
+    },
+    "userFieldsResponses": {},
+    "location": "integrations:daily",
+    "destinationCalendar": null,
+    "iCalUID": "aWtGKzZ1MnNkQjZ5@cal.com",
+    "iCalSequence": 0,
+    "requiresConfirmation": false,
+    "oneTimePassword": null,
+    "organizationId": 1,
+    "hashedLink": null,
+    "uid": "aWtGKzZ1MnNkQjZ5",
+    "conferenceData": {
+      "createRequest": {
+        "requestId": "00000000-0000-0000-0000-000000000000"
+      }
+    },
+    "videoCallData": {
+      "type": "daily_video",
+      "id": "raum-4711",
+      "password": "geheim",
+      "url": "https://meet.cal.com/video/raum-4711"
+    },
+    "appsStatus": [
+      {
+        "appName": "daily-video",
+        "type": "conferencing",
+        "success": 1,
+        "failures": 0,
+        "errors": []
+      }
+    ],
+    "eventTitle": "Erstgespraech",
+    "eventDescription": "",
+    "price": 0,
+    "currency": "eur",
+    "length": 30,
+    "bookingId": 100,
+    "metadata": {
+      "videoCallUrl": "https://app.cal.com/video/aWtGKzZ1MnNkQjZ5"
+    },
+    "status": "ACCEPTED"
+  }
+}

@@ -1,5 +1,117 @@
 # Changelog
 
+## 2.11.0 (2026-08-29)
+
+### Neu: cal.com im Flow-Editor, fünf Auslöser
+
+Wer Termine über cal.com annimmt, konnte damit bisher nichts anfangen. Eine Buchung kam an, und
+was danach passieren sollte, passierte von Hand: die Vorbereitungsmail, der Eintrag im CRM, die
+Nachricht ans eigene Team. Ab jetzt stehen fünf Auslöser im Editor, einer je Ereignis, das cal.com
+über eine Buchung schickt: **angelegt**, **angefragt**, **abgesagt**, **abgelehnt**, **verlegt**.
+
+Alle fünf lassen sich nach der **Terminart** filtern, wahlweise über den Slug oder über die
+Nummer. Das ist kein Beiwerk. Ein Betrieb führt bei cal.com mehrere Terminarten nebeneinander, und
+ein kostenloses Erstgespräch und eine bezahlte Stunde sind verschiedene Vorgänge mit verschiedenen
+Mails. Beide feuern denselben Webhook. Ein Ablauf ohne diesen Filter schickt die Rechnungsmail an
+jemanden, der ein Erstgespräch gebucht hat.
+
+Zwei Felder, weil beide ihren Nachteil haben. Den Slug liest man im cal.com-Konto ab und trägt ihn
+ohne Nachschlagen ein, aber er steckt in der Buchungs-URL und wird geändert, wenn die URL hübscher
+werden soll; ein Filter, der daran hängt, fällt dann still aus. Die Nummer ändert sich nie, steht
+aber nirgends, wo man sie einfach abliest. Der Titel ist bewusst keine Filterachse.
+
+### Der Anschluss hängt an nichts
+
+cal.com ist kein Nachbar-Addon, sondern ein Dienst. Der Anschluss bringt deshalb seine eigene
+Route mit, seine eigene Signaturprüfung und seinen eigenen Schutz gegen Doppelzustellung. Es
+braucht kein zweites Addon, um ihn zu benutzen.
+
+Einzurichten ist eins: die Adresse `https://deine-seite.de/!/automations/cal-com` bei cal.com als
+Webhook eintragen und das Secret, das cal.com dabei zeigt, als
+`STATAMIC_AUTOMATIONS_CALCOM_SECRET` hinterlegen.
+
+**Ohne dieses Secret nimmt die Route nichts an.** Sie steht dann nicht offen, sondern antwortet
+mit 503. Ein Anschluss ohne Zugangsdaten tut nichts, statt alles anzunehmen: eine offene
+POST-Adresse, die Abläufe startet, ist sonst ein Formular, in das jeder Fremde Buchungen schreiben
+kann, und diese Buchungen verschicken Mails.
+
+Geprüft wird die Signatur über den **rohen** Rumpf der Anfrage, bevor irgendetwas dekodiert wird,
+und der Vergleich läuft in konstanter Zeit. Eine Eigenheit von cal.com steckt darin, die man leicht
+übersieht: ist auf cal.coms Seite kein Secret gesetzt, fehlt der Signatur-Header nicht, sondern
+enthält wörtlich `no-secret-provided`. Wer nur prüft, ob ein Header da ist, lässt das durch.
+
+Dazu drei Schranken, die kein Secret ersetzt. cal.com legt weder eine Zustell-Kennung noch einen
+Zeitstempel in die Kopfzeilen, ein einmal mitgeschnittener, gültig signierter Rumpf bliebe also für
+immer gültig; wer ihn aus einem Protokoll hat, könnte den Ablauf später beliebig oft auslösen. Der
+Zeitstempel im Rumpf ist mitsigniert, und ein Umschlag, der älter als einen Tag ist, wird
+abgewiesen. Rümpfe über 256 KB werden abgewiesen, bevor die Prüfsumme über sie läuft. Und auf der
+Route liegt eine Bremse von 120 Anfragen je Minute, gegen jemanden, der die Adresse kennt und sie
+ohne Secret in Dauerschleife aufruft. Alle drei Werte stehen in der Konfiguration.
+
+### Dieselbe Buchung zweimal startet den Ablauf einmal
+
+cal.com stellt erneut zu, wenn eine Antwort ausbleibt. Das Paar aus Ereignis und Buchungs-`uid`
+wird deshalb einen Tag lang festgehalten; kommt es ein zweites Mal, wird es beantwortet, ohne den
+Ablauf noch einmal zu starten. Das Paar und nicht die `uid` allein: dieselbe Buchung wird angelegt,
+verlegt und abgesagt, und alle drei sollen laufen.
+
+Zwei Dinge, die daran leicht schiefgehen, sind ausdrücklich geregelt. Scheitert der Start des
+Ablaufs, etwa weil die Queue gerade nicht erreichbar ist, wird die Vormerkung zurückgenommen. Ohne
+das wäre die Buchung verloren: die Vormerkung stünde, cal.coms Wiederholung liefe in „schon
+dagewesen", und der Ablauf startete nie. Und die Schranke hängt am Cache. Steht `cache.default` auf
+`null` oder `array`, kann sie nicht wirken, und das Addon sagt es im Log, statt still gar nichts
+mehr zu tun. Ein Anschluss, der Erfolg meldet und nichts tut, ist die zäheste Fehlerform.
+
+### Was ein Folgeknoten bekommt
+
+cal.coms Nutzlast ist tief verschachtelt und trägt rund vierzig Felder, die meisten davon für den
+Betrieb einer Kalender-App. Der Auslöser legt die Auswahl flach hin, an der ein Ablauf wirklich
+hängt: `booking.uid`, `booking.title`, `booking.starts_at`, `booking.ends_at`,
+`booking.duration_minutes`, `booking.status`, `booking.event_type_slug`, `booking.event_type_title`,
+`booking.price_cent` mit `booking.currency`, `booking.notes`, `booking.attendee.*`,
+`booking.organizer.*`, `booking.meeting_url` und der Grund einer Absage, einer Ablehnung oder einer
+Verlegung. Dazu `booking.answers` mit allem, was im Buchungsformular beantwortet wurde, also auch
+den eigenen Fragen wie „In welchem Chor singst du?", und `booking.attendee_emails` als eine Zeile
+für das `to`-Feld der Mail-Aktion, das keine Liste annimmt. Die unveränderte Nutzlast liegt daneben
+unter `cal_com.payload`, für den seltenen Fall, den diese Auswahl nicht trifft.
+
+Fünf Eigenheiten von cal.com werden dabei geradegezogen, weil sie sonst im Betrieb auffallen und
+nicht vorher. `payload.type` ist der Slug der Terminart und nicht ihr Titel; der Titel steht in
+`payload.eventTitle`, und `payload.title` ist wieder etwas Drittes, nämlich der Titel der Buchung.
+`language` kommt als Objekt und wird zur Zeichenkette, sonst steht in der Mail „Array". Die
+Zeitschreibweise wechselt je Ereignis zwischen drei Formen, die alle denselben Zeitpunkt in UTC
+meinen; hier kommt eine Form an, dieselbe wie bei den Nachbar-Auslösern, sonst fände eine Bedingung
+denselben Termin auf dem einen Ereignis und auf dem anderen nicht. Der Preis steht in der kleinsten
+Währungseinheit und heißt deshalb `price_cent`, damit niemand „9000 EUR" in eine Mail schreibt. Und
+die Telefonnummer des Buchers steht nicht bei jedem Ereignis am Teilnehmer, sondern in der Antwort
+auf das Formularfeld; sie wird von dort geholt, statt ein Feld anzubieten, das nie etwas trägt.
+
+Ein Feld bleibt roh, und das mit Absicht: **`booking.location` ist keine Ortsangabe.** Bei einem
+Videotermin steht dort eine Maschinenkennung wie `integrations:daily`, bei einem Termin vor Ort die
+echte Adresse. In eine Mail gehört `booking.meeting_url`.
+
+**Eine Verlegung ist bei cal.com keine geänderte Buchung, sondern eine neue.** Die alte wird
+abgesagt, die neue bekommt eine eigene `uid`. `booking.uid` ist deshalb die neue Buchung,
+`booking.rescheduled_from_uid` und `booking.rescheduled_from_starts_at` sind die alte. Wer den
+Termin in einem eigenen System nachhält, sucht ihn über das zweite Feld.
+
+### Was bewusst fehlt
+
+**Aktionen.** Einen Termin über cal.com anzulegen oder abzusagen braucht einen API-Schlüssel, und
+das ist eine andere Zugangsart an einem anderen Ort. Diese Entscheidung steht noch aus, deshalb
+gibt es vorerst nur Auslöser.
+
+**`MEETING_ENDED` und `MEETING_STARTED`.** Beide schickt cal.com in einer anderen Form: flach, ohne
+den `payload`-Umschlag, und mit der rohen Datenbankzeile statt des aufbereiteten Termins, also
+`user` statt `organizer` und `id` statt `bookingId`. Das ist ein zweiter Flattener und ein zweites
+Ausgabeschema, kein Beifang.
+
+**`RECORDING_READY`.** Trägt keine vollständige Buchung, sondern im Kern einen Downloadlink, und
+gilt nur für Cal Video. Auch das wäre ein eigenes Ausgabeschema.
+
+**`BOOKING_PAYMENT_INITIATED`.** In cal.coms Dokumentation ist nicht belegt, welche Form die
+Nutzlast hat. Ein Auslöser, dessen Felder geraten sind, fällt beim ersten echten Webhook um.
+
 ## 2.10.0 (2026-08-29)
 
 ### Neu: sechzehn Auslöser und vier Aktionen für die Handels-Addons

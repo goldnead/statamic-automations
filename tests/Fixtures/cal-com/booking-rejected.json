@@ -1,0 +1,57 @@
+{
+  "triggerEvent": "BOOKING_REJECTED",
+  "createdAt": "2026-08-29T10:05:00.000Z",
+  "payload": {
+    "title": "Stimmbildung zwischen Adrian Goldner und Jonas Kern",
+    "startTime": "2026-09-05T16:00:00.000Z",
+    "endTime": "2026-09-05T17:00:00.000Z",
+    "type": "stimmbildung-60",
+    "description": "",
+    "eventTypeId": 456,
+    "organizer": {
+      "id": 1,
+      "name": "Adrian Goldner",
+      "email": "info@adriangoldner.com",
+      "username": "adriangoldner",
+      "timeZone": "Europe/Berlin",
+      "language": {
+        "locale": "de"
+      },
+      "timeFormat": "HH:mm",
+      "utcOffset": 120
+    },
+    "attendees": [
+      {
+        "email": "jonas.kern@example.com",
+        "name": "Jonas Kern",
+        "phoneNumber": null,
+        "timeZone": "Europe/Berlin",
+        "language": {
+          "locale": "de"
+        },
+        "utcOffset": 120
+      }
+    ],
+    "responses": {
+      "name": {
+        "label": "name",
+        "value": "Jonas Kern",
+        "isHidden": false
+      },
+      "email": {
+        "label": "email",
+        "value": "jonas.kern@example.com",
+        "isHidden": false
+      }
+    },
+    "location": "integrations:daily",
+    "rejectionReason": "In der Woche bin ich auf Chorfreizeit",
+    "uid": "d1FyTmpLOHpXYlZq",
+    "bookingId": 300,
+    "eventTitle": "Stimmbildung 60 Minuten",
+    "length": 60,
+    "price": null,
+    "currency": "eur",
+    "status": "REJECTED"
+  }
+}

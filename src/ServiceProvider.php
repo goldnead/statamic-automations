@@ -19,6 +19,7 @@ use Goldnead\StatamicAutomations\Export\AutomationExporter;
 use Goldnead\StatamicAutomations\Export\AutomationFileSync;
 use Goldnead\StatamicAutomations\Export\AutomationImporter;
 use Goldnead\StatamicAutomations\Integrations\Booking\Triggers as BT;
+use Goldnead\StatamicAutomations\Integrations\CalCom\Triggers as CalT;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\Actions as EA;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\EntitlementsAdapter;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\Triggers as ET;
@@ -105,6 +106,7 @@ use Goldnead\StatamicAutomations\Support\OptionSources\NativeOptionSources;
 use Goldnead\StatamicAutomations\Support\Settings;
 use Goldnead\StatamicAutomations\Templates\TemplateRegistry;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Contracts\Foundation\CachesRoutes;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Route;
 use Statamic\Facades\CP\Nav;
@@ -285,6 +287,8 @@ class ServiceProvider extends AddonServiceProvider
         // property above, under the package's publish tag — no manual
         // publishes() registration needed.
 
+        $this->registerWebhookRoutes();
+
         $this->registerBuiltInOptionSources();
         $this->registerBuiltInNodes();
         $this->registerOptionalIntegrations();
@@ -293,6 +297,28 @@ class ServiceProvider extends AddonServiceProvider
         $this->registerPermissions();
         $this->registerNavigation();
         $this->registerCommands();
+    }
+
+    /**
+     * Eingehende Webhooks von Diensten ausserhalb von Statamic.
+     *
+     * Bewusst nicht ueber Statamics `$routes['web']`-Eigenschaft, die alles in
+     * die `statamic.web`-Gruppe haengt: die bringt CSRF-Schutz und Sitzung mit,
+     * und ein fremder Server hat weder das eine noch das andere. Die Begruendung
+     * in voller Laenge steht in routes/webhooks.php.
+     *
+     * Unter demselben Praefix wie die uebrigen oeffentlichen Routen des Addons,
+     * damit ein Betrieb nur einen Pfad kennen muss.
+     */
+    protected function registerWebhookRoutes(): void
+    {
+        if ($this->app instanceof CachesRoutes && $this->app->routesAreCached()) {
+            return;
+        }
+
+        Route::prefix(config('automations.routes.prefix', '!/automations'))
+            ->middleware((array) config('automations.integrations.cal_com.middleware', []))
+            ->group(__DIR__.'/../routes/webhooks.php');
     }
 
     /**
@@ -343,6 +369,19 @@ class ServiceProvider extends AddonServiceProvider
             'global_set_saved' => GlobalSetSavedTrigger::class,
             'nav_saved' => NavSavedTrigger::class,
             'scheduled' => ScheduledTrigger::class,
+
+            // cal.com. Anders als die Geschwister-Addons ohne Erkennung: cal.com
+            // ist ein Dienst und keine Klasse, es gibt nichts, wonach ein
+            // `class_exists` suchen koennte. Der Anschluss bringt seine eigene
+            // Route mit (siehe routes/webhooks.php) und haengt an nichts weiter,
+            // also stehen die Auslöser im Editor wie jeder andere eingebaute
+            // Knoten. Wer sie nicht will, schaltet sie ueber
+            // `automations.builtin_nodes` einzeln ab.
+            'cal_com.booking_created' => CalT\BookingCreatedTrigger::class,
+            'cal_com.booking_requested' => CalT\BookingRequestedTrigger::class,
+            'cal_com.booking_cancelled' => CalT\BookingCancelledTrigger::class,
+            'cal_com.booking_rejected' => CalT\BookingRejectedTrigger::class,
+            'cal_com.booking_rescheduled' => CalT\BookingRescheduledTrigger::class,
         ];
 
         $logic = [

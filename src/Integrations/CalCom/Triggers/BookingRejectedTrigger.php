@@ -1,0 +1,69 @@
+<?php
+
+namespace Goldnead\StatamicAutomations\Integrations\CalCom\Triggers;
+
+use Goldnead\StatamicAutomations\Context\AutomationContext;
+use Goldnead\StatamicAutomations\Contracts\AutomationTrigger;
+use Goldnead\StatamicAutomations\Integrations\CalCom\Concerns\FlattensCalComBookings;
+
+/**
+ * Eine Terminanfrage wurde abgelehnt.
+ *
+ * Das Gegenstueck zu {@see BookingRequestedTrigger}: der Veranstalter hat die
+ * Anfrage nicht angenommen. Der Grund steht in `booking.rejection_reason`.
+ *
+ * `booking.status` ist `REJECTED`.
+ */
+class BookingRejectedTrigger implements AutomationTrigger
+{
+    use FlattensCalComBookings;
+
+    public static function handle(): string
+    {
+        return 'cal_com.booking_rejected';
+    }
+
+    public static function label(): string
+    {
+        return 'Booking Rejected (cal.com)';
+    }
+
+    public static function description(): ?string
+    {
+        return 'Triggered when a booking request is rejected.';
+    }
+
+    public static function group(): string
+    {
+        return 'cal.com';
+    }
+
+    public static function supportsTestMode(): bool
+    {
+        return true;
+    }
+
+    public static function schema(): array
+    {
+        return self::eventTypeFilterSchema();
+    }
+
+    public static function outputSchema(): array
+    {
+        return self::calComOutputSchema();
+    }
+
+    public function matches(object|array $event, array $config): bool
+    {
+        return $this->isTriggerEvent($event, 'BOOKING_REJECTED')
+            && $this->matchesEventType($event, $config);
+    }
+
+    public function buildContext(object|array $event, array $config): AutomationContext
+    {
+        return AutomationContext::make([
+            'booking' => $this->bookingOf($event),
+            'cal_com' => $this->envelopeOf($event),
+        ]);
+    }
+}
