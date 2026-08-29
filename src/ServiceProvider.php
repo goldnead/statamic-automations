@@ -19,6 +19,7 @@ use Goldnead\StatamicAutomations\Export\AutomationExporter;
 use Goldnead\StatamicAutomations\Export\AutomationFileSync;
 use Goldnead\StatamicAutomations\Export\AutomationImporter;
 use Goldnead\StatamicAutomations\Integrations\Booking\Triggers as BT;
+use Goldnead\StatamicAutomations\Integrations\CalCom\Actions as CalA;
 use Goldnead\StatamicAutomations\Integrations\CalCom\Triggers as CalT;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\Actions as EA;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\EntitlementsAdapter;
@@ -443,6 +444,24 @@ class ServiceProvider extends AddonServiceProvider
             // statt ins Leere zu rufen.
             'vocalflow.create_student' => VfA\CreateStudentAction::class,
             'vocalflow.grant_package' => VfA\GrantPackageAction::class,
+
+            // cal.com, die Gegenrichtung zu den Auslösern oben. Drei, und
+            // damit ist Schluss: die API v2 kann daneben verlegen,
+            // bestaetigen, ablehnen, Terminarten und Verfuegbarkeiten
+            // schreiben, Teams verwalten. Nichts davon ruft heute ein Ablauf.
+            //
+            // Ein Knoten "Terminarten holen" ist bewusst nicht dabei. Die
+            // Kennung einer Terminart ist ein fester Wert in der Einrichtung
+            // eines Ablaufs, nichts, was zur Laufzeit gesucht wird; die einzige
+            // Stelle, die sie wirklich braucht, ist die Gegenprobe in
+            // GetSlotsAction, und die holt sie sich selbst.
+            //
+            // Ohne hinterlegten API-Schluessel tun alle drei nichts, statt ins
+            // Leere zu rufen. Die Auslöser bleiben davon unberuehrt: sie
+            // brauchen den Schluessel nicht.
+            'cal_com.cancel_booking' => CalA\CancelBookingAction::class,
+            'cal_com.create_booking' => CalA\CreateBookingAction::class,
+            'cal_com.get_slots' => CalA\GetSlotsAction::class,
         ];
 
         $automations = $this->app->make('automations');

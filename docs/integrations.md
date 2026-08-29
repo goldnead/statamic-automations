@@ -196,6 +196,127 @@ attendee mail addresses, phone numbers and the meeting link end up in
 `automation_runs.context` and on the run screen. Add anything you would rather
 not keep to `automations.security.redact_keys`, or shorten the retention of runs.
 
+### Three actions, the other direction
+
+| Action | What it does | Handle |
+| --- | --- | --- |
+| Cancel Booking | Cancels a booking, with a reason everybody involved sees | `cal_com.cancel_booking` |
+| Get Free Slots | Reads the free times of an event type | `cal_com.get_slots` |
+| Create Booking | Books a slot | `cal_com.create_booking` |
+
+They need a **second credential**, different from the webhook secret above and
+kept somewhere else: an API key from **Settings → Developer → API keys**.
+
+```dotenv
+STATAMIC_AUTOMATIONS_CALCOM_API_KEY=cal_live_…
+```
+
+Without it the three actions refuse and say so, rather than calling into
+nothing. The triggers are unaffected; they never needed a key.
+
+#### The header that decides everything
+
+cal.com's API v2 versions **per endpoint**, through the `cal-api-version`
+header, and the right version is a different one for each endpoint. There is no
+version that fits all of them.
+
+The wrong one does not answer `400`. It answers, measured on 2026-08-29:
+
+| Endpoint | Right version | Wrong version answers |
+| --- | --- | --- |
+| `/v2/bookings*` | `2024-08-13` | `200`, correct envelope, a different shape inside |
+| `/v2/slots` | `2024-09-04` | `404 Cannot GET /v2/slots` |
+| `/v2/event-types*` | `2024-06-14` | `404`, or with no header at all `200` in a different shape |
+
+Two of those three are silent. That is why the client carries the version as a
+constant next to each operation rather than as one header for all of them, and
+why every action demands the field that proves what it claims: a cancellation
+is only reported when the booking comes back as `cancelled`, a booking only
+when it comes back with a `uid`. You do not have to set any of this; it matters
+if you ever add an operation.
+
+#### Running a flow twice
+
+None of the three has an idempotency key, because cal.com offers none.
+
+- **Cancel Booking** is safe. cal.com refuses the second cancellation with a
+  `400`, and the action looks at the booking's actual state rather than the
+  wording, so the node stays green. What tells the two runs apart is
+  `{{ node.cancelled }}`: `true` means this run did it, `false` with
+  `{{ node.already_cancelled }}` means an earlier one did. **Hang a
+  notification on `cancelled`, not on the node being green**, or the second run
+  sends the cancellation mail a second time.
+
+  One case goes red on purpose: the cancellation went out, cal.com carried it
+  out, and the answer never came back. The booking is cancelled and there is no
+  way from here to tell whether this run did it. Claiming an earlier run would
+  be the comfortable answer and the worse half of the mistake, because
+  `cancelled` stays `false` and the cancellation mail then goes out in no run at
+  all. Note that the engine retries a red node by itself; if you would rather
+  keep that red node than lose the notification, set `_retry_attempts` to `0` on
+  it.
+- **Create Booking** is safe as long as the start time is the same. cal.com
+  answers a taken slot with `409` and creates no second booking, so the second
+  run goes red. The protection comes from the calendar, not from the API: if
+  your flow *computes* the start instead of carrying it, the second run computes
+  a different one and books twice. Take the time from what the person picked,
+  out of the run's context.
+
+  `{{ node.slot_unavailable }}` says the slot was not to be had. It does **not**
+  say a booking exists: cal.com's own message is "already has booking at this
+  time **or is not available**", and a start outside the host's availability or
+  a wrong time zone gives the same `409` with no booking anywhere.
+- **Get Free Slots** reads and changes nothing over at cal.com. It is, however,
+  where the one real double-booking in this integration starts. `Get Free Slots`
+  into `Create Booking` with `{{ node.first }}` in the start field looks
+  harmless and is not: on the second run the first run's slot is taken, this
+  node asks again and hands out the *next* one, the `409` never fires, and the
+  same person ends up with two appointments. `first` belongs in a mail or in a
+  branch, not in a booking node.
+
+#### An empty answer is not proof
+
+`/v2/slots` answers an unknown event type with `{}` and status `200`, the same
+answer as a fully booked calendar. A flow with a mistyped or since-deleted event
+type ID would therefore suggest nothing, quietly, for months.
+
+**Get Free Slots** cross-checks: when the answer is empty, it asks whether the
+event type exists at all. If it does not, the node goes red and says so. If it
+does, `{{ node.count }}` is `0` and that is a real statement. The cross-check
+only runs on the empty path.
+
+#### Booked, or waiting for confirmation
+
+**Create Booking** returns `{{ node.status }}` as `accepted` or `pending`, and
+`{{ node.confirmed }}` as the yes-or-no version of it. Which one you get is
+decided by the event type's **confirmation policy** and by nothing else.
+
+This is the one that costs an afternoon: `GET /v2/event-types` does not return
+that field, and it is not called `requiresConfirmation`. It lives only in
+`GET /v2/event-types/{id}`, under `confirmationPolicy`. Looking in the list,
+finding nothing, and concluding that no confirmation is needed is the easy
+mistake.
+
+The same thing explains a second surprise: **a `pending` booking does not fire
+`BOOKING_CREATED`.** cal.com sends `BOOKING_REQUESTED` for a booking awaiting
+confirmation, which is what the **Booking Requested** trigger is for.
+`BOOKING_CREATED` arrives once somebody confirms.
+
+A green node means cal.com accepted the request, not that the appointment
+stands. Branch on `{{ node.confirmed }}`.
+
+#### Test runs
+
+Cancelling and creating write to somebody else's calendar and send mail, and a
+cancellation cannot be undone from here at all. A test run previews both and
+sends nothing, unless you deliberately switch on
+`automations.test_mode.persist_cal_com_changes`.
+
+Reading free slots is deliberately not covered by that: it changes nothing over
+there, and a preview made of invented times would be worth nothing. A test run
+really asks. Without an API key it therefore goes red, which is the right
+answer for a node that cannot work.
+
 ### Filtering
 
 Every trigger takes an **event type slug** and an **event type ID**; set either,
@@ -216,9 +337,14 @@ a team account.
 
 ### What is deliberately not here
 
-**No actions.** Creating or cancelling a booking through cal.com's API needs an
-API key, which is a different credential in a different place, and that decision
-has not been made.
+**No event type list.** The ID of an event type is a fixed value in the setup of
+a flow, not something looked up at runtime, so a node that fetches a list nobody
+reads would only sit in the editor. The one place that genuinely needs it, the
+cross-check in **Get Free Slots**, fetches it itself.
+
+**No reschedule, confirm or decline.** The API v2 does all three. None of them is
+called by a flow today, and a node that nothing calls still has to be maintained
+and tested with every change to the client.
 
 **No `MEETING_ENDED` / `MEETING_STARTED`.** cal.com sends those in a different
 shape: flat, without the `payload` wrapper, carrying the raw database row rather

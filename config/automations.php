@@ -194,6 +194,15 @@ return [
         // Kunden sichtbar und von hier aus nicht zurueckzunehmen. Ein Testlauf
         // zeigt, was er schicken wuerde, und schickt nichts.
         'persist_vocalflow_changes' => false,
+        // Und noch einmal derselbe Grund: einen Termin anzulegen oder abzusagen
+        // schickt Post an Fremde und veraendert deren Kalender. Eine Absage ist
+        // von hier aus gar nicht zuruecknehmbar, eine Anlage nur durch eine
+        // Absage, die eine zweite Mail ausloest. Ein Testlauf zeigt, was er
+        // schicken wuerde, und schickt nichts. Freie Zeiten zu lesen faellt
+        // nicht darunter: das aendert drueben nichts und laeuft auch im
+        // Testlauf echt, weil eine Vorschau aus erfundenen Zeiten nichts wert
+        // waere.
+        'persist_cal_com_changes' => false,
         'call_real_ai' => false,
     ],
 
@@ -345,6 +354,24 @@ return [
         'cal_com' => [
             'secret' => env('STATAMIC_AUTOMATIONS_CALCOM_SECRET'),
             'path' => env('STATAMIC_AUTOMATIONS_CALCOM_PATH', 'cal-com'),
+
+            // Die API v2, die die drei Aktionen rufen. Ein anderes Geheimnis
+            // als `secret` oben und an einer anderen Stelle zu holen: das
+            // Webhook-Secret zeigt cal.com beim Anlegen des Webhooks, den
+            // API-Schluessel unter Settings -> Developer -> API keys. Ohne
+            // diesen Wert tun die Aktionen nichts, statt ins Leere zu rufen;
+            // die Auslöser laufen davon unberuehrt weiter.
+            'api_key' => env('STATAMIC_AUTOMATIONS_CALCOM_API_KEY'),
+
+            // Die Wurzel der API. Steht hier, damit eine Testumgebung sie
+            // umbiegen kann; im Betrieb ist sie nie eine andere. Nicht der
+            // Host der eigenen Seite und nicht `app.cal.com`.
+            'api_url' => env('STATAMIC_AUTOMATIONS_CALCOM_API_URL', 'https://api.cal.com'),
+
+            // Wie lange die Aktionen auf eine Antwort warten. Zehn Sekunden
+            // sind reichlich und kurz genug, dass ein haengender Dienst nicht
+            // den ganzen Ablauf blockiert.
+            'timeout' => env('STATAMIC_AUTOMATIONS_CALCOM_TIMEOUT', 10),
 
             // Das Fenster, in dem eine schon verarbeitete Zustellung als
             // bekannt gilt. cal.com wiederholt binnen Minuten; ein Tag ist

@@ -1,5 +1,126 @@
 # Changelog
 
+## 2.13.0 (2026-08-29)
+
+### Neu: drei cal.com-Aktionen, die Gegenrichtung zu den fünf Auslösern
+
+Seit 2.12.0 kommen fünf cal.com-Ereignisse im Editor an. Was ein Ablauf daraufhin tun konnte, war
+melden. Ab jetzt kann er handeln: **Termin absagen**, **freie Zeiten holen**, **Termin anlegen**.
+
+Damit läuft eine Wiedervorlage ohne Handgriff durch. Jemand sagt ab, der Ablauf holt die freien
+Zeiten der Terminart, schickt drei Vorschläge, und was der Kunde wählt, wird gebucht.
+
+**Was nicht dabei ist:** ein Knoten „Terminarten holen". Die Kennung einer Terminart ist ein fester
+Wert in der Einrichtung eines Ablaufs und nichts, was zur Laufzeit gesucht wird. Die einzige
+Stelle, die sie wirklich braucht, ist die Gegenprobe in „Freie Zeiten holen", und die holt sie sich
+selbst. Verlegen, bestätigen und ablehnen kann die API auch; heute ruft es kein Ablauf.
+
+### Ein zweiter Schlüssel, an einer anderen Stelle
+
+Die Aktionen brauchen einen API-Schlüssel, und das ist nicht das Webhook-Geheimnis aus 2.12.0. Der
+Schlüssel steht in cal.com unter Settings, Developer, API keys:
+
+```dotenv
+STATAMIC_AUTOMATIONS_CALCOM_API_KEY=cal_live_…
+```
+
+Ohne ihn tun die drei Aktionen nichts und sagen das, statt ins Leere zu rufen. Die Auslöser laufen
+davon unberührt weiter, sie brauchten nie einen Schlüssel.
+
+### Die Kopfzeile, an der alles hängt
+
+cal.coms API v2 versioniert **je Endpunkt**, über `cal-api-version`, und die richtige Version ist
+für jeden Endpunkt eine andere. Es gibt keine, die für alle passt. Bei der falschen antwortet
+cal.com nicht mit 400, sondern (gemessen am 29.08.2026):
+
+| Endpunkt | Richtige Version | Bei falscher Version |
+| --- | --- | --- |
+| `/v2/bookings*` | `2024-08-13` | 200, richtiger Umschlag, andere Form darin |
+| `/v2/slots` | `2024-09-04` | 404 `Cannot GET /v2/slots` |
+| `/v2/event-types*` | `2024-06-14` | 404, ohne Kopfzeile 200 in anderer Form |
+
+Zwei von drei sind still. Der Client trägt die Version deshalb als Konstante neben jeder Operation
+statt als eine gemeinsame Kopfzeile, und jede Aktion verlangt das Feld, das ihre Behauptung belegt:
+eine Absage gilt erst als Absage, wenn der Termin als `cancelled` zurückkommt, ein Termin erst als
+Termin, wenn er eine Kennung hat. Einzustellen ist daran nichts. Es zählt, wenn jemand eine
+Operation ergänzt.
+
+### Was ein doppelter Lauf anrichtet
+
+Keine der drei Aktionen hat einen Idempotenz-Schlüssel, weil cal.com keinen anbietet.
+
+**Absagen ist gefahrlos.** cal.com lehnt die zweite Absage mit 400 ab, und die Aktion sieht
+daraufhin den Zustand des Termins nach, statt den Wortlaut auszulegen. Der Knoten bleibt grün. Was
+die beiden Läufe unterscheidet, ist `{{ node.cancelled }}`: `true` heißt „dieser Lauf hat es
+getan", `false` zusammen mit `{{ node.already_cancelled }}` heißt „ein früherer war es". Eine
+Benachrichtigung gehört an `cancelled` und nicht daran, dass der Knoten grün ist, sonst geht die
+Absage-Mail beim zweiten Lauf ein zweites Mal hinaus.
+
+Ein Fall geht absichtlich rot: die Absage ging hinaus, cal.com hat sie ausgeführt, und die Antwort
+kam nicht zurück. Der Termin ist abgesagt, und von hier aus ist nicht zu erkennen, ob dieser Lauf
+es war. Einen früheren Lauf zu behaupten wäre die bequeme Antwort und die schlimmere Hälfte des
+Fehlers: `cancelled` bliebe `false`, und die Absage-Mail ginge dann in **keinem** Lauf hinaus. Die
+Ablauf-Maschine wiederholt einen roten Knoten von sich aus; wer den roten Knoten dem Verlust der
+Benachrichtigung vorzieht, setzt dort `_retry_attempts` auf 0.
+
+**Anlegen ist gefahrlos, solange der Zeitpunkt derselbe ist.** cal.com antwortet auf einen belegten
+Zeitpunkt mit 409 und legt keinen zweiten Termin an. Der Schutz kommt vom Kalender und nicht von
+der API, und daraus folgt die eine Bauregel: der Zeitpunkt muss von außen kommen. Wer ihn im Ablauf
+ausrechnen lässt, bekommt beim zweiten Lauf einen anderen, keinen Konflikt und einen zweiten
+Termin. Was der Kunde gewählt hat, gehört in den Kontext des Laufs.
+
+`{{ node.slot_unavailable }}` sagt, dass der Zeitpunkt nicht zu haben war. Es sagt **nicht**, dass
+ein Termin steht: cal.coms eigene Meldung lautet „already has booking at this time **or is not
+available**", und ein Zeitpunkt außerhalb der Verfügbarkeit oder eine falsche Zeitzone ergibt
+denselben 409 ganz ohne Termin.
+
+**Freie Zeiten holen** liest nur und ändert bei cal.com nichts. Es ist allerdings die Stelle, an
+der die einzige echte Doppelbuchung dieses Anschlusses anfängt. „Freie Zeiten holen" in „Termin
+anlegen" mit `{{ node.first }}` im Startfeld sieht harmlos aus und ist es nicht: beim zweiten Lauf
+ist der Zeitpunkt des ersten belegt, der Knoten fragt neu und gibt den **nächsten** heraus, der 409
+greift nie, und derselbe Mensch hat zwei Termine. `first` gehört in eine Mail oder in eine
+Verzweigung, nicht in einen Anlage-Knoten.
+
+### Leer ist bei cal.com nicht gleich leer
+
+`/v2/slots` antwortet auf eine **unbekannte** Terminart mit `{}` und Status 200, also genauso wie
+auf einen ausgebuchten Kalender. Ein Ablauf mit einer vertippten oder inzwischen gelöschten Kennung
+würde deshalb still nichts vorschlagen, monatelang, ohne dass etwas kaputt aussieht.
+
+„Freie Zeiten holen" macht die Gegenprobe: kommt nichts zurück, fragt die Aktion nach, ob es die
+Terminart überhaupt gibt. Gibt es sie nicht, geht der Knoten rot und sagt warum. Gibt es sie, ist
+`{{ node.count }}` gleich 0, und das ist eine echte Auskunft. Die Gegenprobe läuft nur auf dem
+leeren Pfad.
+
+### Gebucht, oder auf Bestätigung wartend
+
+„Termin anlegen" gibt `{{ node.status }}` als `accepted` oder `pending` zurück und
+`{{ node.confirmed }}` als die Ja-Nein-Fassung davon. Was von beidem, entscheidet allein die
+Bestätigungs-Einstellung der Terminart.
+
+Das ist die Stelle, die einen Nachmittag kostet: `GET /v2/event-types` gibt dieses Feld **nicht**
+heraus, und es heißt auch nicht `requiresConfirmation`. Es steht nur in
+`GET /v2/event-types/{id}`, unter `confirmationPolicy`. Wer in der Liste nachsieht, findet nichts
+und liest die Abwesenheit als „keine Bestätigung nötig".
+
+Daran hängt eine zweite Überraschung: **ein `pending`-Termin löst `BOOKING_CREATED` nicht aus.**
+cal.com schickt für eine Buchung, die auf Bestätigung wartet, `BOOKING_REQUESTED`, und dafür gibt
+es seit 2.12.0 den Auslöser „Booking Requested". `BOOKING_CREATED` kommt erst, wenn jemand
+bestätigt.
+
+Ein grüner Knoten heißt also „cal.com hat es angenommen" und nicht „der Termin steht". Wer auf
+einen stehenden Termin baut, verzweigt auf `{{ node.confirmed }}`.
+
+### Ein Testlauf sagt nichts ab und legt nichts an
+
+Beides schreibt in fremde Kalender und verschickt Post, und eine Absage lässt sich von hier aus gar
+nicht zurücknehmen. Ein Testlauf zeigt, was er schicken würde, und schickt nichts, solange
+`automations.test_mode.persist_cal_com_changes` nicht ausdrücklich an ist.
+
+Freie Zeiten zu lesen fällt bewusst nicht darunter: das ändert drüben nichts, und eine Vorschau aus
+erfundenen Zeiten wäre nichts wert. Ein Testlauf fragt wirklich. Ohne Schlüssel geht er deshalb
+rot, und das ist die richtige Antwort auf einen Knoten, der nicht arbeiten kann.
+
 ## 2.12.0 (2026-08-29)
 
 ### Neu: VocalFlow im Flow-Editor, sieben Auslöser und zwei Aktionen

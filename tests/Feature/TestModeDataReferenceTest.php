@@ -152,6 +152,12 @@ it('finds the action classes it claims to audit', function (): void {
 function expectedTestRunFailures(): array
 {
     return [
+        // Reading cal.com's free slots changes nothing over there, so this
+        // action deliberately has no test-mode short-circuit: a test run really
+        // asks, because a preview made of invented times would be worth
+        // nothing. Without an API key it therefore does what it says it does
+        // and refuses, which is the right answer to a node that cannot work.
+        'cal_com.get_slots' => 'No cal.com API key is configured in the test app.',
         'call_automation' => 'The dummy target automation handle does not exist.',
         'marketing.send_campaign' => 'The dummy campaign handle does not exist (statamic-marketing is not installed).',
     ];
