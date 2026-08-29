@@ -1,0 +1,57 @@
+{
+    "event": "task.updated",
+    "timestamp": "2026-08-29T12:40:00.000000Z",
+    "data": {
+        "task": {
+            "id": "019bffde-6f70-7000-8000-000000000003",
+            "title": "Atemübung 4/4",
+            "description": "Vier Zählzeiten ein, acht aus.",
+            "due_date": "2026-09-05T00:00:00.000000Z",
+            "status": "completed",
+            "priority": "medium",
+            "session_id": "019bffde-1a2b-7000-8000-000000000001",
+            "updated_at": "2026-08-29T12:39:58.000000Z"
+        },
+        "changes": {
+            "status": {
+                "from": "assigned",
+                "to": "completed"
+            }
+        },
+        "student": {
+            "id": 42,
+            "name": "Nina Sömmer",
+            "email": "nina@example.com"
+        },
+        "coach": {
+            "id": 1,
+            "name": "Adrian Goldner",
+            "email": "coach@example.com"
+        },
+        "session": {
+            "id": "019bffde-1a2b-7000-8000-000000000001",
+            "scheduled_at": "2026-08-29T10:00:00.000000Z",
+            "status": "completed"
+        }
+    },
+    "metadata": {
+        "model_type": "App\\Models\\Task",
+        "model_id": "019bffde-6f70-7000-8000-000000000003",
+        "source": "vocalflow",
+        "version": "1.0",
+        "action": "updated",
+        "urgency_level": "normal",
+        "notification_required": true,
+        "business_impact": "task_modified",
+        "changed_fields": ["status"],
+        "status_change": {
+            "from": "assigned",
+            "to": "completed"
+        },
+        "webhook_id": "2b5e4f77-6d8f-4c13-a4de-5f9a8b7c6d34",
+        "subscription_id": 11,
+        "subscription_name": "beispiel.de task.updated",
+        "delivery_attempt": 1,
+        "signature_method": "HMAC-SHA256"
+    }
+}

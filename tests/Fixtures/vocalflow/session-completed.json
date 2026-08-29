@@ -1,0 +1,60 @@
+{
+    "event": "session.completed",
+    "timestamp": "2026-08-29T12:05:00.000000Z",
+    "data": {
+        "session": {
+            "id": "019bffde-1a2b-7000-8000-000000000001",
+            "coach_id": "019bffde-c0ac-7000-8000-00000000000a",
+            "student_id": "019bffde-57ad-7000-8000-00000000000b",
+            "session_type_id": "019bffde-9c10-7246-be91-3eca56c5d7dd",
+            "scheduled_at": "2026-08-29T10:00:00.000000Z",
+            "completed_at": "2026-08-29T11:04:12.000000Z",
+            "status": "completed",
+            "rating": 5,
+            "duration_minutes": 64
+        },
+        "completion_data": {
+            "success_indicators": {
+                "high_rating": true,
+                "rating_value": 5,
+                "positive_feedback": true,
+                "goals_achieved": true
+            },
+            "follow_up_required": false,
+            "referral_eligible": true,
+            "tasks_assigned": 2,
+            "completion_quality": "excellent"
+        },
+        "coach": {
+            "id": 1,
+            "name": "Adrian Goldner",
+            "email": "coach@example.com"
+        },
+        "student": {
+            "id": 42,
+            "name": "Nina Sömmer",
+            "email": "nina@example.com"
+        },
+        "session_type": {
+            "id": "019bffde-9c10-7246-be91-3eca56c5d7dd",
+            "name": "Einzelstunde",
+            "slug": "einzelstunde"
+        }
+    },
+    "metadata": {
+        "model_type": "App\\Models\\Session",
+        "model_id": "019bffde-1a2b-7000-8000-000000000001",
+        "source": "vocalflow",
+        "version": "1.0",
+        "business_impact": "session_completion",
+        "quality_score": "excellent",
+        "follow_up_required": false,
+        "referral_eligible": true,
+        "notification_priority": "high",
+        "webhook_id": "7d2b1e44-3a5c-4f80-91ab-2c6d5e4f3a20",
+        "subscription_id": 8,
+        "subscription_name": "beispiel.de session.completed",
+        "delivery_attempt": 1,
+        "signature_method": "HMAC-SHA256"
+    }
+}

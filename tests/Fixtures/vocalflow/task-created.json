@@ -1,0 +1,45 @@
+{
+    "event": "task.created",
+    "timestamp": "2026-08-29T12:06:30.000000Z",
+    "data": {
+        "task": {
+            "id": "019bffde-6f70-7000-8000-000000000003",
+            "title": "Atemübung 4/4",
+            "description": "Vier Zählzeiten ein, acht aus.",
+            "due_date": "2026-09-05T00:00:00.000000Z",
+            "status": "assigned",
+            "priority": "medium",
+            "session_id": "019bffde-1a2b-7000-8000-000000000001",
+            "created_at": "2026-08-29T12:06:29.000000Z"
+        },
+        "student": {
+            "id": 42,
+            "name": "Nina Sömmer",
+            "email": "nina@example.com"
+        },
+        "coach": {
+            "id": 1,
+            "name": "Adrian Goldner",
+            "email": "coach@example.com"
+        },
+        "session": {
+            "id": "019bffde-1a2b-7000-8000-000000000001",
+            "scheduled_at": "2026-08-29T10:00:00.000000Z",
+            "status": "completed"
+        }
+    },
+    "metadata": {
+        "model_type": "App\\Models\\Task",
+        "model_id": "019bffde-6f70-7000-8000-000000000003",
+        "source": "vocalflow",
+        "version": "1.0",
+        "urgency_level": "normal",
+        "notification_required": true,
+        "business_impact": "new_task_assignment",
+        "webhook_id": "1a4d3e66-5c7e-4b02-93cd-4e8f7a6b5c23",
+        "subscription_id": 10,
+        "subscription_name": "beispiel.de task.created",
+        "delivery_attempt": 1,
+        "signature_method": "HMAC-SHA256"
+    }
+}

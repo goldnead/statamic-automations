@@ -39,6 +39,8 @@ use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\CampaignSentTri
 use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\SubscriberConfirmedTrigger;
 use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\SubscriberUnsubscribedTrigger;
 use Goldnead\StatamicAutomations\Integrations\Payments\Triggers as PT;
+use Goldnead\StatamicAutomations\Integrations\VocalFlow\Actions as VfA;
+use Goldnead\StatamicAutomations\Integrations\VocalFlow\Triggers as VfT;
 use Goldnead\StatamicAutomations\Integrations\WebhookManager\WebhookManagerAdapter;
 use Goldnead\StatamicAutomations\Integrations\WebhookManager\WebhookManagerSendAction;
 use Goldnead\StatamicAutomations\Listeners\HandleCommerceEvent;
@@ -316,8 +318,10 @@ class ServiceProvider extends AddonServiceProvider
             return;
         }
 
+        // Ohne Middleware auf der Gruppe: die haengt je Dienst an der einzelnen
+        // Route, damit ein zweiter Dienst nicht die Drosselung des ersten erbt.
+        // Begruendung in voller Laenge in routes/webhooks.php.
         Route::prefix(config('automations.routes.prefix', '!/automations'))
-            ->middleware((array) config('automations.integrations.cal_com.middleware', []))
             ->group(__DIR__.'/../routes/webhooks.php');
     }
 
@@ -382,6 +386,21 @@ class ServiceProvider extends AddonServiceProvider
             'cal_com.booking_cancelled' => CalT\BookingCancelledTrigger::class,
             'cal_com.booking_rejected' => CalT\BookingRejectedTrigger::class,
             'cal_com.booking_rescheduled' => CalT\BookingRescheduledTrigger::class,
+
+            // VocalFlow. Dieselbe Ueberlegung wie bei cal.com: ein Dienst und
+            // keine Klasse, es gibt nichts, wonach ein `class_exists` suchen
+            // koennte. Der Anschluss bringt seine eigenen Routen mit (siehe
+            // routes/webhooks.php) und haengt an nichts weiter, also stehen die
+            // Auslöser im Editor wie jeder andere eingebaute Knoten. Wer sie
+            // nicht will, schaltet sie ueber `automations.builtin_nodes`
+            // einzeln ab.
+            'vocalflow.session_created' => VfT\SessionCreatedTrigger::class,
+            'vocalflow.session_completed' => VfT\SessionCompletedTrigger::class,
+            'vocalflow.session_published' => VfT\SessionPublishedTrigger::class,
+            'vocalflow.task_created' => VfT\TaskCreatedTrigger::class,
+            'vocalflow.task_updated' => VfT\TaskUpdatedTrigger::class,
+            'vocalflow.task_assigned' => VfT\TaskAssignedTrigger::class,
+            'vocalflow.task_deleted' => VfT\TaskDeletedTrigger::class,
         ];
 
         $logic = [
@@ -416,6 +435,14 @@ class ServiceProvider extends AddonServiceProvider
             'assign_user_role' => AssignUserRoleAction::class,
             'add_user_to_group' => AddUserToGroupAction::class,
             'set_global_value' => SetGlobalValueAction::class,
+
+            // VocalFlow, die Gegenrichtung zu den Auslösern oben. Genau zwei,
+            // die beiden Schritte des Onboardings; alles Weitere, was die
+            // Partner-API kann, ist bewusst nicht gebaut (siehe
+            // VocalFlowClient). Ohne hinterlegte Zugangsdaten tun beide nichts,
+            // statt ins Leere zu rufen.
+            'vocalflow.create_student' => VfA\CreateStudentAction::class,
+            'vocalflow.grant_package' => VfA\GrantPackageAction::class,
         ];
 
         $automations = $this->app->make('automations');

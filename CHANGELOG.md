@@ -1,5 +1,85 @@
 # Changelog
 
+## 2.12.0 (2026-08-29)
+
+### Neu: VocalFlow im Flow-Editor, sieben Auslöser und zwei Aktionen
+
+VocalFlow ist das System, in dem die Coaching-Sessions stattfinden. Es lief bisher neben den
+Abläufen her: eine Session wurde gehalten, eine Aufgabe zugewiesen, ein Protokoll veröffentlicht,
+und was danach passieren sollte, passierte von Hand. Ab jetzt steht beides im Editor, in beide
+Richtungen.
+
+**Herein kommen sieben Auslöser.** Sechs für die Ereignisse, die VocalFlow über seinen
+Webhook-Kanal schickt: Session **angelegt** und **abgeschlossen**, Aufgabe **angelegt**,
+**geändert**, **zugewiesen** und **gelöscht**. Der siebte ist die **veröffentlichte Session**, und
+der kommt über einen eigenen Endpunkt, weil VocalFlow ihn anders bedient.
+
+Die Session-Auslöser lassen sich nach Sitzungsart filtern, über den Slug oder die Kennung, und nach
+Zustand. Der Zustandsfilter ist kein Beiwerk. „Session angelegt" heißt bei VocalFlow nicht „steht
+als Termin an": der Vorgabewert eines neuen Datensatzes ist `draft`, und der Import von
+Alt-Sitzungen legt sie direkt als `completed` an. Ein Ablauf „Unterlagen zur Vorbereitung
+schicken" ohne diesen Filter mailt beim nächsten Import an jeden Studenten einmal pro Altstunde.
+
+Die Aufgaben-Auslöser filtern nach Zustand und Dringlichkeit. Die Aufgabenart wäre die
+naheliegende dritte Achse und ist bewusst keine: VocalFlow legt sie nur bei „zugewiesen" in die
+Nutzlast, ein Filter darauf fiele bei den anderen still aus, und ein still ausfallender Filter ist
+die schlechteste Sorte. Der Ablauf läuft dann einfach nie, und niemand sucht danach.
+
+**Hinaus gehen zwei Aktionen:** einen **Studenten anlegen** und ihm ein **Paket gutschreiben**. Das
+sind die beiden Schritte, die im Onboarding wirklich vorkommen. Die Partner-API von VocalFlow kann
+mehr, und der Rest ist absichtlich nicht gebaut: ein Knoten, den heute nichts ruft, steht trotzdem
+im Editor und will bei jeder Änderung mitgetestet werden.
+
+Ein Paket gutzuschreiben ist nicht von sich aus wiederholbar, anders als einen Studenten anzulegen.
+Dafür gibt es das Feld **Idempotenz-Schlüssel**, und es bleibt leer, solange niemand es füllt.
+Hinein gehört der Wert, der den Kaufvorgang benennt: eine Bestellnummer, eine Zahlungs-Kennung.
+Einen aus der Nutzlast abzuleiten wäre bequem und falsch, denn er wäre für denselben Studenten mit
+demselben Paket immer derselbe und verschluckte damit den zweiten echten Kauf.
+
+### Die Signatur ist hier anders als bei cal.com
+
+VocalFlow signiert nicht die Bytes, die es verschickt, sondern eine kanonisch neu kodierte Fassung
+der Nutzlast. Die Bytes auf der Leitung escapen Schrägstriche und Umlaute abweichend davon. Ein
+Empfänger, der wie bei cal.com über den rohen Rumpf prüft, würde deshalb **jede echte Zustellung**
+ablehnen, sobald irgendwo ein `/` oder ein `ö` in der Nutzlast steht, und in einer
+VocalFlow-Nutzlast steht beides immer. Der Fehler sähe aus wie ein falsch eingetragenes Geheimnis
+und würde genau dort gesucht.
+
+Dieser Anschluss bildet das Verfahren deshalb nach. Was verglichen wird, ist der Inhalt der
+Nutzlast, nicht ihre Schreibweise. Die Reihenfolge der Schlüssel zählt weiterhin.
+
+### Einzurichten sind vier Werte
+
+Zwei Adressen bei VocalFlow eintragen, `https://deine-seite.de/!/automations/vocalflow` für die
+Ereignisse und `https://deine-seite.de/!/automations/vocalflow/session-published` für die
+veröffentlichte Session. Dazu vier Umgebungsvariablen:
+
+- `STATAMIC_AUTOMATIONS_VOCALFLOW_SECRET`: das Geheimnis des Ereignis-Abos
+- `STATAMIC_AUTOMATIONS_VOCALFLOW_PUBLICATION_SECRET`: das Token der zweiten Adresse
+- `STATAMIC_AUTOMATIONS_VOCALFLOW_PARTNER_URL` und `_PARTNER_SECRET`: für die beiden Aktionen
+
+**Ohne diese Werte nimmt die jeweilige Route nichts an und tun die Aktionen nichts.** Die Routen
+stehen dann nicht offen, sondern antworten mit 503. Ein Anschluss ohne Zugangsdaten ruft nicht ins
+Leere und ist kein Formular, in das jeder Fremde Sessions schreiben kann.
+
+Beide Routen haben eine Schranke gegen Doppelzustellung. Sie hängt beim Ereignis-Kanal am
+Fingerabdruck der signierten Nutzlast und nicht an der Kennung des Vorgangs, und das ist der
+Unterschied zu cal.com: eine Buchung wird einmal angelegt und einmal abgesagt, eine Aufgabe aber
+mehrfach echt geändert. Wer auf die Aufgaben-Kennung sperrte, verwürfe die zweite echte Änderung,
+und der Ablauf, der auf „Aufgabe ist jetzt fertig" wartet, liefe nie.
+
+### Was fehlt, und warum
+
+`session.updated` gibt es bei VocalFlow und hat hier keinen Auslöser. Es wäre das einzige Ereignis,
+mit dem sich heute „Session verlegt" oder „Session abgesagt" bauen ließe. Es stand nicht in der
+Liste, gegen die dieser Anschluss gebaut wurde, und ein Handle ist endgültig: einen zu vergeben ist
+keine Kleinigkeit, die man nebenbei mitnimmt. Wer es braucht, sagt Bescheid.
+
+Von den sechs Ereignissen des Webhook-Kanals kommen bei VocalFlow heute zwei wirklich an,
+`session.created` und `task.assigned`. Bei den übrigen fehlt auf VocalFlows Seite der Absender. Die
+Auslöser stehen trotzdem alle im Editor: der Name ist der Vertrag, und wer die Lücke drüben
+schließt, soll den Auslöser hier vorfinden statt ihn dann erst zu vermissen.
+
 ## 2.11.0 (2026-08-29)
 
 ### Neu: cal.com im Flow-Editor, fünf Auslöser

@@ -1,0 +1,50 @@
+{
+    "event": "task.assigned",
+    "timestamp": "2026-08-29T12:06:00.000000Z",
+    "data": {
+        "task": {
+            "id": "019bffde-4d5e-7000-8000-000000000002",
+            "title": "Übung im 3/4-Takt",
+            "description": "Skala auf /u/ singen, siehe https://beispiel.de/uebungen/skala",
+            "type": "vocal-exercise",
+            "status": "assigned",
+            "priority": "high",
+            "due_date": "2026-09-02T00:00:00.000000Z",
+            "estimated_duration_minutes": 15,
+            "session_id": "019bffde-1a2b-7000-8000-000000000001",
+            "student_id": "019bffde-57ad-7000-8000-00000000000b",
+            "assigned_at": "2026-08-29T12:05:59.000000Z"
+        },
+        "student": {
+            "id": 42,
+            "name": "Nina Sömmer",
+            "email": "nina@example.com"
+        },
+        "coach": {
+            "id": 1,
+            "name": "Adrian Goldner",
+            "email": "coach@example.com"
+        },
+        "session": {
+            "id": "019bffde-1a2b-7000-8000-000000000001",
+            "scheduled_at": "2026-08-29T10:00:00.000000Z",
+            "status": "completed"
+        }
+    },
+    "metadata": {
+        "model_type": "App\\Models\\Task",
+        "model_id": "019bffde-4d5e-7000-8000-000000000002",
+        "source": "vocalflow",
+        "version": "1.0",
+        "business_impact": "task_assignment",
+        "urgency_level": "high",
+        "notification_required": true,
+        "assignment_context": "post_session_follow_up",
+        "follow_up_required": true,
+        "webhook_id": "9e3c2f55-4b6d-4a91-82bc-3d7e6f5a4b12",
+        "subscription_id": 9,
+        "subscription_name": "beispiel.de task.assigned",
+        "delivery_attempt": 1,
+        "signature_method": "HMAC-SHA256"
+    }
+}

@@ -189,6 +189,11 @@ return [
         // nothing unless these are switched on deliberately.
         'persist_entitlement_changes' => false,
         'persist_invoice_changes' => false,
+        // Aus demselben Grund: einen Studenten anzulegen und ein Paket
+        // gutzuschreiben sind echte Vorgaenge in einem fremden System, fuer den
+        // Kunden sichtbar und von hier aus nicht zurueckzunehmen. Ein Testlauf
+        // zeigt, was er schicken wuerde, und schickt nichts.
+        'persist_vocalflow_changes' => false,
         'call_real_ai' => false,
     ],
 
@@ -374,6 +379,91 @@ return [
             // 120 Anfragen je Minute sind fuer jeden normalen Betrieb weit
             // ausreichend. Wer sehr viele Termine gleichzeitig bewegt, setzt
             // den Wert hoch oder leert die Liste.
+            'middleware' => ['throttle:120,1'],
+        ],
+
+        /*
+        | VocalFlow
+        |
+        | Wie cal.com kein Nachbar-Addon, sondern ein Dienst ausserhalb von
+        | Statamic. Der Anschluss bringt seine eigenen Routen mit und haengt an
+        | nichts weiter.
+        |
+        | Er hat zwei Richtungen, und die brauchen verschiedene Zugangsdaten:
+        |
+        |   - **Herein** kommen Ereignisse. Dafuer stehen `secret` (Ereignisse,
+        |     HMAC) und `publication_secret` (veroeffentlichte Session,
+        |     Bearer-Token). Zwei Werte, weil es bei VocalFlow zwei Abos mit
+        |     zwei Verfahren sind.
+        |   - **Hinaus** gehen die beiden Aktionen. Dafuer stehen `partner_url`
+        |     und `partner_secret`.
+        |
+        | Fehlt der jeweilige Wert, nimmt die Route nichts an (503) und tun die
+        | Aktionen nichts. Ein Anschluss ohne Zugangsdaten ruft nicht ins Leere
+        | und steht nicht offen.
+        |
+        | Die Adressen, die bei VocalFlow eingetragen werden, setzen sich aus
+        | `automations.routes.prefix` und `path` bzw. `published_path` zusammen,
+        | also `https://beispiel.de/!/automations/vocalflow` und
+        | `https://beispiel.de/!/automations/vocalflow/session-published`.
+        */
+        'vocalflow' => [
+            // Das Secret des Ereignis-Abos (`WebhookSubscription.secret`).
+            // Damit signiert VocalFlow die kanonische Fassung der Nutzlast.
+            'secret' => env('STATAMIC_AUTOMATIONS_VOCALFLOW_SECRET'),
+
+            // Das Bearer-Token fuer die veroeffentlichte Session
+            // (`ACCOUNT_PUBLICATION_SECRET` auf VocalFlows Seite). Ein anderer
+            // Wert als oben, weil es ein anderes Abo ist.
+            'publication_secret' => env('STATAMIC_AUTOMATIONS_VOCALFLOW_PUBLICATION_SECRET'),
+
+            'path' => env('STATAMIC_AUTOMATIONS_VOCALFLOW_PATH', 'vocalflow'),
+            'published_path' => env('STATAMIC_AUTOMATIONS_VOCALFLOW_PUBLISHED_PATH', 'vocalflow/session-published'),
+
+            // Die Partner-API, die die beiden Aktionen rufen. `partner_url` ist
+            // die Wurzel ohne `/api/partner/v1`; das haengt der Client an.
+            'partner_url' => env('STATAMIC_AUTOMATIONS_VOCALFLOW_PARTNER_URL'),
+            'partner_secret' => env('STATAMIC_AUTOMATIONS_VOCALFLOW_PARTNER_SECRET'),
+
+            // Wie lange die Aktionen auf eine Antwort warten. VocalFlow legt
+            // beim Anlegen eines Studenten eine Coach-Zuordnung mit an; zehn
+            // Sekunden sind reichlich und kurz genug, dass ein haengender
+            // Dienst nicht den ganzen Ablauf blockiert.
+            'timeout' => env('STATAMIC_AUTOMATIONS_VOCALFLOW_TIMEOUT', 10),
+
+            // Das Fenster, in dem eine schon verarbeitete Zustellung als
+            // bekannt gilt. VocalFlow wiederholt ueber Minuten bis Stunden
+            // (acht Versuche mit wachsendem Abstand); ein Tag ist reichlich.
+            //
+            // Diese Schranke haengt am Cache. Steht `cache.default` auf `null`
+            // oder `array`, kann sie nicht wirken; das Addon merkt das und
+            // schreibt eine Warnung ins Log, statt still nichts mehr zu tun.
+            'dedupe_minutes' => env('STATAMIC_AUTOMATIONS_VOCALFLOW_DEDUPE_MINUTES', 1440),
+
+            // Wie alt der Umschlag hoechstens sein darf, gemessen an seinem
+            // eigenen `timestamp`. Der Wert schuetzt davor, dass jemand einen
+            // einmal mitgeschnittenen, gueltig signierten Rumpf spaeter erneut
+            // einspielt. VocalFlows `X-Webhook-Timestamp`-Kopfzeile taugt dafuer
+            // nicht: sie ist nicht mitsigniert.
+            //
+            // Gilt nur fuer den Ereignis-Kanal. Die veroeffentlichte Session
+            // traegt keinen Zeitstempel, dort schuetzt allein `dedupe_minutes`.
+            //
+            // Sinnvoll ist derselbe Wert wie `dedupe_minutes`. 0 schaltet die
+            // Pruefung ab.
+            'max_age_minutes' => env('STATAMIC_AUTOMATIONS_VOCALFLOW_MAX_AGE_MINUTES', 1440),
+
+            // Groesste Anfrage, die ueberhaupt angesehen wird. Sie wirkt hier
+            // schaerfer als bei cal.com: weil VocalFlow ueber die kanonisch neu
+            // kodierte Nutzlast signiert, muss dekodiert werden, bevor die
+            // Signatur feststeht. Diese Schranke ist die Grenze dafuer, was ein
+            // Fremder ohne Secret an Arbeit ausloesen kann.
+            'max_body_bytes' => env('STATAMIC_AUTOMATIONS_VOCALFLOW_MAX_BODY_BYTES', 262144),
+
+            // Middleware auf beiden Webhook-Routen. Bewusst kurz: die Routen
+            // haben keine Sitzung und kein CSRF-Token, weil ein fremder Server
+            // beides nicht hat. Was bleibt, ist die Bremse gegen jemanden, der
+            // die URL kennt und sie ohne Zugangsdaten in Dauerschleife aufruft.
             'middleware' => ['throttle:120,1'],
         ],
 

@@ -1,0 +1,58 @@
+{
+    "event": "session.completed",
+    "timestamp": "2026-08-29T12:10:00.000000Z",
+    "data": {
+        "session": {
+            "id": "019bffde-8a9b-7000-8000-000000000004",
+            "coach_id": "019bffde-c0ac-7000-8000-00000000000a",
+            "student_id": "019bffde-57ad-7000-8000-00000000000b",
+            "session_type_id": "019bffde-9c10-7246-be91-3eca56c5d7dd",
+            "scheduled_at": "2026-08-29T09:00:00.000000Z",
+            "completed_at": "2026-08-29T09:58:03.000000Z",
+            "status": "completed",
+            "rating": 2,
+            "duration_minutes": 58
+        },
+        "completion_data": {
+            "success_indicators": {
+                "rating_value": 2,
+                "goals_achieved": false
+            },
+            "follow_up_required": true,
+            "referral_eligible": false,
+            "tasks_assigned": 0,
+            "completion_quality": "needs_improvement"
+        },
+        "coach": {
+            "id": 1,
+            "name": "Adrian Goldner",
+            "email": "coach@example.com"
+        },
+        "student": {
+            "id": 43,
+            "name": "Jonas Bär",
+            "email": "jonas@example.com"
+        },
+        "session_type": {
+            "id": "019bffde-9c10-7246-be91-3eca56c5d7dd",
+            "name": "Einzelstunde",
+            "slug": "einzelstunde"
+        }
+    },
+    "metadata": {
+        "model_type": "App\\Models\\Session",
+        "model_id": "019bffde-8a9b-7000-8000-000000000004",
+        "source": "vocalflow",
+        "version": "1.0",
+        "business_impact": "session_completion",
+        "quality_score": "needs_improvement",
+        "follow_up_required": true,
+        "referral_eligible": false,
+        "notification_priority": "normal",
+        "webhook_id": "4d7a6b99-8f01-4e35-c6f0-7b1cad9e8f56",
+        "subscription_id": 8,
+        "subscription_name": "beispiel.de session.completed",
+        "delivery_attempt": 1,
+        "signature_method": "HMAC-SHA256"
+    }
+}
