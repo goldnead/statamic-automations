@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.14.1 (2026-09-03)
+
+### Behoben: Oberfläche und ein Wächter, der drei Wochen rot war
+
+- **Die Fußleiste des Inspector-Panels rendete für Trigger-Knoten leer** — ein Trennstrich unter
+  nichts. Das `v-if` sitzt jetzt am `<footer>`.
+- Icon `list-bullets` gibt es nicht (jetzt `list-ul`).
+- Der eigene Dots-Trigger am Dropdown ist raus: Core rendert ihn selbst, der eigene war nur eine
+  Größe zu groß.
+- `Button variant="danger"` im Inspector ins `…`-Menü.
+- Drei Chips ohne `pill`, aber auch ohne `size="sm"`: sie qualifizieren einen Namen und sind kein
+  Status. Rund neben eckigem Statusschild wäre schlechter.
+
+**Der Icon-Wächter war seit dem 15.08. rot** und hat es niemandem gesagt: sein Regex traf `name="…"`
+auf jedem Tag, und die Assertion stand in der Schleife — beim ersten Falschtreffer brach er ab und
+kam nie bis `list-bullets`. Jetzt zwei getrennte Regexe und eine gesammelte Prüfung am Ende.
+
+`node-icon.test` lag im falschen Runner: es zieht über `@goldnead/flow-canvas` eine `.vue`, die
+nacktes Node nicht laden kann. Die vitest-Konfiguration inlined das Paket genau dafür — Datei
+verschoben, Aussagen unverändert.
+
 ## 2.14.0 (2026-08-29)
 
 ### Neu: die Zahlen dieses Addons erscheinen in Insights
