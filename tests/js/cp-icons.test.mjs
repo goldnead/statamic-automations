@@ -32,8 +32,19 @@ function walk(dir) {
     return out;
 }
 
-// Match static `name="foo"` and `icon="foo"` (NOT `:icon="foo"` bindings).
-const ICON_ATTR = /(?<![:@\w-])(?:name|icon)="([a-z0-9-]+)"/g;
+// Static `icon="foo"` on any tag (NOT `:icon="foo"` bindings).
+const ICON_ATTR = /(?<![:@\w-])icon="([a-z0-9-]+)"/g;
+
+// `name="foo"` is an icon name only on `<Icon>` / `<ui-icon>`. Everywhere else
+// it is somebody else's prop — `<TabTrigger name="log">`, `<TabContent
+// name="people">`, `<input name="…">` — and matching those was not a
+// theoretical problem: this test asserted inside its loop, so the first
+// `name="log"` aborted the whole run. It has been red on that false positive
+// ever since the Activity tabs landed, which is exactly how a real dead icon
+// (`list-bullets`, on the run-log Stack) got past it. Hence both changes here:
+// only look at `name=` on an Icon tag, and collect every violation before
+// asserting so one bad name can never hide the next.
+const ICON_NAME_ATTR = /<(?:Icon|ui-icon)\b[^>]*?(?<![:@\w-])name="([a-z0-9-]+)"/gs;
 
 test('the Statamic icon set is present for validation', () => {
     assert.ok(existsSync(iconsDir), `expected icon dir at ${iconsDir}`);
@@ -51,11 +62,18 @@ test('every static Icon name in the CP pages is a shipped Statamic icon', () => 
         readdirSync(iconsDir).filter((f) => f.endsWith('.svg')).map((f) => f.replace(/\.svg$/, '')),
     );
 
+    const missing = [];
+
     for (const file of walk(jsDir)) {
         const src = readFileSync(file, 'utf8');
-        for (const match of src.matchAll(ICON_ATTR)) {
-            const name = match[1];
-            assert.ok(available.has(name), `${file}: icon "${name}" is not a shipped Statamic icon`);
+        for (const pattern of [ICON_ATTR, ICON_NAME_ATTR]) {
+            for (const match of src.matchAll(pattern)) {
+                if (! available.has(match[1])) {
+                    missing.push(`${file}: icon "${match[1]}" is not a shipped Statamic icon`);
+                }
+            }
         }
     }
+
+    assert.deepEqual(missing, []);
 });

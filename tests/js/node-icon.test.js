@@ -7,10 +7,12 @@
  * checking every mapped name against the shipped SVG set, and verifies the
  * per-kind fallback behaviour.
  *
- * Run: `npm run test:js`
+ * Run: `npx vitest run` — NOT `npm run test:js`. This pulls `nodeKinds.js`,
+ * which imports `@goldnead/flow-canvas`, which pulls a `.vue` that bare Node
+ * cannot load (ERR_UNKNOWN_FILE_EXTENSION). vite.config.js inlines that package
+ * for exactly this reason, so the file belongs in the vitest suite.
  */
-import assert from 'node:assert/strict';
-import test from 'node:test';
+import { expect, test } from 'vitest';
 import { readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -33,7 +35,7 @@ const HANDLES = [
 ];
 
 test('the Statamic icon set is present for validation', () => {
-    assert.ok(existsSync(iconsDir), `expected icon dir at ${iconsDir}`);
+    expect(existsSync(iconsDir), `expected icon dir at ${iconsDir}`).toBe(true);
 });
 
 test('every mapped node handle resolves to a real Statamic icon', () => {
@@ -42,7 +44,7 @@ test('every mapped node handle resolves to a real Statamic icon', () => {
     );
     for (const handle of HANDLES) {
         const icon = nodeIcon(handle, 'action');
-        assert.ok(available.has(icon), `handle "${handle}" → "${icon}" is not a shipped icon`);
+        expect(available.has(icon), `handle "${handle}" → "${icon}" is not a shipped icon`).toBe(true);
     }
 });
 
@@ -52,12 +54,12 @@ test('per-kind fallbacks are real icons and distinct from the generic default', 
     );
     for (const kind of ['trigger', 'logic', 'action']) {
         const icon = nodeIcon('__unknown_handle__', kind);
-        assert.ok(available.has(icon), `fallback for kind "${kind}" → "${icon}" is not a shipped icon`);
+        expect(available.has(icon), `fallback for kind "${kind}" → "${icon}" is not a shipped icon`).toBe(true);
     }
 });
 
 test('unknown handle with unknown kind still yields a valid icon name', () => {
     const icon = nodeIcon('__nope__', '__nope__');
-    assert.equal(typeof icon, 'string');
-    assert.ok(icon.length > 0);
+    expect(typeof icon).toBe('string');
+    expect(icon.length).toBeGreaterThan(0);
 });

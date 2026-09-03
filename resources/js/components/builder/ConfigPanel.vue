@@ -153,33 +153,46 @@
                 </PropertiesSection>
             </div>
 
-            <!-- Sticky footer actions -->
-            <footer class="flex items-center gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-content-bg">
+            <!-- Sticky footer actions. Rendered only for non-trigger nodes:
+                 a trigger has neither action (one-trigger-per-flow, see below),
+                 so for a trigger the whole bar is an empty strip with a border
+                 on top — a divider under nothing. -->
+            <footer
+                v-if="kind !== 'trigger'"
+                class="flex items-center gap-2 px-4 py-3 border-t border-gray-200 dark:border-gray-800 bg-content-bg"
+            >
                 <!-- Trigger nodes have no Duplicate here either (same
                      one-trigger-per-flow rule as Delete below): duplicating
                      a trigger would create a second one, which has no
                      Delete action to recover from. -->
                 <Button
-                    v-if="kind !== 'trigger'"
                     :text="__('Duplicate')"
                     icon="duplicate"
                     variant="ghost"
                     size="sm"
                     @click="$emit('duplicate')"
                 />
-                <!-- Trigger nodes have no Delete here (one-trigger-per-flow —
-                     see NodeCard.vue's dropdown / Edit.vue's removeNode);
+                <!-- Delete is a `DropdownItem variant="destructive"`, not a
+                     `Button variant="danger"`. Core reserves `danger` — a solid
+                     red fill — for the confirm button inside a modal; a
+                     destructive action anywhere else lives behind the `…` menu
+                     (ui-vocabulary §24). The Dropdown renders its own dots
+                     trigger, so there is no `#trigger` here.
+
+                     Trigger nodes have no Delete (one-trigger-per-flow — see
+                     NodeCard.vue's dropdown / Edit.vue's removeNode);
                      "Replace trigger" in the node's "..." menu is the only
                      way to change it. -->
-                <Button
-                    v-if="kind !== 'trigger'"
-                    :text="__('Delete node')"
-                    icon="trash"
-                    variant="danger"
-                    size="sm"
-                    class="ml-auto"
-                    @click="$emit('delete')"
-                />
+                <Dropdown align="end" class="ml-auto">
+                    <DropdownMenu>
+                        <DropdownItem
+                            :text="__('Delete node')"
+                            icon="trash"
+                            variant="destructive"
+                            @click="$emit('delete')"
+                        />
+                    </DropdownMenu>
+                </Dropdown>
             </footer>
 
             <!-- Email template preview + picker (mounted once; driven by the
@@ -204,6 +217,9 @@ import { computed, defineComponent, h, ref, watch } from 'vue';
 import {
     Badge,
     Button,
+    Dropdown,
+    DropdownItem,
+    DropdownMenu,
     Field,
     Input,
     Textarea,

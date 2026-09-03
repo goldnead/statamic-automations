@@ -113,7 +113,15 @@
                             <div class="flex flex-wrap items-baseline gap-2">
                                 <span class="w-6 shrink-0 text-sm tabular-nums text-gray-500">{{ index + 1 }}</span>
                                 <span class="font-medium text-gray-900 dark:text-gray-100">{{ step.label }}</span>
-                                <Badge v-if="step.removed" color="amber" :text="__('No longer in the flow')" size="sm" />
+                                <!-- No `size="sm"`: that variant is
+                                     `rounded-[0.1875rem]`, a 3px radius that
+                                     reads as a broken button next to the
+                                     default `rounded-sm` every other badge in
+                                     this addon uses (ui-vocabulary §22). This
+                                     is a chip qualifying the step's name, not
+                                     the row's status, so it stays square rather
+                                     than becoming a pill. -->
+                                <Badge v-if="step.removed" color="amber" :text="__('No longer in the flow')" />
                                 <span class="ml-auto text-sm tabular-nums text-gray-600 dark:text-gray-400">
                                     {{ __(':n reached this step', { n: step.reached }) }}
                                 </span>
@@ -205,7 +213,7 @@
                     </template>
                     <template #cell-node_label="{ row }">
                         <span class="font-medium">{{ row.node_label }}</span>
-                        <Badge v-if="row.node_removed" color="amber" :text="__('Removed')" size="sm" class="ms-1" />
+                        <Badge v-if="row.node_removed" color="amber" :text="__('Removed')" class="ms-1" />
                     </template>
                     <template #cell-node_type="{ row }">
                         <code class="text-xs text-gray-500">{{ row.node_type }}</code>
@@ -262,7 +270,7 @@
                     <template #cell-node_label="{ row }">
                         <span v-if="row.node_label">{{ row.node_label }}</span>
                         <span v-else class="text-gray-500">{{ __('Not started yet') }}</span>
-                        <Badge v-if="row.node_removed" color="amber" :text="__('Removed')" size="sm" class="ms-1" />
+                        <Badge v-if="row.node_removed" color="amber" :text="__('Removed')" class="ms-1" />
                     </template>
                     <template #cell-status="{ row }">
                         <Badge :color="statusColor(row.status)" :text="statusLabel(row.status)" />

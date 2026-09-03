@@ -935,10 +935,12 @@ watch(view, scheduleHeightUpdate);
                     />
                 </div>
 
+                <!-- No `#trigger` here on purpose: Dropdown's own fallback is
+                     already `Button icon="dots" variant="ghost" size="sm"` with
+                     an `aria-label`. The hand-written one we used to pass only
+                     differed by dropping `size="sm"`, so the header carried one
+                     dots button a size larger than every other one in the CP. -->
                 <Dropdown align="end">
-                    <template #trigger>
-                        <Button variant="ghost" icon="dots" :aria-label="__('More actions')" />
-                    </template>
                     <!-- `DropdownMenu` is not optional chrome: a DropdownItem is
                          `grid-cols-subgrid`, and the menu is the grid that
                          defines those columns. Without it the icon and label
@@ -1196,7 +1198,7 @@ watch(view, scheduleHeightUpdate);
             @update:open="(open) => { if (! open) drawerOpen = false; }"
             @closed="drawerOpen = false"
         >
-            <StackHeader icon="list-bullets" :title="__('Run log')" />
+            <StackHeader icon="list-ul" :title="__('Run log')" />
             <StackContent>
                 <RunLogPanel :run="lastRun" />
             </StackContent>
