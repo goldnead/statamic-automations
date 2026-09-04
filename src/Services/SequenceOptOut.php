@@ -111,7 +111,7 @@ class SequenceOptOut
      * die Seite nach dem Ausstieg leer, und der Mensch haette keinen Weg
      * zurueck.
      *
-     * @return Collection<int,object{uuid:string,name:string,opted_out:bool}>
+     * @return Collection<int,\stdClass&object{uuid:string,name:string,opted_out:bool}>
      */
     public function sequencesFor(string $subject): Collection
     {

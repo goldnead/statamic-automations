@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.14.2 (2026-09-05)
+
+### Behoben: Kopfzeile, Mails-Reiter, fremde Übersetzungsschlüssel
+
+- **Die Kopfzeile der Automation wiederholte den Addon-Namen** (Icon, Wort und Schrägstrich vor
+  dem Titel). Kein Core-Bildschirm sagt im Titel, in welchem Bereich man ist; das ist raus (F21).
+  Das Aktiv-Schild hing in der Mitte und steht jetzt rechts bei den Aktionen. An den Namen heran
+  ging nicht sauber: das Namensfeld hält eine Mindestbreite, damit ein leerer Name anklickbar
+  bleibt, und genau dort klaffte die Lücke.
+- **Der Mails-Reiter lief auf Englisch** neben deutschen Pills (E01). 38 Schlüssel in
+  `resources/lang/de.json` ergänzt, die zusammengesetzten Wartezeit-Sätze mit ihren Platzhaltern
+  eingeschlossen.
+- **Zwei Abschnitte „Werkzeuge" untereinander.** `section(__('Tools'))` schickte im deutschen CP
+  den übersetzten Wert, und der ist für Statamic ein anderer Schlüssel als sein eigenes `Tools`.
+  Der Abschnitt heißt jetzt beim Schlüssel.
+- **Keine fremden Übersetzungsschlüssel mehr belegt.** Die JSON-Übersetzungen aller Pakete landen
+  in einem Wörterbuch, ohne Namensraum: der letzte Registrierende gewinnt für das ganze Control
+  Panel. Drei der gestern ergänzten Schlüssel griffen in fremde Einträge, einer mit Schaden:
+  `Disabled` hätte Statamics „Deaktiviert" überall durch „Abgeschaltet" ersetzt. `Step` und
+  `Disabled` sind raus, für `days` wurde nach der Hausregel der Quellstring eindeutig gemacht (die
+  Einheiten der Verzögerung heißen `Minutes`/`Hours`/`Days`), statt die Übersetzung von
+  `statamic-marketing` zu überschreiben. `TranslationKeyOwnershipTest` bewacht das.
+
+Intern: der Rückgabetyp von `SequenceOptOut::sequencesFor()` ist als `stdClass` mit Form
+annotiert, wie PHPStan ihn ableitet; `tests/Fakes/insights-contracts.php` ist durch Pint gelaufen
+(Deklarationen unverändert).
+
 ## 2.14.1 (2026-09-03)
 
 ### Behoben: Oberfläche und ein Wächter, der drei Wochen rot war
