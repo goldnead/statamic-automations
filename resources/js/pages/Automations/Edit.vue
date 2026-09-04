@@ -849,11 +849,16 @@ watch(view, scheduleHeightUpdate);
         <Head :title="[title, __('Statamic Automations')]" />
 
         <Header :title="title">
+            <!-- Nur der Name, nichts davor.
+                 Bis 03.09.2026 standen hier Addon-Icon, das Wort
+                 „Automatisierungen" und ein Schrägstrich vor dem Titel. Adrian:
+                 „Dass der Addon-Name links neben dem Titel steht ist unüblich
+                 und sieht komisch aus. Weglassen." Kein Core-Bildschirm
+                 wiederholt im Titel, in welchem Bereich man gerade ist — das
+                 steht in der Brotkrumen-Zeile darüber und in der Seitenleiste
+                 daneben. -->
             <template #title>
                 <div class="flex items-center gap-2">
-                    <Icon name="workflow" class="size-5 text-gray-500" />
-                    <span class="text-[15px] text-gray-400 dark:text-gray-500 font-medium">{{ __('Automations') }}</span>
-                    <span class="text-gray-300 dark:text-gray-600">/</span>
                     <!-- The ring lives on this wrapper, not the input itself —
                          the input's own `focus:ring-0`/`focus:outline-none`
                          (deliberate, so it reads as inline header text) would
@@ -880,11 +885,6 @@ watch(view, scheduleHeightUpdate);
                         class="text-sm text-red-600 dark:text-red-400"
                         data-automations-field-error="name"
                     >{{ nameError }}</span>
-                    <Badge
-                        :color="automation.enabled ? 'green' : 'amber'"
-                        :text="automation.enabled ? __('Active') : __('Draft')"
-                        pill
-                    />
                 </div>
             </template>
 
@@ -893,6 +893,21 @@ watch(view, scheduleHeightUpdate);
                  primary Save button — mirroring Statamic's entry-publish header
                  density (title left, primary action + overflow menu right). -->
             <template #actions>
+                <!-- Das Aktiv-Badge steht hier, nicht mehr neben dem Namen.
+                     Adrian am 03.09.2026: „Aktiv-Badge hängt in der Mitte rum,
+                     sollte an den Namen ran oder rechts an die anderen
+                     Buttons." An den Namen ging nicht sauber: das Namensfeld
+                     ist ein Eingabefeld mit fester Mindestbreite, damit ein
+                     leerer Name anklickbar bleibt — bei kurzem Namen klaffte
+                     genau dort die Lücke, in der das Badge hing. Rechts steht
+                     es fest an der Kante, so wie der Veröffentlicht-Zustand
+                     eines Entry. -->
+                <Badge
+                    :color="automation.enabled ? 'green' : 'amber'"
+                    :text="automation.enabled ? __('Active') : __('Draft')"
+                    pill
+                />
+
                 <!-- Two readings of the same automation. The canvas is what it
                      does; the list is what it sends. Neither replaces the
                      other, which is why this is a view switch and not a

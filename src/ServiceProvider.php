@@ -988,7 +988,14 @@ class ServiceProvider extends AddonServiceProvider
             }
 
             $nav->create(__('Automations'))
-                ->section(__('Tools'))
+                // Der Schluessel, nicht die Uebersetzung. Statamic lokalisiert
+                // seine eigenen Abschnitte (`Content`, `Fields`, `Tools`,
+                // `Users`) selbst; wer `__('Tools')` uebergibt, schickt im
+                // deutschen CP den Schluessel „Werkzeuge" — und weil das ein
+                // anderer Schluessel ist als „Tools", stand die Seitenleiste
+                // mit ZWEI Abschnitten namens „Werkzeuge" untereinander da.
+                // Teil von Adrians Befund F36 vom 03.09.2026.
+                ->section('Tools')
                 ->route('statamic-automations.automations.index')
                 ->icon('workflow')
                 ->can('view automations')
