@@ -858,21 +858,27 @@ watch(view, scheduleHeightUpdate);
                  steht in der Brotkrumen-Zeile darüber und in der Seitenleiste
                  daneben. -->
             <template #title>
-                <div class="flex items-center gap-2">
+                <!-- `w-full` und `min-w-0`: das Feld traegt den Namen und muss
+                     mitwachsen. Vorher stand nur eine Mindestbreite darauf, das
+                     Feld blieb also 240px schmal und schnitt jeden laengeren
+                     Namen ab — „Checkout liegengebliebe|" (Adrian, 04.09.2026).
+                     `min-w-0` gehoert dazu, sonst weigert sich ein Flex-Kind zu
+                     schrumpfen und schoebe stattdessen die Knoepfe rechts weg. -->
+                <div class="flex w-full min-w-0 items-center gap-2">
                     <!-- The ring lives on this wrapper, not the input itself —
                          the input's own `focus:ring-0`/`focus:outline-none`
                          (deliberate, so it reads as inline header text) would
                          otherwise cancel an invalid-state ring the instant
                          `save()` focuses it. -->
                     <span
-                        class="rounded-md"
+                        class="min-w-0 flex-1 rounded-md"
                         :class="nameInvalid && 'ring-2 ring-red-500/70 dark:ring-red-500/70'"
                     >
                         <input
                             ref="nameInputRef"
                             v-model="automation.name"
                             type="text"
-                            class="bg-transparent border-none focus:outline-none focus:ring-0 text-[25px] font-medium antialiased min-w-[240px] text-gray-900 dark:text-gray-100"
+                            class="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-[25px] font-medium antialiased text-gray-900 dark:text-gray-100"
                             :placeholder="__('Untitled automation')"
                             @input="clearNameError"
                         />

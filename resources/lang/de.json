@@ -75,17 +75,12 @@
     "Which kind of step sends this mail.": "Welche Art Schritt diese Mail verschickt.",
     "Optional. Shown on the canvas and in this list until the step has a subject.": "Optional. Steht auf der Leinwand und in dieser Liste, solange der Schritt keinen Betreff hat.",
     "Position": "Position",
-    "Step": "Schritt",
     "Conditional": "Bedingt",
-    "Disabled": "Abgeschaltet",
     "Completed": "Erledigt",
     "1 second": "1 Sekunde",
     "1 minute": "1 Minute",
     "1 hour": "1 Stunde",
     "1 day": "1 Tag",
-    "minutes": "Minuten",
-    "hours": "Stunden",
-    "days": "Tage",
     "The canvas has changes that are not saved yet. Save them first — an edit made from this list is written straight to the stored automation and would be overwritten by the next save.": "Auf der Leinwand liegen ungespeicherte Änderungen. Speichere sie zuerst — eine Änderung aus dieser Liste geht direkt in die gespeicherte Automatisierung und würde beim nächsten Speichern überschrieben.",
     "This list could not be refreshed and may be out of date. Reload the page to see the stored order.": "Diese Liste konnte nicht aktualisiert werden und ist möglicherweise veraltet. Lade die Seite neu, um die gespeicherte Reihenfolge zu sehen.",
     "You can read this list. Changing it needs the \"edit automations\" permission.": "Du kannst diese Liste lesen. Zum Ändern braucht es das Recht „Automatisierungen bearbeiten\".",
@@ -94,5 +89,8 @@
     ":n days": ":n Tage",
     ":n hours": ":n Stunden",
     ":n minutes": ":n Minuten",
-    ":n seconds": ":n Sekunden"
+    ":n seconds": ":n Sekunden",
+    "Minutes": "Minuten",
+    "Hours": "Stunden",
+    "Days": "Tage"
 }

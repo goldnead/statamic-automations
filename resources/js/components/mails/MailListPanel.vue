@@ -373,9 +373,20 @@ const typeOptions = computed(() =>
 );
 
 const unitOptions = computed(() => [
-    { value: 'minutes', label: __('minutes') },
-    { value: 'hours', label: __('hours') },
-    { value: 'days', label: __('days') },
+    // Grossgeschrieben, und das ist kein Schoenheitsfehler.
+    //
+    // JSON-Uebersetzungen aller Pakete landen in EINEM Woerterbuch (siehe
+    // tests/Unit/TranslationKeyOwnershipTest.php). Die kleingeschriebenen
+    // `days`/`hours`/`minutes` gehoeren bereits `statamic-marketing`, das sie
+    // als „Tagen"/„Stunden"/„Minuten" fuehrt — als Teil eines Satzes richtig,
+    // als Beschriftung einer Auswahl falsch. Wer hier dieselben Schluessel mit
+    // „Tage" belegt, dreht sie dem Nachbarn im ganzen CP um.
+    //
+    // Die Hausregel dafuer steht im Test: den QUELLSTRING eindeutig machen,
+    // nicht die fremde Uebersetzung ueberschreiben.
+    { value: 'minutes', label: __('Minutes') },
+    { value: 'hours', label: __('Hours') },
+    { value: 'days', label: __('Days') },
 ]);
 
 const afterOptions = computed(() => [
