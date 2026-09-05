@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.15.3 (2026-09-05)
+
+### Behoben: der rohe Antlers-Platzhalter stand in der Rückfrage vor dem Löschen
+
+- **„Zahlung bestätigt, {{ contact.first_name }}" löschen?** Der gespeicherte Mailname ist
+  eine Betreffvorlage, und die Rückfrage zitierte sie wörtlich, samt Platzhalter. Der Name
+  wird jetzt vor dem ersten `{{` abgeschnitten und sauber beendet — „Zahlung bestätigt"
+  löschen? Gilt für beide Löschwege (Zeilenmenü über Statamics Aktionsliste und die
+  Rückfrage aus der geöffneten Mail), die weiterhin wortgleich sind.
+- **Gekürzt, nicht aufgelöst.** Ein Betreff ist gegen den Kontakt geschrieben, den ein
+  Durchlauf einmal haben wird; im Control Panel gibt es keinen. Es gibt also nichts,
+  wogegen `Engine\TokenResolver` auflösen könnte, und ein erfundener Name würde einen Satz
+  auf den Schirm setzen, den nie jemand bekommt.
+- **Die Spalte „Mail" zeigt weiter den gespeicherten Betreff, Platzhalter und alles.**
+  Dort ist es die Angabe der Mail selbst, nicht ein Satz über sie; wer den Betreff
+  nachlesen will, muss ihn irgendwo ganz sehen können. Neu ist `display_label` neben
+  `label` in der Mailliste — dieselbe Zeile, gekürzt — und jeder Satz, der eine Mail beim
+  Namen nennt, nimmt diese: die Löschabfrage, die Auswahl „Danach" im Hinzufügen-Formular
+  und der Regelsatz „Wenn … passiert, sende … an …".
+- **Der Test dazu hat vier Formen**, weil ein fester Beispielbetreff genau die
+  interessanten nicht sieht: ohne Platzhalter, mit einem am Ende, mit mehreren, und ganz
+  ohne Namen. Ein Name, der nur aus einem Platzhalter besteht, fällt auf den Node-Key
+  zurück.
+
 ## 2.15.2 (2026-09-05)
 
 ### Behoben: der Sammel-Export prüfte die Schlüssel nur beim Anbieten, nicht beim Ausführen

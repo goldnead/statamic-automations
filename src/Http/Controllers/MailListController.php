@@ -7,6 +7,7 @@ use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Sequence\ChainEditor;
 use Goldnead\StatamicAutomations\Sequence\LinearityRule;
 use Goldnead\StatamicAutomations\Sequence\MailListProjection;
+use Goldnead\StatamicAutomations\Sequence\MailSteps;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
@@ -246,13 +247,21 @@ class MailListController extends Controller
     }
 
     /**
+     * The name to quote in the confirmation, without its Antlers placeholders.
+     *
+     * `display_label` rather than `label`: a mail's stored name is a subject
+     * template, so “Zahlung bestätigt, {{ contact.first_name }}” is what the
+     * column correctly shows and what a question must not. The projection cuts
+     * it at the first `{{` — see {@see MailSteps::withoutPlaceholders} for why
+     * it cuts rather than resolves.
+     *
      * @param  list<array<string, mixed>>  $mails
      */
     protected function labelFor(array $mails, string $nodeKey): string
     {
         foreach ($mails as $mail) {
             if (($mail['node_key'] ?? null) === $nodeKey) {
-                return (string) ($mail['label'] ?: $nodeKey);
+                return (string) (($mail['display_label'] ?? null) ?: ($mail['label'] ?: $nodeKey));
             }
         }
 
@@ -281,10 +290,10 @@ class MailListController extends Controller
      *                                Without it the answer is the list itself,
      *                                which is what the panel's own writes read.
      * @param  (callable(): void)|null  $guard  Runs BEFORE the snapshot and may
-     *                                throw the same RuntimeException a refusal
-     *                                throws. A version written in front of a
-     *                                write that never happened is a lie in the
-     *                                history, and the history is pruned to 25.
+     *                                          throw the same RuntimeException a refusal
+     *                                          throws. A version written in front of a
+     *                                          write that never happened is a lie in the
+     *                                          history, and the history is pruned to 25.
      */
     protected function write(Automation $automation, string $message, callable $apply, ?string $success = null, ?callable $guard = null): JsonResponse
     {

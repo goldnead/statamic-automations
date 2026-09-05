@@ -72,7 +72,7 @@ class RuleProjection
                 'label' => $trigger === null ? null : ($this->registry->describe($trigger->type)['label'] ?? $trigger->type),
             ],
             'mail' => $mail === null
-                ? ['label' => null, 'reference' => null]
+                ? ['label' => null, 'display_label' => null, 'reference' => null]
                 : $this->mails->summarise($mail),
             // The recipient is read off the mail node rather than guessed from
             // the trigger: a rule that mails an administrator on every form

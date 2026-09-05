@@ -471,11 +471,17 @@ const unitOptions = computed(() => [
     { value: 'days', label: __('Days') },
 ]);
 
+// `display_label`, not `label`: this is a sentence quoting a mail by name, and
+// the stored name is a subject template. The column above shows the stored line
+// in full — a reader has to be able to see what the subject really says — but
+// „After “Zahlung bestätigt, {{ contact.first_name }}”“ in a select reads as a
+// broken option. The short form is computed once on the server in
+// Sequence\MailSteps.
 const afterOptions = computed(() => [
     { value: '', label: __('First — right after the trigger') },
     ...mails.value.map((mail) => ({
         value: mail.node_key,
-        label: __('After “:label”', { label: mail.label || mail.node_key }),
+        label: __('After “:label”', { label: mail.display_label || mail.label || mail.node_key }),
     })),
 ]);
 

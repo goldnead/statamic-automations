@@ -205,15 +205,18 @@ describe('Automations/Edit', () => {
     describe('the mail list view', () => {
         const mailListUrl = '/cp/automations/api/automations/3/mail-list';
 
+        // `display_label` rides next to `label` in the real payload: the stored
+        // subject, and the same line cut off at its first Antlers placeholder.
+        // Here they are equal, because these two subjects carry none.
         const mailList = () => ({
             mails: [
                 {
-                    position: 0, node_key: 'm1', type: 'send_email', label: 'One', reference: null,
+                    position: 0, node_key: 'm1', type: 'send_email', label: 'One', display_label: 'One', reference: null,
                     disabled: false, delay: { seconds: 0, sources: [] }, conditional: false,
                     condition: null, also_runs: [],
                 },
                 {
-                    position: 1, node_key: 'm2', type: 'send_email', label: 'Two', reference: null,
+                    position: 1, node_key: 'm2', type: 'send_email', label: 'Two', display_label: 'Two', reference: null,
                     disabled: false, delay: { seconds: 2 * 86400, sources: ['d1'] }, conditional: false,
                     condition: null, also_runs: [],
                 },
@@ -333,6 +336,43 @@ describe('Automations/Edit', () => {
             await flushPromises();
 
             expect(axios.delete).toHaveBeenCalledWith(`${mailListUrl}/b`);
+        });
+
+        it('asks about a mail by its name without the placeholders in it', async () => {
+            // A subject is written against the contact a run will have, and the
+            // Control Panel has none — so „Zahlung bestätigt,
+            // {{ contact.first_name }}“ löschen? asked the reader about a
+            // sentence nobody will ever receive. The server cuts the name at its
+            // first placeholder and ships it as `display_label`; this dialog
+            // quotes that one, and the table's own column keeps the stored line.
+            const withPlaceholder = () => {
+                const list = mailList();
+                list.mails[0].node_key = 'a';
+                list.mails[1].node_key = 'b';
+                list.mails[1].label = 'Zahlung bestätigt, {{ contact.first_name }}';
+                list.mails[1].display_label = 'Zahlung bestätigt';
+
+                return list;
+            };
+
+            const editor = mountEditor(linearGraph(), { mailList: withPlaceholder(), mailListUrl });
+            await openMailList(editor);
+
+            expect(editor.wrapper.find('[data-mail-open="b"]').text())
+                .toBe('Zahlung bestätigt, {{ contact.first_name }}');
+
+            await editor.wrapper.find('[data-mail-open="b"]').trigger('click');
+            await flushPromises();
+            editor.panel().vm.$emit('delete');
+            await flushPromises();
+
+            const modal = editor.wrapper.findComponent({ name: 'ConfirmationModal' });
+
+            expect(modal.attributes('data-attr-body-text')).toBe(
+                'Delete “Zahlung bestätigt”? The waiting time in front of each one goes too. '
+                + 'Anything else in that gap is kept and moves to the next mail.',
+            );
+            expect(modal.attributes('data-attr-body-text')).not.toContain('{{');
         });
 
         it('refuses to edit the list while the canvas holds unsaved changes', async () => {

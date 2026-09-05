@@ -74,6 +74,12 @@ class MailListProjection
                 'node_key' => $node->node_key,
                 'type' => $node->type,
                 'label' => $summary['label'],
+                // The same line with everything from its first `{{` onwards
+                // removed. The table cell shows `label`, because a subject
+                // template is what the mail really carries; every sentence that
+                // quotes the mail by name shows this one. See
+                // {@see MailSteps::withoutPlaceholders}.
+                'display_label' => $summary['display_label'],
                 'reference' => $summary['reference'],
                 'disabled' => (bool) $node->disabled,
                 // Always relative to the mail before it. The first mail's gap

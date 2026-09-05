@@ -1122,13 +1122,20 @@ watch(view, scheduleHeightUpdate);
                  act, and until 2.15.1 they were phrased differently enough that
                  a reader could reasonably wonder whether they did the same
                  thing. The strings come from MailListController::actionList;
-                 anything changed there has to change here. -->
+                 anything changed there has to change here.
+
+                 `display_label` is the mail's name cut off at its first Antlers
+                 placeholder, computed once on the server in Sequence\MailSteps
+                 so that both delete paths quote the same name. A stored subject
+                 reads as a subject in the table's own column and as a defect
+                 inside a question — the mail list showed the placeholder
+                 verbatim in this dialog until 2.15.3. -->
             <ConfirmationModal
                 v-if="pendingMailDelete"
                 :open="true"
                 danger
                 :title="__('Delete mail')"
-                :body-text="`${__('Delete “:label”?', { label: pendingMailDelete.label || pendingMailDelete.node_key })} ${__('The waiting time in front of each one goes too. Anything else in that gap is kept and moves to the next mail.')}`"
+                :body-text="`${__('Delete “:label”?', { label: pendingMailDelete.display_label || pendingMailDelete.label || pendingMailDelete.node_key })} ${__('The waiting time in front of each one goes too. Anything else in that gap is kept and moves to the next mail.')}`"
                 :button-text="__('Delete mail')"
                 :busy="mailListBusy"
                 @confirm="confirmMailDelete"

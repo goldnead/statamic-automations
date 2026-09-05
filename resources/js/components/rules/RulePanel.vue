@@ -165,7 +165,12 @@ const form = ref(blank());
 watch(() => props.rule, () => { form.value = blank(); }, { deep: true });
 
 const triggerLabel = computed(() => props.rule.trigger?.label || props.rule.trigger?.handle || __('something'));
-const mailLabel = computed(() => props.rule.mail?.label || props.rule.mail?.reference || __('a mail'));
+// The rule row reads as one sentence ("When … happens, send … to …"), so the
+// mail is quoted by name inside it and gets the placeholder-free short form the
+// server derives in Sequence\MailSteps. Nothing here shows the stored subject in
+// full, which is why this one falls back to `label` only when an older payload
+// carries no `display_label`.
+const mailLabel = computed(() => props.rule.mail?.display_label || props.rule.mail?.label || props.rule.mail?.reference || __('a mail'));
 const recipientLabel = computed(() => props.rule.recipient || __('nobody yet'));
 
 const templateOptions = computed(() => {

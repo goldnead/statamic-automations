@@ -184,3 +184,56 @@ it('produces an empty list rather than looping for ever on a cyclic graph', func
     expect(count($list['mails']))->toBeLessThanOrEqual(2)
         ->and($list['editable'])->toBeFalse();
 });
+
+/**
+ * A mail's stored name is a subject template, so it may carry Antlers
+ * placeholders. The row shows the stored line; every sentence that quotes the
+ * mail by name shows the short form, because there is no contact in the Control
+ * Panel to resolve `{{ contact.first_name }}` against.
+ *
+ * Four shapes, and the middle two are the ones a fixed test string never sees:
+ * a name with no placeholder at all, one that is nothing but a placeholder, one
+ * with several, and an empty one.
+ */
+it('carries a placeholder-free display name next to the stored one', function (): void {
+    $automation = ($this->build)(
+        [
+            't' => ['type' => 'manual'],
+            'plain' => ['type' => 'send_email', 'config' => ['subject' => 'Zahlung bestätigt']],
+            'trailing' => ['type' => 'send_email', 'config' => ['subject' => 'Zahlung bestätigt, {{ contact.first_name }}']],
+            'several' => ['type' => 'send_email', 'config' => ['subject' => 'Hallo {{ contact.first_name }} {{ contact.last_name }}, willkommen']],
+            'only' => ['type' => 'send_email', 'config' => ['subject' => '{{ contact.first_name }}']],
+            'empty' => ['type' => 'send_email', 'config' => ['subject' => '']],
+        ],
+        [['t', 'plain'], ['plain', 'trailing'], ['trailing', 'several'], ['several', 'only'], ['only', 'empty']],
+    );
+
+    $mails = collect($this->projection->forAutomation($automation)['mails'])->keyBy('node_key');
+
+    // No placeholder: the display name is the stored name, punctuation and all.
+    expect($mails['plain']['display_label'])->toBe('Zahlung bestätigt')
+        ->and($mails['plain']['label'])->toBe('Zahlung bestätigt');
+
+    // The reported case. The comma that held the placeholder onto the sentence
+    // goes with it — "Zahlung bestätigt," would read as a truncation.
+    expect($mails['trailing']['display_label'])->toBe('Zahlung bestätigt')
+        // The stored line is untouched: the column shows what the mail carries.
+        ->and($mails['trailing']['label'])->toBe('Zahlung bestätigt, {{ contact.first_name }}');
+
+    // Several: cut at the FIRST one, not at the last. Everything after the
+    // first placeholder is written around a value nobody can see here.
+    expect($mails['several']['display_label'])->toBe('Hallo');
+
+    // Nothing but a placeholder leaves nothing to show, so the node key stands
+    // in — a name a reader can at least match against the row they clicked.
+    expect($mails['only']['display_label'])->toBe('only');
+
+    // Empty was already handled before this change and stays handled.
+    expect($mails['empty']['display_label'])->toBe('empty')
+        ->and($mails['empty']['label'])->toBe('empty');
+
+    // Not one of them may reach a sentence with braces still in it.
+    foreach ($mails as $mail) {
+        expect($mail['display_label'])->not->toContain('{{');
+    }
+});

@@ -2,6 +2,7 @@
 
 namespace Goldnead\StatamicAutomations\Sequence;
 
+use Goldnead\StatamicAutomations\Engine\TokenResolver;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 
@@ -58,7 +59,67 @@ class MailSteps
     }
 
     /**
-     * What to show on the row: a human line, and the thing it points at.
+     * What to show on the row: a human line, the thing it points at, and a
+     * version of the line that may be quoted inside a sentence.
+     *
+     * `label` is the stored value, placeholders and all — the column that shows
+     * it is showing the mail's own subject, and an editor has to be able to see
+     * what it really says. `display_label` is that same line cut off at its
+     * first `{{`, and it is what belongs in a question like
+     * `Delete “…”?`: a subject template reads as a subject in a table cell and
+     * as a defect in a sentence.
+     *
+     * @return array{label: string, display_label: string, reference: string|null}
+     */
+    public function summarise(AutomationNode $node): array
+    {
+        $summary = $this->summariseNode($node);
+
+        $summary['display_label'] = $this->firstNonEmpty([
+            self::withoutPlaceholders($summary['label']),
+            self::withoutPlaceholders((string) ($summary['reference'] ?? '')),
+            $node->node_key,
+        ]);
+
+        return $summary;
+    }
+
+    /**
+     * A label with everything from its first `{{` onwards removed.
+     *
+     * Cut, not resolved: a subject is written against the contact a run will
+     * eventually have, and the Control Panel has no such contact — there is no
+     * `AutomationContext` to hand {@see TokenResolver},
+     * and filling the gap with an invented name would put a sentence on screen
+     * that no reader will ever receive. What is left of the line is enough to
+     * recognise the mail by, which is all a confirmation dialog needs it for.
+     *
+     * Whatever separator held the placeholder onto the sentence goes with it,
+     * so “Zahlung bestätigt, {{ contact.first_name }}” reads as
+     * “Zahlung bestätigt” rather than “Zahlung bestätigt,”. The trailing trim
+     * only ever runs on a line that really was cut; a label that ends in a
+     * question mark keeps it.
+     *
+     * Returns an empty string when nothing readable is left — a label that is
+     * only a placeholder has no short form, and the caller falls back.
+     */
+    public static function withoutPlaceholders(string $label): string
+    {
+        $cut = mb_strpos($label, '{{');
+
+        if ($cut === false) {
+            return trim($label);
+        }
+
+        return (string) preg_replace(
+            '/[\s,;:.\-–—\/|·•(\[{«»„“”"\']+$/u',
+            '',
+            mb_substr($label, 0, $cut),
+        );
+    }
+
+    /**
+     * The stored line and reference, before the display form is derived.
      *
      * Falls back to the node's own label and then to the registered node label,
      * so a node that opts in without describing itself still produces a row a
@@ -66,7 +127,7 @@ class MailSteps
      *
      * @return array{label: string, reference: string|null}
      */
-    public function summarise(AutomationNode $node): array
+    protected function summariseNode(AutomationNode $node): array
     {
         $class = $this->registry->class($node->type);
         $config = is_array($node->config) ? $node->config : [];

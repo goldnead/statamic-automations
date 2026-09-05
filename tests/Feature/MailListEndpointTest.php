@@ -431,3 +431,38 @@ it('names the one mail it is about to delete', function (): void {
     expect($two->json('0.title'))->toBe('Delete 2 mails')
         ->and($two->json('0.buttonText'))->toBe('Delete 2 mails');
 });
+
+it('names it without the Antlers placeholders its subject carries', function (): void {
+    // A subject is written against the contact a run will have; the Control
+    // Panel has none, so there is nothing to resolve the placeholder against and
+    // it is cut instead. Every subject in `$this->series` is a fixed string,
+    // which is exactly why the defect survived that suite: it takes a subject
+    // with `{{ }}` in it to see it at all.
+    $automation = ($this->series)();
+
+    $automation->nodes()->where('node_key', 'm2')->first()->update([
+        'config' => [
+            'subject' => 'Zahlung bestätigt, {{ contact.first_name }}',
+            'to' => 'a@b.c',
+            'body' => 'x',
+        ],
+    ]);
+
+    $automation = $automation->fresh(['nodes', 'edges']);
+
+    $one = $this->postJson(
+        cp_route('statamic-automations.api.automations.mail-list.actions.list', $automation),
+        ['selections' => ['m2']],
+    );
+
+    expect($one->json('0.confirmationText'))->toBe('Delete “Zahlung bestätigt”?')
+        ->and($one->json('0.confirmationText'))->not->toContain('{{');
+
+    // The list itself keeps the stored subject: the column is showing the mail,
+    // not a sentence about it, and an editor has to be able to read what the
+    // subject really says.
+    $list = $this->getJson(($this->url)($automation));
+
+    expect($list->json('mails.1.label'))->toBe('Zahlung bestätigt, {{ contact.first_name }}')
+        ->and($list->json('mails.1.display_label'))->toBe('Zahlung bestätigt');
+});
