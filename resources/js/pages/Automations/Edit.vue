@@ -651,6 +651,20 @@ function reorderMails(order) {
     );
 }
 
+/**
+ * After a Statamic action has changed the list from inside the table.
+ *
+ * A bulk delete does not go through `mailListWrite` — the listing runs it
+ * against `mail-list/actions` itself and reports it — so nothing here knows
+ * what happened. Both re-reads are needed for the same reason a reorder needs
+ * them: ChainEditor rewrote the graph, and the canvas in memory is now the
+ * pre-delete one that the next Save would write straight back over it.
+ */
+async function refreshAfterAction() {
+    await refreshMailList();
+    await refreshGraph();
+}
+
 // The mail the list has asked to delete, held here until it is confirmed. The
 // confirmation belongs in the same component as the request that carries it
 // out — a delete that asks in one file and fires in another is one refactor
@@ -1035,9 +1049,13 @@ watch(view, scheduleHeightUpdate);
              the viewport bottom (see updateEditorHeight), so it adapts to the CP
              chrome, the addon header, and the optional issues Alert above it
              instead of relying on a hardcoded `100vh - N` guess. -->
-        <!-- The list view. Reading matter rather than a canvas tool, so it gets
-             a comfortable measure instead of the full bleed the canvas uses. -->
-        <div v-if="view === 'mails' && showMailList" class="max-w-5xl pb-8">
+        <!-- The list view. `max-w-page` since 2.15, the same measure the
+             activity view and every listing screen in this addon use: it was a
+             stack of cards on a narrow column, and a card list reads better
+             narrow while a six-column table reads worse. The CP's own
+             full-width toggle works on this measure and not on a bespoke
+             one. -->
+        <div v-if="view === 'mails' && showMailList" class="max-w-page mx-auto pb-8">
             <MailListPanel
                 :list="mailList"
                 :stats="stats"
@@ -1046,11 +1064,12 @@ watch(view, scheduleHeightUpdate);
                 :graph-dirty="graphDirty"
                 :busy="mailListBusy"
                 :stale="mailListStale"
+                :action-url="mailListUrl ? `${mailListUrl}/actions` : null"
                 @reorder="reorderMails"
-                @request-remove="pendingMailDelete = $event"
                 @insert="insertMail"
                 @open-flow="view = 'flow'"
                 @open="openMail"
+                @refresh="refreshAfterAction"
             />
 
             <!-- One mail, opened from the list. The form is ConfigPanel — the

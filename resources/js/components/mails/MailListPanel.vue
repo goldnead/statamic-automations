@@ -11,9 +11,18 @@
      * Reading is always on. Editing is bound to Sequence\LinearityRule, and when
      * it is off, LinearityNotice says which of its seven conditions is broken.
      *
-     * Presentational on purpose: every mutation leaves as an event, so the page
-     * owns the HTTP and this component can be mounted in a test with nothing but
-     * props. -->
+     * Presentational apart from one seam: every mutation the rows themselves
+     * offer leaves as an event, so the page owns the HTTP and this component can
+     * be mounted in a test with nothing but props. The exception is the delete,
+     * which is a Statamic action and therefore talks to `actionUrl` from inside
+     * `Listing` — that is the price of a checkbox column whose selection can
+     * actually do something, and the page is told to re-read afterwards through
+     * `refresh`.
+     *
+     * The rows are a `Listing` in its client-side mode (`:items`), the same
+     * component the runs and protocol screens use. It was a stack of cards until
+     * 2.15: no column headings, no sort, no per-row menu, and five mails filling
+     * a screen. Nothing about "a list of the mails" needed that to be bespoke. -->
     <div class="space-y-4" data-mail-list>
         <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -37,12 +46,21 @@
 
         <!-- The enrollment funnel: how many are in this flow, how many got
              through, how many left. Read out of the runs that already exist
-             (Support\RunStats), so it costs nothing to show here. -->
+             (Support\RunStats), so it costs nothing to show here.
+
+             A line above the table rather than columns in it, because these are
+             counts for the whole automation: as columns they would repeat the
+             same four numbers on every row and invite the reading that they
+             belong to that mail. The colours are gone with the same reasoning —
+             four hues carried no meaning the labels did not already carry, and
+             they were the loudest thing on a screen whose job is a list. Red
+             stays on `Failed`, which is the one of the five that is not just a
+             count but a verdict, and it appears only when there is one. -->
         <div v-if="stats" class="flex flex-wrap gap-2" data-mail-list-stats>
             <Badge :prepend="__('Enrolled')" :text="String(stats.enrolled ?? 0)" />
-            <Badge color="blue" :prepend="__('In progress')" :text="String(stats.in_progress ?? 0)" />
-            <Badge color="green" :prepend="__('Completed')" :text="String(stats.completed ?? 0)" />
-            <Badge color="amber" :prepend="__('Exited')" :text="String(stats.exited ?? 0)" />
+            <Badge :prepend="__('In progress')" :text="String(stats.in_progress ?? 0)" />
+            <Badge :prepend="__('Completed')" :text="String(stats.completed ?? 0)" />
+            <Badge :prepend="__('Exited')" :text="String(stats.exited ?? 0)" />
             <Badge v-if="stats.failed" color="red" :prepend="__('Failed')" :text="String(stats.failed)" />
         </div>
 
@@ -75,95 +93,105 @@
             </p>
         </Card>
 
-        <CardList v-else>
-            <CardListItem
-                v-for="(mail, index) in mails"
-                :key="mail.node_key"
-                :data-mail-row="mail.node_key"
-            >
-                <div class="flex w-full items-start gap-3">
-                    <span class="w-6 shrink-0 pt-0.5 text-sm tabular-nums text-gray-500">{{ index + 1 }}</span>
+        <!-- `action-url` only while the list may actually be changed. It is
+             what turns the checkbox column on, and Statamic's own rule is that
+             a selection must have somewhere to go: with a branched flow, a
+             reader without the permission, or a canvas holding unsaved edits,
+             there is nothing a selection could do, so there are no checkboxes
+             either. Reordering stays in the row menu rather than becoming drag
+             handles: core hides the checkbox column whenever `reorderable` is
+             on, and a permanent trade of multi-select for dragging is the wrong
+             way round for a list this short. -->
+        <Listing
+            v-else
+            :items="rows"
+            :columns="columns"
+            :action-url="canMutate ? actionUrl : undefined"
+            :allow-presets="false"
+            :allow-search="false"
+            :allow-customizing-columns="false"
+            :show-pagination-totals="false"
+            :show-pagination-page-links="false"
+            :show-pagination-per-page-selector="false"
+            sort-column="position"
+            sort-direction="asc"
+            @refreshing="$emit('refresh')"
+        >
+            <template #cell-position="{ row }">
+                <span class="text-2xs tabular-nums text-gray-500" :data-mail-row="row.node_key">{{ row.position }}</span>
+            </template>
 
-                    <div class="min-w-0 flex-1">
-                        <div class="flex flex-wrap items-center gap-2">
-                            <!-- The name opens the mail. A button rather than
-                                 the whole row: the row already carries three
-                                 controls of its own, and a click target that
-                                 swallows them would take the reorder arrows
-                                 with it. A button also reaches the keyboard,
-                                 which a clickable div does not. -->
-                            <button
-                                type="button"
-                                class="cursor-pointer truncate text-start font-medium text-gray-900 hover:underline dark:text-gray-100"
-                                :data-mail-open="mail.node_key"
-                                @click="$emit('open', mail)"
-                            >
-                                {{ mail.label || mail.node_key }}
-                            </button>
-                            <Badge v-if="mail.reference" :text="mail.reference" />
-                            <Badge
-                                v-if="mail.conditional"
-                                color="amber"
-                                icon="git"
-                                :text="__('Conditional')"
-                                :data-mail-conditional="mail.node_key"
-                            />
-                            <Badge v-if="mail.disabled" :text="__('Disabled')" />
-                        </div>
+            <template #cell-label="{ row }">
+                <!-- The name opens the mail. A button rather than the whole
+                     row: the row carries a checkbox and a menu of its own, and
+                     a click target that swallowed them would take both with it.
+                     A button also reaches the keyboard, which a clickable cell
+                     does not. `data-interactive` keeps core's row-click
+                     handler off it. -->
+                <button
+                    type="button"
+                    data-interactive
+                    class="cursor-pointer truncate text-start font-medium text-gray-900 hover:underline dark:text-gray-100"
+                    :data-mail-open="row.node_key"
+                    @click="$emit('open', row.mail)"
+                >
+                    {{ row.label }}
+                </button>
+                <Badge v-if="row.disabled" :text="__('Disabled')" class="ms-1" />
+            </template>
 
-                        <p class="mt-1 text-sm text-gray-600 dark:text-gray-400" :data-mail-delay="mail.node_key">
-                            {{ delayLabel(mail, index) }}
-                        </p>
+            <template #cell-reference="{ row }">
+                <code v-if="row.reference" class="text-xs text-gray-500">{{ row.reference }}</code>
+                <span v-else class="text-gray-500">—</span>
+            </template>
 
-                        <p v-if="mail.conditional" class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                            {{ __('Only some readers reach this mail: :condition', { condition: mail.condition ?? '' }) }}
-                        </p>
+            <template #cell-delay="{ row }">
+                <span class="text-2xs" :data-mail-delay="row.node_key">{{ row.delay }}</span>
+            </template>
 
-                        <p v-if="mail.also_runs?.length" class="mt-1 text-sm text-gray-500">
-                            {{ __('Also runs in this gap: :steps', { steps: alsoRuns(mail) }) }}
-                        </p>
-                    </div>
+            <template #cell-condition="{ row }">
+                <template v-if="row.conditional">
+                    <Badge
+                        color="amber"
+                        icon="git"
+                        :text="__('Conditional')"
+                        :data-mail-conditional="row.node_key"
+                    />
+                    <span class="ms-1 text-2xs text-gray-600 dark:text-gray-400">{{ row.condition }}</span>
+                </template>
+                <span v-else class="text-gray-500">—</span>
+            </template>
 
-                    <!-- Reordering is two buttons, not a drag handle: a drag is
-                         unreachable from a keyboard and silent to a screen
-                         reader, and this list is short by nature. -->
-                    <div v-if="canMutate" class="flex shrink-0 items-center gap-1">
-                        <Button
-                            :ref="(el) => setMoveRef(`${mail.node_key}:up`, el)"
-                            variant="ghost"
-                            size="sm"
-                            icon-only
-                            icon="arrow-up"
-                            :aria-label="__('Move “:label” one place earlier', { label: mail.label || mail.node_key })"
-                            :disabled="index === 0"
-                            @click="move(index, -1)"
-                        />
-                        <Button
-                            :ref="(el) => setMoveRef(`${mail.node_key}:down`, el)"
-                            variant="ghost"
-                            size="sm"
-                            icon-only
-                            icon="arrow-down"
-                            :aria-label="__('Move “:label” one place later', { label: mail.label || mail.node_key })"
-                            :disabled="index === mails.length - 1"
-                            @click="move(index, 1)"
-                        />
-                        <!-- `request-remove`, not `remove`: nothing is deleted
-                             until the page has confirmed it. The confirmation
-                             lives next to the request that carries it out, so
-                             the two can never drift apart. -->
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            icon-only
-                            icon="trash"
-                            :aria-label="__('Delete “:label”', { label: mail.label || mail.node_key })"
-                            @click="$emit('request-remove', mail)"
-                        />
-                    </div>
-                </div>
-            </CardListItem>
-        </CardList>
+            <template #cell-also_runs="{ row }">
+                <span v-if="row.also_runs" class="text-2xs text-gray-500">{{ row.also_runs }}</span>
+                <span v-else class="text-gray-500">—</span>
+            </template>
+
+            <!-- Reading is always on, so "open" is here for everybody. The two
+                 moves are prepended items rather than drag handles for the
+                 reason the old arrow buttons were: a drag is unreachable from a
+                 keyboard and silent to a screen reader. Delete is not here — it
+                 is the Statamic action the `action-url` above serves, so the
+                 row menu and the bulk toolbar delete a mail by the same code
+                 path, with the same confirmation. -->
+            <template #prepended-row-actions="{ row }">
+                <DropdownItem icon="mail" :text="__('Open this mail')" @click="$emit('open', row.mail)" />
+                <template v-if="canMutate">
+                    <DropdownItem
+                        v-if="row.position > 1"
+                        icon="arrow-up"
+                        :text="__('Move up')"
+                        @click="move(row.position - 1, -1)"
+                    />
+                    <DropdownItem
+                        v-if="row.position < rows.length"
+                        icon="arrow-down"
+                        :text="__('Move down')"
+                        @click="move(row.position - 1, 1)"
+                    />
+                </template>
+            </template>
+        </Listing>
 
         <p v-if="list?.tail?.length" class="text-sm text-gray-500" data-mail-list-tail>
             {{ __(':n more step(s) run after the last mail.', { n: list.tail.length }) }}
@@ -228,18 +256,18 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import {
     Alert,
     Badge,
     Button,
     Card,
-    CardList,
-    CardListItem,
     Description,
+    DropdownItem,
     Field,
     Heading,
     Input,
+    Listing,
     Modal,
     Select,
 } from '@statamic/cms/ui';
@@ -262,9 +290,16 @@ const props = defineProps({
     busy: { type: Boolean, default: false },
     /** The last refresh failed, so what is on screen may be behind the server. */
     stale: { type: Boolean, default: false },
+    /**
+     * Where `Listing` asks for, and runs, the actions a selection may perform
+     * — `MailListController::actionList` / `runAction`. Null switches the
+     * checkbox column off, because Statamic ties selections to actions and a
+     * checkbox with nothing behind it is worse than none.
+     */
+    actionUrl: { type: String, default: null },
 });
 
-const emit = defineEmits(['reorder', 'request-remove', 'insert', 'open-flow', 'open']);
+const emit = defineEmits(['reorder', 'insert', 'open-flow', 'open', 'refresh']);
 
 const mails = computed(() => props.list?.mails ?? []);
 const editable = computed(() => Boolean(props.list?.editable));
@@ -324,44 +359,63 @@ function alsoRuns(mail) {
     return (mail.also_runs ?? []).map((step) => step.node_key).join(', ');
 }
 
+// ---------- The table ----------
+
+/**
+ * One row per mail, flattened.
+ *
+ * `Listing` sorts and keys by the row's own scalar fields, so anything a column
+ * shows has to be a field rather than something a cell computes: sorting by
+ * "Sending" has to sort by the sentence the reader sees. The mail itself rides
+ * along under `mail` for the events that hand it back to the page.
+ */
+const rows = computed(() =>
+    mails.value.map((mail, index) => ({
+        // `Listing` keys rows and selections by `id`, and the node key is the
+        // only identifier a mail has inside its automation.
+        id: mail.node_key,
+        node_key: mail.node_key,
+        // The flow position, carried rather than derived from the array index,
+        // because the table may be sorted by any column and "which mail comes
+        // first" must survive that — the reorder items read it.
+        position: index + 1,
+        label: mail.label || mail.node_key,
+        reference: mail.reference || '',
+        delay: delayLabel(mail, index),
+        conditional: Boolean(mail.conditional),
+        condition: mail.condition ?? '',
+        disabled: Boolean(mail.disabled),
+        also_runs: alsoRuns(mail),
+        mail,
+    })),
+);
+
+/**
+ * Computed rather than a module constant, so `__()` is asked at render time
+ * instead of at import time, before the Control Panel has installed it.
+ *
+ * `Position` is this addon's own word (the add form's field carries it too);
+ * everything else here is a source string no other package owns — see
+ * tests/Unit/TranslationKeyOwnershipTest.php for why that matters.
+ */
+const columns = computed(() => [
+    { field: 'position', label: __('Position'), sortable: true, visible: true },
+    { field: 'label', label: __('Mail'), sortable: true, visible: true },
+    { field: 'reference', label: __('Reference'), sortable: true, visible: true },
+    { field: 'delay', label: __('Sending'), sortable: true, visible: true },
+    { field: 'condition', label: __('Condition'), sortable: true, visible: true },
+    { field: 'also_runs', label: __('Runs in this gap'), sortable: true, visible: true },
+]);
+
 // ---------- Reordering ----------
-
-const moveRefs = new Map();
-const focusAfterMove = ref(null);
-
-// Vue hands `null` when the row unmounts. It is stored as-is rather than
-// dropped: the focus restore below already guards a missing element, and a Map
-// that is one row long has nothing worth pruning.
-function setMoveRef(key, el) {
-    moveRefs.set(key, el);
-}
 
 function move(index, delta) {
     const order = movedOrder(mails.value.map((mail) => mail.node_key), index, delta);
 
     if (! order) return;
 
-    // Keep the keyboard where the user left it: after a move the row has a new
-    // position, and focus must travel with it instead of dropping to the body.
-    focusAfterMove.value = `${mails.value[index].node_key}:${delta < 0 ? 'up' : 'down'}`;
-
     emit('reorder', order);
 }
-
-watch(
-    () => mails.value.map((mail) => mail.node_key).join('>'),
-    async () => {
-        const key = focusAfterMove.value;
-        if (! key) return;
-        focusAfterMove.value = null;
-
-        await nextTick();
-
-        const button = moveRefs.get(key);
-        const el = button?.$el ?? button;
-        el?.focus?.();
-    },
-);
 
 // ---------- Inserting ----------
 

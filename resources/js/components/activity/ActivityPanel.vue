@@ -82,11 +82,19 @@
                  Where people stop. The five numbers above say how many left;
                  only this says where, which is the half that names what to fix.
 
-                 The bar is measured against the busiest step rather than against
-                 the first one: a branch splits the flow, and a percentage of "the
-                 trigger" would read as a 60% drop where nothing was lost at all.
-                 With nothing to measure, there is no bar and no 0% — the empty
-                 state says so in words. -->
+                 The share is measured against the busiest step rather than
+                 against the first one: a branch splits the flow, and a
+                 percentage of "the trigger" would read as a 60% drop where
+                 nothing was lost at all. With nothing to measure there is no
+                 percentage at all — the empty state says so in words.
+
+                 The same `Listing` the two tabs beside it use, in its
+                 client-side mode (`:items`): the figures are counted out of the
+                 payload this panel already holds, so a server route and a
+                 second round trip would buy nothing. What it does buy is what
+                 the hand-built card list could not have: column headings, a
+                 sort that works on every column, and a per-row menu — and five
+                 steps that read as five rows instead of filling the screen. -->
             <TabContent name="steps">
                 <Card v-if="!steps.length">
                     <p class="text-sm text-gray-600 dark:text-gray-400">
@@ -103,52 +111,75 @@
                     </p>
                 </Card>
 
-                <CardList v-else>
-                    <CardListItem
-                        v-for="(step, index) in steps"
-                        :key="step.node_key"
-                        :data-activity-step="step.node_key"
-                    >
-                        <div class="w-full">
-                            <div class="flex flex-wrap items-baseline gap-2">
-                                <span class="w-6 shrink-0 text-sm tabular-nums text-gray-500">{{ index + 1 }}</span>
-                                <span class="font-medium text-gray-900 dark:text-gray-100">{{ step.label }}</span>
-                                <!-- No `size="sm"`: that variant is
-                                     `rounded-[0.1875rem]`, a 3px radius that
-                                     reads as a broken button next to the
-                                     default `rounded-sm` every other badge in
-                                     this addon uses (ui-vocabulary §22). This
-                                     is a chip qualifying the step's name, not
-                                     the row's status, so it stays square rather
-                                     than becoming a pill. -->
-                                <Badge v-if="step.removed" color="amber" :text="__('No longer in the flow')" />
-                                <span class="ml-auto text-sm tabular-nums text-gray-600 dark:text-gray-400">
-                                    {{ __(':n reached this step', { n: step.reached }) }}
-                                </span>
-                            </div>
+                <!-- No `action-url`, and therefore deliberately no checkbox
+                     column: the steps are counted rows, not records, and there
+                     is nothing an addon could do to a selection of them. A
+                     checkbox that selects and then offers nothing is worse than
+                     no checkbox. -->
+                <Listing
+                    v-else
+                    :items="steps"
+                    :columns="stepColumns"
+                    :allow-bulk-actions="false"
+                    :allow-presets="false"
+                    :allow-search="false"
+                    :allow-customizing-columns="false"
+                    :show-pagination-totals="false"
+                    :show-pagination-page-links="false"
+                    :show-pagination-per-page-selector="false"
+                    sort-column="position"
+                    sort-direction="asc"
+                >
+                    <template #cell-position="{ row }">
+                        <span class="text-2xs tabular-nums text-gray-500" :data-activity-step="row.node_key">
+                            {{ row.position }}
+                        </span>
+                    </template>
+                    <template #cell-label="{ row }">
+                        <span class="font-medium">{{ row.label }}</span>
+                        <!-- No `size="sm"`: that variant is
+                             `rounded-[0.1875rem]`, a 3px radius that reads as a
+                             broken button next to the default `rounded-sm`
+                             every other badge in this addon uses
+                             (ui-vocabulary §22). -->
+                        <Badge v-if="row.removed" color="amber" :text="__('No longer in the flow')" class="ms-1" />
+                    </template>
+                    <template #cell-reached="{ row }">
+                        <span class="text-2xs tabular-nums">{{ row.reached }}</span>
+                    </template>
+                    <template #cell-share="{ row }">
+                        <span class="text-2xs tabular-nums text-gray-600 dark:text-gray-400">{{ row.share }}%</span>
+                    </template>
+                    <template #cell-completed="{ row }">
+                        <span class="text-2xs tabular-nums">{{ row.completed }}</span>
+                    </template>
+                    <template #cell-failed="{ row }">
+                        <span
+                            class="text-2xs tabular-nums"
+                            :class="row.failed ? 'text-red-600 dark:text-red-400' : 'text-gray-500'"
+                        >{{ row.failed }}</span>
+                    </template>
+                    <template #cell-stuck="{ row }">
+                        <span class="text-2xs tabular-nums" :data-activity-step-stuck="row.node_key">{{ row.stuck }}</span>
+                    </template>
 
-                            <div class="mt-2 flex items-center gap-3 ps-8">
-                                <div class="h-2 flex-1 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-800">
-                                    <!-- `bg-primary`, not a literal blue: the CP
-                                         is themeable and a hardcoded hue is the
-                                         one thing on this panel that would not
-                                         follow the theme. -->
-                                    <div
-                                        class="h-full rounded-full bg-primary"
-                                        :style="{ width: step.share + '%' }"
-                                    ></div>
-                                </div>
-                                <span class="w-12 shrink-0 text-end text-xs tabular-nums text-gray-500">
-                                    {{ step.share }}%
-                                </span>
-                            </div>
-
-                            <p class="mt-1 ps-8 text-sm text-gray-500" :data-activity-step-detail="step.node_key">
-                                {{ step.detail }}
-                            </p>
-                        </div>
-                    </CardListItem>
-                </CardList>
+                    <!-- Both items lead somewhere that already exists: the
+                         protocol next door, filtered to this step, and the CSV
+                         the toolbar above builds. A row menu whose entries only
+                         restate the row would be decoration. -->
+                    <template #prepended-row-actions="{ row }">
+                        <DropdownItem
+                            icon="list-ul"
+                            :text="__('Show in the log')"
+                            @click="showStepInLog(row)"
+                        />
+                        <DropdownItem
+                            icon="download"
+                            :text="__('Export this step')"
+                            @click="exportCsv(row.node_key)"
+                        />
+                    </template>
+                </Listing>
             </TabContent>
 
             <!-- ── Log ───────────────────────────────────────────────────────
@@ -292,9 +323,8 @@ import {
     Badge,
     Button,
     Card,
-    CardList,
-    CardListItem,
     Description,
+    DropdownItem,
     Heading,
     Listing,
     Select,
@@ -469,7 +499,7 @@ const steps = computed(() => {
     const { inGraph, orphans } = orderedKeys.value;
     const base = entered.value;
 
-    const build = (key, removed) => {
+    const build = (key, removed, position) => {
         const stats = nodeStats.value?.[key] ?? { reached: 0, completed: 0, failed: 0 };
         const reached = stats.reached ?? 0;
         const completed = stats.completed ?? 0;
@@ -477,7 +507,16 @@ const steps = computed(() => {
         const stuck = Math.max(0, reached - completed - broke);
 
         return {
+            // `Listing` keys its rows and its selections by `id`. The node key
+            // is the only identifier a step has, and it is unique per
+            // automation by construction.
+            id: key,
             node_key: key,
+            // Carried as a field rather than derived from the array index,
+            // because the table may be sorted by any column and the flow
+            // position has to survive that — it is the one number that says
+            // where in the automation a step sits.
+            position,
             label: removed ? key : labelFor(key),
             removed,
             reached,
@@ -485,23 +524,52 @@ const steps = computed(() => {
             // through divides by zero, and `NaN%` on every row is how that shows
             // up on screen.
             share: base > 0 ? Math.round((reached / base) * 100) : 0,
-            detail: detailFor(completed, broke, stuck),
+            completed,
+            failed: broke,
+            // The third figure of the row, and the one nothing else carries:
+            // reached, minus those that got through, minus those that broke.
+            stuck,
         };
     };
 
     return [
-        ...inGraph.map((key) => build(key, false)),
-        ...orphans.map((key) => build(key, true)),
+        ...inGraph.map((key, index) => build(key, false, index + 1)),
+        ...orphans.map((key, index) => build(key, true, inGraph.length + index + 1)),
     ];
 });
 
-function detailFor(completed, failed, stuck) {
-    const parts = [__(':n got through it', { n: completed })];
+/**
+ * The steps table, as columns.
+ *
+ * Computed rather than a module constant so the labels are translated at render
+ * time — a `const` evaluated at import time asks `__()` before the Control Panel
+ * has installed it.
+ *
+ * `Step` and `Position` are not this addon's words: statamic/cms already
+ * translates the first and the addon's own dictionary carries the second, so
+ * neither is redefined here (see tests/Unit/TranslationKeyOwnershipTest.php).
+ */
+const stepColumns = computed(() => [
+    { field: 'position', label: __('Position'), sortable: true, visible: true },
+    { field: 'label', label: __('Step'), sortable: true, visible: true },
+    { field: 'reached', label: __('Reached'), sortable: true, visible: true },
+    { field: 'share', label: __('Share'), sortable: true, visible: true },
+    { field: 'completed', label: __('Got through'), sortable: true, visible: true },
+    { field: 'failed', label: __('Failed here'), sortable: true, visible: true },
+    { field: 'stuck', label: __('Did not continue'), sortable: true, visible: true },
+]);
 
-    if (failed) parts.push(__(':n failed here', { n: failed }));
-    if (stuck) parts.push(__(':n did not continue from here', { n: stuck }));
-
-    return parts.join(' · ');
+/**
+ * Take one step's rows to the protocol next door.
+ *
+ * The filter and the tab are the two halves of the same act: switching without
+ * the filter lands on every step's runs, and filtering without switching hides
+ * the result behind a tab nobody pressed.
+ */
+function showStepInLog(row) {
+    node.value = row.node_key;
+    status.value = '';
+    tab.value = 'log';
 }
 
 // ---------- The log's step filter ----------
@@ -528,14 +596,19 @@ function formatDate(value) {
  * that payload is assembled in the browser, and copying it here would only add
  * a round trip and a memory copy of the whole log.
  */
-function exportCsv() {
+function exportCsv(nodeKey = null) {
     // The sort direction too, and not as a nicety: `Listing` remembers the
     // reader's choice under `preferences-prefix`, so somebody who once clicked
     // "When" ascending got every export from then on in the opposite order to
     // the table it came from — while the file claims to be that table.
     const params = new URLSearchParams({ range: range.value, order: sortDirection.value });
 
-    if (node.value) params.set('node', node.value);
+    // The toolbar button is wired as `@click="exportCsv"`, so the first
+    // argument there is a MouseEvent, not a step. Anything that is not a
+    // string means "the whole protocol, as it is filtered".
+    const step = typeof nodeKey === 'string' && nodeKey ? nodeKey : node.value;
+
+    if (step) params.set('node', step);
     if (status.value) params.set('status', status.value);
 
     window.open(`${props.activity.exportUrl}?${params.toString()}`, '_blank');

@@ -70,6 +70,10 @@ function mountPanel(list, props = {}) {
 }
 
 const buttons = (wrapper, icon) => wrapper.findAll(`[data-attr-icon="${icon}"]`);
+const cell = (wrapper, nodeKey, column) => wrapper
+    .findAll('[data-listing-row]')
+    .find((row) => row.attributes('data-listing-row') === nodeKey)
+    .find(`[data-column="${column}"]`);
 
 describe('MailListPanel', () => {
     it('shows a branched automation but refuses to rearrange it', () => {
@@ -81,11 +85,41 @@ describe('MailListPanel', () => {
         expect(wrapper.text()).toContain('M1');
         expect(wrapper.text()).toContain('M2');
 
-        // Not editable: no move, no delete, no add.
+        // Not editable: no move, no delete, no add. The delete is the action
+        // behind `action-url`, so withholding that endpoint is what withholds
+        // both the checkbox column and the delete.
         expect(buttons(wrapper, 'arrow-up')).toHaveLength(0);
         expect(buttons(wrapper, 'arrow-down')).toHaveLength(0);
-        expect(buttons(wrapper, 'trash')).toHaveLength(0);
+        expect(wrapper.find('[data-stub="Listing"]').attributes('data-attr-action-url')).toBe('');
         expect(wrapper.find('[data-mail-add]').exists()).toBe(false);
+    });
+
+    it('is a table with a heading over every column', () => {
+        // The complaint this answers: a stack of cards has no column headings,
+        // nothing to sort by, and two mails fill the screen.
+        const wrapper = mountPanel(linearList());
+
+        const heads = wrapper.findAll('[data-column-head]');
+
+        expect(heads.map((head) => head.attributes('data-column-head')))
+            .toEqual(['position', 'label', 'reference', 'delay', 'condition', 'also_runs']);
+        expect(heads.every((head) => head.attributes('data-sortable') === 'true')).toBe(true);
+    });
+
+    it('offers the checkbox column exactly when a selection could do something', () => {
+        // `action-url` is what turns Statamic's checkbox column on. A list that
+        // may not be changed gets none, rather than checkboxes that select and
+        // then offer nothing.
+        const url = '/cp/automations/api/automations/3/mail-list/actions';
+
+        expect(mountPanel(linearList(), { actionUrl: url })
+            .find('[data-stub="Listing"]').attributes('data-attr-action-url')).toBe(url);
+
+        expect(mountPanel(linearList(), { actionUrl: url, canEdit: false })
+            .find('[data-stub="Listing"]').attributes('data-attr-action-url')).toBe('');
+
+        expect(mountPanel(branchedList(), { actionUrl: url })
+            .find('[data-stub="Listing"]').attributes('data-attr-action-url')).toBe('');
     });
 
     it('names the condition that is broken, not merely that the flow is not linear', () => {
@@ -126,7 +160,10 @@ describe('MailListPanel', () => {
 
         expect(wrapper.find('[data-mail-conditional="m2"]').exists()).toBe(true);
         expect(wrapper.find('[data-mail-conditional="m1"]').exists()).toBe(false);
-        expect(wrapper.text()).toContain('Only some readers reach this mail: Branch → true');
+        // The fork itself is named in the cell, next to the badge: the badge
+        // says "not everybody", the text says which fork decides it.
+        expect(cell(wrapper, 'm2', 'condition').text()).toContain('Branch → true');
+        expect(cell(wrapper, 'm1', 'condition').text()).toBe('—');
     });
 
     it('counts the gap from the mail before it, never from the start', () => {
@@ -145,28 +182,52 @@ describe('MailListPanel', () => {
 
         expect(wrapper.emitted('reorder')).toEqual([[['m2', 'm1', 'm3']]]);
 
-        await buttons(wrapper, 'arrow-up')[2].trigger('click');
+        // Row one has no "up", so the second of the two is row three's.
+        await buttons(wrapper, 'arrow-up')[1].trigger('click');
 
         expect(wrapper.emitted('reorder')[1]).toEqual([['m1', 'm3', 'm2']]);
     });
 
     it('cannot walk a mail off either end of the list', () => {
+        // A dropdown item has no disabled state, so the move that cannot happen
+        // is not offered at all — which reads better than a greyed-out entry
+        // and cannot be clicked by a keyboard either.
         const wrapper = mountPanel(linearList());
+        const rows = wrapper.findAll('[data-listing-row]');
 
-        expect(buttons(wrapper, 'arrow-up')[0].attributes('data-attr-disabled')).toBe('true');
-        expect(buttons(wrapper, 'arrow-down')[2].attributes('data-attr-disabled')).toBe('true');
+        expect(rows[0].findAll('[data-attr-icon="arrow-up"]')).toHaveLength(0);
+        expect(rows[0].findAll('[data-attr-icon="arrow-down"]')).toHaveLength(1);
+        expect(rows[2].findAll('[data-attr-icon="arrow-up"]')).toHaveLength(1);
+        expect(rows[2].findAll('[data-attr-icon="arrow-down"]')).toHaveLength(0);
     });
 
-    it('asks for a delete rather than performing one', async () => {
-        // The page owns the confirmation and the request — see the page suite
-        // in automations-edit.test.js. All this row does is ask, which is why
-        // the event is named `request-remove`.
+    it('deletes through the action endpoint, not through a second button', async () => {
+        // One delete path. The row menu used to carry a trash button that asked
+        // the page to confirm; the bulk toolbar would have been a second one
+        // with its own confirmation, and two paths to the same destructive act
+        // is one refactor away from them disagreeing.
+        const wrapper = mountPanel(linearList(), { actionUrl: '/x/actions' });
+
+        expect(buttons(wrapper, 'trash')).toHaveLength(0);
+        expect(wrapper.emitted('request-remove')).toBeUndefined();
+
+        // And the table tells the page to re-read when core has run one.
+        wrapper.findComponent({ name: 'Listing' }).vm.$emit('refreshing');
+
+        expect(wrapper.emitted('refresh')).toHaveLength(1);
+    });
+
+    it('opens the mail from the row menu as well as from its name', async () => {
         const wrapper = mountPanel(linearList());
+        const items = wrapper.findAll('[data-listing-row]')[1]
+            .findAll('[data-row-actions] [data-stub="DropdownItem"]');
 
-        await buttons(wrapper, 'trash')[1].trigger('click');
+        expect(items.map((item) => item.attributes('data-attr-text')))
+            .toEqual(['Open this mail', 'Move up', 'Move down']);
 
-        expect(wrapper.emitted('request-remove')).toHaveLength(1);
-        expect(wrapper.emitted('request-remove')[0][0].node_key).toBe('m2');
+        await items[0].trigger('click');
+
+        expect(wrapper.emitted('open')?.[0]?.[0]?.node_key).toBe('m2');
     });
 
     it('locks the list while the canvas has unsaved changes, and says so', () => {
@@ -184,7 +245,9 @@ describe('MailListPanel', () => {
 
         expect(wrapper.findAll('[data-mail-row]')).toHaveLength(3);
         expect(wrapper.find('[data-mail-list-readonly]').exists()).toBe(true);
-        expect(buttons(wrapper, 'trash')).toHaveLength(0);
+        expect(buttons(wrapper, 'arrow-down')).toHaveLength(0);
+        // Reading is always on, so the mail can still be opened.
+        expect(wrapper.findAll('[data-attr-text="Open this mail"]')).toHaveLength(3);
     });
 
     it('offers to add the first mail to an automation that sends none', async () => {

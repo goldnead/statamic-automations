@@ -257,11 +257,59 @@ describe('Automations/Edit', () => {
             );
         });
 
-        it('confirms a delete through the CP modal before it deletes anything', async () => {
+        it('hands the table an action endpoint, so a selection can do something', async () => {
+            // Statamic ties the checkbox column to `action-url`: no endpoint,
+            // no checkboxes. Deleting mails is the action behind it, which is
+            // why there is no second delete button in the row menu — one path,
+            // one confirmation.
             const editor = mountEditor(linearGraph(), { mailList: mailList(), mailListUrl });
             await openMailList(editor);
 
-            await editor.wrapper.findAll('[data-attr-icon="trash"]')[1].trigger('click');
+            expect(editor.wrapper.find('[data-stub="Listing"]').attributes('data-attr-action-url'))
+                .toBe(`${mailListUrl}/actions`);
+            expect(editor.wrapper.findAll('[data-attr-icon="trash"]')).toHaveLength(0);
+        });
+
+        it('re-reads the list and the graph after the table has run an action', async () => {
+            // A bulk delete never passes through this page's own writes — the
+            // listing runs it and reports it. Without this the canvas in memory
+            // is the pre-delete one, and the next Save writes it back over the
+            // deletion.
+            const editor = mountEditor(linearGraph(), { mailList: mailList(), mailListUrl });
+            await openMailList(editor);
+
+            axios.get.mockClear();
+            axios.get.mockResolvedValue({ data: { nodes: [], edges: [] } });
+
+            editor.wrapper.findComponent({ name: 'Listing' }).vm.$emit('refreshing');
+            await flushPromises();
+
+            expect(axios.get).toHaveBeenCalledWith(mailListUrl);
+            expect(axios.get).toHaveBeenCalledWith('/cp/automations/api/automations/3');
+        });
+
+        it('confirms a delete through the CP modal before it deletes anything', async () => {
+            // The single-mail delete that is still this page's own: the one
+            // reached from the mail's stack, where the reader is looking at the
+            // mail rather than at the table.
+            //
+            // The mails are keyed to the graph's own nodes here, because the
+            // stack edits the node the list opened — a list whose keys name
+            // nothing on the canvas can be read but never opened.
+            const onGraph = () => {
+                const list = mailList();
+                list.mails[0].node_key = 'a';
+                list.mails[1].node_key = 'b';
+
+                return list;
+            };
+
+            const editor = mountEditor(linearGraph(), { mailList: onGraph(), mailListUrl });
+            await openMailList(editor);
+
+            await editor.wrapper.find('[data-mail-open="b"]').trigger('click');
+            await flushPromises();
+            editor.panel().vm.$emit('delete');
             await flushPromises();
 
             const modal = editor.wrapper.findComponent({ name: 'ConfirmationModal' });
@@ -271,11 +319,11 @@ describe('Automations/Edit', () => {
             expect(modal.attributes('data-attr-body-text')).toContain('“Two”');
             expect(axios.delete).not.toHaveBeenCalled();
 
-            axios.delete.mockResolvedValueOnce({ data: mailList() });
+            axios.delete.mockResolvedValueOnce({ data: onGraph() });
             modal.vm.$emit('confirm');
             await flushPromises();
 
-            expect(axios.delete).toHaveBeenCalledWith(`${mailListUrl}/m2`);
+            expect(axios.delete).toHaveBeenCalledWith(`${mailListUrl}/b`);
         });
 
         it('refuses to edit the list while the canvas holds unsaved changes', async () => {

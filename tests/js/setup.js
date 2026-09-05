@@ -78,9 +78,73 @@ function stubComponent(name) {
     return stubs.get(name);
 }
 
+/**
+ * `Listing` is the one component that cannot be a generic stub.
+ *
+ * The generic stub renders the default slot and nothing else, and a listing's
+ * whole content lives in named slots — `cell-<field>` per column,
+ * `prepended-row-actions` per row. Stubbed generically, every table in this
+ * addon renders as an empty div and every assertion about a row passes or fails
+ * for reasons that have nothing to do with the component under test.
+ *
+ * So this one mirrors the real component's structure closely enough to test
+ * against: a header cell per column, a row per item, a cell per column filled
+ * from the matching slot (falling back to the raw value, as core's TableField
+ * does), and one more cell holding the row menu. It deliberately does NOT sort,
+ * paginate or filter — that is core's code, not this addon's, and a stub that
+ * reimplemented it would be asserting against itself.
+ */
+const listingStub = defineComponent({
+    name: 'Listing',
+    inheritAttrs: false,
+    setup(_props, { attrs, slots }) {
+        return () => {
+            const items = Array.isArray(attrs.items) ? attrs.items : [];
+            const columns = (Array.isArray(attrs.columns) ? attrs.columns : [])
+                .map((column) => (typeof column === 'string' ? { field: column, label: column } : column));
+
+            const head = h('thead', [h('tr', columns.map((column) => h(
+                'th',
+                { key: column.field, 'data-column-head': column.field, 'data-sortable': String(column.sortable !== false) },
+                column.label ?? column.field,
+            )))]);
+
+            const body = h('tbody', items.map((row) => h('tr', { key: row.id, 'data-listing-row': String(row.id) }, [
+                ...columns.map((column) => {
+                    const slot = slots[`cell-${column.field}`];
+                    const value = row[column.value || column.field];
+
+                    return h(
+                        'td',
+                        { key: column.field, 'data-column': column.field },
+                        slot ? slot({ value, row }) : String(value ?? ''),
+                    );
+                }),
+                h('td', { 'data-row-actions': '' }, slots['prepended-row-actions']
+                    ? slots['prepended-row-actions']({ row })
+                    : null),
+            ])));
+
+            return h('div', {
+                'data-stub': 'Listing',
+                // The checkbox column is core's answer to `action-url`; a test
+                // asserting that a selection can do something needs to see
+                // whether one was offered at all.
+                'data-attr-action-url': attrs.actionUrl ?? attrs['action-url'] ?? '',
+            }, [h('table', [head, body])]);
+        };
+    },
+});
+
+const namedStubs = { Listing: listingStub };
+
 /** Anything asked of `__STATAMIC__.ui` is a component. */
 const componentBag = () => new Proxy({}, {
-    get: (_target, prop) => (typeof prop === 'string' ? stubComponent(prop) : undefined),
+    get: (_target, prop) => {
+        if (typeof prop !== 'string') return undefined;
+
+        return namedStubs[prop] ?? stubComponent(prop);
+    },
 });
 
 /** `inertia` mixes components (Head, Link) with plain helpers (router). */

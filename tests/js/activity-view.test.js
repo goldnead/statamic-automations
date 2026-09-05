@@ -167,14 +167,73 @@ describe('the activity view', () => {
         await flushPromises();
 
         const steps = panel.findAll('[data-activity-step]');
+        const rows = panel.findAll('[data-listing-row]');
 
         expect(steps).toHaveLength(3);
         // The order is the canvas order, taken from the same layout the canvas
         // uses rather than from a second traversal that could disagree.
         expect(steps.map((s) => s.attributes('data-activity-step'))).toEqual(['t', 'a', 'b']);
-        expect(steps[1].text()).toContain('80%');
-        expect(panel.find('[data-activity-step-detail="a"]').text())
-            .toBe('75 got through it · 5 failed here');
+
+        // Every figure the card list used to spell out in a sentence is a cell
+        // of its own now, which is the point of the table: they can be sorted
+        // on, and they line up down the column.
+        expect(rows[1].find('[data-column="share"]').text()).toBe('80%');
+        expect(rows[1].find('[data-column="reached"]').text()).toBe('80');
+        expect(rows[1].find('[data-column="completed"]').text()).toBe('75');
+        expect(rows[1].find('[data-column="failed"]').text()).toBe('5');
+        // reached − got through − failed, and nothing else carries it.
+        expect(panel.find('[data-activity-step-stuck="a"]').text()).toBe('0');
+    });
+
+    it('names every column, and offers each one to sort by', async () => {
+        // The complaint the table answers: a stack of cards has no headings and
+        // nothing to click, so "which step loses the most people" could only be
+        // read off by eye, row by row.
+        const panel = mountPanel({
+            activity: activity({ nodes: { t: { reached: 4, completed: 4, failed: 0 } } }),
+        });
+
+        await flushPromises();
+
+        const heads = panel.findAll('[data-column-head]');
+
+        expect(heads.map((h) => h.attributes('data-column-head')))
+            .toEqual(['position', 'label', 'reached', 'share', 'completed', 'failed', 'stuck']);
+        expect(heads.every((h) => h.attributes('data-sortable') === 'true')).toBe(true);
+    });
+
+    it('takes one step to the protocol beside it, filtered to that step', async () => {
+        // The row menu leads somewhere that already exists rather than
+        // restating the row.
+        const panel = mountPanel({
+            activity: activity({ nodes: { a: { reached: 4, completed: 4, failed: 0 } } }),
+        });
+
+        await flushPromises();
+
+        // The second row is node `a` — the one the figures above belong to.
+        const row = panel.findAll('[data-listing-row]')[1];
+        const items = row.findAll('[data-row-actions] [data-stub="DropdownItem"]');
+
+        expect(items.map((i) => i.attributes('data-attr-text')))
+            .toEqual(['Show in the log', 'Export this step']);
+
+        await items[0].trigger('click');
+
+        expect(panel.find('[data-activity-node-filter]').attributes('data-attr-model-value')).toBe('a');
+    });
+
+    it('offers no checkbox column, because a selection of steps could do nothing', async () => {
+        // Counted rows, not records. Statamic ties selections to an action
+        // endpoint; there is none here and inventing an empty one would be a
+        // checkbox that selects and then offers nothing.
+        const panel = mountPanel({
+            activity: activity({ nodes: { a: { reached: 4, completed: 4, failed: 0 } } }),
+        });
+
+        await flushPromises();
+
+        expect(panel.find('[data-stub="Listing"]').attributes('data-attr-action-url')).toBe('');
     });
 
     it('keeps a step whose node has been deleted, and says so', async () => {
@@ -195,7 +254,8 @@ describe('the activity view', () => {
         // funnel that loses a step it no longer recognises lies about where
         // people went.
         expect(steps.map((s) => s.attributes('data-activity-step'))).toEqual(['t', 'a', 'b', 'gone']);
-        expect(steps[3].text()).toContain('No longer in the flow');
+        expect(panel.findAll('[data-listing-row]')[3].find('[data-column="label"]').text())
+            .toContain('No longer in the flow');
     });
 
     it('re-asks the server when the window changes and tells the canvas', async () => {

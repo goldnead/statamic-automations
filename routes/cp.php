@@ -120,6 +120,15 @@ Route::prefix('automations')
                 ->name('automations.mail-list.store');
             Route::post('automations/{automationFlow}/mail-list/reorder', [MailListController::class, 'reorder'])
                 ->name('automations.mail-list.reorder');
+            // Statamic's action contract, so the mail table can have a checkbox
+            // column that does something: `/list` says what a selection may do,
+            // the bare route runs it. Declared BEFORE the `{nodeKey}` route
+            // below only for readability — that one is DELETE and these are
+            // POST, so they cannot shadow each other.
+            Route::post('automations/{automationFlow}/mail-list/actions/list', [MailListController::class, 'actionList'])
+                ->name('automations.mail-list.actions.list');
+            Route::post('automations/{automationFlow}/mail-list/actions', [MailListController::class, 'runAction'])
+                ->name('automations.mail-list.actions');
             Route::delete('automations/{automationFlow}/mail-list/{nodeKey}', [MailListController::class, 'destroy'])
                 ->where('nodeKey', '[A-Za-z0-9_.-]+')
                 ->name('automations.mail-list.destroy');

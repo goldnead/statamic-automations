@@ -74,6 +74,121 @@ class MailListController extends Controller
     }
 
     /**
+     * The actions a selection of mails may perform.
+     *
+     * This is the `POST {url}/list` half of Statamic's action contract — the
+     * Control Panel's `Listing` asks it whenever a checkbox is ticked or a row
+     * menu is opened, and hides the checkbox column entirely when no
+     * `action-url` is given. It is answered by hand rather than through
+     * `Statamic\Actions\Action`, because that base class is built around
+     * Statamic items (entries, terms, users) that can be looked up from a
+     * repository, and a mail is a node inside one automation's graph.
+     *
+     * An empty answer is a real answer: a branched flow has no editable list,
+     * and offering "delete" against it would produce a toolbar whose only
+     * button always fails.
+     */
+    public function actionList(Request $request, Automation $automationFlow): JsonResponse
+    {
+        $this->authorizeAction('view automations');
+
+        $selections = $this->selections($request);
+
+        // The projection's own verdict, not a second reading of the rule: the
+        // list on screen is editable exactly when it says so, and two callers
+        // asking the same question in two ways is how they come to disagree.
+        $editable = (bool) ($this->projection->forAutomation($automationFlow)['editable'] ?? false);
+
+        if ($selections === [] || ! $editable || ! $this->canEdit()) {
+            return response()->json([]);
+        }
+
+        return response()->json([[
+            'handle' => 'delete',
+            'title' => __('Delete mail'),
+            'icon' => 'trash',
+            'component' => null,
+            'runnable' => true,
+            'confirm' => true,
+            'dangerous' => true,
+            'buttonText' => __('Delete mail'),
+            // Two source strings rather than one with "(s)" in it: Statamic's
+            // action runner passes this through `__n`, which chooses between
+            // the halves of a `singular|plural` string — but only against its
+            // own JS dictionary, and this one is already translated by the time
+            // it gets there. So the choice is made here, where the count is.
+            'confirmationText' => count($selections) === 1
+                ? __('Delete this mail?')
+                : __('Delete :count mails?', ['count' => count($selections)]),
+            'warningText' => __('The waiting time in front of each one goes too. Anything else in that gap is kept and moves to the next mail.'),
+            'dirtyWarningText' => null,
+            'bypassesDirtyWarning' => false,
+            'requiresElevatedSession' => false,
+            'fields' => [],
+            'values' => [],
+            'meta' => [],
+            'context' => [],
+        ]]);
+    }
+
+    /**
+     * Run one action against a selection of mails.
+     *
+     * One snapshot for the whole selection, not one per mail: an editor who
+     * deletes three mails and then reverts means the three, and three
+     * consecutive versions would make them undo it three times.
+     */
+    public function runAction(Request $request, Automation $automationFlow): JsonResponse
+    {
+        $this->authorizeAction('edit automations');
+
+        $data = $request->validate([
+            'action' => ['required', 'string', 'in:delete'],
+            'selections' => ['required', 'array', 'min:1'],
+            'selections.*' => ['required', 'string'],
+        ]);
+
+        $keys = array_values(array_unique($data['selections']));
+
+        return $this->write(
+            $automationFlow,
+            'Removed mails from the list',
+            function () use ($automationFlow, $keys) {
+                $automation = $automationFlow;
+
+                foreach ($keys as $key) {
+                    $automation = $this->editor->remove($automation, $key);
+                }
+
+                return $automation;
+            },
+            count($keys) === 1
+                ? __('The mail was removed.')
+                : __(':count mails were removed.', ['count' => count($keys)]),
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function selections(Request $request): array
+    {
+        /** @var array<int, mixed> $raw */
+        $raw = $request->input('selections', []);
+
+        return array_values(array_filter(
+            array_map(fn ($value) => is_string($value) ? $value : null, is_array($raw) ? $raw : []),
+        ));
+    }
+
+    protected function canEdit(): bool
+    {
+        $user = auth()->user();
+
+        return $user !== null && (! method_exists($user, 'can') || $user->can('edit automations'));
+    }
+
+    /**
      * Snapshot, apply, and answer with the list as it now is.
      *
      * The refusal path is a 422 carrying the rule's own reasons, not a bare
@@ -82,8 +197,13 @@ class MailListController extends Controller
      * nothing files a bug.
      *
      * @param  callable(): Automation  $apply
+     * @param  string|null  $success  When given, the answer is `{message}` for
+     *                                Statamic's action runner, which shows it
+     *                                as a toast and then refreshes the listing.
+     *                                Without it the answer is the list itself,
+     *                                which is what the panel's own writes read.
      */
-    protected function write(Automation $automation, string $message, callable $apply): JsonResponse
+    protected function write(Automation $automation, string $message, callable $apply, ?string $success = null): JsonResponse
     {
         app(VersionManager::class)->snapshot($automation, $message);
 
@@ -94,6 +214,10 @@ class MailListController extends Controller
                 'message' => $e->getMessage(),
                 'list' => $this->projection->forAutomation($automation),
             ], 422);
+        }
+
+        if ($success !== null) {
+            return response()->json(['message' => $success]);
         }
 
         return response()->json($this->projection->forAutomation($automation));

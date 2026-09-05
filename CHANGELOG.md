@@ -1,5 +1,39 @@
 # Changelog
 
+## 2.15.0 (2026-09-05)
+
+### Geändert: Schritte und Mails sind jetzt Statamic-Tabellen
+
+Beide Ansichten waren gestapelte Karten mit selbst gebautem Innenleben: keine Spaltenköpfe,
+keine Sortierung, keine Mehrfachauswahl, kein „…"-Menü — und fünf Datensätze füllten den
+Bildschirm (F20, F22). Sie laufen jetzt über dieselbe `Listing`-Komponente wie die Reiter
+„Protokoll" und „Im Ablauf" daneben, in deren client-seitiger Betriebsart (`:items`): die
+Zahlen liegen ohnehin schon im Inertia-Payload, also braucht es dafür keine neue Route.
+
+- **Aktivität → Schritte** ist eine Tabelle aus sieben Spalten: Position, Schritt, Erreicht,
+  Anteil, Durchgekommen, Gescheitert, Nicht weiter. Was vorher als Satz unter dem Balken stand
+  („3 sind durchgekommen · 1 ist hier gescheitert"), ist damit sortierbar und untereinander
+  lesbar. Der blaue Fortschrittsbalken ist weg; die Prozentzahl, die er zeichnete, steht in
+  ihrer eigenen Spalte. Je Zeile ein „…"-Menü mit „Im Protokoll ansehen" (wechselt den Reiter
+  und setzt den Schritt-Filter) und „Diesen Schritt exportieren".
+- **Mails** ist eine Tabelle aus sechs Spalten: Position, Mail, Referenz, Versand, Bedingung,
+  Läuft dazwischen. Die Zähler stehen weiter als schmale Zeile darüber, aber ohne die vier
+  Farben — es sind Zahlen für die ganze Automatisierung, nicht für eine Zeile. Rot bleibt nur
+  „Fehlgeschlagen", und nur wenn es welche gibt.
+- **Mehrfachauswahl bei den Mails, mit echter Wirkung.** Neu:
+  `POST …/mail-list/actions/list` und `POST …/mail-list/actions` — Statamics Aktions-Vertrag.
+  Damit hat die Tabelle eine Auswahlspalte, und die Auswahl kann gelöscht werden, über
+  denselben `ChainEditor` und mit demselben Versions-Schnappschuss wie eine einzelne Mail.
+  Die Spalte erscheint nur, wenn die Liste auch geändert werden darf (gerader Ablauf, Recht
+  „Automatisierungen bearbeiten", keine ungespeicherten Leinwand-Änderungen).
+- **Hoch/Runter und Löschen sind ins „…"-Menü gewandert.** Kein Drag: Statamics Listing blendet
+  die Auswahlspalte aus, sobald `reorderable` an ist, und ein dauerhafter Tausch von
+  Mehrfachauswahl gegen Ziehen wäre für eine so kurze Liste die falsche Richtung.
+- **Bei den Schritten gibt es bewusst keine Auswahlspalte:** das sind gezählte Zeilen, keine
+  Datensätze, und es gibt nichts, was eine Auswahl von ihnen tun könnte.
+- Die Mails-Ansicht nutzt jetzt `max-w-page` wie jeder andere Listen-Bildschirm des Addons
+  statt einer eigenen Breite.
+
 ## 2.14.2 (2026-09-05)
 
 ### Behoben: Kopfzeile, Mails-Reiter, fremde Übersetzungsschlüssel

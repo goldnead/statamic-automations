@@ -237,3 +237,107 @@ it('never lets the trigger be reordered away', function (): void {
         ->and($automation->edges->where('to_node_key', 't')->count())->toBe(0)
         ->and($automation->edges->where('from_node_key', 't')->count())->toBe(1);
 });
+
+/**
+ * ── The action endpoint ───────────────────────────────────────────────────
+ *
+ * The mail table is a Statamic `Listing`, and Statamic ties its checkbox column
+ * to an action endpoint: no endpoint, no checkboxes. These two routes are that
+ * endpoint — `/actions/list` says what a selection may do, `/actions` runs it —
+ * so a multi-select in the CP deletes mails through the same ChainEditor as a
+ * single one, with the same version snapshot in front of it.
+ */
+it('offers a delete for a selection of mails', function (): void {
+    $automation = ($this->series)();
+
+    $response = $this->postJson(
+        cp_route('statamic-automations.api.automations.mail-list.actions.list', $automation),
+        ['selections' => ['m1', 'm2']],
+    );
+
+    $response->assertOk();
+
+    expect($response->json())->toHaveCount(1)
+        ->and($response->json('0.handle'))->toBe('delete')
+        ->and($response->json('0.dangerous'))->toBeTrue()
+        // Statamic's runner only asks before an action whose `confirm` is on,
+        // and a bulk delete that does not ask is the one this list must not be.
+        ->and($response->json('0.confirm'))->toBeTrue()
+        ->and($response->json('0.confirmationText'))->toContain('2');
+});
+
+it('offers no action at all against a list that cannot be edited', function (): void {
+    // A branched flow has no editable list, so a toolbar here would carry one
+    // button that always fails. An empty answer is the honest one.
+    $automation = ($this->series)();
+    $automation->nodes()->create(['node_key' => 'br', 'type' => 'branch', 'position_x' => 0, 'position_y' => 0, 'config' => []]);
+    $automation->edges()->create(['from_node_key' => 'br', 'to_node_key' => 'm1', 'from_output' => 'true']);
+    $automation->edges()->create(['from_node_key' => 'br', 'to_node_key' => 'm2', 'from_output' => 'false']);
+
+    $this->postJson(
+        cp_route('statamic-automations.api.automations.mail-list.actions.list', $automation->fresh(['nodes', 'edges'])),
+        ['selections' => ['m1']],
+    )->assertOk()->assertExactJson([]);
+});
+
+it('offers nothing for an empty selection', function (): void {
+    $this->postJson(
+        cp_route('statamic-automations.api.automations.mail-list.actions.list', ($this->series)()),
+        ['selections' => []],
+    )->assertOk()->assertExactJson([]);
+});
+
+it('deletes every selected mail, and the gap in front of each', function (): void {
+    $automation = ($this->series)();
+    $before = count(app(VersionManager::class)->versions($automation));
+
+    $response = $this->postJson(
+        cp_route('statamic-automations.api.automations.mail-list.actions', $automation),
+        ['action' => 'delete', 'selections' => ['m1', 'm3']],
+    );
+
+    $response->assertOk();
+    // Statamic's action runner shows `message` as the toast and then refreshes;
+    // returning the projection here would be shown as "Action completed".
+    expect($response->json('message'))->toContain('2');
+
+    $automation = $automation->fresh(['nodes', 'edges']);
+    $keys = $automation->nodes->pluck('node_key')->all();
+
+    expect($keys)->toContain('t')
+        ->and($keys)->toContain('m2')
+        ->and($keys)->not->toContain('m1')
+        ->and($keys)->not->toContain('m3')
+        // The five-day wait belonged to the mail that is gone and went with it.
+        ->and($keys)->not->toContain('d2')
+        // One snapshot for the whole selection, not one per mail: an editor who
+        // deletes two and reverts means the two.
+        ->and(count(app(VersionManager::class)->versions($automation)))->toBe($before + 1);
+});
+
+it('refuses an action from somebody without the edit permission', function (): void {
+    $automation = ($this->series)();
+
+    $plain = User::make()->email('action-reader@example.com');
+    $plain->save();
+
+    $this->actingAs($plain);
+
+    $this->postJson(
+        cp_route('statamic-automations.api.automations.mail-list.actions', $automation),
+        ['action' => 'delete', 'selections' => ['m1']],
+    )->assertStatus(403);
+
+    expect($automation->fresh(['nodes'])->nodes->pluck('node_key')->all())->toContain('m1');
+});
+
+it('runs no action it does not know', function (): void {
+    $automation = ($this->series)();
+
+    $this->postJson(
+        cp_route('statamic-automations.api.automations.mail-list.actions', $automation),
+        ['action' => 'publish', 'selections' => ['m1']],
+    )->assertStatus(422);
+
+    expect($automation->fresh(['nodes'])->nodes->pluck('node_key')->all())->toContain('m1');
+});
