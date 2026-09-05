@@ -109,6 +109,7 @@
     "Delete :count mails": ":count Mails löschen",
     "Delete “:label”?": "„:label“ löschen?",
     "Delete :count mails?": ":count Mails löschen?",
+    "After “:label”": "Nach „:label“",
     "Export :count steps": ":count Schritte exportieren",
     "The mail was removed.": "Die Mail wurde entfernt.",
     "The waiting time in front of each one goes too. Anything else in that gap is kept and moves to the next mail.": "Die Wartezeit davor geht jeweils mit. Alles andere in dieser Lücke bleibt und rückt zur nächsten Mail."

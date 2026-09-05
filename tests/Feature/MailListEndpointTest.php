@@ -435,7 +435,7 @@ it('names the one mail it is about to delete', function (): void {
 it('names it without the Antlers placeholders its subject carries', function (): void {
     // A subject is written against the contact a run will have; the Control
     // Panel has none, so there is nothing to resolve the placeholder against and
-    // it is cut instead. Every subject in `$this->series` is a fixed string,
+    // it is removed instead. Every subject in `$this->series` is a fixed string,
     // which is exactly why the defect survived that suite: it takes a subject
     // with `{{ }}` in it to see it at all.
     $automation = ($this->series)();
@@ -465,4 +465,32 @@ it('names it without the Antlers placeholders its subject carries', function ():
 
     expect($list->json('mails.1.label'))->toBe('Zahlung bestätigt, {{ contact.first_name }}')
         ->and($list->json('mails.1.display_label'))->toBe('Zahlung bestätigt');
+});
+
+it('still tells two mails apart that differ only after the placeholder', function (): void {
+    // The dialog names ONE mail because the reader may have opened the row menu
+    // on the wrong row. Two mails whose names differ only behind the placeholder
+    // must therefore still produce two different questions — a shortening that
+    // stopped at the first `{{` gave both of these the same one.
+    $automation = ($this->series)();
+
+    foreach ([
+        'm1' => 'Hallo {{ name }} Teil 2',
+        'm2' => 'Hallo {{ name }}, willkommen',
+    ] as $key => $subject) {
+        $automation->nodes()->where('node_key', $key)->first()->update([
+            'config' => ['subject' => $subject, 'to' => 'a@b.c', 'body' => 'x'],
+        ]);
+    }
+
+    $automation = $automation->fresh(['nodes', 'edges']);
+
+    $ask = fn (string $key) => $this->postJson(
+        cp_route('statamic-automations.api.automations.mail-list.actions.list', $automation),
+        ['selections' => [$key]],
+    )->json('0.confirmationText');
+
+    expect($ask('m1'))->toBe('Delete “Hallo Teil 2”?')
+        ->and($ask('m2'))->toBe('Delete “Hallo, willkommen”?')
+        ->and($ask('m1'))->not->toBe($ask('m2'));
 });

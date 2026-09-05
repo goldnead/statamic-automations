@@ -64,10 +64,18 @@ class MailSteps
      *
      * `label` is the stored value, placeholders and all — the column that shows
      * it is showing the mail's own subject, and an editor has to be able to see
-     * what it really says. `display_label` is that same line cut off at its
-     * first `{{`, and it is what belongs in a question like
+     * what it really says. `display_label` is that same line with its
+     * placeholders taken out, and it is what belongs in a question like
      * `Delete “…”?`: a subject template reads as a subject in a table cell and
      * as a defect in a sentence.
+     *
+     * The fallback chain when nothing readable survives runs through the node's
+     * own name before it gives up on the node key. That field exists for exactly
+     * this: the add form calls it "Name — Optional. Shown on the canvas and in
+     * this list, as long as the step has no subject." A mail called
+     * "Willkommensmail" whose subject is nothing but `{{ contact.first_name }}`
+     * has a perfectly good name; answering `mail_e71qdm` would be throwing it
+     * away.
      *
      * @return array{label: string, display_label: string, reference: string|null}
      */
@@ -77,6 +85,7 @@ class MailSteps
 
         $summary['display_label'] = $this->firstNonEmpty([
             self::withoutPlaceholders($summary['label']),
+            self::withoutPlaceholders(is_string($node->label) ? $node->label : ''),
             self::withoutPlaceholders((string) ($summary['reference'] ?? '')),
             $node->node_key,
         ]);
@@ -85,37 +94,75 @@ class MailSteps
     }
 
     /**
-     * A label with everything from its first `{{` onwards removed.
+     * A label with its Antlers placeholders taken out and the seam closed.
      *
-     * Cut, not resolved: a subject is written against the contact a run will
+     * Removed, not resolved: a subject is written against the contact a run will
      * eventually have, and the Control Panel has no such contact — there is no
-     * `AutomationContext` to hand {@see TokenResolver},
-     * and filling the gap with an invented name would put a sentence on screen
-     * that no reader will ever receive. What is left of the line is enough to
-     * recognise the mail by, which is all a confirmation dialog needs it for.
+     * `AutomationContext` to hand {@see TokenResolver}, and filling the gap with
+     * an invented name would put a sentence on screen that no reader will ever
+     * receive.
      *
-     * Whatever separator held the placeholder onto the sentence goes with it,
-     * so “Zahlung bestätigt, {{ contact.first_name }}” reads as
-     * “Zahlung bestätigt” rather than “Zahlung bestätigt,”. The trailing trim
-     * only ever runs on a line that really was cut; a label that ends in a
-     * question mark keeps it.
+     * **Every placeholder, not everything from the first one on.** Cutting at the
+     * first `{{` looks equivalent and is not: German subjects that open with the
+     * first name are ordinary, not an edge case, and cutting there leaves nothing
+     * at all. Worse, it makes the short form ambiguous — `Hallo {{ name }} Teil 2`
+     * and `Hallo {{ name }}, willkommen` both collapse to `Hallo`, so the
+     * confirmation dialog stops telling two mails apart, which is the one job the
+     * name has there.
+     *
+     *     Hallo {{ name }}, willkommen              → Hallo, willkommen
+     *     Hi {{ a }} und {{ b }} tschuess           → Hi und tschuess
+     *     Hallo {{ name }} Teil 2                   → Hallo Teil 2
+     *     {{ contact.first_name }} — dein Platz     → dein Platz
+     *     Newsletter {{if foo}}Ja{{/if}} Ende       → Newsletter Ja Ende
+     *     Tag {{ x }}: Teil 2                       → Tag: Teil 2
+     *     Betreff (für {{ x }})                     → Betreff (für)
+     *     Betreff ({{ campaign }})                  → Betreff
+     *
+     * The Antlers row is a deliberate choice: the tags go, the text between them
+     * stays. That is what the reader sees when the condition holds, it needs no
+     * knowledge of which tags open blocks, and it never invents words. Guessing
+     * that `Ja` belongs to a branch and dropping it would need an Antlers parser
+     * to be right and would be silently wrong whenever it is not.
+     *
+     * Closing marks are kept, only joiners and openers are trimmed off the seam:
+     * `„Zitat“ {{ x }}` keeps its closing quote, and `Betreff (für {{ x }})` keeps
+     * its bracket instead of ending on a lonely `(`. A full stop or question mark
+     * at the end is the author's, and stays.
      *
      * Returns an empty string when nothing readable is left — a label that is
      * only a placeholder has no short form, and the caller falls back.
      */
     public static function withoutPlaceholders(string $label): string
     {
-        $cut = mb_strpos($label, '{{');
-
-        if ($cut === false) {
+        if (! str_contains($label, '{{')) {
             return trim($label);
         }
 
-        return (string) preg_replace(
-            '/[\s,;:.\-–—\/|·•(\[{«»„“”"\']+$/u',
-            '',
-            mb_substr($label, 0, $cut),
-        );
+        // Every `{{ … }}`, non-greedy so two placeholders are two matches rather
+        // than one that swallows the words between them. `s` because a subject
+        // pasted from an editor can carry a newline inside the braces.
+        $text = (string) preg_replace('/\{\{.*?\}\}/su', '', $label);
+
+        // An unclosed `{{` never matched above and would otherwise reach the
+        // screen with its braces showing — the whole defect this method answers.
+        $text = (string) preg_replace('/\{\{.*$/su', '', $text);
+
+        // A bracket pair that held nothing but the placeholder is litter.
+        $text = (string) preg_replace('/\(\s*\)|\[\s*\]/u', '', $text);
+
+        // The space that used to sit in front of the placeholder now sits in
+        // front of the punctuation that followed it: "Tag : Teil 2".
+        $text = (string) preg_replace('/\s+(?=[,;:.!?)\]}])/u', '', $text);
+
+        $text = (string) preg_replace('/\s+/u', ' ', $text);
+
+        // Joiners and openers promise more text that is no longer there.
+        // Closers and sentence enders do not, so they stay.
+        $text = (string) preg_replace('/[\s,;:\-–—\/|&+·•(\[{„‚«‹]+$/u', '', $text);
+        $text = (string) preg_replace('/^[\s,;:\-–—\/|&+·•)\]}“”»›]+/u', '', $text);
+
+        return trim($text);
     }
 
     /**

@@ -1,5 +1,35 @@
 # Changelog
 
+## 2.15.4 (2026-09-05)
+
+### Behoben: die Kürzung aus 2.15.3 warf den Rest des Betreffs weg
+
+- **Jeder Platzhalter wird entfernt, nicht mehr am ersten abgeschnitten.** 2.15.3 schnitt
+  vor dem ersten `{{` — bei einem deutschen Betreff, der mit dem Vornamen anfängt, blieb
+  damit gar nichts übrig, und das ist kein Randfall. `Hallo {{ name }}, willkommen` heißt
+  jetzt `Hallo, willkommen` statt `Hallo`, `{{ contact.first_name }} — dein Platz im Kurs`
+  heißt `dein Platz im Kurs` statt des Node-Keys.
+- **Damit ist die Kurzform wieder eindeutig.** `Hallo {{ name }} Teil 2` und
+  `Hallo {{ name }}, willkommen` ergaben in 2.15.3 beide „Hallo" — zwei Mails, eine
+  Rückfrage. Der Name steht in der Rückfrage, weil der Leser das Menü auf der falschen
+  Zeile geöffnet haben kann; eine Kurzform, die zwei Zeilen gleich benennt, nimmt genau
+  das weg.
+- **Antlers-Blöcke:** die Tags gehen, der Text dazwischen bleibt
+  (`Newsletter {{if foo}}Ja{{/if}} Ende` → `Newsletter Ja Ende`). Das ist, was der Leser
+  sieht, wenn die Bedingung greift, und es braucht keinen Parser, um richtig zu sein.
+- **Nur Binde- und Öffnungszeichen werden an der Naht abgeschnitten, Schlusszeichen nicht.**
+  `„Zitat“ {{ x }}` behält sein schließendes Anführungszeichen, `Betreff (für {{ x }})`
+  behält die Klammer statt auf einem einsamen `(` zu enden, und ein Punkt oder Fragezeichen
+  am Ende gehört dem Autor und bleibt.
+- **Bleibt vom Betreff nichts, kommt jetzt der eigene Name des Schritts.** Das Feld „Name"
+  im Hinzufügen-Formular ist genau dafür da. Erst danach der Node-Key. Solange der Betreff
+  noch Worte trägt, gewinnt der Betreff — er ist die Zeile, die die Mail führt.
+- **Ein unvollständiges `{{` ohne schließende Klammern** erreicht den Schirm nicht mehr mit
+  sichtbaren Klammern.
+- **`After “:label”` hat eine deutsche Übersetzung** (`Nach „:label“`). Im deutschen CP
+  stand dort bisher englischer Text mit englischen Anführungszeichen, direkt neben dem
+  deutschen „…" löschen?.
+
 ## 2.15.3 (2026-09-05)
 
 ### Behoben: der rohe Antlers-Platzhalter stand in der Rückfrage vor dem Löschen

@@ -2,6 +2,7 @@
 
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Sequence\MailListProjection;
+use Goldnead\StatamicAutomations\Sequence\MailSteps;
 
 /**
  * The list of mails an automation sends.
@@ -186,14 +187,60 @@ it('produces an empty list rather than looping for ever on a cyclic graph', func
 });
 
 /**
+ * The shortening rule itself, without a graph around it.
+ *
+ * Every row here is a subject somebody could plausibly write. The ones that
+ * matter most are the ones where the placeholder is NOT at the end: a German
+ * subject that opens with the first name is ordinary, and the first version of
+ * this fix cut at the first `{{` and threw the rest of the line away.
+ */
+it('removes every placeholder from a name and closes the seam', function (string $stored, string $expected): void {
+    expect(MailSteps::withoutPlaceholders($stored))->toBe($expected);
+})->with([
+    // Nothing to do.
+    ['Zahlung bestätigt', 'Zahlung bestätigt'],
+    ['Schon fertig?', 'Schon fertig?'],
+    ['', ''],
+
+    // The reported case: the comma that held the placeholder onto the sentence
+    // goes with it, because "Zahlung bestätigt," reads as a truncation.
+    ['Zahlung bestätigt, {{ contact.first_name }}', 'Zahlung bestätigt'],
+
+    // A placeholder in the middle keeps both sides.
+    ['Hallo {{ name }}, willkommen', 'Hallo, willkommen'],
+    ['Hallo {{ name }} Teil 2', 'Hallo Teil 2'],
+    ['Tag {{ x }}: Teil 2', 'Tag: Teil 2'],
+    ['Hi {{ a }} und {{ b }} tschuess', 'Hi und tschuess'],
+
+    // A placeholder at the FRONT. Cutting at the first `{{` left nothing here.
+    ['{{ contact.first_name }} — dein Platz im Kurs', 'dein Platz im Kurs'],
+
+    // Antlers tags go, the text between them stays: that is what the reader sees
+    // when the condition holds, and it needs no parser to be right about.
+    ['Newsletter {{if foo}}Ja{{/if}} Ende', 'Newsletter Ja Ende'],
+
+    // Closing marks are the author's and stay; only joiners and openers are
+    // trimmed off the seam.
+    ['„Zitat“ {{ x }}', '„Zitat“'],
+    ['Betreff (für {{ x }})', 'Betreff (für)'],
+    ['Ende. {{ x }}', 'Ende.'],
+
+    // A bracket pair that held nothing but the placeholder is litter.
+    ['Betreff ({{ campaign }})', 'Betreff'],
+
+    // An unclosed `{{` is the whole defect wearing a typo — it must not reach
+    // the screen with its braces showing.
+    ['Hallo {{ name', 'Hallo'],
+
+    // Nothing readable left: the caller falls back, this returns empty.
+    ['{{ contact.first_name }}', ''],
+]);
+
+/**
  * A mail's stored name is a subject template, so it may carry Antlers
  * placeholders. The row shows the stored line; every sentence that quotes the
  * mail by name shows the short form, because there is no contact in the Control
  * Panel to resolve `{{ contact.first_name }}` against.
- *
- * Four shapes, and the middle two are the ones a fixed test string never sees:
- * a name with no placeholder at all, one that is nothing but a placeholder, one
- * with several, and an empty one.
  */
 it('carries a placeholder-free display name next to the stored one', function (): void {
     $automation = ($this->build)(
@@ -203,9 +250,23 @@ it('carries a placeholder-free display name next to the stored one', function ()
             'trailing' => ['type' => 'send_email', 'config' => ['subject' => 'Zahlung bestätigt, {{ contact.first_name }}']],
             'several' => ['type' => 'send_email', 'config' => ['subject' => 'Hallo {{ contact.first_name }} {{ contact.last_name }}, willkommen']],
             'only' => ['type' => 'send_email', 'config' => ['subject' => '{{ contact.first_name }}']],
+            'named' => [
+                'type' => 'send_email',
+                'label' => 'Willkommensmail',
+                'config' => ['subject' => '{{ contact.first_name }} {{ contact.last_name }}'],
+            ],
+            'nameless' => ['type' => 'send_email', 'config' => ['subject' => '{{ contact.first_name }} {{ contact.last_name }}']],
+            'subject_wins' => [
+                'type' => 'send_email',
+                'label' => 'Willkommensmail',
+                'config' => ['subject' => '{{ contact.first_name }}, willkommen im Kurs'],
+            ],
             'empty' => ['type' => 'send_email', 'config' => ['subject' => '']],
         ],
-        [['t', 'plain'], ['plain', 'trailing'], ['trailing', 'several'], ['several', 'only'], ['only', 'empty']],
+        [
+            ['t', 'plain'], ['plain', 'trailing'], ['trailing', 'several'], ['several', 'only'],
+            ['only', 'named'], ['named', 'nameless'], ['nameless', 'subject_wins'], ['subject_wins', 'empty'],
+        ],
     );
 
     $mails = collect($this->projection->forAutomation($automation)['mails'])->keyBy('node_key');
@@ -214,19 +275,33 @@ it('carries a placeholder-free display name next to the stored one', function ()
     expect($mails['plain']['display_label'])->toBe('Zahlung bestätigt')
         ->and($mails['plain']['label'])->toBe('Zahlung bestätigt');
 
-    // The reported case. The comma that held the placeholder onto the sentence
-    // goes with it — "Zahlung bestätigt," would read as a truncation.
     expect($mails['trailing']['display_label'])->toBe('Zahlung bestätigt')
         // The stored line is untouched: the column shows what the mail carries.
         ->and($mails['trailing']['label'])->toBe('Zahlung bestätigt, {{ contact.first_name }}');
 
-    // Several: cut at the FIRST one, not at the last. Everything after the
-    // first placeholder is written around a value nobody can see here.
-    expect($mails['several']['display_label'])->toBe('Hallo');
+    // Both placeholders go, the words around them stay.
+    expect($mails['several']['display_label'])->toBe('Hallo, willkommen');
 
-    // Nothing but a placeholder leaves nothing to show, so the node key stands
-    // in — a name a reader can at least match against the row they clicked.
+    // Nothing but a placeholder and no name of its own: the node key stands in,
+    // which a reader can at least match against the row they clicked.
     expect($mails['only']['display_label'])->toBe('only');
+
+    // A subject made of nothing but placeholders leaves nothing — and then the
+    // node's own name is the next-best answer, before the key. The add form
+    // offers that field for exactly this ("Optional. Shown on the canvas and in
+    // this list, as long as the step has no subject"), so spending it on a key
+    // like `mail_e71qdm` would be throwing a perfectly good name away.
+    expect($mails['named']['display_label'])->toBe('Willkommensmail')
+        ->and($mails['named']['label'])->toBe('{{ contact.first_name }} {{ contact.last_name }}');
+
+    // Its neighbour has the same subject and no name: that is what proves the
+    // name did it, and not the subject.
+    expect($mails['nameless']['display_label'])->toBe('nameless');
+
+    // The other way round, and this is the precedence on purpose: as soon as the
+    // subject still says something after the placeholders are gone, the subject
+    // wins. It is the line the mail actually carries; the name is the stand-in.
+    expect($mails['subject_wins']['display_label'])->toBe('willkommen im Kurs');
 
     // Empty was already handled before this change and stays handled.
     expect($mails['empty']['display_label'])->toBe('empty')
@@ -236,4 +311,28 @@ it('carries a placeholder-free display name next to the stored one', function ()
     foreach ($mails as $mail) {
         expect($mail['display_label'])->not->toContain('{{');
     }
+});
+
+/**
+ * Two mails that differ only inside the placeholder still differ afterwards.
+ *
+ * The confirmation dialog names one mail because the reader may have opened the
+ * row menu on the wrong row, and the name is the only thing that says so. A
+ * shortening that collapses two names into one takes that away — which is what
+ * cutting at the first `{{` did to exactly this pair.
+ */
+it('keeps two names apart that differ only after the placeholder', function (): void {
+    $automation = ($this->build)(
+        [
+            't' => ['type' => 'manual'],
+            'a' => ['type' => 'send_email', 'config' => ['subject' => 'Hallo {{ name }} Teil 2']],
+            'b' => ['type' => 'send_email', 'config' => ['subject' => 'Hallo {{ name }}, willkommen']],
+        ],
+        [['t', 'a'], ['a', 'b']],
+    );
+
+    $names = array_column($this->projection->forAutomation($automation)['mails'], 'display_label');
+
+    expect($names)->toBe(['Hallo Teil 2', 'Hallo, willkommen'])
+        ->and(array_unique($names))->toHaveCount(2);
 });
