@@ -104,16 +104,17 @@
              way round for a list this short. -->
         <Listing
             v-else
+            :key="sortToken"
             :items="rows"
             :columns="columns"
             :action-url="canMutate ? actionUrl : undefined"
+            v-model:sort-column="sortColumn"
             :allow-presets="false"
             :allow-search="false"
             :allow-customizing-columns="false"
             :show-pagination-totals="false"
             :show-pagination-page-links="false"
             :show-pagination-per-page-selector="false"
-            sort-column="position"
             sort-direction="asc"
             @refreshing="$emit('refresh')"
         >
@@ -140,9 +141,14 @@
                 <Badge v-if="row.disabled" :text="__('Disabled')" class="ms-1" />
             </template>
 
+            <!-- Every empty cell carries the size class its filled twin
+                 carries. Without it a column's type jumps between 14px and
+                 11.2px depending on whether that row happens to have a value —
+                 the default size wins wherever no class sets one, and an
+                 em dash is exactly such a place. -->
             <template #cell-reference="{ row }">
                 <code v-if="row.reference" class="text-xs text-gray-500">{{ row.reference }}</code>
-                <span v-else class="text-gray-500">—</span>
+                <span v-else class="text-xs text-gray-500">—</span>
             </template>
 
             <template #cell-delay="{ row }">
@@ -159,12 +165,12 @@
                     />
                     <span class="ms-1 text-2xs text-gray-600 dark:text-gray-400">{{ row.condition }}</span>
                 </template>
-                <span v-else class="text-gray-500">—</span>
+                <span v-else class="text-2xs text-gray-500">—</span>
             </template>
 
             <template #cell-also_runs="{ row }">
                 <span v-if="row.also_runs" class="text-2xs text-gray-500">{{ row.also_runs }}</span>
-                <span v-else class="text-gray-500">—</span>
+                <span v-else class="text-2xs text-gray-500">—</span>
             </template>
 
             <!-- Reading is always on, so "open" is here for everybody. The two
@@ -409,10 +415,32 @@ const columns = computed(() => [
 
 // ---------- Reordering ----------
 
+/**
+ * Which column the table is sorted by, and a token that puts it back.
+ *
+ * "Move up" moves a mail one place earlier in the AUTOMATION, which is the only
+ * thing moving a mail can mean. Under a table sorted by, say, "Sending", the
+ * row would then jump to a position the reader cannot predict, or not appear to
+ * move at all. Core avoids the question by turning sorting off while its
+ * reorder mode is on; this list has no such mode, so the move takes the sort
+ * with it and drops the table back into flow order.
+ *
+ * Remounting is how, and it is the same device the protocol tab uses for its
+ * filters: `Listing` seeds its sort from the prop once and never watches it
+ * again, so a changed prop reaches nothing. A new key does.
+ */
+const sortColumn = ref('position');
+const sortToken = ref(0);
+
 function move(index, delta) {
     const order = movedOrder(mails.value.map((mail) => mail.node_key), index, delta);
 
     if (! order) return;
+
+    if (sortColumn.value !== 'position') {
+        sortColumn.value = 'position';
+        sortToken.value += 1;
+    }
 
     emit('reorder', order);
 }

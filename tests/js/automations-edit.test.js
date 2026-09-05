@@ -314,9 +314,18 @@ describe('Automations/Edit', () => {
 
             const modal = editor.wrapper.findComponent({ name: 'ConfirmationModal' });
             expect(modal.exists()).toBe(true);
-            // It says what travels with the mail, because deleting one also
-            // deletes the waiting time in front of it.
-            expect(modal.attributes('data-attr-body-text')).toContain('“Two”');
+
+            // Word for word what the table's own delete says, in the same
+            // order. The strings are MailListController::actionList's
+            // `title`, `confirmationText` and `warningText`; the two paths were
+            // phrased differently until 2.15.1, and one act with two wordings
+            // reads as two acts.
+            expect(modal.attributes('data-attr-title')).toBe('Delete mail');
+            expect(modal.attributes('data-attr-button-text')).toBe('Delete mail');
+            expect(modal.attributes('data-attr-body-text')).toBe(
+                'Delete “Two”? The waiting time in front of each one goes too. '
+                + 'Anything else in that gap is kept and moves to the next mail.',
+            );
             expect(axios.delete).not.toHaveBeenCalled();
 
             axios.delete.mockResolvedValueOnce({ data: onGraph() });

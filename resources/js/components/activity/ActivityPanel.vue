@@ -111,16 +111,23 @@
                     </p>
                 </Card>
 
-                <!-- No `action-url`, and therefore deliberately no checkbox
-                     column: the steps are counted rows, not records, and there
-                     is nothing an addon could do to a selection of them. A
-                     checkbox that selects and then offers nothing is worse than
-                     no checkbox. -->
+                <!-- The checkbox column comes from `action-url`: Statamic ties
+                     the one to the other, and the action behind it is the
+                     export. Steps are counted rows rather than records, so
+                     there is nothing to delete or publish — but exporting the
+                     protocol of three chosen steps at once is the thing the row
+                     menu already does for one.
+                     `v-model:selections` is held here so a changed window can
+                     clear it: the rows are then a different set, and a
+                     selection carried across would name steps that are no
+                     longer on screen. -->
                 <Listing
                     v-else
                     :items="steps"
                     :columns="stepColumns"
-                    :allow-bulk-actions="false"
+                    :action-url="activity.stepActionsUrl"
+                    :action-context="stepActionContext"
+                    v-model:selections="stepSelections"
                     :allow-presets="false"
                     :allow-search="false"
                     :allow-customizing-columns="false"
@@ -163,20 +170,18 @@
                         <span class="text-2xs tabular-nums" :data-activity-step-stuck="row.node_key">{{ row.stuck }}</span>
                     </template>
 
-                    <!-- Both items lead somewhere that already exists: the
-                         protocol next door, filtered to this step, and the CSV
-                         the toolbar above builds. A row menu whose entries only
-                         restate the row would be decoration. -->
+                    <!-- One item, and it leads somewhere that already exists:
+                         the protocol next door, filtered to this step. The
+                         export is NOT here — it is the server action the
+                         `action-url` above serves, so it appears in this menu
+                         by itself, for this one row, and in the selection
+                         toolbar for several. Two entries that both export would
+                         be two code paths for one act. -->
                     <template #prepended-row-actions="{ row }">
                         <DropdownItem
                             icon="list-ul"
                             :text="__('Show in the log')"
                             @click="showStepInLog(row)"
-                        />
-                        <DropdownItem
-                            icon="download"
-                            :text="__('Export this step')"
-                            @click="exportCsv(row.node_key)"
                         />
                     </template>
                 </Listing>
@@ -560,6 +565,34 @@ const stepColumns = computed(() => [
 ]);
 
 /**
+ * The steps the reader has ticked, by node key.
+ *
+ * Held here rather than left inside `Listing`, for one reason: a changed window
+ * is a different set of rows, and a selection that survived it would name steps
+ * that are no longer on screen — and would still be sent to the export.
+ */
+const stepSelections = ref([]);
+
+watch(range, () => {
+    stepSelections.value = [];
+});
+
+/**
+ * What the export action is told about the table it was fired from.
+ *
+ * Statamic sends this with the `/list` request and hands back whatever the
+ * server echoes into the action's own `context`, which is what travels with the
+ * run. So the file gets the window, the outcome filter and the direction the
+ * table is showing — the alternative is a CSV that quietly covers a different
+ * period than the screen it was asked for from.
+ */
+const stepActionContext = computed(() => ({
+    range: range.value,
+    status: status.value || '',
+    order: sortDirection.value,
+}));
+
+/**
  * Take one step's rows to the protocol next door.
  *
  * The filter and the tab are the two halves of the same act: switching without
@@ -596,19 +629,14 @@ function formatDate(value) {
  * that payload is assembled in the browser, and copying it here would only add
  * a round trip and a memory copy of the whole log.
  */
-function exportCsv(nodeKey = null) {
+function exportCsv() {
     // The sort direction too, and not as a nicety: `Listing` remembers the
     // reader's choice under `preferences-prefix`, so somebody who once clicked
     // "When" ascending got every export from then on in the opposite order to
     // the table it came from — while the file claims to be that table.
     const params = new URLSearchParams({ range: range.value, order: sortDirection.value });
 
-    // The toolbar button is wired as `@click="exportCsv"`, so the first
-    // argument there is a MouseEvent, not a step. Anything that is not a
-    // string means "the whole protocol, as it is filtered".
-    const step = typeof nodeKey === 'string' && nodeKey ? nodeKey : node.value;
-
-    if (step) params.set('node', step);
+    if (node.value) params.set('node', node.value);
     if (status.value) params.set('status', status.value);
 
     window.open(`${props.activity.exportUrl}?${params.toString()}`, '_blank');

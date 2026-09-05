@@ -341,3 +341,93 @@ it('runs no action it does not know', function (): void {
 
     expect($automation->fresh(['nodes'])->nodes->pluck('node_key')->all())->toContain('m1');
 });
+
+it('offers nothing for a selection this list does not hold', function (): void {
+    // The client picks the ids, and the table it picked them from may be
+    // minutes old — a second tab, a colleague, an undo. Offering "delete"
+    // against a key that is gone produces a button guaranteed to fail.
+    $automation = ($this->series)();
+
+    $this->postJson(
+        cp_route('statamic-automations.api.automations.mail-list.actions.list', $automation),
+        ['selections' => ['m1', 'gone']],
+    )->assertOk()->assertExactJson([]);
+
+    // `d1` is a delay, not a mail. The list holds mails.
+    $this->postJson(
+        cp_route('statamic-automations.api.automations.mail-list.actions.list', $automation),
+        ['selections' => ['d1']],
+    )->assertOk()->assertExactJson([]);
+});
+
+it('writes no version for a delete it refuses', function (): void {
+    // The bug this pins: `write()` used to snapshot BEFORE applying, so a
+    // refused action left a "Removed mails from the list" version behind that
+    // removed nothing — and VersionManager prunes to 25, so enough of them push
+    // the real history out. `runAction` is the one write path where the client
+    // chooses a list of ids, which makes a stale selection the ordinary case.
+    $automation = ($this->series)();
+    $before = count(app(VersionManager::class)->versions($automation));
+
+    foreach ([['gone'], ['m1', 'gone'], ['d1'], ['t']] as $selections) {
+        $response = $this->postJson(
+            cp_route('statamic-automations.api.automations.mail-list.actions', $automation),
+            ['action' => 'delete', 'selections' => $selections],
+        );
+
+        $response->assertStatus(422);
+        expect($response->json('message'))->toContain('no mail with the key');
+        // The refusal carries the list as it still is, so the screen is
+        // corrected rather than only complained at.
+        expect($response->json('list.editable'))->toBeTrue();
+    }
+
+    expect(count(app(VersionManager::class)->versions($automation->fresh())))->toBe($before)
+        // …and nothing was removed either.
+        ->and($automation->fresh(['nodes'])->nodes->pluck('node_key')->all())
+        ->toContain('m1')->toContain('d1')->toContain('t');
+});
+
+it('writes no version for a delete against a branched automation', function (): void {
+    $automation = ($this->series)();
+    $automation->nodes()->create(['node_key' => 'br', 'type' => 'branch', 'position_x' => 0, 'position_y' => 0, 'config' => []]);
+    $automation->edges()->create(['from_node_key' => 'br', 'to_node_key' => 'm1', 'from_output' => 'true']);
+    $automation->edges()->create(['from_node_key' => 'br', 'to_node_key' => 'm2', 'from_output' => 'false']);
+    $automation = $automation->fresh(['nodes', 'edges']);
+
+    $before = count(app(VersionManager::class)->versions($automation));
+
+    $response = $this->postJson(
+        cp_route('statamic-automations.api.automations.mail-list.actions', $automation),
+        ['action' => 'delete', 'selections' => ['m1']],
+    );
+
+    $response->assertStatus(422);
+    expect($response->json('message'))->toContain('not a straight line')
+        ->and(count(app(VersionManager::class)->versions($automation->fresh())))->toBe($before);
+});
+
+it('names the one mail it is about to delete', function (): void {
+    // A reader can open the row menu on the wrong row, and the name is the only
+    // thing on the dialog that says so. Several at once are counted instead —
+    // there is no name that covers them.
+    $automation = ($this->series)();
+
+    $one = $this->postJson(
+        cp_route('statamic-automations.api.automations.mail-list.actions.list', $automation),
+        ['selections' => ['m2']],
+    );
+
+    expect($one->json('0.confirmationText'))->toContain('Two')
+        // `title` is what the floating toolbar prints on its button, so it is
+        // the string that has to count.
+        ->and($one->json('0.title'))->toBe('Delete mail');
+
+    $two = $this->postJson(
+        cp_route('statamic-automations.api.automations.mail-list.actions.list', $automation),
+        ['selections' => ['m1', 'm2']],
+    );
+
+    expect($two->json('0.title'))->toBe('Delete 2 mails')
+        ->and($two->json('0.buttonText'))->toBe('Delete 2 mails');
+});

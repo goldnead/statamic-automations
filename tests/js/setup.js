@@ -97,10 +97,25 @@ function stubComponent(name) {
 const listingStub = defineComponent({
     name: 'Listing',
     inheritAttrs: false,
-    setup(_props, { attrs, slots }) {
+    // Declared rather than read off `attrs`, so a test can inspect what the
+    // component under test handed in — `findComponent({ name: 'Listing' })
+    // .props('actionContext')`. The generic stub can only mirror scalars into
+    // the DOM, and half of what a listing is given is an array or an object.
+    props: {
+        items: { type: Array, default: () => [] },
+        columns: { type: Array, default: () => [] },
+        actionUrl: { type: String, default: null },
+        actionContext: { type: Object, default: null },
+        selections: { type: Array, default: null },
+        allowBulkActions: { type: Boolean, default: true },
+        reorderable: { type: Boolean, default: false },
+        sortColumn: { type: String, default: null },
+    },
+    emits: ['update:selections', 'update:sortColumn', 'refreshing'],
+    setup(props, { slots }) {
         return () => {
-            const items = Array.isArray(attrs.items) ? attrs.items : [];
-            const columns = (Array.isArray(attrs.columns) ? attrs.columns : [])
+            const items = Array.isArray(props.items) ? props.items : [];
+            const columns = (Array.isArray(props.columns) ? props.columns : [])
                 .map((column) => (typeof column === 'string' ? { field: column, label: column } : column));
 
             const head = h('thead', [h('tr', columns.map((column) => h(
@@ -125,12 +140,22 @@ const listingStub = defineComponent({
                     : null),
             ])));
 
+            // The three inputs core decides the checkbox column from, mirrored
+            // raw. The stub does NOT decide it — core's rule is
+            // `(selections || allowBulkActions && !!actionUrl) && !reorderable`,
+            // and a stub that reimplemented it would let a test pass against
+            // the stub's opinion rather than the component's. So a test asserts
+            // what was handed in, and the screenshot proves what came out.
+            //
+            // All three matter separately: "no checkbox column because there is
+            // no action endpoint" and "no checkbox column because bulk actions
+            // are switched off" are different claims, and only both together
+            // say which one a screen is making.
             return h('div', {
                 'data-stub': 'Listing',
-                // The checkbox column is core's answer to `action-url`; a test
-                // asserting that a selection can do something needs to see
-                // whether one was offered at all.
-                'data-attr-action-url': attrs.actionUrl ?? attrs['action-url'] ?? '',
+                'data-attr-action-url': props.actionUrl ?? '',
+                'data-attr-allow-bulk-actions': String(props.allowBulkActions),
+                'data-attr-reorderable': String(props.reorderable),
             }, [h('table', [head, body])]);
         };
     },

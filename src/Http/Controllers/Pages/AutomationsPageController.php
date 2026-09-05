@@ -189,6 +189,10 @@ class AutomationsPageController extends Controller
             'logUrl' => cp_route('statamic-automations.api.automations.activity.node-runs', $automation->id),
             'subjectsUrl' => cp_route('statamic-automations.api.automations.activity.subjects', $automation->id),
             'exportUrl' => cp_route('statamic-automations.api.automations.activity.export', $automation->id),
+            // What the steps table hands `Listing` as its `action-url`. Without
+            // it the table has no checkbox column at all — Statamic ties the
+            // one to the other.
+            'stepActionsUrl' => cp_route('statamic-automations.api.automations.activity.step-actions', $automation->id),
         ]);
     }
 

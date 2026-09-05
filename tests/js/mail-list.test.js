@@ -217,6 +217,28 @@ describe('MailListPanel', () => {
         expect(wrapper.emitted('refresh')).toHaveLength(1);
     });
 
+    it('puts the table back into flow order when a mail is moved', async () => {
+        // "Move up" moves a mail one place earlier in the AUTOMATION, which is
+        // the only thing it can mean. Under a table sorted by another column
+        // the row would appear to jump somewhere unpredictable, or not to move
+        // at all. Core sidesteps this by disabling sorting in its reorder mode;
+        // this list has none, so the move takes the sort with it.
+        const wrapper = mountPanel(linearList());
+        const before = wrapper.findComponent({ name: 'Listing' });
+
+        expect(before.props('sortColumn')).toBe('position');
+
+        before.vm.$emit('update:sortColumn', 'delay');
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.findComponent({ name: 'Listing' }).props('sortColumn')).toBe('delay');
+
+        await buttons(wrapper, 'arrow-down')[0].trigger('click');
+
+        expect(wrapper.emitted('reorder')).toEqual([[['m2', 'm1', 'm3']]]);
+        expect(wrapper.findComponent({ name: 'Listing' }).props('sortColumn')).toBe('position');
+    });
+
     it('opens the mail from the row menu as well as from its name', async () => {
         const wrapper = mountPanel(linearList());
         const items = wrapper.findAll('[data-listing-row]')[1]

@@ -1,5 +1,41 @@
 # Changelog
 
+## 2.15.1 (2026-09-05)
+
+### Behoben: Versionen für Löschungen, die nie stattfanden — und deutsche Serverstrings
+
+- **Eine abgelehnte Sammel-Löschung schrieb trotzdem eine Version.** `write()` legte den
+  Schnappschuss vor dem Versuch an, nicht nach dem Erfolg. `runAction` ist der einzige
+  Schreibweg, bei dem der Client eine Liste selbst gewählter IDs schickt — eine veraltete
+  Tabelle (zweiter Reiter, Kollege, Undo) ist dort der Normalfall, nicht die Ausnahme. Vier
+  abgelehnte Aufrufe hinterließen vier Einträge „Removed mails from the list", die nichts
+  entfernt hatten; die Historie behält nur 25, also verdrängen genug davon die echten.
+  Die Prüfung läuft jetzt **vor** dem Schnappschuss.
+- **`actionList` prüfte die Auswahl nicht.** Eine Auswahl mit einer ID, die es nicht gibt,
+  bekam „Mail löschen" angeboten — eine Aktion, deren Ausführung garantiert scheiterte.
+- **Serverseitiges `__()` erreichte das eigene Wörterbuch nicht.** Laravel merkt sich die
+  zusammengeführten JSON-Übersetzungen einer Sprache beim ersten Zugriff; ein Addon, das
+  seinen Pfad danach registriert, steht nicht drin. Gemessen im Playground: der Loader bot
+  1831 Schlüssel, der Übersetzer hielt 1725 — die fehlenden 106 waren genau die dieses
+  Addons. Unsichtbar blieb das, solange jede Zeichenkette im Browser ein zweites Mal
+  übersetzt wurde; sobald eine einen Wert trägt (`:count`), geht das nicht mehr, und der
+  Sammel-Knopf stand auf Englisch da. Der Merkzettel wird jetzt verworfen, nachdem der Pfad
+  registriert ist.
+- **Sammel-Knopf und Bestätigung zählen mit:** „2 Mails löschen" statt „Mail löschen", und
+  bei einer einzelnen wird sie benannt: „„Angekommen?" löschen?".
+- **Mehrfachauswahl auch bei den Schritten** (F20 ist damit bei vier von vier). Die Aktion
+  dahinter ist der Sammel-Export: `node` nimmt jetzt eine Liste an, und die neuen Routen
+  `POST …/activity/steps/actions{,/list}` liefern die CSV der ausgewählten Schritte. Der
+  Einzel-Export ist aus dem Zeilenmenü in dieselbe Aktion gewandert — ein Codeweg statt zwei.
+- **Verschieben stellt die Sortierung zurück.** Wer die Mails nach „Versand" sortierte und
+  dann „Nach oben" wählte, sah die Zeile scheinbar willkürlich springen: verschoben wird die
+  Ablaufposition, sortiert war nach etwas anderem. Die Bewegung setzt die Tabelle jetzt auf
+  „Position" zurück.
+- **Ein Löschen, ein Wortlaut.** Aus der Tabelle und aus der geöffneten Mail kam dieselbe Tat
+  mit zwei Formulierungen. Beide sagen jetzt wörtlich dasselbe.
+- Leere Zellen tragen die Schriftgröße ihrer Spalte; vorher sprang die Schrift innerhalb einer
+  Spalte zwischen 14px und 11.2px, je nachdem ob die Zeile einen Wert hatte.
+
 ## 2.15.0 (2026-09-05)
 
 ### Geändert: Schritte und Mails sind jetzt Statamic-Tabellen

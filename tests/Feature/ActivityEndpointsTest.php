@@ -394,3 +394,114 @@ it('counts the runs with nobody attached the same way, whatever window is chosen
 
     expect($overview['without_subject'])->toBe(1);
 });
+
+// ── The steps table's actions ────────────────────────────────────────────────
+//
+// Statamic ties a listing's checkbox column to an action endpoint. The steps
+// are counted rows rather than records, so there is nothing to delete — but
+// exporting the protocol of three chosen steps at once is exactly the thing the
+// row menu already does for one, and that is what makes the column honest.
+
+it('filters the protocol by several steps at once', function (): void {
+    // The change under this: `node` used to be read as a single string, so a
+    // selection could never reach the query.
+    $run = ($this->run)();
+    ($this->step)($run, 'trigger');
+    ($this->step)($run, 'welcome');
+
+    $one = $this->getJson(($this->url)('node-runs', ['node' => 'welcome']))->assertOk()->json('data');
+    $both = $this->getJson(($this->url)('node-runs', ['node' => ['welcome', 'trigger']]))->assertOk()->json('data');
+
+    expect($one)->toHaveCount(1)
+        ->and($both)->toHaveCount(2);
+});
+
+it('offers an export for a selection of steps, and counts it', function (): void {
+    ($this->step)(($this->run)(), 'welcome');
+
+    $url = cp_route('statamic-automations.api.automations.activity.step-actions.list', $this->automation->id);
+
+    $one = $this->postJson($url, ['selections' => ['welcome']])->assertOk();
+
+    expect($one->json())->toHaveCount(1)
+        ->and($one->json('0.handle'))->toBe('export')
+        // An export changes nothing, so it asks nothing. A confirmation in
+        // front of a read would be the only one in the Control Panel.
+        ->and($one->json('0.confirm'))->toBeFalse()
+        ->and($one->json('0.title'))->toBe('Export this step');
+
+    $two = $this->postJson($url, ['selections' => ['welcome', 'trigger']])->assertOk();
+
+    expect($two->json('0.title'))->toBe('Export 2 steps');
+});
+
+it('offers no step action for an empty or unknown selection', function (): void {
+    $url = cp_route('statamic-automations.api.automations.activity.step-actions.list', $this->automation->id);
+
+    $this->postJson($url, ['selections' => []])->assertOk()->assertExactJson([]);
+    // A step this automation has never had is a stale table; an export against
+    // it could only produce an empty file that looks like a working one.
+    $this->postJson($url, ['selections' => ['welcome', 'nie-dagewesen']])->assertOk()->assertExactJson([]);
+});
+
+it('exports the protocol of exactly the selected steps, as a file', function (): void {
+    $run = ($this->run)(['subject_key' => 'jane@example.com']);
+    ($this->step)($run, 'trigger');
+    ($this->step)($run, 'welcome');
+
+    $response = $this->post(
+        cp_route('statamic-automations.api.automations.activity.step-actions', $this->automation->id),
+        [
+            'action' => 'export',
+            'selections' => ['welcome'],
+            'context' => ['range' => '30', 'status' => '', 'order' => 'desc'],
+        ],
+    );
+
+    $response->assertOk();
+    // Statamic's action runner asks for a blob and hands anything carrying a
+    // Content-Disposition straight to the browser as a download. Without this
+    // header the CSV would be parsed as a JSON action result and vanish.
+    $response->assertHeader('content-type', 'text/csv; charset=UTF-8');
+    expect($response->headers->get('content-disposition'))->toContain('attachment');
+
+    $rows = array_map(
+        fn (string $line) => str_getcsv($line, escape: ''),
+        array_filter(explode("\n", trim(ltrim($response->streamedContent(), "\xEF\xBB\xBF")))),
+    );
+    array_shift($rows);
+
+    expect(array_column($rows, 1))->toBe(['Welcome']);
+});
+
+it('keeps a step whose node is gone exportable', function (): void {
+    // The table lists it under "No longer in the flow", so the selection has to
+    // reach it too — otherwise the row offers an action the server refuses.
+    ($this->step)(($this->run)(), 'geloescht');
+
+    $this->postJson(
+        cp_route('statamic-automations.api.automations.activity.step-actions.list', $this->automation->id),
+        ['selections' => ['geloescht']],
+    )->assertOk()->assertJsonCount(1);
+});
+
+it('refuses the step actions to somebody who may not read runs', function (): void {
+    $role = Role::make('no-runs')->addPermission('access cp')->addPermission('view automations');
+    $role->save();
+
+    $plain = User::make()->email('steps@example.com');
+    $plain->assignRole($role);
+    $plain->save();
+
+    $this->actingAs($plain);
+
+    $this->postJson(
+        cp_route('statamic-automations.api.automations.activity.step-actions.list', $this->automation->id),
+        ['selections' => ['welcome']],
+    )->assertForbidden();
+
+    $this->postJson(
+        cp_route('statamic-automations.api.automations.activity.step-actions', $this->automation->id),
+        ['action' => 'export', 'selections' => ['welcome']],
+    )->assertForbidden();
+});

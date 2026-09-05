@@ -131,6 +131,36 @@ it('translates the source strings its own screens actually pass to __()', functi
     }
 });
 
+it('reaches its own dictionary from PHP and not only from the browser', function (): void {
+    // Until 2.15.1 it did not, and nothing noticed: every string the server
+    // produced was handed to the Control Panel and translated a SECOND time in
+    // the browser, where the dictionary is complete. A string that carries a
+    // value cannot survive that route — `__('Delete :count mails', [...])`
+    // substitutes here, so what arrives is no longer a key the browser can look
+    // up, and the screen reads English.
+    //
+    // The cause is a memo: Laravel merges a locale's JSON files once, on first
+    // use, and `loadJsonTranslationsFrom()` from a provider that boots after
+    // that first use never reaches it. See
+    // ServiceProvider::makeJsonTranslationsReachable.
+    //
+    // Honest about its own reach: this pins the PROPERTY, not the mechanism.
+    // Testbench boots nothing that translates before this addon's provider, so
+    // the memo is never stale here and this passes with the fix removed. It was
+    // measured on a real install (studio playground, 05.09.2026: loader 1831
+    // keys, translator 1725) and only a real install can fail it.
+    app()->setLocale('de');
+
+    expect(__('Steps'))->toBe('Schritte')
+        ->and(__('Delete :count mails', ['count' => 2]))->toBe('2 Mails löschen')
+        ->and(__('Export :count steps', ['count' => 3]))->toBe('3 Schritte exportieren')
+        // And the neighbours are still theirs — dropping the memo re-reads
+        // every path in its registered order, it does not reorder them.
+        ->and(__('Step'))->toBe('Schritt');
+
+    app()->setLocale('en');
+});
+
 /**
  * Every `__('…')` source string this addon's own code passes.
  *

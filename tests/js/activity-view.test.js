@@ -215,25 +215,85 @@ describe('the activity view', () => {
         const row = panel.findAll('[data-listing-row]')[1];
         const items = row.findAll('[data-row-actions] [data-stub="DropdownItem"]');
 
+        // Only the log item is prepended. The export is the server action the
+        // `action-url` serves, so core puts it in this same menu for one row
+        // and in the selection toolbar for several — one code path, not two
+        // entries that both export.
         expect(items.map((i) => i.attributes('data-attr-text')))
-            .toEqual(['Show in the log', 'Export this step']);
+            .toEqual(['Show in the log']);
 
         await items[0].trigger('click');
 
         expect(panel.find('[data-activity-node-filter]').attributes('data-attr-model-value')).toBe('a');
     });
 
-    it('offers no checkbox column, because a selection of steps could do nothing', async () => {
-        // Counted rows, not records. Statamic ties selections to an action
-        // endpoint; there is none here and inventing an empty one would be a
-        // checkbox that selects and then offers nothing.
+    it('gives the steps table an action endpoint, which is what puts checkboxes on it', async () => {
+        // Statamic's rule is `(selections || allowBulkActions && actionUrl) &&
+        // !reorderable`. All three inputs are asserted, because "no checkbox
+        // column" has two different causes and they are not the same claim.
         const panel = mountPanel({
-            activity: activity({ nodes: { a: { reached: 4, completed: 4, failed: 0 } } }),
+            activity: activity({
+                nodes: { a: { reached: 4, completed: 4, failed: 0 } },
+                stepActionsUrl: '/cp/automations/api/automations/3/activity/steps/actions',
+            }),
         });
 
         await flushPromises();
 
-        expect(panel.find('[data-stub="Listing"]').attributes('data-attr-action-url')).toBe('');
+        const listing = panel.find('[data-stub="Listing"]');
+
+        expect(listing.attributes('data-attr-action-url'))
+            .toBe('/cp/automations/api/automations/3/activity/steps/actions');
+        expect(listing.attributes('data-attr-allow-bulk-actions')).toBe('true');
+        expect(listing.attributes('data-attr-reorderable')).toBe('false');
+    });
+
+    it('tells the export which window and which outcome the table is showing', async () => {
+        // The action runner sends the action's own `context`, not the
+        // listing's, so the server echoes this back and the file covers the
+        // period the screen does. A CSV that quietly spans another period than
+        // the table it was asked for from is the failure this prevents.
+        const panel = mountPanel({
+            activity: activity({
+                range: '7',
+                nodes: { a: { reached: 4, completed: 4, failed: 0 } },
+                stepActionsUrl: '/x/actions',
+            }),
+        });
+
+        await flushPromises();
+
+        expect(panel.findComponent({ name: 'Listing' }).props('actionContext'))
+            .toEqual({ range: '7', status: '', order: 'desc' });
+    });
+
+    it('drops the selection when the window changes', async () => {
+        // A changed window is a different set of rows. A selection carried
+        // across it would name steps that are no longer on screen — and would
+        // still be sent to the export.
+        axios.get.mockResolvedValueOnce({
+            data: { range: '7', funnel: {}, nodes: { a: { reached: 1, completed: 1, failed: 0 } }, without_subject: 0 },
+        });
+
+        const panel = mountPanel({
+            activity: activity({
+                nodes: { a: { reached: 4, completed: 4, failed: 0 } },
+                stepActionsUrl: '/x/actions',
+            }),
+        });
+
+        await flushPromises();
+
+        const listing = panel.findComponent({ name: 'Listing' });
+        listing.vm.$emit('update:selections', ['a']);
+        await flushPromises();
+
+        expect(listing.props('selections')).toEqual(['a']);
+
+        await panel.findComponent({ name: 'Select' }).vm.$emit('update:modelValue', '7');
+        await flushPromises();
+
+        expect(panel.findComponent({ name: 'Listing' }).props('selections')).toEqual([]);
     });
 
     it('keeps a step whose node has been deleted, and says so', async () => {

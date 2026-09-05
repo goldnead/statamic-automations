@@ -374,8 +374,12 @@ class ActivityController extends Controller
 
         $window->apply($query);
 
-        if (is_string($node = $request->query('node')) && $node !== '') {
-            $query->where('node_key', $node);
+        // One step or several. The protocol's own filter sends a single handle;
+        // the steps table's export action sends the selection, which is a list.
+        // `whereIn` covers both, so there is one filter rather than two that
+        // could come to disagree about what "no filter" means.
+        if (($nodes = $this->nodeFilter($request)) !== []) {
+            $query->whereIn('node_key', $nodes);
         }
 
         if (is_string($status = $request->query('status')) && $status !== '') {
@@ -402,6 +406,162 @@ class ActivityController extends Controller
     private function ascending(Request $request): bool
     {
         return strtolower((string) $request->query('order', 'desc')) === 'asc';
+    }
+
+    /**
+     * The `node` parameter, as a list either way.
+     *
+     * @return list<string>
+     */
+    private function nodeFilter(Request $request): array
+    {
+        $node = $request->query('node');
+
+        if (is_string($node)) {
+            return $node === '' ? [] : [$node];
+        }
+
+        if (! is_array($node)) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            array_map(fn ($value) => is_string($value) ? $value : null, $node),
+            fn (?string $value) => $value !== null && $value !== '',
+        ));
+    }
+
+    /**
+     * ── The steps table's actions ─────────────────────────────────────────
+     *
+     * Statamic's `Listing` ties its checkbox column to an action endpoint: no
+     * endpoint, no checkboxes. The steps of an automation are counted rows
+     * rather than records, so there is nothing to delete or publish — but there
+     * is one thing a reader plainly wants to do with three of them at once, and
+     * it is the thing the row menu already offers for one: export the protocol
+     * of exactly those steps.
+     *
+     * The answer to the run is a CSV, not JSON. Statamic's action runner asks
+     * for a blob and hands anything carrying a `Content-Disposition` straight to
+     * the browser as a download, so a file is a legitimate result of an action.
+     *
+     * @return list<string>
+     */
+    private function knownNodeKeys(Automation $automation): array
+    {
+        $onCanvas = $automation->nodes->pluck('node_key')->all();
+
+        // A step whose node has since been deleted still has runs, and the
+        // table still lists it — so it is still exportable. The panel appends
+        // exactly these rows under "No longer in the flow".
+        $withRuns = AutomationNodeRun::query()
+            ->where('automation_uuid', (string) $automation->uuid)
+            ->where('is_test', false)
+            ->distinct()
+            ->pluck('node_key')
+            ->all();
+
+        return array_values(array_unique(array_map('strval', [...$onCanvas, ...$withRuns])));
+    }
+
+    public function stepActionList(Request $request, Automation $automationFlow): JsonResponse
+    {
+        $this->authorizeAction('view automation runs');
+
+        $selections = $this->stepSelections($request);
+
+        // A selection naming a step this automation has never had is a stale
+        // table, and an action offered against it could only produce an empty
+        // file that looks like a working one.
+        if ($selections === [] || array_diff($selections, $this->knownNodeKeys($automationFlow)) !== []) {
+            return response()->json([]);
+        }
+
+        $count = count($selections);
+
+        return response()->json([[
+            'handle' => 'export',
+            'title' => $count === 1 ? __('Export this step') : __('Export :count steps', ['count' => $count]),
+            'icon' => 'download',
+            'component' => null,
+            'runnable' => true,
+            // No confirmation: an export changes nothing, and a dialog in front
+            // of it would be the only one in the Control Panel that guards a
+            // read.
+            'confirm' => false,
+            'dangerous' => false,
+            'buttonText' => $count === 1 ? __('Export this step') : __('Export :count steps', ['count' => $count]),
+            'confirmationText' => null,
+            'warningText' => null,
+            'dirtyWarningText' => null,
+            'bypassesDirtyWarning' => true,
+            'requiresElevatedSession' => false,
+            'fields' => [],
+            'values' => [],
+            'meta' => [],
+            // Echoed back, because the runner sends the action's own `context`
+            // with the run and not the listing's. The window and the outcome
+            // filter belong to the file the same way they belong to the table.
+            'context' => $this->exportContext($request),
+        ]]);
+    }
+
+    public function runStepAction(Request $request, Automation $automationFlow): StreamedResponse
+    {
+        $this->authorizeAction('view automation runs');
+
+        $data = $request->validate([
+            'action' => ['required', 'string', 'in:export'],
+            'selections' => ['required', 'array', 'min:1'],
+            'selections.*' => ['required', 'string'],
+        ]);
+
+        $context = $this->exportContext($request, 'context');
+
+        // The export reads its parameters off the query string, because that is
+        // what a GET download is. Rather than teaching it a second source, the
+        // action builds the request that export already understands — one code
+        // path for the file, whichever door it was asked for through.
+        $proxy = Request::create('', 'GET', [
+            ...$context,
+            'node' => array_values(array_unique($data['selections'])),
+        ]);
+
+        return $this->export($proxy, $automationFlow);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function stepSelections(Request $request): array
+    {
+        /** @var mixed $raw */
+        $raw = $request->input('selections', []);
+
+        return array_values(array_filter(
+            array_map(fn ($value) => is_string($value) ? $value : null, is_array($raw) ? $raw : []),
+            fn (?string $value) => $value !== null && $value !== '',
+        ));
+    }
+
+    /**
+     * @return array{range: string, status: string, order: string}
+     */
+    private function exportContext(Request $request, string $key = 'context'): array
+    {
+        /** @var array<string, mixed> $raw */
+        $raw = is_array($context = $request->input($key)) ? $context : [];
+
+        // The window falls back to the panel's own default rather than to an
+        // empty string: `ActivityWindow::make('')` is "everything there is", so
+        // a missing context would silently export more than the table shows.
+        $range = is_string($raw['range'] ?? null) && $raw['range'] !== '' ? $raw['range'] : ActivityWindow::DEFAULT;
+
+        return [
+            'range' => $range,
+            'status' => is_string($raw['status'] ?? null) ? $raw['status'] : '',
+            'order' => is_string($raw['order'] ?? null) ? $raw['order'] : 'desc',
+        ];
     }
 
     /**

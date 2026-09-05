@@ -118,6 +118,7 @@ use Illuminate\Contracts\Foundation\CachesRoutes;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Translation\Translator;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\Permission;
 use Statamic\Providers\AddonServiceProvider;
@@ -276,6 +277,7 @@ class ServiceProvider extends AddonServiceProvider
         // keine eigenen Blade-Ansichten mit.
         $this->loadViewsFrom(__DIR__.'/../resources/views', 'statamic-automations');
         $this->loadJsonTranslationsFrom(__DIR__.'/../resources/lang');
+        $this->makeJsonTranslationsReachable();
 
         $this->publishes([
             __DIR__.'/../resources/lang' => $this->app->langPath('vendor/statamic-automations'),
@@ -356,6 +358,47 @@ class ServiceProvider extends AddonServiceProvider
      * `require` — wer nur dieses Addon installiert, soll kein Analytics-Paket
      * mitgeschleppt bekommen.
      */
+    /**
+     * Make the JSON dictionary this addon just registered reachable from PHP.
+     *
+     * `loadJsonTranslationsFrom()` appends a directory to the file loader, but
+     * Laravel's translator memoises a whole locale's merged JSON the first time
+     * anything asks for a string — under `loaded['*']['*'][$locale]`, once. If
+     * something translated before this provider booted, and in a Statamic
+     * install something always has, that memo was built without this addon's
+     * file and is never rebuilt. Measured on the studio playground 05.09.2026:
+     * the loader offered 1831 keys, the translator held 1725 — the missing 106
+     * were exactly this addon's, and `__('Steps')` answered "Steps" while
+     * `__('Step')`, which statamic/cms owns, answered "Schritt".
+     *
+     * It stayed invisible for as long as every string the server produced was
+     * handed to the Control Panel and translated a second time in the browser,
+     * where the dictionary is complete. It stops being invisible the moment a
+     * string carries a value: `__('Delete :count mails', ['count' => 2])`
+     * substitutes on this side, so the result is no longer a key the browser
+     * can look up, and the screen reads English.
+     *
+     * Dropping the memo is the whole fix. Groups are re-read lazily and the
+     * merge order is unchanged, so what comes back is what Laravel would have
+     * produced had nothing been cached early — for the siblings as well as for
+     * this addon.
+     */
+    protected function makeJsonTranslationsReachable(): void
+    {
+        // Nothing has asked for a translation yet, so there is no stale memo to
+        // drop — and resolving the translator here just to clear it would be
+        // this addon deciding when the container instantiates it.
+        if (! $this->app->resolved('translator')) {
+            return;
+        }
+
+        $translator = $this->app->make('translator');
+
+        if ($translator instanceof Translator) {
+            $translator->setLoaded([]);
+        }
+    }
+
     protected function registerInsightsMetrics(): void
     {
         $this->app->booted(function (): void {

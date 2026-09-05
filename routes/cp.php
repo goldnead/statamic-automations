@@ -155,6 +155,13 @@ Route::prefix('automations')
                 ->name('automations.activity.export');
             Route::get('automations/{automationFlow}/activity/subjects', [ActivityController::class, 'subjects'])
                 ->name('automations.activity.subjects');
+            // Statamic's action contract for the steps table, so its checkbox
+            // column has something to do: `/list` says what a selection may do,
+            // the bare route runs it and answers with the CSV.
+            Route::post('automations/{automationFlow}/activity/steps/actions/list', [ActivityController::class, 'stepActionList'])
+                ->name('automations.activity.step-actions.list');
+            Route::post('automations/{automationFlow}/activity/steps/actions', [ActivityController::class, 'runStepAction'])
+                ->name('automations.activity.step-actions');
 
             // Node / trigger / action metadata
             Route::get('nodes', [NodesController::class, 'index'])->name('nodes.index');

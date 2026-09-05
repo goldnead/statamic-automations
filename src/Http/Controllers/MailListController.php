@@ -84,42 +84,55 @@ class MailListController extends Controller
      * Statamic items (entries, terms, users) that can be looked up from a
      * repository, and a mail is a node inside one automation's graph.
      *
-     * An empty answer is a real answer: a branched flow has no editable list,
-     * and offering "delete" against it would produce a toolbar whose only
-     * button always fails.
+     * An empty answer is a real answer, and it is given for three reasons: a
+     * branched flow has no editable list, a reader may not change one, and a
+     * selection that names something this list does not hold is a stale table
+     * — a second tab, a colleague, an undo. Offering "delete" in any of those
+     * cases produces a toolbar whose only button is guaranteed to fail.
      */
     public function actionList(Request $request, Automation $automationFlow): JsonResponse
     {
         $this->authorizeAction('view automations');
 
         $selections = $this->selections($request);
+        $mails = $this->editableMails($automationFlow);
 
-        // The projection's own verdict, not a second reading of the rule: the
-        // list on screen is editable exactly when it says so, and two callers
-        // asking the same question in two ways is how they come to disagree.
-        $editable = (bool) ($this->projection->forAutomation($automationFlow)['editable'] ?? false);
-
-        if ($selections === [] || ! $editable || ! $this->canEdit()) {
+        if ($selections === [] || $mails === null || ! $this->canEdit()) {
             return response()->json([]);
         }
 
+        // Every selected key has to be a mail this list currently holds. The
+        // client picks the ids, and the table it picked them from may be
+        // minutes old.
+        if (array_diff($selections, array_column($mails, 'node_key')) !== []) {
+            return response()->json([]);
+        }
+
+        $count = count($selections);
+
         return response()->json([[
             'handle' => 'delete',
-            'title' => __('Delete mail'),
+            // `title` is what the floating toolbar prints on its button, so it
+            // is the string that has to count. `buttonText` is the confirmation
+            // dialog's run button and counts for the same reason.
+            'title' => $count === 1 ? __('Delete mail') : __('Delete :count mails', ['count' => $count]),
             'icon' => 'trash',
             'component' => null,
             'runnable' => true,
             'confirm' => true,
             'dangerous' => true,
-            'buttonText' => __('Delete mail'),
+            'buttonText' => $count === 1 ? __('Delete mail') : __('Delete :count mails', ['count' => $count]),
             // Two source strings rather than one with "(s)" in it: Statamic's
-            // action runner passes this through `__n`, which chooses between
+            // action runner passes these through `__n`, which chooses between
             // the halves of a `singular|plural` string — but only against its
-            // own JS dictionary, and this one is already translated by the time
-            // it gets there. So the choice is made here, where the count is.
-            'confirmationText' => count($selections) === 1
-                ? __('Delete this mail?')
-                : __('Delete :count mails?', ['count' => count($selections)]),
+            // own JS dictionary, and these are already translated by the time
+            // they get there. So the choice is made here, where the count is.
+            //
+            // One mail is named, because the reader may have opened the menu on
+            // the wrong row and the name is the only thing that says so.
+            'confirmationText' => $count === 1
+                ? __('Delete “:label”?', ['label' => $this->labelFor($mails, $selections[0])])
+                : __('Delete :count mails?', ['count' => $count]),
             'warningText' => __('The waiting time in front of each one goes too. Anything else in that gap is kept and moves to the next mail.'),
             'dirtyWarningText' => null,
             'bypassesDirtyWarning' => false,
@@ -137,6 +150,14 @@ class MailListController extends Controller
      * One snapshot for the whole selection, not one per mail: an editor who
      * deletes three mails and then reverts means the three, and three
      * consecutive versions would make them undo it three times.
+     *
+     * The guard runs BEFORE that snapshot, and this is the one write path where
+     * that distinction earns its keep: it is the only one where the client
+     * chooses a list of ids, so a stale table is the ordinary case rather than
+     * a bug. A refusal that had already written a version would leave a
+     * "Removed mails from the list" entry behind that removed nothing, and
+     * VersionManager keeps only the last 25 — enough of them and the real
+     * history is pushed out.
      */
     public function runAction(Request $request, Automation $automationFlow): JsonResponse
     {
@@ -165,6 +186,23 @@ class MailListController extends Controller
             count($keys) === 1
                 ? __('The mail was removed.')
                 : __(':count mails were removed.', ['count' => count($keys)]),
+            guard: function () use ($automationFlow, $keys) {
+                $mails = $this->editableMails($automationFlow);
+
+                if ($mails === null) {
+                    throw new RuntimeException($this->notEditableMessage($automationFlow));
+                }
+
+                $unknown = array_values(array_diff($keys, array_column($mails, 'node_key')));
+
+                if ($unknown !== []) {
+                    throw new RuntimeException(
+                        'This automation has no mail with the key '
+                        .implode(', ', array_map(fn (string $key) => "'{$key}'", $unknown))
+                        .'. Reload the list and try again.'
+                    );
+                }
+            },
         );
     }
 
@@ -179,6 +217,46 @@ class MailListController extends Controller
         return array_values(array_filter(
             array_map(fn ($value) => is_string($value) ? $value : null, is_array($raw) ? $raw : []),
         ));
+    }
+
+    /**
+     * The mails this list currently holds, or null when it may not be edited.
+     *
+     * The projection's own verdict, not a second reading of the rule: the list
+     * on screen is editable exactly when it says so, and two callers asking the
+     * same question in two ways is how they come to disagree.
+     *
+     * @return list<array<string, mixed>>|null
+     */
+    protected function editableMails(Automation $automation): ?array
+    {
+        $list = $this->projection->forAutomation($automation);
+
+        return ($list['editable'] ?? false) ? array_values($list['mails'] ?? []) : null;
+    }
+
+    /** The same sentence ChainEditor::assertEditable refuses with. */
+    protected function notEditableMessage(Automation $automation): string
+    {
+        $reasons = $this->projection->forAutomation($automation)['reasons'] ?? [];
+
+        return 'This automation is not a straight line, so its mail list cannot be edited: '
+            .implode(' ', $reasons)
+            .' Edit it on the canvas instead.';
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $mails
+     */
+    protected function labelFor(array $mails, string $nodeKey): string
+    {
+        foreach ($mails as $mail) {
+            if (($mail['node_key'] ?? null) === $nodeKey) {
+                return (string) ($mail['label'] ?: $nodeKey);
+            }
+        }
+
+        return $nodeKey;
     }
 
     protected function canEdit(): bool
@@ -202,9 +280,25 @@ class MailListController extends Controller
      *                                as a toast and then refreshes the listing.
      *                                Without it the answer is the list itself,
      *                                which is what the panel's own writes read.
+     * @param  (callable(): void)|null  $guard  Runs BEFORE the snapshot and may
+     *                                throw the same RuntimeException a refusal
+     *                                throws. A version written in front of a
+     *                                write that never happened is a lie in the
+     *                                history, and the history is pruned to 25.
      */
-    protected function write(Automation $automation, string $message, callable $apply, ?string $success = null): JsonResponse
+    protected function write(Automation $automation, string $message, callable $apply, ?string $success = null, ?callable $guard = null): JsonResponse
     {
+        try {
+            if ($guard !== null) {
+                $guard();
+            }
+        } catch (RuntimeException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'list' => $this->projection->forAutomation($automation),
+            ], 422);
+        }
+
         app(VersionManager::class)->snapshot($automation, $message);
 
         try {

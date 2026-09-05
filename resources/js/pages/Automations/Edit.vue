@@ -1114,13 +1114,21 @@ watch(view, scheduleHeightUpdate);
 
             <!-- Statamic's confirmation, never window.confirm: browsers
                  suppress native dialogs in plenty of contexts, and where they
-                 do not, the dialog steals focus from the CP. -->
+                 do not, the dialog steals focus from the CP.
+
+                 Word for word what the table's own delete says, in the same
+                 order — heading, question, consequence. Deleting a mail from
+                 the row menu and deleting the mail you have open are the same
+                 act, and until 2.15.1 they were phrased differently enough that
+                 a reader could reasonably wonder whether they did the same
+                 thing. The strings come from MailListController::actionList;
+                 anything changed there has to change here. -->
             <ConfirmationModal
                 v-if="pendingMailDelete"
                 :open="true"
                 danger
-                :title="__('Delete this mail?')"
-                :body-text="__('“:label” is removed from the automation, and so is the waiting time in front of it. Anything else in that gap is kept and moves to the next mail.', { label: pendingMailDelete.label || pendingMailDelete.node_key })"
+                :title="__('Delete mail')"
+                :body-text="`${__('Delete “:label”?', { label: pendingMailDelete.label || pendingMailDelete.node_key })} ${__('The waiting time in front of each one goes too. Anything else in that gap is kept and moves to the next mail.')}`"
                 :button-text="__('Delete mail')"
                 :busy="mailListBusy"
                 @confirm="confirmMailDelete"

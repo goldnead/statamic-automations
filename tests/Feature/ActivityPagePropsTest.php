@@ -96,6 +96,10 @@ it('carries the urls, the ranges and the columns the view needs', function (): v
         ->and($activity['logUrl'])->toContain('/activity/node-runs')
         ->and($activity['subjectsUrl'])->toContain('/activity/subjects')
         ->and($activity['exportUrl'])->toContain('/activity/export')
+        // Without this the steps table has no checkbox column at all: Statamic
+        // ties selections to an action endpoint, and this is where the view
+        // learns its address.
+        ->and($activity['stepActionsUrl'])->toContain('/activity/steps/actions')
         ->and(array_column($activity['logColumns'], 'field'))
         ->toBe(['created_at', 'node_label', 'node_type', 'status', 'subject', 'duration_ms', 'error_message'])
         ->and(array_column($activity['subjectColumns'], 'field'))
