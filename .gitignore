@@ -16,3 +16,10 @@ composer.lock
 
 # Codespaces playground (scaffolded Statamic site for addon dev)
 /playground
+
+# Interne Arbeitsunterlagen von Agentenlaeufen. Sie lagen bis 05.09.2026
+# getrackt in diesem oeffentlichen Repo; progress.md enthielt einen
+# Testbench-Zugang im Klartext. export-ignore in .gitattributes hielt sie nur
+# aus dem Composer-Tarball heraus, nicht von GitHub.
+/.superpowers
+/docs/superpowers
