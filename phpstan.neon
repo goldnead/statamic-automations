@@ -13,6 +13,18 @@ parameters:
     # seams, so PHPStan sees calls into classes that are not installed here.
     treatPhpDocTypesAsCertain: false
 
+    # Larastan resolves `view('name')` to a view-string only for templates it
+    # can find under an application's view paths. The package's own namespace
+    # (`statamic-automations::…`, registered via loadViewsFrom()) is not one of
+    # them, and `viewDirectories: [resources/views]` does not teach it the
+    # namespace prefix either (tried 05.09.2026). The template exists and the
+    # feature tests render it; the finding is about Larastan's lookup, not
+    # about the view.
+    ignoreErrors:
+        -
+            message: '#Parameter \#1 \$view of function view expects view-string\|null, string given#'
+            path: src/Http/Controllers/Web/SequenceOptOutController.php
+
     # Das Analytics-Addon ist ein `suggest`, kein `require`: die Kennzahlen
     # unter src/Integrations/Insights erweitern seinen Vertrag, und es liegt
     # nicht in vendor/. Gelesen wird der Stellvertreter aus der Testsuite —

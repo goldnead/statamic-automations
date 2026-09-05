@@ -27,6 +27,15 @@ Intern: der Rückgabetyp von `SequenceOptOut::sequencesFor()` ist als `stdClass`
 annotiert, wie PHPStan ihn ableitet; `tests/Fakes/insights-contracts.php` ist durch Pint gelaufen
 (Deklarationen unverändert).
 
+- **MySQL-Job der CI grün.** Er fiel an der Reihenfolge der Zeitreihen-Eimer, die in
+  `statamic-insights` `TableMetric::bucketed()` ohne `ORDER BY` gruppierte; MySQL 8 liefert die
+  Gruppen in Begegnungsreihenfolge. Behoben in insights 1.2.1, die byteweise Kopie
+  `tests/Fakes/insights-table-metric.php` ist nachgezogen.
+- **Larastan ohne Rest.** `view('statamic-automations::sequence-opt-out')` galt Larastan nicht
+  als `view-string`, weil es Paket-Namensräume nicht auflöst (`viewDirectories` hilft dort
+  nicht). Der Befund ist in `phpstan.neon` mit Begründung ausgenommen; die Vorlage existiert und
+  wird in der Suite gerendert.
+
 ## 2.14.1 (2026-09-03)
 
 ### Behoben: Oberfläche und ein Wächter, der drei Wochen rot war
