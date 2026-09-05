@@ -1124,12 +1124,13 @@ watch(view, scheduleHeightUpdate);
                  thing. The strings come from MailListController::actionList;
                  anything changed there has to change here.
 
-                 `display_label` is the mail's name cut off at its first Antlers
-                 placeholder, computed once on the server in Sequence\MailSteps
-                 so that both delete paths quote the same name. A stored subject
-                 reads as a subject in the table's own column and as a defect
-                 inside a question — the mail list showed the placeholder
-                 verbatim in this dialog until 2.15.3. -->
+                 `display_label` is the mail's name with every Antlers
+                 placeholder taken out and the seam closed, computed once on the
+                 server in Sequence\MailSteps so that both delete paths quote the
+                 same name. A stored subject reads as a subject in the table's own
+                 column and as a defect inside a question — the mail list showed
+                 the placeholder verbatim in this dialog until 2.15.3, and cut the
+                 rest of the line away until 2.15.4. -->
             <ConfirmationModal
                 v-if="pendingMailDelete"
                 :open="true"

@@ -219,21 +219,37 @@ it('removes every placeholder from a name and closes the seam', function (string
     // when the condition holds, and it needs no parser to be right about.
     ['Newsletter {{if foo}}Ja{{/if}} Ende', 'Newsletter Ja Ende'],
 
+    // Each placeholder leaves a space behind, and this is why: without it the
+    // two branches of a condition fuse into "PremiumBasis", a word no reader is
+    // ever sent. Two words that were both really written beat one that was not.
+    ['{{if premium}}Premium{{else}}Basis{{/if}}', 'Premium Basis'],
+    ['Hallo{{ name }}Welt', 'Hallo Welt'],
+
     // Closing marks are the author's and stay; only joiners and openers are
     // trimmed off the seam.
     ['„Zitat“ {{ x }}', '„Zitat“'],
     ['Betreff (für {{ x }})', 'Betreff (für)'],
     ['Ende. {{ x }}', 'Ende.'],
 
-    // A bracket pair that held nothing but the placeholder is litter.
+    // A bracket pair that held nothing but the placeholder is litter — and
+    // removing one pair can expose the next, so the sweep repeats until it
+    // settles rather than leaving "A () B" behind.
     ['Betreff ({{ campaign }})', 'Betreff'],
+    ['A (({{ x }})) B', 'A B'],
+    ['A ([{{ x }}]) B', 'A B'],
 
     // An unclosed `{{` is the whole defect wearing a typo — it must not reach
     // the screen with its braces showing.
     ['Hallo {{ name', 'Hallo'],
 
     // Nothing readable left: the caller falls back, this returns empty.
+    // "Readable" is at least one letter or digit — a leftover full stop or dash
+    // counts as non-empty to PHP and would win against the step's own name, and
+    // `Delete “.”?` names nothing at all.
     ['{{ contact.first_name }}', ''],
+    ['{{ x }}.', ''],
+    ['{{ x }} — ', ''],
+    ['{{ a }}{{ b }}', ''],
 ]);
 
 /**
@@ -261,11 +277,17 @@ it('carries a placeholder-free display name next to the stored one', function ()
                 'label' => 'Willkommensmail',
                 'config' => ['subject' => '{{ contact.first_name }}, willkommen im Kurs'],
             ],
+            'punctuation' => [
+                'type' => 'send_email',
+                'label' => 'Erinnerung',
+                'config' => ['subject' => '{{ contact.first_name }}.'],
+            ],
             'empty' => ['type' => 'send_email', 'config' => ['subject' => '']],
         ],
         [
             ['t', 'plain'], ['plain', 'trailing'], ['trailing', 'several'], ['several', 'only'],
-            ['only', 'named'], ['named', 'nameless'], ['nameless', 'subject_wins'], ['subject_wins', 'empty'],
+            ['only', 'named'], ['named', 'nameless'], ['nameless', 'subject_wins'],
+            ['subject_wins', 'punctuation'], ['punctuation', 'empty'],
         ],
     );
 
@@ -302,6 +324,11 @@ it('carries a placeholder-free display name next to the stored one', function ()
     // subject still says something after the placeholders are gone, the subject
     // wins. It is the line the mail actually carries; the name is the stand-in.
     expect($mails['subject_wins']['display_label'])->toBe('willkommen im Kurs');
+
+    // A leftover full stop is not a name. It is non-empty to PHP, so without the
+    // letter-or-digit test it would win against "Erinnerung" and the dialog would
+    // ask `Delete “.”?`.
+    expect($mails['punctuation']['display_label'])->toBe('Erinnerung');
 
     // Empty was already handled before this change and stays handled.
     expect($mails['empty']['display_label'])->toBe('empty')

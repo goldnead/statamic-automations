@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.15.5 (2026-09-05)
+
+### Behoben: die Kürzung verschmolz zwei Worte, ließ Satzzeichen als Namen durchgehen und räumte nur eine Klammerebene
+
+- **Jeder Platzhalter hinterlässt jetzt ein Leerzeichen, nicht nichts.** Genau daran hing die
+  Zusage „erfindet nie Worte", und sie stimmte nicht:
+  `{{if premium}}Premium{{else}}Basis{{/if}}` wurde zu `PremiumBasis` — ein Wort, das kein
+  Leser je bekommt. Jetzt `Premium Basis`. Aus demselben Grund wird `Hallo{{ name }}Welt` zu
+  `Hallo Welt` statt `HalloWelt`: beide Hälften hat jemand geschrieben, das Kompositum nicht.
+- **Bleibt nur ein Satzzeichen übrig, zählt das als leer.** `{{ x }}.` ergab `.`, und weil ein
+  Punkt für PHP nicht leer ist, gewann er gegen den eigenen Namen des Schritts — die Rückfrage
+  hieß dann „„." löschen?". „Lesbar" heißt jetzt: mindestens ein Buchstabe oder eine Ziffer.
+- **Verschachtelte Leerklammern werden ganz geräumt.** `A (({{ x }})) B` blieb bei `A () B`
+  stehen, weil die Reinigung nur einmal lief. Sie läuft jetzt, bis sich nichts mehr ändert.
+- **Drei Kommentare beschrieben noch das Verhalten vor 2.15.4** (Projektion, Controller,
+  `Edit.vue`) und verwiesen dabei auf eine Methode, deren Kopf inzwischen das Gegenteil sagte.
+
 ## 2.15.4 (2026-09-05)
 
 ### Behoben: die Kürzung aus 2.15.3 warf den Rest des Betreffs weg

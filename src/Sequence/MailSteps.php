@@ -125,31 +125,59 @@ class MailSteps
      * that `Ja` belongs to a branch and dropping it would need an Antlers parser
      * to be right and would be silently wrong whenever it is not.
      *
+     * **Each placeholder leaves a space behind, not nothing.** That is the whole
+     * of "never invents words": removing the tags of
+     * `{{if premium}}Premium{{else}}Basis{{/if}}` without a gap fuses them into
+     * `PremiumBasis`, a word no reader will ever be sent. With the gap it reads
+     * `Premium Basis` — two words that were both really written. The same gap
+     * turns `Hallo{{ name }}Welt` into `Hallo Welt` rather than `HalloWelt`, and
+     * that is the better of the two for the same reason: `HalloWelt` is a word
+     * nobody typed, while the two halves are.
+     *
      * Closing marks are kept, only joiners and openers are trimmed off the seam:
      * `„Zitat“ {{ x }}` keeps its closing quote, and `Betreff (für {{ x }})` keeps
      * its bracket instead of ending on a lonely `(`. A full stop or question mark
      * at the end is the author's, and stays.
      *
      * Returns an empty string when nothing readable is left — a label that is
-     * only a placeholder has no short form, and the caller falls back.
+     * only a placeholder has no short form, and the caller falls back. "Readable"
+     * means at least one letter or digit: `{{ x }}.` would otherwise leave `.`,
+     * which counts as non-empty and would win against the step's own name, and
+     * `Delete “.”?` names nothing.
      */
     public static function withoutPlaceholders(string $label): string
     {
-        if (! str_contains($label, '{{')) {
-            return trim($label);
-        }
+        $text = str_contains($label, '{{') ? self::stripPlaceholders($label) : $label;
+        $text = trim($text);
 
+        return preg_match('/[\p{L}\p{N}]/u', $text) === 1 ? $text : '';
+    }
+
+    /** The removal itself, on a label that really carries a placeholder. */
+    private static function stripPlaceholders(string $label): string
+    {
         // Every `{{ … }}`, non-greedy so two placeholders are two matches rather
         // than one that swallows the words between them. `s` because a subject
-        // pasted from an editor can carry a newline inside the braces.
-        $text = (string) preg_replace('/\{\{.*?\}\}/su', '', $label);
+        // pasted from an editor can carry a newline inside the braces. The space
+        // it leaves behind is what keeps two neighbouring words apart.
+        $text = (string) preg_replace('/\{\{.*?\}\}/su', ' ', $label);
 
         // An unclosed `{{` never matched above and would otherwise reach the
         // screen with its braces showing — the whole defect this method answers.
-        $text = (string) preg_replace('/\{\{.*$/su', '', $text);
+        $text = (string) preg_replace('/\{\{.*$/su', ' ', $text);
 
-        // A bracket pair that held nothing but the placeholder is litter.
-        $text = (string) preg_replace('/\(\s*\)|\[\s*\]/u', '', $text);
+        // A bracket pair that held nothing but the placeholder is litter, and
+        // removing one pair can expose the next: `A (({{ x }})) B`. Repeat until
+        // it settles, with a bound so a pathological label cannot spin.
+        for ($i = 0; $i < 10; $i++) {
+            $shorter = (string) preg_replace('/\(\s*\)|\[\s*\]/u', '', $text);
+
+            if ($shorter === $text) {
+                break;
+            }
+
+            $text = $shorter;
+        }
 
         // The space that used to sit in front of the placeholder now sits in
         // front of the punctuation that followed it: "Tag : Teil 2".

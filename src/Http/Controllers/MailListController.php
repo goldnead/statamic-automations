@@ -251,9 +251,10 @@ class MailListController extends Controller
      *
      * `display_label` rather than `label`: a mail's stored name is a subject
      * template, so “Zahlung bestätigt, {{ contact.first_name }}” is what the
-     * column correctly shows and what a question must not. The projection cuts
-     * it at the first `{{` — see {@see MailSteps::withoutPlaceholders} for why
-     * it cuts rather than resolves.
+     * column correctly shows and what a question must not. The projection takes
+     * every placeholder out and closes the seam — see
+     * {@see MailSteps::withoutPlaceholders} for why it removes rather than
+     * resolves, and why it does not stop at the first one.
      *
      * @param  list<array<string, mixed>>  $mails
      */
