@@ -474,6 +474,26 @@ it('exports the protocol of exactly the selected steps, as a file', function ():
     expect(array_column($rows, 1))->toBe(['Welcome']);
 });
 
+it('runs no export for a step this automation has never had', function (): void {
+    // The same check the offer makes, on the run. Unreachable through the
+    // Control Panel — Statamic asks `/list` first and would be handed nothing —
+    // so this is depth. Without it the endpoint answered 200 with a file
+    // holding nothing but its header row: the failure that looks like a result,
+    // on the one answer here nobody reads on screen before trusting it.
+    ($this->step)(($this->run)(), 'welcome');
+
+    $url = cp_route('statamic-automations.api.automations.activity.step-actions', $this->automation->id);
+
+    $this->postJson($url, ['action' => 'export', 'selections' => ['nie-dagewesen']])
+        ->assertStatus(422)
+        ->assertJsonPath('message', "This automation has no step called 'nie-dagewesen'. Reload the table and try again.");
+
+    // And a selection that is only partly wrong is wrong: a file of the valid
+    // half would be a quieter version of the same lie.
+    $this->postJson($url, ['action' => 'export', 'selections' => ['welcome', 'nie-dagewesen']])
+        ->assertStatus(422);
+});
+
 it('keeps a step whose node is gone exportable', function (): void {
     // The table lists it under "No longer in the flow", so the selection has to
     // reach it too — otherwise the row offers an action the server refuses.

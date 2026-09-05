@@ -382,6 +382,20 @@ class ServiceProvider extends AddonServiceProvider
      * merge order is unchanged, so what comes back is what Laravel would have
      * produced had nothing been cached early — for the siblings as well as for
      * this addon.
+     *
+     * ── The one thing it does throw away ──────────────────────────────────
+     *
+     * `Lang::addLines()` writes straight into that same memo, and nothing on
+     * disk backs those lines up: a group or a JSON file is re-read on the next
+     * lookup, an `addLines()` entry is simply gone. A package that seeds
+     * translations at runtime and does so BEFORE this provider boots would lose
+     * them, silently and only in that order.
+     *
+     * Nothing in the studio playground calls it (checked 05.09.2026, zero
+     * callers across all installed packages), so this costs nothing here. It is
+     * written down because the next person to install this addon somewhere else
+     * cannot check that from inside it. If it ever bites, the narrower fix is to
+     * drop only `loaded['*']['*']` — the JSON bucket — instead of everything.
      */
     protected function makeJsonTranslationsReachable(): void
     {

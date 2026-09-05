@@ -506,7 +506,7 @@ class ActivityController extends Controller
         ]]);
     }
 
-    public function runStepAction(Request $request, Automation $automationFlow): StreamedResponse
+    public function runStepAction(Request $request, Automation $automationFlow): StreamedResponse|JsonResponse
     {
         $this->authorizeAction('view automation runs');
 
@@ -516,6 +516,25 @@ class ActivityController extends Controller
             'selections.*' => ['required', 'string'],
         ]);
 
+        $keys = array_values(array_unique($data['selections']));
+
+        // The same check `stepActionList` makes, on the run rather than on the
+        // offer. It is unreachable through the Control Panel — Statamic asks
+        // `/list` first and would be handed nothing — so this is depth rather
+        // than a user's mistake. It is still worth having: without it the
+        // endpoint answers 200 with a file holding nothing but its header row,
+        // which is the failure that looks like a result, and the CSV is the one
+        // answer here that nobody reads on screen before trusting it.
+        $unknown = array_values(array_diff($keys, $this->knownNodeKeys($automationFlow)));
+
+        if ($unknown !== []) {
+            return response()->json([
+                'message' => 'This automation has no step called '
+                    .implode(', ', array_map(fn (string $key) => "'{$key}'", $unknown))
+                    .'. Reload the table and try again.',
+            ], 422);
+        }
+
         $context = $this->exportContext($request, 'context');
 
         // The export reads its parameters off the query string, because that is
@@ -524,7 +543,7 @@ class ActivityController extends Controller
         // path for the file, whichever door it was asked for through.
         $proxy = Request::create('', 'GET', [
             ...$context,
-            'node' => array_values(array_unique($data['selections'])),
+            'node' => $keys,
         ]);
 
         return $this->export($proxy, $automationFlow);

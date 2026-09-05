@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.15.2 (2026-09-05)
+
+### Behoben: der Sammel-Export prüfte die Schlüssel nur beim Anbieten, nicht beim Ausführen
+
+- **`POST …/activity/steps/actions` nahm jeden Schritt-Schlüssel an.** Ein unbekannter
+  ergab HTTP 200 mit einer CSV, die nur die Kopfzeile enthielt; eine gemischte Auswahl
+  ergab eine Datei der gültigen Hälfte. Genau das, was die Prüfung in `/actions/list`
+  verhindern sollte — sie saß nur dort. Über die Oberfläche war es nicht erreichbar
+  (Statamic fragt erst `/list`), es ist Tiefenverteidigung. Jetzt 422 mit dem Namen des
+  unbekannten Schritts. Eine Datei ist die eine Antwort hier, die niemand auf dem Schirm
+  liest, bevor er ihr glaubt.
+- **`makeJsonTranslationsReachable()` nennt sein Restrisiko.** `setLoaded([])` wirft auch
+  weg, was zur Laufzeit über `Lang::addLines()` eingespielt wurde: Gruppen und JSON-Dateien
+  kommen von der Platte zurück, `addLines`-Zeilen nicht. Im Playground gibt es dafür keinen
+  einzigen Aufrufer; auf einer fremden Installation mit einem solchen Paket wäre es ein
+  stiller Verlust. Steht jetzt im Docblock, samt der engeren Ausweichlösung.
+
 ## 2.15.1 (2026-09-05)
 
 ### Behoben: Versionen für Löschungen, die nie stattfanden — und deutsche Serverstrings
