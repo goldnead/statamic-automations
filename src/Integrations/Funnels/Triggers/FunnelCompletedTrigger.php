@@ -44,9 +44,10 @@ class FunnelCompletedTrigger implements AutomationTrigger
             [
                 'handle' => 'funnel',
                 'label' => 'Funnel',
-                'type' => 'text',
+                'type' => 'select',
+                'options_source' => 'funnels.funnels',
                 'required' => false,
-                'help' => 'The funnel handle. Leave empty for every funnel.',
+                'help' => 'Leave empty for every funnel.',
             ],
         ];
     }

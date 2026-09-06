@@ -183,9 +183,10 @@ trait FlattensPayments
             [
                 'handle' => 'product',
                 'label' => 'Product',
-                'type' => 'text',
+                'type' => 'select',
+                'options_source' => 'payments.products',
                 'required' => false,
-                'help' => 'The product handle. Leave empty for every product.',
+                'help' => 'Leave empty for every product.',
             ],
         ];
     }

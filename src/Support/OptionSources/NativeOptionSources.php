@@ -430,4 +430,63 @@ class NativeOptionSources
     {
         return $this->webhookManager->destinations();
     }
+
+    /**
+     * What may be bought, for the product filter on the payment triggers.
+     *
+     * Read from the payments catalogue rather than from the products table:
+     * the catalogue is the one surface that already unifies the config file,
+     * `statamic-products` and `statamic-offers`, so a picker built on the table
+     * alone would show three of six and then refuse the save. Same source the
+     * offer form's own product select uses.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function paymentProducts(Request $request): array
+    {
+        $catalogue = 'Goldnead\\StatamicPayments\\Support\\Catalogue';
+
+        if (! class_exists($catalogue)) {
+            return [];
+        }
+
+        try {
+            return collect(app($catalogue)->all())
+                ->map(fn ($product, $handle) => [
+                    'value' => (string) $handle,
+                    'label' => (string) (is_array($product) ? ($product['name'] ?? $handle) : $handle),
+                ])
+                ->values()
+                ->all();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * The funnels of the optional funnels addon, for the funnel filter on its
+     * triggers. Referenced by name so this class stays loadable without it.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function funnels(Request $request): array
+    {
+        $funnel = 'Goldnead\\StatamicFunnels\\Models\\Funnel';
+
+        if (! class_exists($funnel)) {
+            return [];
+        }
+
+        try {
+            return collect($funnel::query()->orderBy('title')->get())
+                ->map(fn ($item) => [
+                    'value' => (string) $item->handle,
+                    'label' => (string) ($item->title ?: $item->handle),
+                ])
+                ->values()
+                ->all();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
 }

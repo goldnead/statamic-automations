@@ -671,6 +671,8 @@ class ServiceProvider extends AddonServiceProvider
         $automations->registerOptionSource('email_templates.templates', fn ($request) => $this->app->make($native)->emailTemplates($request));
         $automations->registerOptionSource('leadhub.statuses', fn ($request) => $this->app->make($native)->leadHubStatuses($request));
         $automations->registerOptionSource('leadhub.tags', fn ($request) => $this->app->make($native)->leadHubTags($request));
+        $automations->registerOptionSource('payments.products', fn ($request) => $this->app->make($native)->paymentProducts($request));
+        $automations->registerOptionSource('funnels.funnels', fn ($request) => $this->app->make($native)->funnels($request));
         $webhookDestinations = fn ($request) => $this->app->make($native)->webhookDestinations($request);
         $automations->registerOptionSource('webhook_manager.destinations', $webhookDestinations);
         $automations->registerOptionSource('webhooks', $webhookDestinations);

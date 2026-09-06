@@ -38,9 +38,10 @@ class CampaignSentTrigger implements AutomationTrigger
             [
                 'handle' => 'campaign',
                 'label' => 'Campaign filter',
-                'type' => 'text',
+                'type' => 'select',
+                'options_source' => 'marketing.campaigns',
                 'required' => false,
-                'help' => 'Optional — only run for this campaign handle.',
+                'help' => 'Optional — only run for this campaign.',
             ],
         ];
     }

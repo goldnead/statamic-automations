@@ -38,9 +38,10 @@ class SubscriberConfirmedTrigger implements AutomationTrigger
             [
                 'handle' => 'list',
                 'label' => 'List filter',
-                'type' => 'text',
+                'type' => 'select',
+                'options_source' => 'marketing.lists',
                 'required' => false,
-                'help' => 'Optional — only run for this mailing list handle.',
+                'help' => 'Optional — only run for this mailing list.',
             ],
         ];
     }

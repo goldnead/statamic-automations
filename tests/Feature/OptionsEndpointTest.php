@@ -11,6 +11,7 @@
  */
 
 use Goldnead\StatamicAutomations\Models\Automation;
+use Goldnead\StatamicAutomations\Registries\OptionSourceRegistry;
 use Statamic\Facades\AssetContainer;
 use Statamic\Facades\Collection as CollectionFacade;
 use Statamic\Facades\Entry;
@@ -234,6 +235,23 @@ it('returns an empty list for webhooks when the webhook-manager addon is absent'
     $this->getJson('/cp/automations/api/options/webhooks')
         ->assertOk()
         ->assertJsonPath('data', []);
+});
+
+it('registers the sources the payment and funnel triggers filter on', function (): void {
+    // Neither sibling is installed here, so the answer is an empty list — the
+    // point of the assertion is that the handles the trigger schemas name are
+    // registered at all. An unregistered source resolves to the same empty
+    // list, and the picker would then be silently blank for ever.
+    $registry = app(OptionSourceRegistry::class);
+
+    expect($registry->has('payments.products'))->toBeTrue()
+        ->and($registry->has('funnels.funnels'))->toBeTrue();
+
+    foreach (['payments.products', 'funnels.funnels'] as $source) {
+        $this->getJson("/cp/automations/api/options/{$source}")
+            ->assertOk()
+            ->assertJsonPath('data', []);
+    }
 });
 
 it('returns an empty array (never an error) for an entirely unknown source', function (): void {
