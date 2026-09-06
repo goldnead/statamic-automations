@@ -2,20 +2,24 @@
 
 namespace Goldnead\StatamicAutomations\Support;
 
-use Goldnead\StatamicAutomations\Models\AutomationSetting;
-use Illuminate\Contracts\Foundation\Application;
-use Illuminate\Support\Facades\Cache;
+use Goldnead\BrandContext\Contracts\ProvidesSettings;
 
 /**
  * The settings an operator may change from the Control Panel, and the one place
  * that knows what those are.
  *
- * Three readers share this definition — the boot-time override, the validation
- * on the way in, and the screen that draws the form — so a setting is added by
- * adding one entry to {@see FIELDS} and nothing else falls out of step. The
- * screen in particular is generated from here rather than from a hand-kept list
- * of labels, which is what the read-only version was: a second description of
- * the config file that could quietly disagree with it.
+ * **This class is now a declaration and nothing else.** Until 2026-09-06 it also
+ * owned the table, the cache, the boot-time config override and the "back to
+ * default" rule — about a thousand lines that `leadhub` and `webhook-manager`
+ * each carried a near-identical copy of. All of that moved into
+ * `goldnead/statamic-brand-context`, which does it once, for every addon in the
+ * suite, and does it *per brand* — the defect this addon shipped with, and
+ * documented in its own settings migration: `automation_settings` has no brand
+ * column, so on a multi-brand install two brands silently shared one row.
+ *
+ * What is left is the only part that ever legitimately belonged here: the field
+ * list. {@see settingsGroups()} feeds the screen, the validation and the config
+ * override alike, so a field cannot appear on screen without a rule behind it.
  *
  * **Overrides, not a copy.** Only keys somebody actually changed are stored.
  * Everything else keeps following `config/automations.php`, so upgrading the
@@ -28,14 +32,39 @@ use Illuminate\Support\Facades\Cache;
  * first; `ai.api_key` and everything else read from `env()` belongs to the
  * deployment, and putting a secret in the database would take it out of the
  * secret store and into a backup. `integrations` is not a setting at all — it
- * is a detection, and it stays read-only on the screen for that reason.
+ * is a detection, and it is shown read-only on the dashboard for that reason.
  */
-class Settings
+class Settings implements ProvidesSettings
 {
-    public function __construct(protected Application $app) {}
+    /**
+     * Stable forever: it is written into `brand_settings.namespace` on every
+     * row this addon owns, so renaming it orphans every override a site made.
+     */
+    public static function settingsNamespace(): string
+    {
+        return 'automations';
+    }
 
-    /** Cache key for the stored overrides. */
-    public const CACHE_KEY = 'statamic-automations.settings.overrides';
+    /** The config root unset values keep following: `config/automations.php`. */
+    public static function settingsConfigPath(): string
+    {
+        return 'automations';
+    }
+
+    /**
+     * Singular `automation`, not `automations`.
+     *
+     * This is the name this addon has shipped since v2.9 and the one assigned
+     * to user groups on live installations. A name derived from the namespace
+     * would read `manage automations settings` and would silently stop matching
+     * them: the operator loses the screen with nothing anywhere saying why.
+     * Registered by this addon's own ServiceProvider, as it always was — the
+     * shared layer only asks which permission to check.
+     */
+    public static function settingsPermission(): string
+    {
+        return 'manage automation settings';
+    }
 
     /**
      * The editable settings, in the order and grouping the screen shows them.
@@ -47,7 +76,7 @@ class Settings
      *
      * @return array<int, array{title: string, description: string, fields: array<int, array<string, mixed>>}>
      */
-    public static function groups(): array
+    public static function settingsGroups(): array
     {
         return [
             [
@@ -168,187 +197,5 @@ class Settings
                 ],
             ],
         ];
-    }
-
-    /**
-     * Every editable field, flattened.
-     *
-     * @return array<string, array<string, mixed>> key => field
-     */
-    public static function fields(): array
-    {
-        $fields = [];
-
-        foreach (static::groups() as $group) {
-            foreach ($group['fields'] as $field) {
-                $fields[$field['key']] = $field;
-            }
-        }
-
-        return $fields;
-    }
-
-    /**
-     * The stored overrides, keyed by dotted path.
-     *
-     * Cached because this is read on every boot, including the boot of every
-     * queue worker job. A missing table (installed but not migrated) or an
-     * unreachable cache is not fatal: no overrides means the config file, which
-     * is exactly the behaviour before this screen existed.
-     *
-     * @return array<string, mixed>
-     */
-    public function overrides(): array
-    {
-        try {
-            return Cache::rememberForever(self::CACHE_KEY, fn () => $this->read());
-        } catch (\Throwable) {
-            try {
-                return $this->read();
-            } catch (\Throwable) {
-                return [];
-            }
-        }
-    }
-
-    /** @return array<string, mixed> */
-    protected function read(): array
-    {
-        return AutomationSetting::query()
-            ->pluck('value', 'key')
-            ->all();
-    }
-
-    /**
-     * Push the stored overrides onto the live config.
-     *
-     * Overriding the config rather than teaching every reader about this class
-     * is the whole point: `config('automations.runs.prune_after_days')` is read
-     * in a dozen places, and a second source of truth next to it would be one
-     * missed call site away from a setting that looks changed and is not.
-     */
-    public function apply(): void
-    {
-        // `config:cache` boots the app fully and then dumps the whole
-        // resolved config to `bootstrap/cache/config.php`. Applying here
-        // during that build would bake the overrides into the cached file,
-        // and a baked override outlives the row it came from: deleting a
-        // setting would then have no effect at all until somebody ran
-        // `config:clear`.
-        //
-        // It would also poison the baseline below. On the next boot
-        // `mergeConfigFrom` is skipped (the config is cached), so
-        // `config('automations')` *is* the baked file — the snapshot would
-        // record the override as the packaged default, and a value reset to
-        // the file's default would be stored as a row instead of deleted,
-        // which is precisely the property this class promises.
-        //
-        // Skipping is safe: the cached config keeps the file values, and
-        // every process that reads it applies the overrides on its own boot.
-        if (method_exists($this->app, 'runningConsoleCommand') && $this->app->runningConsoleCommand('config:cache')) {
-            return;
-        }
-
-        // Snapshot what the config *files* say, before anything stored covers
-        // it. This is what "back to default" means on this install: the
-        // package config as the host published and edited it, not the copy
-        // inside the package — a site that changed a default in its own
-        // `config/automations.php` must be able to return to that value.
-        $this->baseline ??= config('automations', []);
-
-        foreach ($this->overrides() as $key => $value) {
-            // Only keys this class offers. A row left behind by an older
-            // release must not be able to set an arbitrary config path.
-            if (! isset(static::fields()[$key])) {
-                continue;
-            }
-
-            config()->set('automations.'.$key, $value);
-        }
-    }
-
-    /**
-     * The value on screen for one field: the override if there is one, else
-     * whatever the config file says.
-     */
-    public function value(string $key): mixed
-    {
-        return config('automations.'.$key);
-    }
-
-    /**
-     * Write the changed settings.
-     *
-     * A value equal to the packaged default is *deleted* rather than stored, so
-     * "back to default" is reachable from the form and the table does not
-     * accumulate rows that pin a value to what it already was.
-     *
-     * @param  array<string, mixed>  $values  key => value, keys from {@see fields()}
-     */
-    public function save(array $values): void
-    {
-        $fields = static::fields();
-
-        foreach ($values as $key => $value) {
-            if (! isset($fields[$key])) {
-                continue;
-            }
-
-            if ($value === $this->packagedDefault($key)) {
-                AutomationSetting::query()->where('key', $key)->delete();
-
-                // Put the file's value back on the live config by hand.
-                // `apply()` below only writes the overrides that exist, so a
-                // deleted one would leave the old value standing in this
-                // process — the row is gone, the screen says "default", and
-                // everything reading `config()` until the next boot still gets
-                // the value that was just taken away.
-                config()->set('automations.'.$key, $value);
-
-                continue;
-            }
-
-            AutomationSetting::query()->updateOrCreate(['key' => $key], ['value' => $value]);
-        }
-
-        $this->forget();
-        $this->apply();
-    }
-
-    /** Drop the cached overrides so the next read sees the table. */
-    public function forget(): void
-    {
-        try {
-            Cache::forget(self::CACHE_KEY);
-        } catch (\Throwable) {
-            // No cache store is a running-without-cache install, not a failure
-            // to save: `read()` then hits the table on every call anyway.
-        }
-    }
-
-    /**
-     * The config as the files have it, taken before any override was applied.
-     *
-     * @var array<string, mixed>|null
-     */
-    protected ?array $baseline = null;
-
-    /**
-     * What the config files say, ignoring any override already applied to the
-     * live config.
-     *
-     * Never `config()`: by the time anything asks, {@see apply()} has already
-     * overwritten the live value with the override, so comparing against it
-     * would report every stored value as equal to the default and delete the
-     * lot on the next save. The package file is the last resort, for a call
-     * that happens before `apply()` ever ran.
-     */
-    protected function packagedDefault(string $key): mixed
-    {
-        if ($this->baseline === null) {
-            $this->baseline = require __DIR__.'/../../config/automations.php';
-        }
-
-        return data_get($this->baseline, $key);
     }
 }

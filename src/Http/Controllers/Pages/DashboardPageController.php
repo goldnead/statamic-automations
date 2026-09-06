@@ -4,17 +4,19 @@ namespace Goldnead\StatamicAutomations\Http\Controllers\Pages;
 
 use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Http\Controllers\Controller;
+use Goldnead\StatamicAutomations\Integrations\IntegrationDetector;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Statamic\CP\Column;
 
 /**
- * Overview dashboard: KPIs, recent failures and a 14-day run trend.
+ * Overview dashboard: KPIs, recent failures, a 14-day run trend and which
+ * sister addons were detected.
  */
 class DashboardPageController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, IntegrationDetector $detector)
     {
         $this->authorizeAction('view automations');
 
@@ -60,6 +62,14 @@ class DashboardPageController extends Controller
             'automationsUrl' => cp_route('statamic-automations.automations.index'),
             'runsUrl' => cp_route('statamic-automations.runs.index'),
             'canCreate' => $this->userCan('create automations'),
+            // A detection, not a setting: whether a sister addon is installed
+            // is composer's answer, and a control for it would be a switch that
+            // does nothing. It sat on the old settings screen, which was the
+            // only place a human could see it; that screen moved into
+            // brand-context on 2026-09-06 and the shared layer takes editable
+            // settings only, by contract. So the read-only panel lands here
+            // rather than being lost in the move.
+            'integrations' => $detector->snapshot(),
         ]);
     }
 

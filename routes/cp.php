@@ -13,11 +13,9 @@ use Goldnead\StatamicAutomations\Http\Controllers\Pages\DashboardPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\ImportPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\RulesPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\RunsPageController;
-use Goldnead\StatamicAutomations\Http\Controllers\Pages\SettingsPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\TemplatesPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\RuleController;
 use Goldnead\StatamicAutomations\Http\Controllers\RunsController;
-use Goldnead\StatamicAutomations\Http\Controllers\SettingsController;
 use Goldnead\StatamicAutomations\Http\Controllers\TemplatesController;
 use Goldnead\StatamicAutomations\Http\Controllers\VersionsController;
 use Illuminate\Support\Facades\Route;
@@ -83,7 +81,21 @@ Route::prefix('automations')
         Route::get('import', [ImportPageController::class, 'show'])
             ->name('import');
 
-        Route::get('settings', [SettingsPageController::class, 'index'])
+        // The settings screen moved into brand-context on 2026-09-06: one page
+        // for the whole suite, one section per addon, per brand. The name stays
+        // and redirects, because it is what is in operators' bookmarks and in
+        // every link this addon has printed since v2.9 — and a 404 on a URL
+        // that used to work reads as a broken install, not as a moved page.
+        //
+        // Resolved at request time rather than with Route::redirect(): that
+        // helper takes a finished URL, and building one here would depend on
+        // brand-context's routes already being registered when this file is
+        // loaded. A closure is also what the `api.index` ping below already is,
+        // so nothing new is being asked of route caching.
+        //
+        // Kept until the next major, together with the `automation_settings`
+        // table it belongs to.
+        Route::get('settings', fn () => redirect(cp_route('brand-context.settings.index')))
             ->name('settings');
 
         Route::get('audit', [AuditPageController::class, 'index'])
@@ -204,9 +216,11 @@ Route::prefix('automations')
                 ->where('handle', '[A-Za-z0-9_-]+')
                 ->name('templates.install');
 
-            // Settings
-            Route::get('settings', [SettingsController::class, 'show'])->name('settings.show');
-            Route::patch('settings', [SettingsController::class, 'update'])->name('settings.update');
+            // No settings endpoints here any more. Reading and writing them is
+            // brand-context's `brand-context.settings.*`, which posts through
+            // Inertia rather than axios. Not redirected like the page route
+            // above: these two were consumed by this addon's own Vue screen and
+            // nothing else, and a redirected PATCH loses its body.
 
             // Export / Import
             Route::get('automations/{automationFlow}/export', [ExportImportController::class, 'export'])->name('automations.export');

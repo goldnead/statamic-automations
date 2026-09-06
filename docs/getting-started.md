@@ -99,7 +99,7 @@ That's it. The next form submission will dispatch a queued run, and you'll see i
   | `test_mode.persist_leadhub_changes` | `false` | actually writes to LeadHub (tags, notes, tasks, stages, scores) |
   | `test_mode.call_real_ai` | `false` | actually calls the AI provider (and bills you) |
 
-  The same switches are visible read-only under **Automations → Settings**. Turning any of them on makes a test run behave like a live run for that category — including the data-reference check, which is then enforced again.
+  The same switches are editable under **Settings → Addon settings**, in the Statamic Automations section (permission: `manage automation settings`). Turning any of them on makes a test run behave like a live run for that category — including the data-reference check, which is then enforced again.
 
 To exercise a reference end to end, hand the test run a context instead of turning a flag on: `POST /cp/automations/api/automations/{id}/test` accepts a `context` object, e.g. `{"lead": {"id": "abc"}}`.
 

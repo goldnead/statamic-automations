@@ -39,6 +39,16 @@ it('renders the dashboard', function (): void {
 
     $response->assertStatus(200);
     expect(inertiaComponent($response))->toBe('statamic-automations::Dashboard');
+
+    // The detected sister addons. This panel used to live at the foot of the
+    // settings screen, and that screen is brand-context's since 2026-09-06 — a
+    // layer that takes editable settings only. The dashboard is now the one
+    // place a human can see what the engine detected, so the prop has to be
+    // here or the information is simply gone from the Control Panel.
+    $props = json_decode($response->getContent(), true)['props'];
+
+    expect($props['integrations'])->toBeArray()
+        ->and($props['integrations'])->toHaveKeys(['webhook_manager', 'leadhub']);
 });
 
 it('renders the automations index', function (): void {
@@ -123,12 +133,12 @@ it('renders the import page', function (): void {
     expect(inertiaComponent($response))->toBe('statamic-automations::Import');
 });
 
-it('renders the settings page', function (): void {
-    $response = $this->withHeaders(['X-Inertia' => 'true'])
-        ->get(cp_route('statamic-automations.settings'));
-
-    $response->assertStatus(200);
-    expect(inertiaComponent($response))->toBe('statamic-automations::Settings/Show');
+it('sends the old settings URL to the suite settings screen', function (): void {
+    // This addon no longer renders a settings page. Since 2026-09-06 the screen
+    // is brand-context's, one page for the whole suite; the route name survives
+    // only so bookmarks and older links keep landing somewhere.
+    $this->get(cp_route('statamic-automations.settings'))
+        ->assertRedirect(cp_route('brand-context.settings.index'));
 });
 
 it('renders the audit log page', function (): void {

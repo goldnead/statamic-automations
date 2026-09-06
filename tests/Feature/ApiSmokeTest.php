@@ -92,8 +92,14 @@ it('lists runs and shows a run detail', function (): void {
         ->assertJsonPath('data.id', $run->id);
 });
 
-it('returns settings', function (): void {
-    $this->getJson('/cp/automations/api/settings')->assertOk();
+it('no longer serves a settings endpoint', function (): void {
+    // Both `api/settings` routes went with the screen they fed. Reading and
+    // writing settings is brand-context's `brand-context.settings.*` since
+    // 2026-09-06, and that screen posts through Inertia, not axios. Asserted
+    // rather than deleted: a 404 here is the correct answer, and an endpoint
+    // that quietly came back would be a second way to write the same rows.
+    $this->getJson('/cp/automations/api/settings')->assertNotFound();
+    $this->patchJson('/cp/automations/api/settings', ['settings' => []])->assertNotFound();
 });
 
 it('enables and disables an automation', function (): void {

@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { Head, Link } from '@statamic/cms/inertia';
-import { Header, Button, Listing, Card, Panel, Heading, Subheading } from '@statamic/cms/ui';
+import { Header, Button, Listing, Card, Panel, Heading, Subheading, Badge } from '@statamic/cms/ui';
 
 const props = defineProps({
     title: { type: String, required: true },
@@ -13,7 +13,21 @@ const props = defineProps({
     automationsUrl: { type: String, required: true },
     runsUrl: { type: String, required: true },
     canCreate: { type: Boolean, default: false },
+    integrations: { type: Object, required: true },
 });
+
+// The two that have a name a person would recognise. Everything else the
+// detector reports is humanised from its key rather than listed here, so a
+// sister addon added to `IntegrationDetector` shows up without a second edit
+// in this file — a hand-kept list is what makes a screen quietly incomplete.
+const integrationMeta = {
+    webhook_manager: { label: __('Webhook Manager') },
+    leadhub: { label: __('LeadHub') },
+};
+
+function humanize(key) {
+    return String(key).replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 const cards = computed(() => [
     { label: __('Automations'), value: props.stats.automations, href: props.automationsUrl },
@@ -99,6 +113,35 @@ function barHeight(value) {
                 <div class="flex items-center gap-4 mt-3 text-xs text-gray-500 dark:text-gray-400">
                     <span class="flex items-center gap-1.5"><span class="size-2.5 rounded-sm bg-green-500"></span>{{ __('Success') }}</span>
                     <span class="flex items-center gap-1.5"><span class="size-2.5 rounded-sm bg-red-400 dark:bg-red-500"></span>{{ __('Failed') }}</span>
+                </div>
+            </Card>
+        </Panel>
+
+        <!-- Not a setting: whether a sister addon is installed is decided by
+             composer, so a control here would be a switch that does nothing.
+             It used to sit at the foot of this addon's settings screen; that
+             screen moved into brand-context, which by contract carries editable
+             settings only, so the detection moved here instead of disappearing.
+             Same markup and the same two badges as before. -->
+        <Panel :heading="__('Integrations')" class="mb-6">
+            <Card>
+                <p class="mb-4 text-sm text-gray-500 dark:text-gray-400">
+                    {{ __('Sister addons. Their triggers and actions register automatically when installed — this is what is detected, not something to switch on.') }}
+                </p>
+
+                <div
+                    v-for="(active, key) in integrations"
+                    :key="key"
+                    class="flex items-center justify-between gap-4 border-t border-gray-200 py-3 first:border-t-0 dark:border-gray-800"
+                    :data-integration="key"
+                >
+                    <span class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {{ integrationMeta[key]?.label ?? humanize(key) }}
+                    </span>
+                    <Badge
+                        :color="active ? 'green' : 'default'"
+                        :text="active ? __('Detected') : __('Not installed')"
+                    />
                 </div>
             </Card>
         </Panel>

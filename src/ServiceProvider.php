@@ -2,6 +2,7 @@
 
 namespace Goldnead\StatamicAutomations;
 
+use Goldnead\BrandContext\Settings\SettingsRegistry;
 use Goldnead\StatamicAutomations\Console\Commands\PruneRuns;
 use Goldnead\StatamicAutomations\Console\Commands\RunDueScheduledJobs;
 use Goldnead\StatamicAutomations\Console\Commands\RunScheduledAutomations;
@@ -190,11 +191,10 @@ class ServiceProvider extends AddonServiceProvider
         // addons are detected lazily).
         $this->app->singleton(IntegrationDetector::class);
 
-        // Singleton because it holds the pre-override snapshot of the config
-        // files. A second instance created after `apply()` would take the
-        // already-overridden config for the baseline, and then read every
-        // stored value as "equal to the default" and delete it on the next save.
-        $this->app->singleton(Settings::class);
+        // No binding for Support\Settings any more: since 2026-09-06 it holds
+        // no state at all — the baseline snapshot, the cache and the store live
+        // in brand-context's SettingsManager, which is the singleton that
+        // matters. Ours is four static methods and is never instantiated.
         $this->app->singleton(WebhookManagerAdapter::class);
         $this->app->singleton(LeadHubAdapter::class);
         $this->app->singleton(EntitlementsAdapter::class);
@@ -246,12 +246,12 @@ class ServiceProvider extends AddonServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
-        // Settings changed in the Control Panel are pushed onto the live config
-        // before anything reads it. First thing in boot, and in every process
-        // — a queue worker resolves `automations.runs.*` too, and a setting
-        // that held only for web requests would be a setting that appears to
-        // work and silently does not where the work happens.
-        $this->app->make(Settings::class)->apply();
+        // Announce this addon's settings to the shared layer, which does the
+        // storing, validating, screen and config override itself — see
+        // Support\Settings. In boot and not later: brand-context applies the
+        // overrides in an `app->booted()` callback, and a registration made
+        // after that point would never reach `config()` in this process.
+        $this->app->make(SettingsRegistry::class)->register(Settings::class);
 
         // Resolve the {automationFlow} route parameter through the active
         // storage driver so flat-file definitions (which have no DB row) bind
@@ -1068,7 +1068,17 @@ class ServiceProvider extends AddonServiceProvider
                     // overrules the core's. See tests/Unit/TranslationKeyOwnershipTest.
                     $nav->item(__('Automation templates'))->route('statamic-automations.templates.index'),
                     $nav->item(__('Import'))->route('statamic-automations.import'),
-                    $nav->item(__('Settings'))->route('statamic-automations.settings'),
+                    // No `Settings` item any more. The screen moved into
+                    // brand-context, which builds its own entry under the
+                    // Control Panel's `Settings` section — where Statamic core
+                    // puts settings — and only for operators who may manage at
+                    // least one section. An item here would point at
+                    // `statamic-automations.settings`, which is now nothing but
+                    // a redirect to that page, and this addon has already had
+                    // that reported as a defect: see the `Mail rules` note a few
+                    // lines up, where a menu entry that only redirected read to
+                    // Adrian as exactly that. The route stays for bookmarks;
+                    // the menu does not carry it.
                 ]);
         });
     }

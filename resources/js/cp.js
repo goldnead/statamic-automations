@@ -18,7 +18,6 @@ import RunsIndex from './pages/Runs/Index.vue';
 import RunsShow from './pages/Runs/Show.vue';
 import TemplatesIndex from './pages/Templates/Index.vue';
 import ImportPage from './pages/Import.vue';
-import SettingsShow from './pages/Settings/Show.vue';
 import AuditIndex from './pages/Audit/Index.vue';
 import RulesIndex from './pages/Rules/Index.vue';
 
@@ -30,7 +29,8 @@ Statamic.booting(() => {
     Statamic.$inertia.register('statamic-automations::Runs/Show', RunsShow);
     Statamic.$inertia.register('statamic-automations::Templates/Index', TemplatesIndex);
     Statamic.$inertia.register('statamic-automations::Import', ImportPage);
-    Statamic.$inertia.register('statamic-automations::Settings/Show', SettingsShow);
+    // No `Settings/Show`: the settings screen is brand-context's now
+    // (`brand-context::Settings`), one page for the whole suite.
     Statamic.$inertia.register('statamic-automations::Audit/Index', AuditIndex);
     Statamic.$inertia.register('statamic-automations::Rules/Index', RulesIndex);
 });

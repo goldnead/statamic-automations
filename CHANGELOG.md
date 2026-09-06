@@ -1,5 +1,28 @@
 # Changelog
 
+## 2.16.0 (2026-09-06)
+
+### Geändert: die Einstellungen ziehen auf den gemeinsamen Suite-Bildschirm
+
+Die Seite **Automations → Einstellungen** entfällt. Dieselben Felder stehen jetzt unter
+**Einstellungen → Addon-Einstellungen**, zusammen mit denen der anderen Suite-Addons.
+Die alte Adresse leitet weiter, das Recht `manage automation settings` bleibt unverändert,
+und eine Migration trägt gespeicherte Werte in die neue Tabelle. Zu tun ist nichts außer
+`php artisan migrate`.
+
+- **Voraussetzung: `goldnead/statamic-brand-context` ≥ 1.12.** Das Paket ist MIT und war schon
+  vorher eine Abhängigkeit; es stellt jetzt Bildschirm, Validierung, Speicher und die
+  Markendimension. Dieses Addon schreibt nur noch die Feldliste
+  (`Support\Settings::settingsGroups()`) und meldet sich an.
+- **Die Werte sind ab jetzt markenbezogen.** `automation_settings` hatte keine `brand_id`, auf
+  einer Mehrmarken-Installation teilten sich also zwei Marken eine Einstellung. Im
+  Einmarken-Betrieb ändert sich dadurch nichts.
+- **`automation_settings` bleibt eine Minor-Version stehen.** Wer zurückrollt, verliert sonst
+  seine Einstellungen. Das Löschen kommt später und angekündigt.
+- **Die Integrations-Anzeige ist aufs Dashboard gewandert.** Sie war nie eine Einstellung,
+  sondern eine Erkennung — welche Schwester-Addons installiert sind, entscheidet Composer.
+- Netto −1067/+296 Zeilen: Model, Request, zwei Controller und die Vue-Seite entfallen.
+
 ## 2.15.5 (2026-09-05)
 
 ### Behoben: die Kürzung verschmolz zwei Worte, ließ Satzzeichen als Namen durchgehen und räumte nur eine Klammerebene

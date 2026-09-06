@@ -28,7 +28,7 @@
         "laravel/framework": "^12.0|^13.0",
         "statamic/cms": "^6.0",
         "inertiajs/inertia-laravel": "^1.0|^2.0",
-        "goldnead/statamic-brand-context": "^1.8",
+        "goldnead/statamic-brand-context": "^1.12",
         "goldnead/statamic-flow-canvas": "^1.1"
     },
     "suggest": {

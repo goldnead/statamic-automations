@@ -118,7 +118,10 @@ dataset('cp pages', function () {
         'runs index' => [fn () => cp_route('statamic-automations.runs.index')],
         'templates' => [fn () => cp_route('statamic-automations.templates.index')],
         'import' => [fn () => cp_route('statamic-automations.import')],
-        'settings' => [fn () => cp_route('statamic-automations.settings')],
+        // No `settings` row: since 2026-09-06 that route renders no Vue page at
+        // all, it redirects to brand-context's suite settings screen. There are
+        // no props of ours to collect, and the redirect itself is pinned in
+        // CpRoutesTest.
         'audit' => [fn () => cp_route('statamic-automations.audit')],
     ];
 });
@@ -127,9 +130,8 @@ it('hands Vue only URLs the router can match', function (Closure $url): void {
     $response = $this->withHeaders(['X-Inertia' => 'true'])->get($url());
     $response->assertStatus(200);
 
-    // Not every page links elsewhere — Settings is config-driven and exposes no
-    // URLs at all — so an empty result is legitimate here. The collector itself
-    // is proven by the record-bound test below.
+    // Not every page links elsewhere, so an empty result is legitimate here.
+    // The collector itself is proven by the record-bound test below.
     $urls = cpUrlsInProps(pageProps($response));
 
     foreach ($urls as $path => $target) {

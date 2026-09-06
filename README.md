@@ -412,22 +412,30 @@ See [`config/automations.php`](config/automations.php). Highlights:
 
 ### Settings in the Control Panel
 
-Part of that file can also be changed under **Automations → Settings** in the Control Panel
-(permission: `manage automation settings`): queue name and connection, run retention and how
-long failed runs are kept, whether the full context is stored and encrypted, all five
+Part of that file can also be changed under **Settings → Addon settings** in the Control
+Panel (permission: `manage automation settings`): queue name and connection, run retention
+and how long failed runs are kept, whether the full context is stored and encrypted, all five
 test-mode switches, and the redaction list.
 
+That screen is not this addon's any more. It belongs to
+[`goldnead/statamic-brand-context`](https://github.com/goldnead/statamic-brand-context), which
+draws one page for the whole suite — one section per installed addon, this one included. The
+old address, `/cp/automations/settings`, redirects there. The change also fixes a defect this
+addon shipped with: settings are now stored **per brand**, where the old table had no brand
+column and two brands on one install silently shared a value.
+
 Only the **difference** to the config file is stored, one row per changed key in
-`automation_settings`. A value set back to what the file says deletes its row again, so the
+`brand_settings`. A value set back to what the file says deletes its row again, so the
 config file stays the default and a later release can still move it. An install that never
 opens the screen behaves exactly as before. The other side of that: if a value in
 `config/automations.php` does not match what the site actually does, look here first —
 editing the file will not move a key somebody has already overridden.
 
-The overrides are pushed onto the live config **in the addon's `boot()`**, not in a CP
-middleware. A queue worker that starts hours later boots the same way and sees them; a
-setting that held only for web requests would be one that appears to work and does not where
-the work happens.
+The overrides are pushed onto the live config **at boot**, not in a CP middleware. A queue
+worker that starts hours later boots the same way and sees them; a setting that held only for
+web requests would be one that appears to work and does not where the work happens. This addon
+announces its settings to the shared layer in its own `boot()`; brand-context applies them once
+every provider has had the chance to register.
 
 Nothing is applied while `config:cache` builds its file. A baked override would outlive the
 row it came from — deleting a setting would have no effect until somebody ran `config:clear`
@@ -442,12 +450,20 @@ Not editable there, on purpose:
 - `storage.driver` — it decides where automations live, and cannot be switched under a
   running install without moving them first.
 - `integrations` — not a setting but a detection: whether a sibling addon is installed is
-  decided by Composer, so a control here would be a switch that does nothing. It is shown on
-  the screen, read-only.
+  decided by Composer, so a control here would be a switch that does nothing. It is shown
+  read-only on the **Automations dashboard**, which is where it moved when the settings screen
+  became the suite's.
 
-The table is **not** brand-scoped, unlike every other table in this addon. These are
-properties of the installation; one queue name per brand would mean a worker draining one
-brand's jobs and not the other's, with nothing anywhere saying so.
+### Upgrading from a release before 2026-09-06
+
+`migrate` carries every row of the old `automation_settings` table into `brand_settings`,
+under the namespace `automations` and on the default brand — the only honest reading of a
+value that was set when brands did not apply. Nothing is lost and nothing has to be re-entered.
+
+`automation_settings` is **left in place** for one minor version. Dropping it in the same
+release that stops reading it would mean a `migrate:rollback` comes up with every setting
+silently back at its packaged default. It goes in the next minor, together with the
+`/cp/automations/settings` redirect.
 
 ## Personal data
 
