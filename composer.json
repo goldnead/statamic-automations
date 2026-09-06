@@ -60,7 +60,7 @@
             "url": "https://github.com/goldnead/statamic-automations",
             "description": "Visual automation builder for Statamic forms, entries, leads and webhooks.",
             "developer": "Adrian Goldner",
-            "developer-url": "https://gldnr.studio",
+            "developer-url": "https://adriangoldner.dev",
             "vite": {
                 "input": [
                     "resources/js/cp.js",
