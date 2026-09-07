@@ -316,6 +316,19 @@ class SendEmailAction implements AutomationAction
                         'slug' => (string) $templateSlug,
                         'source' => 'entry',
                     ];
+                } elseif (SaidRecently::shouldSay('send_email-template-missing:'.$templateSlug)) {
+                    // Der Knoten nennt eine Vorlage, und es geht der eigene Text
+                    // raus. Das ist der vorgesehene Rückfall, aber lautlos war
+                    // er falsch: der häufigste Grund ist, dass die Vorlage einer
+                    // anderen Marke gehört als der Ablauf, und dann verschickt
+                    // ein Ablauf monatelang nicht das, was in ihm ausgewählt ist.
+                    // Gedrosselt je Kürzel, damit ein Fan-out die Zeile einmal
+                    // schreibt und nicht achthundert Mal.
+                    Log::warning(sprintf(
+                        'Die E-Mail-Vorlage [%s] ist von hier aus nicht auflösbar — meist gehört sie einer '
+                        .'anderen Marke als dieser Ablauf. Verschickt wird der eigene Text des Knotens.',
+                        $templateSlug,
+                    ));
                 }
 
                 $html = $resolved->body;
