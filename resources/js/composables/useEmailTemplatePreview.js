@@ -11,6 +11,22 @@ const listCache = new Map(); // apiBase -> [{ slug, title, subject, preview }]
 const htmlCache = new Map(); // slug    -> { slug, title, subject, preview, html }
 
 /**
+ * The server's reason, as a sentence — never a bare "went wrong".
+ *
+ * The endpoints answer every failure with a `message` that says what is
+ * actually wrong (unknown slug, foreign brand, render error incl. its
+ * exception message). Reducing that to a fixed "Vorschau nicht verfügbar" was
+ * half of bug F17: the reason existed and nobody could see it.
+ */
+function reasonFrom(err) {
+    return (
+        err?.response?.data?.message ||
+        err?.message ||
+        'Die Vorschau konnte nicht geladen werden. Der Grund steht im Laravel-Log.'
+    );
+}
+
+/**
  * Fetches the flat list of managed email templates for the picker from
  * `GET {apiBase}/email-templates` (see `EmailTemplatePreviewController::index`).
  * Uses the same bare `axios` instance as the rest of the addon's CP requests
@@ -42,7 +58,7 @@ export function useEmailTemplateList(apiBase) {
             listCache.set(apiBase, result);
             templates.value = result;
         } catch (err) {
-            error.value = err;
+            error.value = reasonFrom(err);
             templates.value = [];
         } finally {
             loading.value = false;
@@ -57,6 +73,8 @@ export function useEmailTemplateList(apiBase) {
  * `GET {apiBase}/email-templates/preview?slug=…`, with sample merge tokens
  * already resolved server-side. Guards against out-of-order responses so a
  * fast keyboard walk through the picker never shows a stale preview.
+ *
+ * `error` is the server's reason as a displayable string, not the axios error.
  */
 export function useEmailTemplatePreview(apiBase) {
     const preview = ref(null);
@@ -91,7 +109,7 @@ export function useEmailTemplatePreview(apiBase) {
             preview.value = result;
         } catch (err) {
             if (my !== seq) return;
-            error.value = err;
+            error.value = reasonFrom(err);
             preview.value = null;
         } finally {
             if (my === seq) loading.value = false;

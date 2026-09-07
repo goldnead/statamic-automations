@@ -83,12 +83,17 @@
                     <span>{{ __('Vorschau wird geladen…') }}</span>
                 </div>
 
+                <!-- The reason comes from the endpoint (unknown slug, foreign
+                     brand, render error). Never a fixed sentence: F17 was a
+                     brand mismatch that this pane used to describe as
+                     "nicht verfügbar" and nothing else. -->
                 <div
                     v-else-if="previewError"
-                    class="flex flex-col items-center justify-center gap-2 h-full min-h-72 text-sm text-red-600 dark:text-red-400"
+                    class="flex flex-col items-center justify-center gap-2 h-full min-h-72 px-6 text-center text-sm text-red-600 dark:text-red-400"
                 >
-                    <Icon name="warning-diamond" class="size-5" />
-                    <span>{{ __('Vorschau nicht verfügbar.') }}</span>
+                    <Icon name="warning-diamond" class="size-5 shrink-0" />
+                    <span class="font-medium">{{ __('Diese Vorlage lässt sich nicht anzeigen.') }}</span>
+                    <span class="text-xs text-gray-600 dark:text-gray-400">{{ previewError }}</span>
                 </div>
 
                 <div v-else-if="preview" class="flex flex-col gap-2">
@@ -124,11 +129,14 @@
         <template #footer>
             <div class="flex items-center justify-end gap-2 px-4 py-3">
                 <Button variant="ghost" :text="__('Abbrechen')" @click="$emit('update:open', false)" />
+                <!-- A template that does not render here does not send either
+                     (same brand-scoped resolve in SendEmailAction), so taking
+                     it would arm a node with a mail nobody ever gets. -->
                 <Button
                     variant="primary"
                     icon="checkmark"
                     :text="__('Diese Vorlage verwenden')"
-                    :disabled="!highlighted"
+                    :disabled="!highlighted || previewLoading || !!previewError"
                     @click="confirmSelection"
                 />
             </div>
@@ -144,7 +152,7 @@ import { useEmailTemplateList, useEmailTemplatePreview } from '../../composables
 /**
  * Master-detail template picker. Left: a searchable, keyboard-navigable list of
  * managed templates (title + subject). Right: a live sandboxed-iframe render of
- * the highlighted template (same endpoint as EmailPreviewModal, cached per slug).
+ * the highlighted template (`email-templates/preview`, cached per slug).
  * Confirming (button / Enter / double-click) emits the chosen slug and closes.
  */
 const props = defineProps({
@@ -219,7 +227,7 @@ function moveHighlight(delta) {
 }
 
 function confirmSelection() {
-    if (!highlighted.value) return;
+    if (!highlighted.value || previewLoading.value || previewError.value) return;
     emit('select', highlighted.value);
     emit('update:open', false);
 }

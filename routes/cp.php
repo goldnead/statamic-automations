@@ -197,6 +197,13 @@ Route::prefix('automations')
             Route::get('email-templates/preview', [EmailTemplatePreviewController::class, 'preview'])
                 ->name('email-templates.preview');
 
+            // Eine gespeicherte Mail dieses Ablaufs, gerendert — plus der
+            // Zeiger auf das, was davon wirklich rausging. Speist die Vorschau
+            // in der Mails-Ansicht und am E-Mail-Knoten.
+            Route::get('automations/{automationFlow}/mails/{nodeKey}/preview', [EmailTemplatePreviewController::class, 'node'])
+                ->where('nodeKey', '[A-Za-z0-9_.-]+')
+                ->name('automations.mails.preview');
+
             // Versions + audit
             Route::get('automations/{automationFlow}/versions', [VersionsController::class, 'index'])->name('automations.versions');
             Route::post('automations/{automationFlow}/versions/{timestamp}/revert', [VersionsController::class, 'revert'])

@@ -9,6 +9,7 @@ use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationAction;
 use Goldnead\StatamicAutomations\Engine\TokenResolver;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
+use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Sending\BrandMailer;
 use Goldnead\StatamicAutomations\Sequence\MailSteps;
 use Goldnead\StatamicAutomations\Support\ActionResult;
@@ -70,6 +71,21 @@ class SendEmailAction implements AutomationAction
      * import: the sibling addon is optional and must stay so.
      */
     protected const MARKETING_ACTION = 'Goldnead\\Marketing\\Integrations\\Automations\\Actions\\SendMarketingEmailAction';
+
+    /**
+     * The suite-wide store of what went out, in email-templates. Held as a
+     * string for the same reason as above: the addon is optional, and this one
+     * must run without it. Frozen name — see Snapshots::CLASS_NAME.
+     */
+    protected const SNAPSHOTS = 'Goldnead\\EmailTemplates\\Snapshots\\Snapshots';
+
+    /**
+     * node uuid => its stored mail, or null when it could not be read.
+     * {@see storedMail()}.
+     *
+     * @var array<string, array<string, mixed>|null>
+     */
+    protected static array $storedMailCache = [];
 
     public function __construct(
         protected ?LeadHubAdapter $adapter = null,
@@ -273,6 +289,13 @@ class SendEmailAction implements AutomationAction
         // body below.
         $html = null;
 
+        // The template as it stands right now, with its {{ … }} intact — what
+        // goes into the snapshot after a successful send. Captured here and
+        // nowhere later: three lines down the same strings have the recipient's
+        // name in them, and a snapshot table that holds one person's mail needs
+        // a deletion concept the whole design exists to avoid.
+        $snapshotTemplate = null;
+
         if (! empty($templateSlug) && $this->emailTemplatesAvailable()) {
             $resolved = EmailTemplates::resolve(
                 $templateSlug,
@@ -280,6 +303,21 @@ class SendEmailAction implements AutomationAction
             );
 
             if ($resolved !== null && $resolved->body !== '') {
+                // Only a managed entry. `source: fallback` means the slug did
+                // not resolve and the callable above handed back this run's
+                // ALREADY RESOLVED body — personalised text wearing a
+                // template's clothes.
+                if (($resolved->source ?? '') === 'entry') {
+                    $snapshotTemplate = [
+                        'subject' => (string) ($resolved->subject ?? ''),
+                        'body' => (string) $resolved->body,
+                        'plain_text' => $resolved->plainText ?? null,
+                        'layout' => $resolved->layout ?? null,
+                        'slug' => (string) $templateSlug,
+                        'source' => 'entry',
+                    ];
+                }
+
                 $html = $resolved->body;
                 $subjectFromTemplate = false;
 
@@ -430,6 +468,8 @@ class SendEmailAction implements AutomationAction
             if ($dedupeKey !== null) {
                 Cache::put($dedupeKey, true, now()->addYear());
             }
+
+            $this->recordSnapshot($context, $snapshotTemplate);
 
             return ActionResult::success([
                 'sent_to' => $to,
@@ -670,6 +710,100 @@ class SendEmailAction implements AutomationAction
     protected function emailTemplatesAvailable(): bool
     {
         return static::emailTemplatesInstalled();
+    }
+
+    /**
+     * Write the sent mail into the suite-wide snapshot table — one row per
+     * *version of this node's mail*, never one per recipient.
+     *
+     * The table lives in `goldnead/statamic-email-templates` and is the only
+     * one there is; this addon does not own a second. It is an optional
+     * dependency, so the class is held as a string and checked. Anything that
+     * goes wrong in there answers null and logs — a send is never failed for a
+     * bookkeeping row.
+     *
+     * `(owner_type, owner_id, content_hash)` is the key, so a node that fires
+     * ten thousand times with an unchanged mail is one row, and an edited mail
+     * starts a new one next to the old.
+     *
+     * **What is handed over carries `{{ … }}` and nothing personal.** Two paths
+     * lead here and both are guarded: a managed template is captured before its
+     * tokens are resolved (see execute()), and an inline body is read from the
+     * STORED node, not from the `$config` array — that one went through
+     * TokenResolver before this action ever saw it and holds the recipient's
+     * name. Where neither is available the snapshot is skipped, because writing
+     * a personalised mail into a table with no deletion concept is the one
+     * outcome worse than not recording the send.
+     *
+     * @param  array<string, mixed>|null  $template
+     */
+    protected function recordSnapshot(AutomationContext $context, ?array $template): void
+    {
+        if (! class_exists(self::SNAPSHOTS)) {
+            return;
+        }
+
+        $flowUuid = (string) ($context->get('_automation.uuid') ?? '');
+        $nodeUuid = (string) ($context->get('_node.uuid') ?? '');
+
+        if ($flowUuid === '' || $nodeUuid === '') {
+            return;
+        }
+
+        $template ??= $this->storedMail($nodeUuid);
+
+        if ($template === null || ((string) $template['body'] === '' && (string) $template['subject'] === '')) {
+            return;
+        }
+
+        $class = self::SNAPSHOTS;
+
+        $class::record('automations:node', $flowUuid.':'.$nodeUuid, $template);
+    }
+
+    /**
+     * The node's own subject and body as they are STORED, with placeholders.
+     *
+     * Read from the database rather than from the `$config` handed to
+     * execute(): NodeExecutor resolves every config value against the run
+     * context before an action sees it, so `$config['body']` is this one
+     * recipient's mail.
+     *
+     * ponytail: memoised per process, keyed by node uuid — a fan-out of 800
+     * mails through one worker costs one query. A long-lived worker holds a few
+     * hundred bytes per mail node it has run; swap for a request-scoped cache
+     * if that ever matters.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function storedMail(string $nodeUuid): ?array
+    {
+        if (array_key_exists($nodeUuid, static::$storedMailCache)) {
+            return static::$storedMailCache[$nodeUuid];
+        }
+
+        $mail = null;
+
+        try {
+            $node = AutomationNode::where('uuid', $nodeUuid)->first();
+            $config = is_array($node?->config) ? $node->config : null;
+
+            if ($config !== null) {
+                $mail = [
+                    'subject' => (string) ($config['subject'] ?? ''),
+                    'body' => (string) ($config['body'] ?? ''),
+                    'slug' => null,
+                    'source' => 'inline',
+                ];
+            }
+        } catch (\Throwable $e) {
+            Log::warning('[automations] Der gespeicherte Stand des Mail-Knotens ließ sich nicht lesen, der Versand wird nicht aufgezeichnet.', [
+                'node' => $nodeUuid,
+                'exception' => $e,
+            ]);
+        }
+
+        return static::$storedMailCache[$nodeUuid] = $mail;
     }
 
     /**

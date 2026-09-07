@@ -89,7 +89,14 @@
                         />
 
                         <!-- Email template affordances: rendered preview +
-                             master-detail picker, next to the template select. -->
+                             master-detail picker, next to the template select.
+
+                             Die Vorschau zeigt die Mail dieses Schritts, wie
+                             sie GESPEICHERT ist — mit Vorlage oder mit eigenem
+                             Text — und daneben, was davon rausging. Deshalb
+                             hängt sie nicht mehr daran, ob im Formular gerade
+                             eine Vorlage steht. Was im Formular steht und noch
+                             nicht gespeichert ist, zeigt der Wähler daneben. -->
                         <div
                             v-if="isEmailTemplateField(field)"
                             class="mt-2 flex items-center gap-2"
@@ -99,7 +106,6 @@
                                 variant="filled"
                                 icon="eye"
                                 :text="__('Vorschau')"
-                                :disabled="!config[field.handle]"
                                 @click="openEmailPreview(field)"
                             />
                             <Button
@@ -197,10 +203,12 @@
 
             <!-- Email template preview + picker (mounted once; driven by the
                  field buttons above via emailFieldHandle). -->
-            <EmailPreviewModal
+            <MailPreviewModal
                 v-model:open="emailPreviewOpen"
-                :slug="emailSlug"
                 :api-base="apiBase"
+                :automation-id="automation?.id ?? null"
+                :mails="[{ node_key: node.node_key, label: node.label || node.node_key }]"
+                :node-key="node.node_key"
             />
             <EmailTemplatePicker
                 v-model:open="emailPickerOpen"
@@ -230,7 +238,7 @@ import {
     Icon,
 } from '@statamic/cms/ui';
 import ConditionBuilder from './ConditionBuilder.vue';
-import EmailPreviewModal from './EmailPreviewModal.vue';
+import MailPreviewModal from './MailPreviewModal.vue';
 import EmailTemplatePicker from './EmailTemplatePicker.vue';
 import KeyValueField from './KeyValueField.vue';
 import PropertiesSection from './PropertiesSection.vue';

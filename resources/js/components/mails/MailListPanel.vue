@@ -182,6 +182,10 @@
                  path, with the same confirmation. -->
             <template #prepended-row-actions="{ row }">
                 <DropdownItem icon="mail" :text="__('Open this mail')" @click="$emit('open', row.mail)" />
+                <!-- Lesen kommt vor Ändern: die Vorschau steht jedem offen,
+                     der die Liste sehen darf, und blättert von hier aus durch
+                     alle Mails des Ablaufs. -->
+                <DropdownItem icon="eye" :text="__('Preview this mail')" @click="preview(row.node_key)" />
                 <template v-if="canMutate">
                     <DropdownItem
                         v-if="row.position > 1"
@@ -258,6 +262,17 @@
                 />
             </template>
         </Modal>
+
+        <!-- Dieselbe Vorschau wie am E-Mail-Knoten, nur mit allen Mails des
+             Ablaufs im Schrittwähler — von hier aus liest man die Strecke
+             durch, statt jeden Schritt einzeln zu öffnen. -->
+        <MailPreviewModal
+            v-model:open="previewing"
+            :api-base="apiBase"
+            :automation-id="automationId"
+            :mails="previewMails"
+            :node-key="previewKey"
+        />
     </div>
 </template>
 
@@ -279,6 +294,7 @@ import {
 } from '@statamic/cms/ui';
 
 import LinearityNotice from './LinearityNotice.vue';
+import MailPreviewModal from '../builder/MailPreviewModal.vue';
 import { durationParts, movedOrder } from '../../support/mailList.js';
 
 const props = defineProps({
@@ -303,12 +319,38 @@ const props = defineProps({
      * checkbox with nothing behind it is worse than none.
      */
     actionUrl: { type: String, default: null },
+    /** Addon CP API base (`.../automations/api`), für die Vorschau. */
+    apiBase: { type: String, default: null },
+    /** Die Id des Ablaufs, dessen Mails hier stehen. */
+    automationId: { type: [String, Number], default: null },
 });
 
 const emit = defineEmits(['reorder', 'insert', 'open-flow', 'open', 'refresh']);
 
 const mails = computed(() => props.list?.mails ?? []);
 const editable = computed(() => Boolean(props.list?.editable));
+
+// ---------- Vorschau ----------
+
+const previewing = ref(false);
+const previewKey = ref(null);
+
+/**
+ * Der Schrittwähler der Vorschau, in Flow-Reihenfolge — nicht in der gerade
+ * sortierten Reihenfolge der Tabelle. „Nächste Mail" heißt die nächste, die der
+ * Ablauf schickt; wer nach Betreff sortiert hat, meint damit nichts anderes.
+ */
+const previewMails = computed(() =>
+    mails.value.map((mail) => ({
+        node_key: mail.node_key,
+        label: mail.display_label || mail.label || mail.node_key,
+    })),
+);
+
+function preview(nodeKey) {
+    previewKey.value = nodeKey;
+    previewing.value = true;
+}
 
 /**
  * Three separate gates, each with its own message above, because they call for

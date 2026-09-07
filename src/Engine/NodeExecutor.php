@@ -38,6 +38,20 @@ class NodeExecutor
         /** @var class-string $class */
         $class = $entry['class'];
         $kind = $entry['kind'];
+
+        // Which node is running, for the actions that have to name themselves
+        // to something outside this engine. The mail node needs it: the
+        // snapshot of a sent mail is owned by "{flow uuid}:{node uuid}", and
+        // execute() only ever sees a config array.
+        //
+        // Underscore like `_automation`: engine data, not payload. Two short
+        // strings and nothing more — the run payload keeps a copy of the whole
+        // context, so anything put here is written once per node run.
+        $context->set('_node', [
+            'uuid' => (string) $node->uuid,
+            'key' => (string) $node->node_key,
+        ]);
+
         $config = $this->tokens->resolve($node->config ?? [], $context);
         if (! is_array($config)) {
             $config = [];

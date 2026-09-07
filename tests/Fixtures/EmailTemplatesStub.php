@@ -68,11 +68,35 @@ if (! class_exists(EmailTemplates::class)) {
         }
 
         /**
+         * Mirrors `EmailTemplateCollectionManager::findBySlug()`: under
+         * multi-brand with a brand resolved, only that brand's template answers
+         * to a slug. Without this the stub would be looser than the sibling and
+         * would hide exactly the mismatch F17 was made of — a template the
+         * picker offered and the resolver refused.
+         *
+         * @param  array<string,mixed>  $entry
+         */
+        protected static function visibleForCurrentBrand(array $entry): bool
+        {
+            if (! app()->bound('brand-context')) {
+                return true;
+            }
+
+            $manager = app('brand-context');
+
+            if (! $manager->multiBrandEnabled() || ! $manager->hasCurrent()) {
+                return true;
+            }
+
+            return (string) ($entry['brand'] ?? '') === (string) $manager->current()->handle;
+        }
+
+        /**
          * @param  (callable(string):(EmailTemplateData|array<string,mixed>|null))|null  $fallback
          */
         public static function resolve(string $slug, ?callable $fallback = null): ?EmailTemplateData
         {
-            if (isset(self::$entries[$slug])) {
+            if (isset(self::$entries[$slug]) && self::visibleForCurrentBrand(self::$entries[$slug])) {
                 $data = EmailTemplateData::fromArray(self::$entries[$slug] + ['slug' => $slug]);
                 $data->source = 'entry';
 

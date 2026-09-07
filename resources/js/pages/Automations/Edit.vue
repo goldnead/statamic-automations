@@ -1065,6 +1065,8 @@ watch(view, scheduleHeightUpdate);
                 :busy="mailListBusy"
                 :stale="mailListStale"
                 :action-url="mailListUrl ? `${mailListUrl}/actions` : null"
+                :api-base="apiBase"
+                :automation-id="automation.id ?? null"
                 @reorder="reorderMails"
                 @insert="insertMail"
                 @open-flow="view = 'flow'"
