@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.18.0 (2026-09-08)
+
+### Fixed: an unmigrated install no longer answers HTTP 500
+
+The automations list, dashboard, runs, rules and audit screens used to die with `no such table`
+when the addon was installed but its migrations had never run. Each now shows an empty state
+naming the tables it is missing and saying to run `php artisan migrate`, and writes the reason
+to the log. Every screen names only the tables it actually reads.
+
+Under the `flat_file` driver the definition tables are left out of the check, because nothing
+reads them there. Where a screen reaches the definitions through an Eloquent relation rather
+than the repository, they are named regardless.
+
 ## 2.17.0 (2026-09-07)
 
 ### Added: the trigger filters offer what is there instead of demanding a handle
