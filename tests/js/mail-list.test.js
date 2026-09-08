@@ -244,8 +244,12 @@ describe('MailListPanel', () => {
         const items = wrapper.findAll('[data-listing-row]')[1]
             .findAll('[data-row-actions] [data-stub="DropdownItem"]');
 
+        // The preview sits between "open" and the two moves, and has since
+        // 2.17.0 shipped it: reading comes before changing, and the preview is
+        // outside the `canMutate` block so a reader who may not touch the list
+        // still gets it. This expectation had frozen the pre-2.17.0 three.
         expect(items.map((item) => item.attributes('data-attr-text')))
-            .toEqual(['Open this mail', 'Move up', 'Move down']);
+            .toEqual(['Open this mail', 'Preview this mail', 'Move up', 'Move down']);
 
         await items[0].trigger('click');
 

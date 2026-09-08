@@ -13,6 +13,12 @@ Under the `flat_file` driver the definition tables are left out of the check, be
 reads them there. Where a screen reaches the definitions through an Eloquent relation rather
 than the repository, they are named regardless.
 
+### Fixed: the JavaScript test leg, red since 2.17.0
+
+`mail-list.test.js` still expected the three row-menu entries the mail list had before 2.17.0 put
+the preview between "open" and the two moves. The component was right, the expectation was stale;
+it has been pulled to the shipped menu, with the reason for that order written next to it.
+
 ## 2.17.0 (2026-09-07)
 
 ### Added: the trigger filters offer what is there instead of demanding a handle
