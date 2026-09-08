@@ -1,5 +1,60 @@
 # Changelog
 
+## 2.17.0 (2026-09-07)
+
+### Neu: die Trigger-Filter bieten an, was da ist, statt ein Handle zu verlangen
+
+Sieben Auslöser verlangten bisher, dass man das Handle des Objekts kennt und abtippt: die
+Zahlungs-Auslöser das Produkt, die vier Funnel-Auslöser den Funnel, die Marketing-Auslöser
+Liste und Kampagne. Alle sieben waren ein Textfeld ohne Optionsquelle. Sie zeigen jetzt auf die
+vorhandene `OptionSourceRegistry`; `marketing.lists` und `marketing.campaigns` meldet das
+Marketing-Addon dort schon selbst an, neu registriert sind `payments.products` und
+`funnels.funnels`.
+
+Die Produktliste kommt aus der Payments-Catalogue, nicht aus der Produkttabelle: die Catalogue
+ist die einzige Stelle, die Konfigurationsdatei, `statamic-products` und `statamic-offers`
+zusammenführt. Eine Auswahl auf der Tabelle allein zeigte drei von sechs Produkten. Beide
+Auflöser sind über Klassennamen geschützt und liefern ohne das jeweilige Geschwister-Addon eine
+leere Liste, nie einen Fehler.
+
+Der Schritt-Filter des Funnel-Auslösers bleibt ein Textfeld: welche Schritte zur Wahl stehen,
+hängt am gewählten Funnel, und eine abhängige Liste kann der Options-Endpunkt heute nicht.
+
+### Behoben: der Vorlagenwähler bot Vorlagen an, die er nicht zeigen konnte
+
+Die Vorlagenliste im E-Mail-Knoten fragte ohne Markenfilter ab, die Vorschau löste über den
+markengebundenen Resolver auf. Auf einer Instanz mit mehreren Marken bot der Wähler damit
+fremde Vorlagen an, die er nicht anzeigen konnte und die der Knoten auch nicht verschickt hätte.
+Beide Enden benutzen jetzt dieselbe Marke, jeder Fehlschlag nennt seinen Grund und schreibt eine
+Logzeile statt „Vorschau nicht verfügbar", und eine Vorlage, die nicht rendert, lässt sich nicht
+mehr übernehmen.
+
+### Neu: die Mails eines Ablaufs sind ansehbar
+
+Ein Endpunkt liefert die gespeicherte Mail eines Schritts, gerendert mit Beispieldaten und mit
+stehen gelassenen Platzhaltern dort, wo es keine gibt. Eine Vorschau mit Schrittwähler zeigt sie
+in der Mails-Ansicht und am Knoten. Was wirklich rausging, kommt aus der Snapshot-Schicht in
+`statamic-email-templates`: der Versand zeichnet die Vorlage mit ihren `{{ }}` auf, nie den
+aufgelösten Text eines Empfängers.
+
+### Behoben: eine nicht auflösbare Vorlage ging still im Rückfall unter
+
+Nennt ein Knoten eine Vorlage, die von seiner Marke aus nicht auffindbar ist, geht seit jeher
+der eigene Text des Knotens raus. Der Rückfall bleibt richtig, war aber lautlos: ein Ablauf
+verschickt so monatelang nicht das, was in ihm steht. Es gibt jetzt eine Logzeile, je Kürzel
+gedrosselt, damit ein Fan-out sie einmal schreibt und nicht tausendmal.
+
+### Geändert: `goldnead/statamic-brand-context` ab 1.13
+
+Die Einstellungsseite aus 2.16.0 arbeitet unter älteren Fassungen nicht verlässlich. Auf einer
+Installation mit einer einzigen Marke wurden die Werte der zuletzt angemeldeten Addons gar nicht
+auf die Config gelegt — `automations` war beim Nachmessen im Playground am 07.09. eines davon.
+Die Seite zeigte den gespeicherten Wert, gelesen wurde die Paketvorgabe. Dazu löschte bis 1.12
+ein zweites Speichern desselben Abschnitts die Überschreibung des ersten, ohne Meldung. Das
+Recht bleibt `manage automation settings`, es ändert sich nichts an der Bedienung. Wer zwischen
+dem 06.09. und diesem Update Einstellungen gesetzt hat, sieht nach, ob sie noch dastehen;
+verlorene Werte kommen nicht von selbst zurück.
+
 ## 2.16.0 (2026-09-06)
 
 ### Geändert: die Einstellungen ziehen auf den gemeinsamen Suite-Bildschirm
