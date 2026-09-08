@@ -2,745 +2,722 @@
 
 ## 2.17.0 (2026-09-07)
 
-### Neu: die Trigger-Filter bieten an, was da ist, statt ein Handle zu verlangen
+### Added: the trigger filters offer what is there instead of demanding a handle
 
-Sieben Auslöser verlangten bisher, dass man das Handle des Objekts kennt und abtippt: die
-Zahlungs-Auslöser das Produkt, die vier Funnel-Auslöser den Funnel, die Marketing-Auslöser
-Liste und Kampagne. Alle sieben waren ein Textfeld ohne Optionsquelle. Sie zeigen jetzt auf die
-vorhandene `OptionSourceRegistry`; `marketing.lists` und `marketing.campaigns` meldet das
-Marketing-Addon dort schon selbst an, neu registriert sind `payments.products` und
-`funnels.funnels`.
+Seven triggers used to require knowing the object's handle and typing it out: the payment
+triggers the product, the four funnel triggers the funnel, the marketing triggers the list and
+the campaign. All seven were a text field without an option source. They now point at the
+existing `OptionSourceRegistry`; `marketing.lists` and `marketing.campaigns` are already
+registered there by the marketing addon itself, and `payments.products` and `funnels.funnels` are
+newly registered.
 
-Die Produktliste kommt aus der Payments-Catalogue, nicht aus der Produkttabelle: die Catalogue
-ist die einzige Stelle, die Konfigurationsdatei, `statamic-products` und `statamic-offers`
-zusammenführt. Eine Auswahl auf der Tabelle allein zeigte drei von sechs Produkten. Beide
-Auflöser sind über Klassennamen geschützt und liefern ohne das jeweilige Geschwister-Addon eine
-leere Liste, nie einen Fehler.
+The product list comes from the payments catalogue, not from the products table: the catalogue is
+the only place that brings the config file, `statamic-products` and `statamic-offers` together. A
+picker built on the table alone showed three of six products. Both resolvers are guarded by class
+name and return an empty list without the respective sibling addon, never an error.
 
-Der Schritt-Filter des Funnel-Auslösers bleibt ein Textfeld: welche Schritte zur Wahl stehen,
-hängt am gewählten Funnel, und eine abhängige Liste kann der Options-Endpunkt heute nicht.
+The funnel trigger's step filter stays a text field: which steps are available depends on the
+funnel chosen, and the options endpoint cannot do a dependent list today.
 
-### Behoben: der Vorlagenwähler bot Vorlagen an, die er nicht zeigen konnte
+### Fixed: the template picker offered templates it could not show
 
-Die Vorlagenliste im E-Mail-Knoten fragte ohne Markenfilter ab, die Vorschau löste über den
-markengebundenen Resolver auf. Auf einer Instanz mit mehreren Marken bot der Wähler damit
-fremde Vorlagen an, die er nicht anzeigen konnte und die der Knoten auch nicht verschickt hätte.
-Beide Enden benutzen jetzt dieselbe Marke, jeder Fehlschlag nennt seinen Grund und schreibt eine
-Logzeile statt „Vorschau nicht verfügbar", und eine Vorlage, die nicht rendert, lässt sich nicht
-mehr übernehmen.
+The template list in the email node queried without a brand filter, while the preview resolved
+through the brand-bound resolver. On an installation with several brands the picker therefore
+offered other brands' templates, which it could not display and which the node would not have
+sent either. Both ends now use the same brand, every failure names its reason and writes a log
+line instead of "preview unavailable", and a template that does not render can no longer be
+selected.
 
-### Neu: die Mails eines Ablaufs sind ansehbar
+### Added: a flow's mails can be looked at
 
-Ein Endpunkt liefert die gespeicherte Mail eines Schritts, gerendert mit Beispieldaten und mit
-stehen gelassenen Platzhaltern dort, wo es keine gibt. Eine Vorschau mit Schrittwähler zeigt sie
-in der Mails-Ansicht und am Knoten. Was wirklich rausging, kommt aus der Snapshot-Schicht in
-`statamic-email-templates`: der Versand zeichnet die Vorlage mit ihren `{{ }}` auf, nie den
-aufgelösten Text eines Empfängers.
+An endpoint returns a step's stored mail, rendered with sample data and with placeholders left
+standing where there is none. A preview with a step picker shows it in the mails view and on the
+node. What actually went out comes from the snapshot layer in `statamic-email-templates`: the
+send records the template with its `{{ }}`, never one recipient's resolved text.
 
-### Behoben: eine nicht auflösbare Vorlage ging still im Rückfall unter
+### Fixed: an unresolvable template went down silently in the fallback
 
-Nennt ein Knoten eine Vorlage, die von seiner Marke aus nicht auffindbar ist, geht seit jeher
-der eigene Text des Knotens raus. Der Rückfall bleibt richtig, war aber lautlos: ein Ablauf
-verschickt so monatelang nicht das, was in ihm steht. Es gibt jetzt eine Logzeile, je Kürzel
-gedrosselt, damit ein Fan-out sie einmal schreibt und nicht tausendmal.
+If a node names a template that cannot be found from its brand, the node's own text has always
+gone out instead. The fallback stays correct, but it was silent: a flow can spend months sending
+something other than what it says. There is a log line now, throttled per handle, so that a
+fan-out writes it once and not a thousand times.
 
-### Geändert: `goldnead/statamic-brand-context` ab 1.13
+### Changed: `goldnead/statamic-brand-context` from 1.13
 
-Die Einstellungsseite aus 2.16.0 arbeitet unter älteren Fassungen nicht verlässlich. Auf einer
-Installation mit einer einzigen Marke wurden die Werte der zuletzt angemeldeten Addons gar nicht
-auf die Config gelegt — `automations` war beim Nachmessen im Playground am 07.09. eines davon.
-Die Seite zeigte den gespeicherten Wert, gelesen wurde die Paketvorgabe. Dazu löschte bis 1.12
-ein zweites Speichern desselben Abschnitts die Überschreibung des ersten, ohne Meldung. Das
-Recht bleibt `manage automation settings`, es ändert sich nichts an der Bedienung. Wer zwischen
-dem 06.09. und diesem Update Einstellungen gesetzt hat, sieht nach, ob sie noch dastehen;
-verlorene Werte kommen nicht von selbst zurück.
+The settings page from 2.16.0 does not work reliably under older versions. On an installation
+with a single brand, the values of the addons registered last were not applied to the config at
+all — `automations` was one of them when this was measured in the playground on 2026-09-07. The
+page showed the stored value while the package default was what got read. On top of that, up to
+1.12 a second save of the same section deleted the first one's override, without a message. The
+permission stays `manage automation settings`, nothing about the handling changes. Anyone who set
+settings between 2026-09-06 and this update should check whether they are still there; lost
+values do not come back on their own.
 
 ## 2.16.0 (2026-09-06)
 
-### Geändert: die Einstellungen ziehen auf den gemeinsamen Suite-Bildschirm
+### Changed: the settings move to the shared suite screen
 
-Die Seite **Automations → Einstellungen** entfällt. Dieselben Felder stehen jetzt unter
-**Einstellungen → Addon-Einstellungen**, zusammen mit denen der anderen Suite-Addons.
-Die alte Adresse leitet weiter, das Recht `manage automation settings` bleibt unverändert,
-und eine Migration trägt gespeicherte Werte in die neue Tabelle. Zu tun ist nichts außer
-`php artisan migrate`.
+The page **Automations → Settings** is gone. The same fields now sit under **Settings → Addon
+settings**, together with those of the other suite addons. The old address redirects, the
+permission `manage automation settings` is unchanged, and a migration carries stored values into
+the new table. There is nothing to do beyond `php artisan migrate`.
 
-- **Voraussetzung: `goldnead/statamic-brand-context` ≥ 1.12.** Das Paket ist MIT und war schon
-  vorher eine Abhängigkeit; es stellt jetzt Bildschirm, Validierung, Speicher und die
-  Markendimension. Dieses Addon schreibt nur noch die Feldliste
-  (`Support\Settings::settingsGroups()`) und meldet sich an.
-- **Die Werte sind ab jetzt markenbezogen.** `automation_settings` hatte keine `brand_id`, auf
-  einer Mehrmarken-Installation teilten sich also zwei Marken eine Einstellung. Im
-  Einmarken-Betrieb ändert sich dadurch nichts.
-- **`automation_settings` bleibt eine Minor-Version stehen.** Wer zurückrollt, verliert sonst
-  seine Einstellungen. Das Löschen kommt später und angekündigt.
-- **Die Integrations-Anzeige ist aufs Dashboard gewandert.** Sie war nie eine Einstellung,
-  sondern eine Erkennung — welche Schwester-Addons installiert sind, entscheidet Composer.
-- Netto −1067/+296 Zeilen: Model, Request, zwei Controller und die Vue-Seite entfallen.
+- **Requires `goldnead/statamic-brand-context` ≥ 1.12.** That package is MIT and was already a
+  dependency; it now provides the screen, the validation, the storage and the brand dimension.
+  This addon only writes the field list (`Support\Settings::settingsGroups()`) and registers
+  itself.
+- **The values are brand-scoped from now on.** `automation_settings` had no `brand_id`, so on a
+  multi-brand installation two brands shared one setting. In single-brand operation nothing
+  changes.
+- **`automation_settings` stays for one minor version.** Otherwise anyone rolling back loses
+  their settings. Dropping it comes later and announced.
+- **The integrations display has moved to the dashboard.** It was never a setting but a
+  detection — which sibling addons are installed is Composer's decision.
+- Net −1067/+296 lines: the model, the request, two controllers and the Vue page are gone.
 
 ## 2.15.5 (2026-09-05)
 
-### Behoben: die Kürzung verschmolz zwei Worte, ließ Satzzeichen als Namen durchgehen und räumte nur eine Klammerebene
+### Fixed: the shortening fused two words, let punctuation pass as a name, and cleared only one level of brackets
 
-- **Jeder Platzhalter hinterlässt jetzt ein Leerzeichen, nicht nichts.** Genau daran hing die
-  Zusage „erfindet nie Worte", und sie stimmte nicht:
-  `{{if premium}}Premium{{else}}Basis{{/if}}` wurde zu `PremiumBasis` — ein Wort, das kein
-  Leser je bekommt. Jetzt `Premium Basis`. Aus demselben Grund wird `Hallo{{ name }}Welt` zu
-  `Hallo Welt` statt `HalloWelt`: beide Hälften hat jemand geschrieben, das Kompositum nicht.
-- **Bleibt nur ein Satzzeichen übrig, zählt das als leer.** `{{ x }}.` ergab `.`, und weil ein
-  Punkt für PHP nicht leer ist, gewann er gegen den eigenen Namen des Schritts — die Rückfrage
-  hieß dann „„." löschen?". „Lesbar" heißt jetzt: mindestens ein Buchstabe oder eine Ziffer.
-- **Verschachtelte Leerklammern werden ganz geräumt.** `A (({{ x }})) B` blieb bei `A () B`
-  stehen, weil die Reinigung nur einmal lief. Sie läuft jetzt, bis sich nichts mehr ändert.
-- **Drei Kommentare beschrieben noch das Verhalten vor 2.15.4** (Projektion, Controller,
-  `Edit.vue`) und verwiesen dabei auf eine Methode, deren Kopf inzwischen das Gegenteil sagte.
+- **Every placeholder now leaves a space behind, not nothing.** That is exactly what the promise
+  "it never invents words" hung on, and it was not true:
+  `{{if premium}}Premium{{else}}Basis{{/if}}` became `PremiumBasis` — a word no reader ever
+  receives. Now `Premium Basis`. For the same reason `Hallo{{ name }}Welt` becomes `Hallo Welt`
+  instead of `HalloWelt`: somebody wrote both halves, nobody wrote the compound.
+- **If only a punctuation mark is left, that counts as empty.** `{{ x }}.` produced `.`, and
+  because a full stop is not empty to PHP, it won against the step's own name — the confirmation
+  then read "delete "."?". "Readable" now means: at least one letter or digit.
+- **Nested empty brackets are cleared completely.** `A (({{ x }})) B` was left at `A () B`,
+  because the cleanup ran only once. It now runs until nothing changes any more.
+- **Three comments still described the behaviour before 2.15.4** (the projection, the controller,
+  `Edit.vue`) and referred to a method whose own docblock said the opposite by then.
 
 ## 2.15.4 (2026-09-05)
 
-### Behoben: die Kürzung aus 2.15.3 warf den Rest des Betreffs weg
+### Fixed: the shortening from 2.15.3 threw away the rest of the subject
 
-- **Jeder Platzhalter wird entfernt, nicht mehr am ersten abgeschnitten.** 2.15.3 schnitt
-  vor dem ersten `{{` — bei einem deutschen Betreff, der mit dem Vornamen anfängt, blieb
-  damit gar nichts übrig, und das ist kein Randfall. `Hallo {{ name }}, willkommen` heißt
-  jetzt `Hallo, willkommen` statt `Hallo`, `{{ contact.first_name }} — dein Platz im Kurs`
-  heißt `dein Platz im Kurs` statt des Node-Keys.
-- **Damit ist die Kurzform wieder eindeutig.** `Hallo {{ name }} Teil 2` und
-  `Hallo {{ name }}, willkommen` ergaben in 2.15.3 beide „Hallo" — zwei Mails, eine
-  Rückfrage. Der Name steht in der Rückfrage, weil der Leser das Menü auf der falschen
-  Zeile geöffnet haben kann; eine Kurzform, die zwei Zeilen gleich benennt, nimmt genau
-  das weg.
-- **Antlers-Blöcke:** die Tags gehen, der Text dazwischen bleibt
-  (`Newsletter {{if foo}}Ja{{/if}} Ende` → `Newsletter Ja Ende`). Das ist, was der Leser
-  sieht, wenn die Bedingung greift, und es braucht keinen Parser, um richtig zu sein.
-- **Nur Binde- und Öffnungszeichen werden an der Naht abgeschnitten, Schlusszeichen nicht.**
-  `„Zitat“ {{ x }}` behält sein schließendes Anführungszeichen, `Betreff (für {{ x }})`
-  behält die Klammer statt auf einem einsamen `(` zu enden, und ein Punkt oder Fragezeichen
-  am Ende gehört dem Autor und bleibt.
-- **Bleibt vom Betreff nichts, kommt jetzt der eigene Name des Schritts.** Das Feld „Name"
-  im Hinzufügen-Formular ist genau dafür da. Erst danach der Node-Key. Solange der Betreff
-  noch Worte trägt, gewinnt der Betreff — er ist die Zeile, die die Mail führt.
-- **Ein unvollständiges `{{` ohne schließende Klammern** erreicht den Schirm nicht mehr mit
-  sichtbaren Klammern.
-- **`After “:label”` hat eine deutsche Übersetzung** (`Nach „:label“`). Im deutschen CP
-  stand dort bisher englischer Text mit englischen Anführungszeichen, direkt neben dem
-  deutschen „…" löschen?.
+- **Every placeholder is removed now, instead of cutting at the first one.** 2.15.3 cut before
+  the first `{{` — with a German subject that starts with the first name, nothing at all was
+  left, and that is not an edge case. `Hallo {{ name }}, willkommen` is now
+  `Hallo, willkommen` instead of `Hallo`, and `{{ contact.first_name }} — dein Platz im Kurs`
+  is `dein Platz im Kurs` instead of the node key.
+- **That makes the short form unambiguous again.** `Hallo {{ name }} Teil 2` and
+  `Hallo {{ name }}, willkommen` both produced "Hallo" in 2.15.3 — two mails, one confirmation
+  dialogue. The name appears in that dialogue because the reader may have opened the menu on
+  the wrong row; a short form that names two rows identically takes exactly that away.
+- **Antlers blocks:** the tags go, the text between them stays
+  (`Newsletter {{if foo}}Ja{{/if}} Ende` → `Newsletter Ja Ende`). That is what the reader sees
+  when the condition holds, and it needs no parser to be right.
+- **Only connecting and opening characters are trimmed at the seam, closing ones are not.**
+  `„Zitat“ {{ x }}` keeps its closing quotation mark, `Betreff (für {{ x }})` keeps the bracket
+  instead of ending on a lone `(`, and a full stop or question mark at the end belongs to the
+  author and stays.
+- **If nothing is left of the subject, the step's own name is used now.** The "Name" field in
+  the add form exists precisely for that. Only after it comes the node key. As long as the
+  subject still carries words, the subject wins — it is the line that leads the mail.
+- **An incomplete `{{` without closing brackets** no longer reaches the screen with visible
+  brackets.
+- **`After “:label”` has a German translation** (`Nach „:label“`). In the German CP there was
+  English text with English quotation marks there so far, right next to the German
+  „…" löschen?.
 
 ## 2.15.3 (2026-09-05)
 
-### Behoben: der rohe Antlers-Platzhalter stand in der Rückfrage vor dem Löschen
+### Fixed: the raw Antlers placeholder appeared in the confirmation before deleting
 
-- **„Zahlung bestätigt, {{ contact.first_name }}" löschen?** Der gespeicherte Mailname ist
-  eine Betreffvorlage, und die Rückfrage zitierte sie wörtlich, samt Platzhalter. Der Name
-  wird jetzt vor dem ersten `{{` abgeschnitten und sauber beendet — „Zahlung bestätigt"
-  löschen? Gilt für beide Löschwege (Zeilenmenü über Statamics Aktionsliste und die
-  Rückfrage aus der geöffneten Mail), die weiterhin wortgleich sind.
-- **Gekürzt, nicht aufgelöst.** Ein Betreff ist gegen den Kontakt geschrieben, den ein
-  Durchlauf einmal haben wird; im Control Panel gibt es keinen. Es gibt also nichts,
-  wogegen `Engine\TokenResolver` auflösen könnte, und ein erfundener Name würde einen Satz
-  auf den Schirm setzen, den nie jemand bekommt.
-- **Die Spalte „Mail" zeigt weiter den gespeicherten Betreff, Platzhalter und alles.**
-  Dort ist es die Angabe der Mail selbst, nicht ein Satz über sie; wer den Betreff
-  nachlesen will, muss ihn irgendwo ganz sehen können. Neu ist `display_label` neben
-  `label` in der Mailliste — dieselbe Zeile, gekürzt — und jeder Satz, der eine Mail beim
-  Namen nennt, nimmt diese: die Löschabfrage, die Auswahl „Danach" im Hinzufügen-Formular
-  und der Regelsatz „Wenn … passiert, sende … an …".
-- **Der Test dazu hat vier Formen**, weil ein fester Beispielbetreff genau die
-  interessanten nicht sieht: ohne Platzhalter, mit einem am Ende, mit mehreren, und ganz
-  ohne Namen. Ein Name, der nur aus einem Platzhalter besteht, fällt auf den Node-Key
-  zurück.
+- **Delete "Zahlung bestätigt, {{ contact.first_name }}"?** The stored mail name is a subject
+  template, and the confirmation quoted it verbatim, placeholder included. The name is now cut
+  before the first `{{` and finished cleanly — delete "Zahlung bestätigt"? This applies to both
+  deletion paths (the row menu through Statamic's action list, and the confirmation from the
+  opened mail), which still read identically.
+- **Shortened, not resolved.** A subject is written against the contact a run will one day
+  have; in the Control Panel there is none. So there is nothing for `Engine\TokenResolver` to
+  resolve against, and an invented name would put a sentence on the screen that nobody ever
+  receives.
+- **The "Mail" column still shows the stored subject, placeholders and all.** There it is the
+  mail's own value, not a sentence about it; anyone who wants to read the subject has to be
+  able to see it in full somewhere. New is `display_label` next to `label` in the mail list —
+  the same line, shortened — and every sentence that calls a mail by name uses that one: the
+  delete confirmation, the "After" picker in the add form and the rule sentence "When … happens,
+  send … to …".
+- **The test for it has four shapes**, because one fixed example subject misses precisely the
+  interesting ones: without a placeholder, with one at the end, with several, and with no name
+  at all. A name consisting only of a placeholder falls back to the node key.
 
 ## 2.15.2 (2026-09-05)
 
-### Behoben: der Sammel-Export prüfte die Schlüssel nur beim Anbieten, nicht beim Ausführen
+### Fixed: the bulk export checked the keys only when offering, not when running
 
-- **`POST …/activity/steps/actions` nahm jeden Schritt-Schlüssel an.** Ein unbekannter
-  ergab HTTP 200 mit einer CSV, die nur die Kopfzeile enthielt; eine gemischte Auswahl
-  ergab eine Datei der gültigen Hälfte. Genau das, was die Prüfung in `/actions/list`
-  verhindern sollte — sie saß nur dort. Über die Oberfläche war es nicht erreichbar
-  (Statamic fragt erst `/list`), es ist Tiefenverteidigung. Jetzt 422 mit dem Namen des
-  unbekannten Schritts. Eine Datei ist die eine Antwort hier, die niemand auf dem Schirm
-  liest, bevor er ihr glaubt.
-- **`makeJsonTranslationsReachable()` nennt sein Restrisiko.** `setLoaded([])` wirft auch
-  weg, was zur Laufzeit über `Lang::addLines()` eingespielt wurde: Gruppen und JSON-Dateien
-  kommen von der Platte zurück, `addLines`-Zeilen nicht. Im Playground gibt es dafür keinen
-  einzigen Aufrufer; auf einer fremden Installation mit einem solchen Paket wäre es ein
-  stiller Verlust. Steht jetzt im Docblock, samt der engeren Ausweichlösung.
+- **`POST …/activity/steps/actions` accepted any step key.** An unknown one produced HTTP 200
+  with a CSV containing only the header row; a mixed selection produced a file of the valid
+  half. Exactly what the check in `/actions/list` was meant to prevent — it only sat there. It
+  was not reachable through the interface (Statamic asks `/list` first), so this is defence in
+  depth. Now a 422 naming the unknown step. A file is the one answer here that nobody reads on
+  screen before believing it.
+- **`makeJsonTranslationsReachable()` names its residual risk.** `setLoaded([])` also discards
+  whatever was injected at runtime through `Lang::addLines()`: groups and JSON files come back
+  from disk, `addLines` lines do not. In the playground there is not a single caller for that;
+  on somebody else's installation with such a package it would be a silent loss. It is in the
+  docblock now, together with the narrower workaround.
 
 ## 2.15.1 (2026-09-05)
 
-### Behoben: Versionen für Löschungen, die nie stattfanden — und deutsche Serverstrings
+### Fixed: versions for deletions that never happened — and German server strings
 
-- **Eine abgelehnte Sammel-Löschung schrieb trotzdem eine Version.** `write()` legte den
-  Schnappschuss vor dem Versuch an, nicht nach dem Erfolg. `runAction` ist der einzige
-  Schreibweg, bei dem der Client eine Liste selbst gewählter IDs schickt — eine veraltete
-  Tabelle (zweiter Reiter, Kollege, Undo) ist dort der Normalfall, nicht die Ausnahme. Vier
-  abgelehnte Aufrufe hinterließen vier Einträge „Removed mails from the list", die nichts
-  entfernt hatten; die Historie behält nur 25, also verdrängen genug davon die echten.
-  Die Prüfung läuft jetzt **vor** dem Schnappschuss.
-- **`actionList` prüfte die Auswahl nicht.** Eine Auswahl mit einer ID, die es nicht gibt,
-  bekam „Mail löschen" angeboten — eine Aktion, deren Ausführung garantiert scheiterte.
-- **Serverseitiges `__()` erreichte das eigene Wörterbuch nicht.** Laravel merkt sich die
-  zusammengeführten JSON-Übersetzungen einer Sprache beim ersten Zugriff; ein Addon, das
-  seinen Pfad danach registriert, steht nicht drin. Gemessen im Playground: der Loader bot
-  1831 Schlüssel, der Übersetzer hielt 1725 — die fehlenden 106 waren genau die dieses
-  Addons. Unsichtbar blieb das, solange jede Zeichenkette im Browser ein zweites Mal
-  übersetzt wurde; sobald eine einen Wert trägt (`:count`), geht das nicht mehr, und der
-  Sammel-Knopf stand auf Englisch da. Der Merkzettel wird jetzt verworfen, nachdem der Pfad
-  registriert ist.
-- **Sammel-Knopf und Bestätigung zählen mit:** „2 Mails löschen" statt „Mail löschen", und
-  bei einer einzelnen wird sie benannt: „„Angekommen?" löschen?".
-- **Mehrfachauswahl auch bei den Schritten** (F20 ist damit bei vier von vier). Die Aktion
-  dahinter ist der Sammel-Export: `node` nimmt jetzt eine Liste an, und die neuen Routen
-  `POST …/activity/steps/actions{,/list}` liefern die CSV der ausgewählten Schritte. Der
-  Einzel-Export ist aus dem Zeilenmenü in dieselbe Aktion gewandert — ein Codeweg statt zwei.
-- **Verschieben stellt die Sortierung zurück.** Wer die Mails nach „Versand" sortierte und
-  dann „Nach oben" wählte, sah die Zeile scheinbar willkürlich springen: verschoben wird die
-  Ablaufposition, sortiert war nach etwas anderem. Die Bewegung setzt die Tabelle jetzt auf
-  „Position" zurück.
-- **Ein Löschen, ein Wortlaut.** Aus der Tabelle und aus der geöffneten Mail kam dieselbe Tat
-  mit zwei Formulierungen. Beide sagen jetzt wörtlich dasselbe.
-- Leere Zellen tragen die Schriftgröße ihrer Spalte; vorher sprang die Schrift innerhalb einer
-  Spalte zwischen 14px und 11.2px, je nachdem ob die Zeile einen Wert hatte.
+- **A rejected bulk deletion wrote a version regardless.** `write()` created the snapshot before
+  the attempt, not after success. `runAction` is the only write path where the client sends a
+  list of ids it picked itself — a stale table (a second tab, a colleague, an undo) is the
+  ordinary case there, not the exception. Four rejected calls left four entries "Removed mails
+  from the list" that had removed nothing; the history keeps only 25, so enough of them push the
+  real ones out. The check now runs **before** the snapshot.
+- **`actionList` did not validate the selection.** A selection containing an id that does not
+  exist was offered "delete mail" — an action guaranteed to fail when run.
+- **Server-side `__()` did not reach the addon's own dictionary.** Laravel memoises a locale's
+  merged JSON translations on first access; an addon that registers its path afterwards is not
+  in there. Measured in the playground: the loader offered 1831 keys, the translator held 1725 —
+  the missing 106 were exactly this addon's. That stayed invisible as long as every string was
+  translated a second time in the browser; as soon as one carries a value (`:count`) that is no
+  longer possible, and the bulk button stood there in English. The memo is now discarded after
+  the path is registered.
+- **The bulk button and the confirmation count along:** "delete 2 mails" instead of "delete
+  mail", and a single one is named: delete "Angekommen?"?
+- **Multi-select on the steps as well** (F20 is at four of four with that). The action behind it
+  is the bulk export: `node` now takes a list, and the new routes
+  `POST …/activity/steps/actions{,/list}` return the CSV of the selected steps. The single
+  export has moved from the row menu into the same action — one code path instead of two.
+- **Moving a row resets the sort.** Anyone who sorted the mails by "sent" and then chose "move
+  up" saw the row jump seemingly at random: what moves is the position in the flow, while the
+  sort was by something else. The move now resets the table to "position".
+- **One deletion, one wording.** The same act came with two phrasings from the table and from
+  the opened mail. Both now say literally the same thing.
+- Empty cells carry their column's font size; before this the type jumped between 14px and
+  11.2px within one column, depending on whether the row had a value.
 
 ## 2.15.0 (2026-09-05)
 
-### Geändert: Schritte und Mails sind jetzt Statamic-Tabellen
+### Changed: steps and mails are Statamic tables now
 
-Beide Ansichten waren gestapelte Karten mit selbst gebautem Innenleben: keine Spaltenköpfe,
-keine Sortierung, keine Mehrfachauswahl, kein „…"-Menü — und fünf Datensätze füllten den
-Bildschirm (F20, F22). Sie laufen jetzt über dieselbe `Listing`-Komponente wie die Reiter
-„Protokoll" und „Im Ablauf" daneben, in deren client-seitiger Betriebsart (`:items`): die
-Zahlen liegen ohnehin schon im Inertia-Payload, also braucht es dafür keine neue Route.
+Both views were stacked cards with hand-built internals: no column headings, no sorting, no
+multi-select, no "…" menu — and five records filled the screen (F20, F22). They now run through
+the same `Listing` component as the "Log" and "In the flow" tabs beside them, in its client-side
+mode (`:items`): the figures are already in the Inertia payload, so no new route is needed for it.
 
-- **Aktivität → Schritte** ist eine Tabelle aus sieben Spalten: Position, Schritt, Erreicht,
-  Anteil, Durchgekommen, Gescheitert, Nicht weiter. Was vorher als Satz unter dem Balken stand
-  („3 sind durchgekommen · 1 ist hier gescheitert"), ist damit sortierbar und untereinander
-  lesbar. Der blaue Fortschrittsbalken ist weg; die Prozentzahl, die er zeichnete, steht in
-  ihrer eigenen Spalte. Je Zeile ein „…"-Menü mit „Im Protokoll ansehen" (wechselt den Reiter
-  und setzt den Schritt-Filter) und „Diesen Schritt exportieren".
-- **Mails** ist eine Tabelle aus sechs Spalten: Position, Mail, Referenz, Versand, Bedingung,
-  Läuft dazwischen. Die Zähler stehen weiter als schmale Zeile darüber, aber ohne die vier
-  Farben — es sind Zahlen für die ganze Automatisierung, nicht für eine Zeile. Rot bleibt nur
-  „Fehlgeschlagen", und nur wenn es welche gibt.
-- **Mehrfachauswahl bei den Mails, mit echter Wirkung.** Neu:
-  `POST …/mail-list/actions/list` und `POST …/mail-list/actions` — Statamics Aktions-Vertrag.
-  Damit hat die Tabelle eine Auswahlspalte, und die Auswahl kann gelöscht werden, über
-  denselben `ChainEditor` und mit demselben Versions-Schnappschuss wie eine einzelne Mail.
-  Die Spalte erscheint nur, wenn die Liste auch geändert werden darf (gerader Ablauf, Recht
-  „Automatisierungen bearbeiten", keine ungespeicherten Leinwand-Änderungen).
-- **Hoch/Runter und Löschen sind ins „…"-Menü gewandert.** Kein Drag: Statamics Listing blendet
-  die Auswahlspalte aus, sobald `reorderable` an ist, und ein dauerhafter Tausch von
-  Mehrfachauswahl gegen Ziehen wäre für eine so kurze Liste die falsche Richtung.
-- **Bei den Schritten gibt es bewusst keine Auswahlspalte:** das sind gezählte Zeilen, keine
-  Datensätze, und es gibt nichts, was eine Auswahl von ihnen tun könnte.
-- Die Mails-Ansicht nutzt jetzt `max-w-page` wie jeder andere Listen-Bildschirm des Addons
-  statt einer eigenen Breite.
+- **Activity → Steps** is a table of seven columns: position, step, reached, share, passed,
+  failed, went no further. What used to sit as a sentence under the bar ("3 passed · 1 failed
+  here") is sortable and readable underneath each other with that. The blue progress bar is
+  gone; the percentage it drew has a column of its own. One "…" menu per row with "view in the
+  log" (switches the tab and sets the step filter) and "export this step".
+- **Mails** is a table of six columns: position, mail, reference, sent, condition, runs in
+  between. The counters still sit as a narrow row above it, but without the four colours — they
+  are figures for the whole automation, not for one row. Only "failed" stays red, and only when
+  there are any.
+- **Multi-select on the mails, with real effect.** New: `POST …/mail-list/actions/list` and
+  `POST …/mail-list/actions` — Statamic's action contract. That gives the table a selection
+  column, and the selection can be deleted, through the same `ChainEditor` and with the same
+  version snapshot as a single mail. The column only appears if the list may actually be changed
+  (a linear flow, the "edit automations" permission, no unsaved canvas changes).
+- **Up/down and delete have moved into the "…" menu.** No drag: Statamic's listing hides the
+  selection column as soon as `reorderable` is on, and permanently trading multi-select for
+  dragging would be the wrong direction for a list this short.
+- **The steps deliberately have no selection column:** those are counted rows, not records, and
+  there is nothing a selection of them could do.
+- The mails view now uses `max-w-page` like every other listing screen in the addon, instead of a
+  width of its own.
 
 ## 2.14.2 (2026-09-05)
 
-### Behoben: Kopfzeile, Mails-Reiter, fremde Übersetzungsschlüssel
+### Fixed: the header, the mails tab, other packages' translation keys
 
-- **Die Kopfzeile der Automation wiederholte den Addon-Namen** (Icon, Wort und Schrägstrich vor
-  dem Titel). Kein Core-Bildschirm sagt im Titel, in welchem Bereich man ist; das ist raus (F21).
-  Das Aktiv-Schild hing in der Mitte und steht jetzt rechts bei den Aktionen. An den Namen heran
-  ging nicht sauber: das Namensfeld hält eine Mindestbreite, damit ein leerer Name anklickbar
-  bleibt, und genau dort klaffte die Lücke.
-- **Der Mails-Reiter lief auf Englisch** neben deutschen Pills (E01). 38 Schlüssel in
-  `resources/lang/de.json` ergänzt, die zusammengesetzten Wartezeit-Sätze mit ihren Platzhaltern
-  eingeschlossen.
-- **Zwei Abschnitte „Werkzeuge" untereinander.** `section(__('Tools'))` schickte im deutschen CP
-  den übersetzten Wert, und der ist für Statamic ein anderer Schlüssel als sein eigenes `Tools`.
-  Der Abschnitt heißt jetzt beim Schlüssel.
-- **Keine fremden Übersetzungsschlüssel mehr belegt.** Die JSON-Übersetzungen aller Pakete landen
-  in einem Wörterbuch, ohne Namensraum: der letzte Registrierende gewinnt für das ganze Control
-  Panel. Drei der gestern ergänzten Schlüssel griffen in fremde Einträge, einer mit Schaden:
-  `Disabled` hätte Statamics „Deaktiviert" überall durch „Abgeschaltet" ersetzt. `Step` und
-  `Disabled` sind raus, für `days` wurde nach der Hausregel der Quellstring eindeutig gemacht (die
-  Einheiten der Verzögerung heißen `Minutes`/`Hours`/`Days`), statt die Übersetzung von
-  `statamic-marketing` zu überschreiben. `TranslationKeyOwnershipTest` bewacht das.
+- **The automation's header repeated the addon's name** (icon, word and slash before the title).
+  No core screen states in its title which area one is in; that is gone (F21). The active badge
+  hung in the middle and now sits on the right with the actions. Reaching the name itself did not
+  work cleanly: the name field keeps a minimum width so that an empty name stays clickable, and
+  that is exactly where the gap opened.
+- **The mails tab ran in English** next to German pills (E01). 38 keys added to
+  `resources/lang/de.json`, the composed waiting-time sentences with their placeholders included.
+- **Two "Tools" sections underneath each other.** `section(__('Tools'))` sent the translated
+  value in the German CP, and to Statamic that is a different key from its own `Tools`. The
+  section is named by the key now.
+- **No more occupying other packages' translation keys.** Every package's JSON translations end
+  up in one dictionary, without a namespace: the last one to register wins for the whole Control
+  Panel. Three of the keys added yesterday reached into other packages' entries, one of them with
+  damage: `Disabled` would have replaced Statamic's "Deaktiviert" with "Abgeschaltet" everywhere.
+  `Step` and `Disabled` are gone, and for `days` the source string was made unambiguous following
+  the house rule (the delay units are called `Minutes`/`Hours`/`Days`), instead of overwriting
+  `statamic-marketing`'s translation. `TranslationKeyOwnershipTest` guards that.
 
-Intern: der Rückgabetyp von `SequenceOptOut::sequencesFor()` ist als `stdClass` mit Form
-annotiert, wie PHPStan ihn ableitet; `tests/Fakes/insights-contracts.php` ist durch Pint gelaufen
-(Deklarationen unverändert).
+Internal: the return type of `SequenceOptOut::sequencesFor()` is annotated as a shaped `stdClass`,
+the way PHPStan infers it; `tests/Fakes/insights-contracts.php` has been through Pint
+(declarations unchanged).
 
-- **MySQL-Job der CI grün.** Er fiel an der Reihenfolge der Zeitreihen-Eimer, die in
-  `statamic-insights` `TableMetric::bucketed()` ohne `ORDER BY` gruppierte; MySQL 8 liefert die
-  Gruppen in Begegnungsreihenfolge. Behoben in insights 1.2.1, die byteweise Kopie
-  `tests/Fakes/insights-table-metric.php` ist nachgezogen.
-- **Larastan ohne Rest.** `view('statamic-automations::sequence-opt-out')` galt Larastan nicht
-  als `view-string`, weil es Paket-Namensräume nicht auflöst (`viewDirectories` hilft dort
-  nicht). Der Befund ist in `phpstan.neon` mit Begründung ausgenommen; die Vorlage existiert und
-  wird in der Suite gerendert.
+- **The CI's MySQL job is green.** It failed on the order of the time-series buckets, which
+  `TableMetric::bucketed()` in `statamic-insights` grouped without an `ORDER BY`; MySQL 8 returns
+  the groups in the order it met them. Fixed in insights 1.2.1, and the byte-for-byte copy
+  `tests/Fakes/insights-table-metric.php` has been brought along.
+- **Larastan without a remainder.** `view('statamic-automations::sequence-opt-out')` did not count
+  as a `view-string` to Larastan, because it does not resolve package namespaces (`viewDirectories`
+  does not help there). The finding is excluded in `phpstan.neon` with a reason; the template
+  exists and is rendered in the suite.
 
 ## 2.14.1 (2026-09-03)
 
-### Behoben: Oberfläche und ein Wächter, der drei Wochen rot war
+### Fixed: the interface, and a guard that had been red for three weeks
 
-- **Die Fußleiste des Inspector-Panels rendete für Trigger-Knoten leer** — ein Trennstrich unter
-  nichts. Das `v-if` sitzt jetzt am `<footer>`.
-- Icon `list-bullets` gibt es nicht (jetzt `list-ul`).
-- Der eigene Dots-Trigger am Dropdown ist raus: Core rendert ihn selbst, der eigene war nur eine
-  Größe zu groß.
-- `Button variant="danger"` im Inspector ins `…`-Menü.
-- Drei Chips ohne `pill`, aber auch ohne `size="sm"`: sie qualifizieren einen Namen und sind kein
-  Status. Rund neben eckigem Statusschild wäre schlechter.
+- **The inspector panel's footer rendered empty for trigger nodes** — a separator line under
+  nothing. The `v-if` now sits on the `<footer>`.
+- The icon `list-bullets` does not exist (now `list-ul`).
+- The dropdown's own dots trigger is gone: core renders it itself, and the custom one was merely
+  one size too large.
+- `Button variant="danger"` in the inspector moved into the `…` menu.
+- Three chips without `pill`, but without `size="sm"` either: they qualify a name and are not a
+  status. Round next to a square status badge would be worse.
 
-**Der Icon-Wächter war seit dem 15.08. rot** und hat es niemandem gesagt: sein Regex traf `name="…"`
-auf jedem Tag, und die Assertion stand in der Schleife — beim ersten Falschtreffer brach er ab und
-kam nie bis `list-bullets`. Jetzt zwei getrennte Regexe und eine gesammelte Prüfung am Ende.
+**The icon guard had been red since 2026-08-15** and told nobody: its regex matched `name="…"` on
+every tag, and the assertion sat inside the loop — on the first false match it aborted and never
+reached `list-bullets`. Two separate regexes now, and one collected assertion at the end.
 
-`node-icon.test` lag im falschen Runner: es zieht über `@goldnead/flow-canvas` eine `.vue`, die
-nacktes Node nicht laden kann. Die vitest-Konfiguration inlined das Paket genau dafür — Datei
-verschoben, Aussagen unverändert.
+`node-icon.test` was in the wrong runner: through `@goldnead/flow-canvas` it pulls in a `.vue` that
+bare Node cannot load. The vitest configuration inlines that package for exactly this reason — the
+file was moved, the assertions unchanged.
 
 ## 2.14.0 (2026-08-29)
 
-### Neu: die Zahlen dieses Addons erscheinen in Insights
+### Added: this addon's figures appear in Insights
 
-`statamic-insights` ist ab 1.1.0 keine Umsatzauswertung mehr, sondern die Auswertungs-Schicht der
-Familie: jedes Addon meldet an, was es zählen kann, und bekommt dafür Zeitraum, Vergleich mit dem
-Vorzeitraum, Diagramm, Aufteilungen und zwei fertige Schirme.
+From 1.1.0 onwards `statamic-insights` is no longer a revenue report but the family's reporting
+layer: every addon registers what it can count, and gets the period, the comparison against the
+previous period, the chart, the splits and two finished screens for it.
 
-Die Kopplung ist in **beide** Richtungen freiwillig. Ohne Insights fehlt hier nichts; ohne dieses
-Addon fehlt dort nur seine Gruppe. `suggest`, nie `require`.
+The coupling is voluntary in **both** directions. Without Insights nothing is missing here;
+without this addon only its group is missing there. `suggest`, never `require`.
 
-Jede Zahl hält sich an die Hausregeln des Vertrags: **null ist nicht null** (eine Quote ohne Nenner
-hat keine Antwort und zeigt keine 0 %), `available()` entscheidet über die Existenz und nie über die
-Daten, Lücken im Verlauf füllt Insights und nicht die Kennzahl, und ein Filter, den eine Zahl nicht
-versteht, wird ignoriert statt zum Fehler.
+Every figure keeps to the contract's house rules: **null is not zero** (a rate without a
+denominator has no answer and shows no 0 %), `available()` decides about existence and never about
+the data, gaps in the series are filled by Insights and not by the metric, and a filter a figure
+does not understand is ignored rather than turned into an error.
 
-Fünf Zahlen: Durchläufe, Fehlschläge, Erfolgsquote, Laufzeit im Median, Serien-Ausstiege.
+Five figures: runs, failures, success rate, median run time, sequence opt-outs.
 
-**Die Erfolgsquote zählt nur Durchläufe mit einem Urteil.** Wer noch in einer Verzögerung wartet,
-ist weder Erfolg noch Fehlschlag und bleibt außen vor. Das ist eine benannte Abweichung von der
-Kohorten-Regel und steht deshalb in der Beschreibung der Kachel.
+**The success rate counts only runs that have a verdict.** Anyone still waiting in a delay is
+neither a success nor a failure and stays out of it. That is a named departure from the cohort
+rule and is therefore stated in the tile's description.
 
-Die Serien-Ausstiege rechnen auf einer zweiten Tabelle und erben die Marken-Bedingung mit.
+The sequence opt-outs are computed on a second table and inherit the brand condition with it.
 
-### Behoben: eine Zahl zählt nur noch die aktive Marke
+### Fixed: a figure counts only the active brand now
 
-Beim Bauen der Anbindung bekam diese Frage in der Familie vier verschiedene Antworten, und auf einem
-Schirm nebeneinander ist das schlimmer als gar keine: eine Kachel zeigte den Umsatz dreier fremder
-Marken, während die daneben korrekt filterte. Die Regel steht jetzt einmal in
-`TableMetric::brandScoped()`, als Abschrift von `BrandScope::apply()`; hier wird nur noch die Spalte
-genannt, und Zahl, Diagramm und jede Aufteilung verengen gemeinsam.
+While building this connection, that question got four different answers across the family, and
+side by side on one screen that is worse than no answer at all: one tile showed three other
+brands' revenue while the tile beside it filtered correctly. The rule now lives once in
+`TableMetric::brandScoped()`, as a transcription of `BrandScope::apply()`; all that is named here
+is the column, and the figure, the chart and every split narrow together.
 
-Ist keine Marke gewählt, liest die Kachel **0 und bleibt stehen**. Ein Leser versteht eine Null;
-eine verschwundene Kachel bemerkt er nicht.
+If no brand is selected, the tile reads **0 and stays put**. A reader understands a zero; a tile
+that has disappeared goes unnoticed.
 
 ## 2.13.0 (2026-08-29)
 
-### Neu: drei cal.com-Aktionen, die Gegenrichtung zu den fünf Auslösern
+### Added: three cal.com actions, the return direction to the five triggers
 
-Seit 2.12.0 kommen fünf cal.com-Ereignisse im Editor an. Was ein Ablauf daraufhin tun konnte, war
-melden. Ab jetzt kann er handeln: **Termin absagen**, **freie Zeiten holen**, **Termin anlegen**.
+Since 2.12.0, five cal.com events arrive in the editor. What a flow could do in response was
+report. From now on it can act: **cancel a booking**, **fetch free slots**, **create a booking**.
 
-Damit läuft eine Wiedervorlage ohne Handgriff durch. Jemand sagt ab, der Ablauf holt die freien
-Zeiten der Terminart, schickt drei Vorschläge, und was der Kunde wählt, wird gebucht.
+That makes a rescheduling run through without a manual step. Somebody cancels, the flow fetches
+the event type's free slots, sends three proposals, and whatever the customer picks gets booked.
 
-**Was nicht dabei ist:** ein Knoten „Terminarten holen". Die Kennung einer Terminart ist ein fester
-Wert in der Einrichtung eines Ablaufs und nichts, was zur Laufzeit gesucht wird. Die einzige
-Stelle, die sie wirklich braucht, ist die Gegenprobe in „Freie Zeiten holen", und die holt sie sich
-selbst. Verlegen, bestätigen und ablehnen kann die API auch; heute ruft es kein Ablauf.
+**What is not included:** a "fetch event types" node. An event type's identifier is a fixed value
+in a flow's setup and not something looked up at runtime. The only place that really needs it is
+the counter-check in "fetch free slots", and that fetches it itself. The API can also reschedule,
+confirm and decline; today no flow calls that.
 
-### Ein zweiter Schlüssel, an einer anderen Stelle
+### A second key, in a different place
 
-Die Aktionen brauchen einen API-Schlüssel, und das ist nicht das Webhook-Geheimnis aus 2.12.0. Der
-Schlüssel steht in cal.com unter Settings, Developer, API keys:
+The actions need an API key, and that is not the webhook secret from 2.12.0. The key is in cal.com
+under Settings, Developer, API keys:
 
 ```dotenv
 STATAMIC_AUTOMATIONS_CALCOM_API_KEY=cal_live_…
 ```
 
-Ohne ihn tun die drei Aktionen nichts und sagen das, statt ins Leere zu rufen. Die Auslöser laufen
-davon unberührt weiter, sie brauchten nie einen Schlüssel.
+Without it the three actions do nothing and say so, instead of calling into the void. The triggers
+keep running unaffected by that, they never needed a key.
 
-### Die Kopfzeile, an der alles hängt
+### The header everything hangs on
 
-cal.coms API v2 versioniert **je Endpunkt**, über `cal-api-version`, und die richtige Version ist
-für jeden Endpunkt eine andere. Es gibt keine, die für alle passt. Bei der falschen antwortet
-cal.com nicht mit 400, sondern (gemessen am 29.08.2026):
+cal.com's API v2 versions **per endpoint**, through `cal-api-version`, and the correct version is a
+different one for each endpoint. There is none that fits all of them. With the wrong one, cal.com
+does not answer with a 400 but (measured on 2026-08-29):
 
-| Endpunkt | Richtige Version | Bei falscher Version |
+| Endpoint | Correct version | With the wrong version |
 | --- | --- | --- |
-| `/v2/bookings*` | `2024-08-13` | 200, richtiger Umschlag, andere Form darin |
+| `/v2/bookings*` | `2024-08-13` | 200, correct envelope, a different shape inside it |
 | `/v2/slots` | `2024-09-04` | 404 `Cannot GET /v2/slots` |
-| `/v2/event-types*` | `2024-06-14` | 404, ohne Kopfzeile 200 in anderer Form |
+| `/v2/event-types*` | `2024-06-14` | 404, and without the header a 200 in a different shape |
 
-Zwei von drei sind still. Der Client trägt die Version deshalb als Konstante neben jeder Operation
-statt als eine gemeinsame Kopfzeile, und jede Aktion verlangt das Feld, das ihre Behauptung belegt:
-eine Absage gilt erst als Absage, wenn der Termin als `cancelled` zurückkommt, ein Termin erst als
-Termin, wenn er eine Kennung hat. Einzustellen ist daran nichts. Es zählt, wenn jemand eine
-Operation ergänzt.
+Two of three are silent. The client therefore carries the version as a constant next to each
+operation rather than as one shared header, and every action requires the field that evidences its
+claim: a cancellation only counts as a cancellation once the booking comes back as `cancelled`, a
+booking only counts as a booking once it has an identifier. There is nothing to configure about
+this. It matters when somebody adds an operation.
 
-### Was ein doppelter Lauf anrichtet
+### What a duplicate run does
 
-Keine der drei Aktionen hat einen Idempotenz-Schlüssel, weil cal.com keinen anbietet.
+None of the three actions has an idempotency key, because cal.com offers none.
 
-**Absagen ist gefahrlos.** cal.com lehnt die zweite Absage mit 400 ab, und die Aktion sieht
-daraufhin den Zustand des Termins nach, statt den Wortlaut auszulegen. Der Knoten bleibt grün. Was
-die beiden Läufe unterscheidet, ist `{{ node.cancelled }}`: `true` heißt „dieser Lauf hat es
-getan", `false` zusammen mit `{{ node.already_cancelled }}` heißt „ein früherer war es". Eine
-Benachrichtigung gehört an `cancelled` und nicht daran, dass der Knoten grün ist, sonst geht die
-Absage-Mail beim zweiten Lauf ein zweites Mal hinaus.
+**Cancelling is harmless.** cal.com refuses the second cancellation with a 400, and the action then
+looks up the booking's state instead of interpreting the wording. The node stays green. What
+distinguishes the two runs is `{{ node.cancelled }}`: `true` means "this run did it", `false`
+together with `{{ node.already_cancelled }}` means "an earlier one did". A notification belongs on
+`cancelled` and not on the node being green, otherwise the cancellation mail goes out a second time
+on the second run.
 
-Ein Fall geht absichtlich rot: die Absage ging hinaus, cal.com hat sie ausgeführt, und die Antwort
-kam nicht zurück. Der Termin ist abgesagt, und von hier aus ist nicht zu erkennen, ob dieser Lauf
-es war. Einen früheren Lauf zu behaupten wäre die bequeme Antwort und die schlimmere Hälfte des
-Fehlers: `cancelled` bliebe `false`, und die Absage-Mail ginge dann in **keinem** Lauf hinaus. Die
-Ablauf-Maschine wiederholt einen roten Knoten von sich aus; wer den roten Knoten dem Verlust der
-Benachrichtigung vorzieht, setzt dort `_retry_attempts` auf 0.
+One case deliberately goes red: the cancellation went out, cal.com carried it out, and the answer
+did not come back. The booking is cancelled, and from here there is no way to tell whether this run
+did it. Claiming an earlier run would be the convenient answer and the worse half of the mistake:
+`cancelled` would stay `false`, and the cancellation mail would then go out on **no** run at all.
+The flow engine retries a red node on its own; anyone who prefers the red node to losing the
+notification sets `_retry_attempts` to 0 there.
 
-**Anlegen ist gefahrlos, solange der Zeitpunkt derselbe ist.** cal.com antwortet auf einen belegten
-Zeitpunkt mit 409 und legt keinen zweiten Termin an. Der Schutz kommt vom Kalender und nicht von
-der API, und daraus folgt die eine Bauregel: der Zeitpunkt muss von außen kommen. Wer ihn im Ablauf
-ausrechnen lässt, bekommt beim zweiten Lauf einen anderen, keinen Konflikt und einen zweiten
-Termin. Was der Kunde gewählt hat, gehört in den Kontext des Laufs.
+**Creating is harmless as long as the time is the same.** cal.com answers a taken slot with a 409
+and creates no second booking. The protection comes from the calendar and not from the API, and
+from that follows the one building rule: the time has to come from outside. Anyone who has the flow
+compute it gets a different one on the second run, no conflict and a second booking. What the
+customer chose belongs in the run's context.
 
-`{{ node.slot_unavailable }}` sagt, dass der Zeitpunkt nicht zu haben war. Es sagt **nicht**, dass
-ein Termin steht: cal.coms eigene Meldung lautet „already has booking at this time **or is not
-available**", und ein Zeitpunkt außerhalb der Verfügbarkeit oder eine falsche Zeitzone ergibt
-denselben 409 ganz ohne Termin.
+`{{ node.slot_unavailable }}` says the time was not available. It does **not** say that a booking
+exists: cal.com's own message reads "already has booking at this time **or is not available**", and
+a time outside the availability, or a wrong timezone, produces the same 409 with no booking at all.
 
-**Freie Zeiten holen** liest nur und ändert bei cal.com nichts. Es ist allerdings die Stelle, an
-der die einzige echte Doppelbuchung dieses Anschlusses anfängt. „Freie Zeiten holen" in „Termin
-anlegen" mit `{{ node.first }}` im Startfeld sieht harmlos aus und ist es nicht: beim zweiten Lauf
-ist der Zeitpunkt des ersten belegt, der Knoten fragt neu und gibt den **nächsten** heraus, der 409
-greift nie, und derselbe Mensch hat zwei Termine. `first` gehört in eine Mail oder in eine
-Verzweigung, nicht in einen Anlage-Knoten.
+**Fetching free slots** only reads and changes nothing at cal.com. It is, however, where this
+integration's only real double booking begins. "Fetch free slots" into "create booking" with
+`{{ node.first }}` in the start field looks harmless and is not: on the second run the first run's
+time is taken, the node asks again and hands out the **next** one, the 409 never applies, and the
+same person has two bookings. `first` belongs in a mail or in a branch, not in a creating node.
 
-### Leer ist bei cal.com nicht gleich leer
+### Empty is not the same as empty at cal.com
 
-`/v2/slots` antwortet auf eine **unbekannte** Terminart mit `{}` und Status 200, also genauso wie
-auf einen ausgebuchten Kalender. Ein Ablauf mit einer vertippten oder inzwischen gelöschten Kennung
-würde deshalb still nichts vorschlagen, monatelang, ohne dass etwas kaputt aussieht.
+`/v2/slots` answers an **unknown** event type with `{}` and status 200, that is, exactly as it
+answers a fully booked calendar. A flow with a mistyped or since-deleted identifier would therefore
+silently propose nothing, for months, without anything looking broken.
 
-„Freie Zeiten holen" macht die Gegenprobe: kommt nichts zurück, fragt die Aktion nach, ob es die
-Terminart überhaupt gibt. Gibt es sie nicht, geht der Knoten rot und sagt warum. Gibt es sie, ist
-`{{ node.count }}` gleich 0, und das ist eine echte Auskunft. Die Gegenprobe läuft nur auf dem
-leeren Pfad.
+"Fetch free slots" does the counter-check: if nothing comes back, the action asks whether the event
+type exists at all. If it does not, the node goes red and says why. If it does, `{{ node.count }}`
+is 0, and that is a real answer. The counter-check runs only on the empty path.
 
-### Gebucht, oder auf Bestätigung wartend
+### Booked, or awaiting confirmation
 
-„Termin anlegen" gibt `{{ node.status }}` als `accepted` oder `pending` zurück und
-`{{ node.confirmed }}` als die Ja-Nein-Fassung davon. Was von beidem, entscheidet allein die
-Bestätigungs-Einstellung der Terminart.
+"Create booking" returns `{{ node.status }}` as `accepted` or `pending` and `{{ node.confirmed }}`
+as the yes/no version of that. Which of the two it is depends solely on the event type's
+confirmation setting.
 
-Das ist die Stelle, die einen Nachmittag kostet: `GET /v2/event-types` gibt dieses Feld **nicht**
-heraus, und es heißt auch nicht `requiresConfirmation`. Es steht nur in
-`GET /v2/event-types/{id}`, unter `confirmationPolicy`. Wer in der Liste nachsieht, findet nichts
-und liest die Abwesenheit als „keine Bestätigung nötig".
+This is the part that costs an afternoon: `GET /v2/event-types` does **not** hand out that field,
+and it is not called `requiresConfirmation` either. It is only in `GET /v2/event-types/{id}`, under
+`confirmationPolicy`. Anyone looking in the list finds nothing and reads the absence as "no
+confirmation needed".
 
-Daran hängt eine zweite Überraschung: **ein `pending`-Termin löst `BOOKING_CREATED` nicht aus.**
-cal.com schickt für eine Buchung, die auf Bestätigung wartet, `BOOKING_REQUESTED`, und dafür gibt
-es seit 2.12.0 den Auslöser „Booking Requested". `BOOKING_CREATED` kommt erst, wenn jemand
-bestätigt.
+A second surprise hangs on that: **a `pending` booking does not fire `BOOKING_CREATED`.** For a
+booking awaiting confirmation, cal.com sends `BOOKING_REQUESTED`, and the "Booking Requested"
+trigger has existed for that since 2.12.0. `BOOKING_CREATED` only arrives once somebody confirms.
 
-Ein grüner Knoten heißt also „cal.com hat es angenommen" und nicht „der Termin steht". Wer auf
-einen stehenden Termin baut, verzweigt auf `{{ node.confirmed }}`.
+A green node therefore means "cal.com accepted it" and not "the booking stands". Anyone relying on
+a standing booking branches on `{{ node.confirmed }}`.
 
-### Ein Testlauf sagt nichts ab und legt nichts an
+### A test run cancels nothing and creates nothing
 
-Beides schreibt in fremde Kalender und verschickt Post, und eine Absage lässt sich von hier aus gar
-nicht zurücknehmen. Ein Testlauf zeigt, was er schicken würde, und schickt nichts, solange
-`automations.test_mode.persist_cal_com_changes` nicht ausdrücklich an ist.
+Both write into other people's calendars and send mail, and a cancellation cannot be taken back
+from here at all. A test run shows what it would send, and sends nothing unless
+`automations.test_mode.persist_cal_com_changes` is explicitly on.
 
-Freie Zeiten zu lesen fällt bewusst nicht darunter: das ändert drüben nichts, und eine Vorschau aus
-erfundenen Zeiten wäre nichts wert. Ein Testlauf fragt wirklich. Ohne Schlüssel geht er deshalb
-rot, und das ist die richtige Antwort auf einen Knoten, der nicht arbeiten kann.
+Reading free slots deliberately does not fall under that: it changes nothing over there, and a
+preview made of invented times would be worth nothing. A test run really asks. Without a key it
+therefore goes red, and that is the right answer for a node that cannot do its work.
 
 ## 2.12.0 (2026-08-29)
 
-### Neu: VocalFlow im Flow-Editor, sieben Auslöser und zwei Aktionen
+### Added: VocalFlow in the flow editor, seven triggers and two actions
 
-VocalFlow ist das System, in dem die Coaching-Sessions stattfinden. Es lief bisher neben den
-Abläufen her: eine Session wurde gehalten, eine Aufgabe zugewiesen, ein Protokoll veröffentlicht,
-und was danach passieren sollte, passierte von Hand. Ab jetzt steht beides im Editor, in beide
-Richtungen.
+VocalFlow is the system the coaching sessions take place in. Until now it ran alongside the flows:
+a session was held, a task assigned, a report published, and whatever was supposed to happen
+afterwards happened by hand. From now on both are in the editor, in both directions.
 
-**Herein kommen sieben Auslöser.** Sechs für die Ereignisse, die VocalFlow über seinen
-Webhook-Kanal schickt: Session **angelegt** und **abgeschlossen**, Aufgabe **angelegt**,
-**geändert**, **zugewiesen** und **gelöscht**. Der siebte ist die **veröffentlichte Session**, und
-der kommt über einen eigenen Endpunkt, weil VocalFlow ihn anders bedient.
+**Seven triggers come in.** Six for the events VocalFlow sends through its webhook channel: session
+**created** and **completed**, task **created**, **updated**, **assigned** and **deleted**. The
+seventh is the **published session**, and it arrives through an endpoint of its own, because
+VocalFlow serves it differently.
 
-Die Session-Auslöser lassen sich nach Sitzungsart filtern, über den Slug oder die Kennung, und nach
-Zustand. Der Zustandsfilter ist kein Beiwerk. „Session angelegt" heißt bei VocalFlow nicht „steht
-als Termin an": der Vorgabewert eines neuen Datensatzes ist `draft`, und der Import von
-Alt-Sitzungen legt sie direkt als `completed` an. Ein Ablauf „Unterlagen zur Vorbereitung
-schicken" ohne diesen Filter mailt beim nächsten Import an jeden Studenten einmal pro Altstunde.
+The session triggers can be filtered by session type, through the slug or the identifier, and by
+state. The state filter is not an accessory. "Session created" does not mean "is scheduled" at
+VocalFlow: a new record's default value is `draft`, and the import of legacy sessions creates them
+directly as `completed`. A flow "send the preparation material" without that filter mails every
+student once per legacy lesson at the next import.
 
-Die Aufgaben-Auslöser filtern nach Zustand und Dringlichkeit. Die Aufgabenart wäre die
-naheliegende dritte Achse und ist bewusst keine: VocalFlow legt sie nur bei „zugewiesen" in die
-Nutzlast, ein Filter darauf fiele bei den anderen still aus, und ein still ausfallender Filter ist
-die schlechteste Sorte. Der Ablauf läuft dann einfach nie, und niemand sucht danach.
+The task triggers filter by state and urgency. The task type would be the obvious third axis and
+deliberately is not one: VocalFlow only puts it into the payload on "assigned", a filter on it
+would fail silently on the others, and a filter that fails silently is the worst kind. The flow
+then simply never runs, and nobody goes looking for it.
 
-**Hinaus gehen zwei Aktionen:** einen **Studenten anlegen** und ihm ein **Paket gutschreiben**. Das
-sind die beiden Schritte, die im Onboarding wirklich vorkommen. Die Partner-API von VocalFlow kann
-mehr, und der Rest ist absichtlich nicht gebaut: ein Knoten, den heute nichts ruft, steht trotzdem
-im Editor und will bei jeder Änderung mitgetestet werden.
+**Two actions go out:** **create a student** and **credit them a package**. Those are the two steps
+that really occur during onboarding. VocalFlow's partner API can do more, and the rest is
+deliberately not built: a node nothing calls today still sits in the editor and wants to be tested
+along with every change.
 
-Ein Paket gutzuschreiben ist nicht von sich aus wiederholbar, anders als einen Studenten anzulegen.
-Dafür gibt es das Feld **Idempotenz-Schlüssel**, und es bleibt leer, solange niemand es füllt.
-Hinein gehört der Wert, der den Kaufvorgang benennt: eine Bestellnummer, eine Zahlungs-Kennung.
-Einen aus der Nutzlast abzuleiten wäre bequem und falsch, denn er wäre für denselben Studenten mit
-demselben Paket immer derselbe und verschluckte damit den zweiten echten Kauf.
+Crediting a package is not repeatable by itself, unlike creating a student. That is what the
+**idempotency key** field is for, and it stays empty until somebody fills it. What belongs in it is
+the value that names the purchase: an order number, a payment identifier. Deriving one from the
+payload would be convenient and wrong, because it would always be the same for the same student
+with the same package and would therefore swallow the second genuine purchase.
 
-### Die Signatur ist hier anders als bei cal.com
+### The signature works differently here than at cal.com
 
-VocalFlow signiert nicht die Bytes, die es verschickt, sondern eine kanonisch neu kodierte Fassung
-der Nutzlast. Die Bytes auf der Leitung escapen Schrägstriche und Umlaute abweichend davon. Ein
-Empfänger, der wie bei cal.com über den rohen Rumpf prüft, würde deshalb **jede echte Zustellung**
-ablehnen, sobald irgendwo ein `/` oder ein `ö` in der Nutzlast steht, und in einer
-VocalFlow-Nutzlast steht beides immer. Der Fehler sähe aus wie ein falsch eingetragenes Geheimnis
-und würde genau dort gesucht.
+VocalFlow does not sign the bytes it sends but a canonically re-encoded version of the payload. The
+bytes on the wire escape slashes and umlauts differently from that. A receiver checking over the
+raw body, as with cal.com, would therefore reject **every genuine delivery** as soon as a `/` or an
+`ö` appears anywhere in the payload, and both are always present in a VocalFlow payload. The error
+would look like a wrongly entered secret and would be searched for in exactly that place.
 
-Dieser Anschluss bildet das Verfahren deshalb nach. Was verglichen wird, ist der Inhalt der
-Nutzlast, nicht ihre Schreibweise. Die Reihenfolge der Schlüssel zählt weiterhin.
+This integration therefore reproduces the procedure. What is compared is the payload's content, not
+its spelling. The order of the keys still counts.
 
-### Einzurichten sind vier Werte
+### Four values to set up
 
-Zwei Adressen bei VocalFlow eintragen, `https://deine-seite.de/!/automations/vocalflow` für die
-Ereignisse und `https://deine-seite.de/!/automations/vocalflow/session-published` für die
-veröffentlichte Session. Dazu vier Umgebungsvariablen:
+Enter two addresses at VocalFlow, `https://your-site.com/!/automations/vocalflow` for the events
+and `https://your-site.com/!/automations/vocalflow/session-published` for the published session.
+Plus four environment variables:
 
-- `STATAMIC_AUTOMATIONS_VOCALFLOW_SECRET`: das Geheimnis des Ereignis-Abos
-- `STATAMIC_AUTOMATIONS_VOCALFLOW_PUBLICATION_SECRET`: das Token der zweiten Adresse
-- `STATAMIC_AUTOMATIONS_VOCALFLOW_PARTNER_URL` und `_PARTNER_SECRET`: für die beiden Aktionen
+- `STATAMIC_AUTOMATIONS_VOCALFLOW_SECRET`: the event subscription's secret
+- `STATAMIC_AUTOMATIONS_VOCALFLOW_PUBLICATION_SECRET`: the second address's token
+- `STATAMIC_AUTOMATIONS_VOCALFLOW_PARTNER_URL` and `_PARTNER_SECRET`: for the two actions
 
-**Ohne diese Werte nimmt die jeweilige Route nichts an und tun die Aktionen nichts.** Die Routen
-stehen dann nicht offen, sondern antworten mit 503. Ein Anschluss ohne Zugangsdaten ruft nicht ins
-Leere und ist kein Formular, in das jeder Fremde Sessions schreiben kann.
+**Without these values the respective route accepts nothing and the actions do nothing.** The
+routes are then not open but answer with a 503. An integration without credentials does not call
+into the void and is not a form any stranger can write sessions into.
 
-Beide Routen haben eine Schranke gegen Doppelzustellung. Sie hängt beim Ereignis-Kanal am
-Fingerabdruck der signierten Nutzlast und nicht an der Kennung des Vorgangs, und das ist der
-Unterschied zu cal.com: eine Buchung wird einmal angelegt und einmal abgesagt, eine Aufgabe aber
-mehrfach echt geändert. Wer auf die Aufgaben-Kennung sperrte, verwürfe die zweite echte Änderung,
-und der Ablauf, der auf „Aufgabe ist jetzt fertig" wartet, liefe nie.
+Both routes have a barrier against duplicate delivery. On the event channel it hangs on the
+fingerprint of the signed payload and not on the case's identifier, and that is the difference from
+cal.com: a booking is created once and cancelled once, whereas a task is genuinely updated several
+times. Barring on the task identifier would discard the second genuine update, and the flow waiting
+for "the task is done now" would never run.
 
-### Was fehlt, und warum
+### What is missing, and why
 
-`session.updated` gibt es bei VocalFlow und hat hier keinen Auslöser. Es wäre das einzige Ereignis,
-mit dem sich heute „Session verlegt" oder „Session abgesagt" bauen ließe. Es stand nicht in der
-Liste, gegen die dieser Anschluss gebaut wurde, und ein Handle ist endgültig: einen zu vergeben ist
-keine Kleinigkeit, die man nebenbei mitnimmt. Wer es braucht, sagt Bescheid.
+`session.updated` exists at VocalFlow and has no trigger here. It would be the only event that
+"session rescheduled" or "session cancelled" could be built on today. It was not on the list this
+integration was built against, and a handle is final: giving one out is not a small thing to take
+along in passing. Anyone who needs it should say so.
 
-Von den sechs Ereignissen des Webhook-Kanals kommen bei VocalFlow heute zwei wirklich an,
-`session.created` und `task.assigned`. Bei den übrigen fehlt auf VocalFlows Seite der Absender. Die
-Auslöser stehen trotzdem alle im Editor: der Name ist der Vertrag, und wer die Lücke drüben
-schließt, soll den Auslöser hier vorfinden statt ihn dann erst zu vermissen.
+Of the webhook channel's six events, two actually arrive from VocalFlow today, `session.created`
+and `task.assigned`. For the rest the sender is missing on VocalFlow's side. All the triggers are
+in the editor regardless: the name is the contract, and whoever closes the gap over there should
+find the trigger here rather than start missing it then.
 
 ## 2.11.0 (2026-08-29)
 
-### Neu: cal.com im Flow-Editor, fünf Auslöser
+### Added: cal.com in the flow editor, five triggers
 
-Wer Termine über cal.com annimmt, konnte damit bisher nichts anfangen. Eine Buchung kam an, und
-was danach passieren sollte, passierte von Hand: die Vorbereitungsmail, der Eintrag im CRM, die
-Nachricht ans eigene Team. Ab jetzt stehen fünf Auslöser im Editor, einer je Ereignis, das cal.com
-über eine Buchung schickt: **angelegt**, **angefragt**, **abgesagt**, **abgelehnt**, **verlegt**.
+Anyone taking appointments through cal.com could do nothing with them here so far. A booking came
+in, and whatever was supposed to happen afterwards happened by hand: the preparation mail, the CRM
+entry, the message to one's own team. From now on there are five triggers in the editor, one per
+event cal.com sends about a booking: **created**, **requested**, **cancelled**, **rejected**,
+**rescheduled**.
 
-Alle fünf lassen sich nach der **Terminart** filtern, wahlweise über den Slug oder über die
-Nummer. Das ist kein Beiwerk. Ein Betrieb führt bei cal.com mehrere Terminarten nebeneinander, und
-ein kostenloses Erstgespräch und eine bezahlte Stunde sind verschiedene Vorgänge mit verschiedenen
-Mails. Beide feuern denselben Webhook. Ein Ablauf ohne diesen Filter schickt die Rechnungsmail an
-jemanden, der ein Erstgespräch gebucht hat.
+All five can be filtered by **event type**, either through the slug or through the number. That is
+not an accessory. A business runs several event types side by side at cal.com, and a free first
+conversation and a paid lesson are different cases with different mails. Both fire the same
+webhook. A flow without that filter sends the invoice mail to somebody who booked a first
+conversation.
 
-Zwei Felder, weil beide ihren Nachteil haben. Den Slug liest man im cal.com-Konto ab und trägt ihn
-ohne Nachschlagen ein, aber er steckt in der Buchungs-URL und wird geändert, wenn die URL hübscher
-werden soll; ein Filter, der daran hängt, fällt dann still aus. Die Nummer ändert sich nie, steht
-aber nirgends, wo man sie einfach abliest. Der Titel ist bewusst keine Filterachse.
+Two fields, because both have their drawback. The slug can be read off in the cal.com account and
+entered without looking anything up, but it is part of the booking URL and gets changed when
+somebody wants a prettier URL; a filter hanging on it then fails silently. The number never
+changes, but it is nowhere anybody simply reads it off. The title is deliberately not a filter
+axis.
 
-### Der Anschluss hängt an nichts
+### The integration hangs on nothing
 
-cal.com ist kein Nachbar-Addon, sondern ein Dienst. Der Anschluss bringt deshalb seine eigene
-Route mit, seine eigene Signaturprüfung und seinen eigenen Schutz gegen Doppelzustellung. Es
-braucht kein zweites Addon, um ihn zu benutzen.
+cal.com is not a sibling addon but a service. The integration therefore brings its own route, its
+own signature check and its own protection against duplicate delivery. No second addon is needed to
+use it.
 
-Einzurichten ist eins: die Adresse `https://deine-seite.de/!/automations/cal-com` bei cal.com als
-Webhook eintragen und das Secret, das cal.com dabei zeigt, als
-`STATAMIC_AUTOMATIONS_CALCOM_SECRET` hinterlegen.
+There is one thing to set up: enter the address `https://your-site.com/!/automations/cal-com` at
+cal.com as a webhook and store the secret cal.com shows you as
+`STATAMIC_AUTOMATIONS_CALCOM_SECRET`.
 
-**Ohne dieses Secret nimmt die Route nichts an.** Sie steht dann nicht offen, sondern antwortet
-mit 503. Ein Anschluss ohne Zugangsdaten tut nichts, statt alles anzunehmen: eine offene
-POST-Adresse, die Abläufe startet, ist sonst ein Formular, in das jeder Fremde Buchungen schreiben
-kann, und diese Buchungen verschicken Mails.
+**Without that secret the route accepts nothing.** It is then not open but answers with a 503. An
+integration without credentials does nothing rather than accepting everything: an open POST address
+that starts flows would otherwise be a form any stranger can write bookings into, and those
+bookings send mail.
 
-Geprüft wird die Signatur über den **rohen** Rumpf der Anfrage, bevor irgendetwas dekodiert wird,
-und der Vergleich läuft in konstanter Zeit. Eine Eigenheit von cal.com steckt darin, die man leicht
-übersieht: ist auf cal.coms Seite kein Secret gesetzt, fehlt der Signatur-Header nicht, sondern
-enthält wörtlich `no-secret-provided`. Wer nur prüft, ob ein Header da ist, lässt das durch.
+The signature is checked over the **raw** request body, before anything is decoded, and the
+comparison runs in constant time. There is a cal.com peculiarity in this that is easy to miss: if
+no secret is set on cal.com's side, the signature header is not absent but contains the literal
+`no-secret-provided`. Anyone who only checks whether a header is there lets that through.
 
-Dazu drei Schranken, die kein Secret ersetzt. cal.com legt weder eine Zustell-Kennung noch einen
-Zeitstempel in die Kopfzeilen, ein einmal mitgeschnittener, gültig signierter Rumpf bliebe also für
-immer gültig; wer ihn aus einem Protokoll hat, könnte den Ablauf später beliebig oft auslösen. Der
-Zeitstempel im Rumpf ist mitsigniert, und ein Umschlag, der älter als einen Tag ist, wird
-abgewiesen. Rümpfe über 256 KB werden abgewiesen, bevor die Prüfsumme über sie läuft. Und auf der
-Route liegt eine Bremse von 120 Anfragen je Minute, gegen jemanden, der die Adresse kennt und sie
-ohne Secret in Dauerschleife aufruft. Alle drei Werte stehen in der Konfiguration.
+Plus three barriers no secret replaces. cal.com puts neither a delivery identifier nor a timestamp
+in the headers, so a validly signed body captured once would stay valid for ever; anyone who has it
+from a log could trigger the flow arbitrarily often later on. The timestamp in the body is signed
+along with it, and an envelope older than a day is rejected. Bodies over 256 KB are rejected before
+the checksum runs over them. And the route carries a limit of 120 requests per minute, against
+somebody who knows the address and calls it in a loop without a secret. All three values are in the
+configuration.
 
-### Dieselbe Buchung zweimal startet den Ablauf einmal
+### The same booking twice starts the flow once
 
-cal.com stellt erneut zu, wenn eine Antwort ausbleibt. Das Paar aus Ereignis und Buchungs-`uid`
-wird deshalb einen Tag lang festgehalten; kommt es ein zweites Mal, wird es beantwortet, ohne den
-Ablauf noch einmal zu starten. Das Paar und nicht die `uid` allein: dieselbe Buchung wird angelegt,
-verlegt und abgesagt, und alle drei sollen laufen.
+cal.com delivers again when an answer does not arrive. The pair of event and booking `uid` is
+therefore held for a day; if it arrives a second time, it is answered without starting the flow
+again. The pair and not the `uid` alone: the same booking is created, rescheduled and cancelled,
+and all three are meant to run.
 
-Zwei Dinge, die daran leicht schiefgehen, sind ausdrücklich geregelt. Scheitert der Start des
-Ablaufs, etwa weil die Queue gerade nicht erreichbar ist, wird die Vormerkung zurückgenommen. Ohne
-das wäre die Buchung verloren: die Vormerkung stünde, cal.coms Wiederholung liefe in „schon
-dagewesen", und der Ablauf startete nie. Und die Schranke hängt am Cache. Steht `cache.default` auf
-`null` oder `array`, kann sie nicht wirken, und das Addon sagt es im Log, statt still gar nichts
-mehr zu tun. Ein Anschluss, der Erfolg meldet und nichts tut, ist die zäheste Fehlerform.
+Two things that easily go wrong about this are explicitly handled. If starting the flow fails, for
+instance because the queue is momentarily unreachable, the claim is withdrawn. Without that the
+booking would be lost: the claim would stand, cal.com's retry would run into "seen already", and
+the flow would never start. And the barrier hangs on the cache. If `cache.default` is `null` or
+`array`, it cannot work, and the addon says so in the log instead of silently doing nothing at all.
+An integration that reports success and does nothing is the most stubborn kind of defect.
 
-### Was ein Folgeknoten bekommt
+### What a following node receives
 
-cal.coms Nutzlast ist tief verschachtelt und trägt rund vierzig Felder, die meisten davon für den
-Betrieb einer Kalender-App. Der Auslöser legt die Auswahl flach hin, an der ein Ablauf wirklich
-hängt: `booking.uid`, `booking.title`, `booking.starts_at`, `booking.ends_at`,
-`booking.duration_minutes`, `booking.status`, `booking.event_type_slug`, `booking.event_type_title`,
-`booking.price_cent` mit `booking.currency`, `booking.notes`, `booking.attendee.*`,
-`booking.organizer.*`, `booking.meeting_url` und der Grund einer Absage, einer Ablehnung oder einer
-Verlegung. Dazu `booking.answers` mit allem, was im Buchungsformular beantwortet wurde, also auch
-den eigenen Fragen wie „In welchem Chor singst du?", und `booking.attendee_emails` als eine Zeile
-für das `to`-Feld der Mail-Aktion, das keine Liste annimmt. Die unveränderte Nutzlast liegt daneben
-unter `cal_com.payload`, für den seltenen Fall, den diese Auswahl nicht trifft.
+cal.com's payload is deeply nested and carries around forty fields, most of them for running a
+calendar app. The trigger lays out flat the selection a flow really depends on: `booking.uid`,
+`booking.title`, `booking.starts_at`, `booking.ends_at`, `booking.duration_minutes`,
+`booking.status`, `booking.event_type_slug`, `booking.event_type_title`, `booking.price_cent` with
+`booking.currency`, `booking.notes`, `booking.attendee.*`, `booking.organizer.*`,
+`booking.meeting_url` and the reason for a cancellation, a rejection or a reschedule. Plus
+`booking.answers` with everything answered in the booking form, including custom questions such as
+"Which choir do you sing in?", and `booking.attendee_emails` as one string for the mail action's
+`to` field, which takes no list. The unchanged payload sits next to it under `cal_com.payload`, for
+the rare case this selection does not cover.
 
-Fünf Eigenheiten von cal.com werden dabei geradegezogen, weil sie sonst im Betrieb auffallen und
-nicht vorher. `payload.type` ist der Slug der Terminart und nicht ihr Titel; der Titel steht in
-`payload.eventTitle`, und `payload.title` ist wieder etwas Drittes, nämlich der Titel der Buchung.
-`language` kommt als Objekt und wird zur Zeichenkette, sonst steht in der Mail „Array". Die
-Zeitschreibweise wechselt je Ereignis zwischen drei Formen, die alle denselben Zeitpunkt in UTC
-meinen; hier kommt eine Form an, dieselbe wie bei den Nachbar-Auslösern, sonst fände eine Bedingung
-denselben Termin auf dem einen Ereignis und auf dem anderen nicht. Der Preis steht in der kleinsten
-Währungseinheit und heißt deshalb `price_cent`, damit niemand „9000 EUR" in eine Mail schreibt. Und
-die Telefonnummer des Buchers steht nicht bei jedem Ereignis am Teilnehmer, sondern in der Antwort
-auf das Formularfeld; sie wird von dort geholt, statt ein Feld anzubieten, das nie etwas trägt.
+Five cal.com peculiarities are straightened out along the way, because otherwise they show up in
+production rather than beforehand. `payload.type` is the event type's slug and not its title; the
+title is in `payload.eventTitle`, and `payload.title` is a third thing again, namely the booking's
+title. `language` arrives as an object and is turned into a string, otherwise the mail says
+"Array". The time format alternates per event between three shapes that all mean the same instant
+in UTC; one shape arrives here, the same one as with the sibling triggers, otherwise a condition
+would find the same appointment on one event and not on the other. The price is in the smallest
+currency unit and is therefore called `price_cent`, so that nobody writes "9000 EUR" into a mail.
+And the booker's phone number is not on the attendee in every event but in the answer to the form
+field; it is fetched from there instead of offering a field that never carries anything.
 
-Ein Feld bleibt roh, und das mit Absicht: **`booking.location` ist keine Ortsangabe.** Bei einem
-Videotermin steht dort eine Maschinenkennung wie `integrations:daily`, bei einem Termin vor Ort die
-echte Adresse. In eine Mail gehört `booking.meeting_url`.
+One field stays raw, and deliberately so: **`booking.location` is not a location.** For a video
+appointment it holds a machine identifier such as `integrations:daily`, for an on-site appointment
+the real address. What belongs in a mail is `booking.meeting_url`.
 
-**Eine Verlegung ist bei cal.com keine geänderte Buchung, sondern eine neue.** Die alte wird
-abgesagt, die neue bekommt eine eigene `uid`. `booking.uid` ist deshalb die neue Buchung,
-`booking.rescheduled_from_uid` und `booking.rescheduled_from_starts_at` sind die alte. Wer den
-Termin in einem eigenen System nachhält, sucht ihn über das zweite Feld.
+**A reschedule is not a changed booking at cal.com but a new one.** The old one is cancelled, the
+new one gets a `uid` of its own. `booking.uid` is therefore the new booking, and
+`booking.rescheduled_from_uid` and `booking.rescheduled_from_starts_at` are the old one. Anyone
+tracking the appointment in a system of their own looks it up through the second field.
 
-### Was bewusst fehlt
+### What is deliberately missing
 
-**Aktionen.** Einen Termin über cal.com anzulegen oder abzusagen braucht einen API-Schlüssel, und
-das ist eine andere Zugangsart an einem anderen Ort. Diese Entscheidung steht noch aus, deshalb
-gibt es vorerst nur Auslöser.
+**Actions.** Creating or cancelling an appointment through cal.com needs an API key, and that is a
+different kind of credential in a different place. That decision is still open, so for now there
+are only triggers.
 
-**`MEETING_ENDED` und `MEETING_STARTED`.** Beide schickt cal.com in einer anderen Form: flach, ohne
-den `payload`-Umschlag, und mit der rohen Datenbankzeile statt des aufbereiteten Termins, also
-`user` statt `organizer` und `id` statt `bookingId`. Das ist ein zweiter Flattener und ein zweites
-Ausgabeschema, kein Beifang.
+**`MEETING_ENDED` and `MEETING_STARTED`.** cal.com sends both in a different shape: flat, without
+the `payload` envelope, and with the raw database row instead of the prepared appointment, that is,
+`user` instead of `organizer` and `id` instead of `bookingId`. That is a second flattener and a
+second output schema, not a by-catch.
 
-**`RECORDING_READY`.** Trägt keine vollständige Buchung, sondern im Kern einen Downloadlink, und
-gilt nur für Cal Video. Auch das wäre ein eigenes Ausgabeschema.
+**`RECORDING_READY`.** Carries no complete booking but essentially a download link, and only
+applies to Cal Video. That too would be an output schema of its own.
 
-**`BOOKING_PAYMENT_INITIATED`.** In cal.coms Dokumentation ist nicht belegt, welche Form die
-Nutzlast hat. Ein Auslöser, dessen Felder geraten sind, fällt beim ersten echten Webhook um.
+**`BOOKING_PAYMENT_INITIATED`.** cal.com's documentation does not establish what shape the payload
+has. A trigger whose fields are guessed falls over at the first real webhook.
 
 ## 2.10.0 (2026-08-29)
 
-### Neu: sechzehn Auslöser und vier Aktionen für die Handels-Addons
+### Added: sixteen triggers and four actions for the commerce addons
 
-Vier Nachbar-Addons feuern zusammen neunzehn Ereignisse. Drei davon hatten einen Trigger-Knoten,
-die übrigen sechzehn feuerten ins Leere. Wer wollte, dass beim Widerruf eines Zugangs jemand
-Bescheid bekommt, oder dass eine gekündigte Ratenzahlung anders behandelt wird als eine
-abbezahlte, musste den Listener selbst schreiben. Genau diese Arbeit soll dieses Addon abnehmen.
+Four sibling addons fire nineteen events between them. Three of those had a trigger node, the
+remaining sixteen fired into the void. Anyone who wanted somebody notified when an access is
+revoked, or a cancelled payment plan handled differently from a finished one, had to write the
+listener themselves. That is exactly the work this addon is supposed to take off their hands.
 
-**Payments** (mit `goldnead/statamic-payments`), sechs neue Auslöser: Erstattung, Abo gestartet,
-Abo verlängert, Abo gekündigt, Abo beendet, Abo-Start fehlgeschlagen. Alle filterbar nach Produkt,
-wie ihre drei Geschwister.
+**Payments** (with `goldnead/statamic-payments`), six new triggers: refund, subscription started,
+subscription renewed, subscription cancelled, subscription ended, subscription start failed. All
+filterable by product, like their three siblings.
 
-Zwei Unterscheidungen stecken darin, die im Ablauf zählen. „Gekündigt" und „beendet" sind nicht
-dasselbe: das eine ist jemand, der geht, das andere jemand, der die letzte Rate bezahlt hat, und
-ein gemeinsamer Ablauf für beide schickt „schade, dass du gehst" an einen Kunden, der gerade
-fertig abbezahlt hat. Und die Erstattung trägt getrennt, wie viel diesmal zurückging und ob damit
-alles zurück ist. Nur die zweite Angabe darf einen Zugangsentzug auslösen, deshalb gibt es dafür
-den Filter „nur vollständige Erstattungen" direkt am Auslöser.
+Two distinctions are in there that matter in a flow. "Cancelled" and "ended" are not the same
+thing: one is somebody leaving, the other somebody who has paid the last instalment, and one flow
+for both sends "sorry to see you go" to a customer who has just finished paying. And the refund
+carries separately how much went back this time and whether that means everything is back. Only the
+second of those may trigger a revocation of access, which is why there is a "full refunds only"
+filter right on the trigger.
 
-„Abo-Start fehlgeschlagen" ist der Fall, den ein Betrieb sonst erst erfährt, wenn der Kunde
-schreibt: Das Geld ist da, die Vereinbarung dahinter existiert nicht. Dahinter gehört eine
-Meldung an einen Menschen, keine Kundenmail.
+"Subscription start failed" is the case a business otherwise only learns about when the customer
+writes in: the money is there, the agreement behind it does not exist. What belongs behind it is a
+notification to a person, not a customer mail.
 
-**Entitlements** (mit `goldnead/statamic-entitlements`), fünf neue Auslöser: Zugang gewährt,
-entzogen, abgelaufen, verlängert, wartet auf Bestätigung. Filterbar nach Produkt und nach Quelle.
-Derselbe Kurs per Opt-in gewonnen und derselbe Kurs gekauft sind zwei verschiedene Sachverhalte
-und verdienen zwei verschiedene Mails.
+**Entitlements** (with `goldnead/statamic-entitlements`), five new triggers: access granted,
+revoked, expired, renewed, awaiting confirmation. Filterable by product and by source. The same
+course won through an opt-in and the same course bought are two different facts and deserve two
+different mails.
 
-„Zugang entzogen" trägt den Grund und den Verursacher mit. Eine Rückbuchung, die ein Webhook
-verarbeitet hat, und eine Erstattung, die ein Mensch bewilligt hat, sind dieselbe Datenzeile und
-sehr verschiedene Tatsachen.
+"Access revoked" carries the reason and the actor along. A chargeback a webhook processed and a
+refund a person approved are the same database row and very different facts.
 
-Dazu zwei Aktionen: **Zugang gewähren** und **Zugang entziehen**. Beide vertragen einen zweiten
-Lauf. Ein Zugang ist über (Subjekt, Produkt, Quelle, Quellreferenz) eindeutig, das Addon hält
-diese Kombination mit einem Unique-Index, und ein zweiter Lauf mit denselben Werten gibt den
-vorhandenen Zugang zurück, statt einen zweiten anzulegen.
+Plus two actions: **grant access** and **revoke access**. Both tolerate a second run. An access is
+unique over (subject, product, source, source reference), the addon holds that combination with a
+unique index, and a second run with the same values returns the existing access instead of creating
+a second one.
 
-Das Ergebnis führt drei Angaben, weil „der Aufruf hat geklappt" und „diese Person hat Zugang"
-zwei verschiedene Tatsachen sind. `grants_access` beantwortet die zweite. `created` sagt nur, ob
-dieser Lauf die Zeile geschrieben hat, was enger ist, als es aussieht: Eine bestätigte
-Doppel-Anmeldung schaltet einen vorhandenen Zugang frei, ohne etwas zu schreiben. Wer eine
-Willkommensmail genau einmal verschicken will, hängt sie deshalb an den Auslöser
-„Zugang gewährt", den das Addon je Zustandswechsel genau einmal feuert.
+The result carries three values, because "the call worked" and "this person has access" are two
+different facts. `grants_access` answers the second one. `created` only says whether this run wrote
+the row, which is narrower than it looks: a confirmed double sign-up unlocks an existing access
+without writing anything. Anyone who wants to send a welcome mail exactly once therefore hangs it
+on the "access granted" trigger, which the addon fires exactly once per state change.
 
-Ein entzogener Zugang bleibt entzogen, absichtlich, damit ein erneut zugestellter Webhook keine
-Erstattung rückgängig macht. Ein zweiter Gewähren-Lauf ändert daran nichts, und deshalb **färbt
-die Aktion ihren Knoten in diesem Fall rot**, statt Erfolg zu melden. Andernfalls liefe der
-Ablauf zufrieden weiter über einen Menschen, der keinen Zugang hat. Ein Zugang, dessen Startdatum
-noch in der Zukunft liegt, ist kein Fehler und sagt das über `provisional`.
+A revoked access stays revoked, deliberately, so that a redelivered webhook cannot undo a refund. A
+second granting run does not change that, and that is why **the action colours its node red in this
+case** instead of reporting success. Otherwise the flow would carry on contentedly about a person
+who has no access. An access whose start date is still in the future is not an error and says so
+through `provisional`.
 
-„Zugang entziehen" entzieht jeden Zugang, den das Subjekt für dieses Produkt hält, nicht den
-ersten gefundenen. `revoked` sagt, wie viele dieser Lauf wirklich geändert hat, `matched`, wie
-viele Zeilen es überhaupt gibt.
+"Revoke access" revokes every access the subject holds for this product, not the first one found.
+`revoked` says how many this run actually changed, `matched` how many rows there are at all.
 
-**Booking** (mit `goldnead/statamic-booking`), drei neue Auslöser: gebucht, storniert, verschoben.
-Filterbar nach Endpunkt, und dieser Filter ist keine Zierde: Eine Website betreibt mehrere
-Endpunkte nebeneinander, ein kostenloses Gespräch und eine bezahlte Stunde, und alle feuern
-dieselben drei Ereignisse.
+**Booking** (with `goldnead/statamic-booking`), three new triggers: booked, cancelled, rescheduled.
+Filterable by endpoint, and that filter is no ornament: a website runs several endpoints side by
+side, a free conversation and a paid lesson, and all of them fire the same three events.
 
-„Verschoben" ist der einzige der drei, der sich wiederholen kann. Das Booking-Addon schreibt und
-meldet eine Verschiebung, ohne zu prüfen, ob sich etwas geändert hat, also feuert eine erneut
-zugestellte Verschiebung ein zweites Mal. Steht etwas Teures dahinter, gehört eine Entdopplung
-davor. Das steht auch am Knoten selbst.
+"Rescheduled" is the only one of the three that can repeat. The booking addon writes and reports a
+reschedule without checking whether anything changed, so a redelivered reschedule fires a second
+time. If something expensive sits behind it, a deduplication belongs in front. That is stated on the
+node itself as well.
 
-**Invoices** (mit `goldnead/statamic-invoices`), zwei neue Auslöser: Rechnung ausgestellt,
-Gutschrift ausgestellt. Die Gutschrift trägt beide Dokumente, weil eine Gutschrift für sich
-gelesen nichts darüber sagt, was sie aufhebt.
+**Invoices** (with `goldnead/statamic-invoices`), two new triggers: invoice issued, credit note
+issued. The credit note carries both documents, because a credit note read on its own says nothing
+about what it reverses.
 
-Dazu zwei Aktionen: **Rechnung ausstellen** und **Gutschrift ausstellen**. Auch beide vertragen
-einen zweiten Lauf, gehalten von einem Unique-Index auf (Zahlung, Art) im Rechnungs-Addon. Und
-auch hier ist `created` das Feld, an dem ein Folgeschritt hängen sollte: Die Aktion gelingt auch
-dann, wenn sie nur das schon vorhandene Dokument zurückgibt.
+Plus two actions: **issue an invoice** and **issue a credit note**. Both tolerate a second run as
+well, held by a unique index on (payment, kind) in the invoicing addon. And here too `created` is
+the field a following step should hang on: the action also succeeds when it merely returns the
+document that was already there.
 
-Die Gutschrift storniert immer die ganze Rechnung, unabhängig davon, wie viel Geld tatsächlich
-zurückgeflossen ist. Bei einer Teilerstattung ist sie das falsche Dokument. Sie gehört hinter eine
-Bedingung auf vollständige Erstattung oder hinter den Payments-Auslöser mit eingeschaltetem Filter.
+The credit note always reverses the whole invoice, regardless of how much money actually went back.
+On a partial refund it is the wrong document. It belongs behind a condition on a full refund, or
+behind the payments trigger with that filter switched on.
 
-### Was bewusst nicht dabei ist
+### What is deliberately not included
 
-**Keine Erstattungs-Aktion.** `statamic-payments` kann beim Zahlungsanbieter keine Erstattung
-auslösen; es kann nur nachbuchen, was jemand im Dashboard des Anbieters getan hat. Eine Aktion
-namens „Erstattung auslösen" würde also kein Geld bewegen, aber den erstatteten Betrag schreiben
-und das Erstattungs-Ereignis feuern, woraufhin das Rechnungs-Addon eine Gutschrift für nie
-zurückgeflossenes Geld ausstellt. Solange das Addon keine echte Erstattung anbietet, gibt es hier
-keine.
+**No refund action.** `statamic-payments` cannot trigger a refund at the payment provider; it can
+only record what somebody did in the provider's dashboard. An action called "issue a refund" would
+therefore move no money, but would write the refunded amount and fire the refund event, whereupon
+the invoicing addon issues a credit note for money that never went back. As long as the addon
+offers no real refund, there is none here.
 
-**Keine Booking-Aktionen.** Das Booking-Addon bietet nach außen keinen Weg, eine Buchung
-anzulegen, zu verschieben oder zu stornieren; seine einzige öffentliche Methode nimmt einen
-Anbieter-Webhook entgegen. Direkt in die Tabelle zu schreiben würde seinen Eindeutigkeitsschlüssel
-umgehen und keines seiner Ereignisse feuern. Eine Aktion, die still das Falsche tut, ist schlechter
-als keine.
+**No booking actions.** The booking addon offers no outward way to create, reschedule or cancel a
+booking; its only public method takes a provider webhook. Writing into the table directly would
+bypass its uniqueness key and would fire none of its events. An action that silently does the wrong
+thing is worse than none.
 
-### Ohne die Nachbar-Addons ändert sich nichts
+### Without the sibling addons nothing changes
 
-Alle neuen Knoten hängen wie bisher an der Erkennung: Ist das jeweilige Addon nicht installiert,
-erscheint kein Knoten in der Bibliothek und es wird kein Listener registriert. Eine Installation
-ohne `statamic-booking` verhält sich exakt wie vorher. Das ist jetzt auch als Test festgehalten,
-zusammen mit dem Fall, dass eine Aktion scheitert: Sie färbt ihren Knoten rot und beendet den Lauf
-als fehlgeschlagen, statt eine Ausnahme in einen Queue-Worker zu werfen, in den niemand schaut.
+All the new nodes hang on the detection as before: if the respective addon is not installed, no node
+appears in the library and no listener is registered. An installation without `statamic-booking`
+behaves exactly as before. That is now held in place by a test as well, together with the case of an
+action failing: it colours its node red and ends the run as failed, instead of throwing an exception
+into a queue worker nobody looks at.
 
 ## 2.9.0 — 2026-08-25
 
@@ -758,433 +735,421 @@ als fehlgeschlagen, statt eine Ausnahme in einen Queue-Worker zu werfen, in den 
 
 ## 2.8.0 — 2026-08-25
 
-### Neu — sechs Auslöser für Funnel- und Zahlungs-Ereignisse
+### Added — six triggers for funnel and payment events
 
-Beide Nachbar-Addons feuerten diese längst, und niemand konnte sie hören: es gab keinen
-Trigger-Knoten dafür. „Schick den Kurs, wenn die Zahlung durch ist" brauchte einen selbst
-geschriebenen Listener.
+Both sibling addons had been firing these for a long time, and nobody could hear them: there was no
+trigger node for it. "Send the course once the payment goes through" needed a hand-written listener.
 
-- **Funnels** (mit `goldnead/statamic-funnels`): Schritt betreten, Formular abgeschickt, Angebot
-  angenommen, Funnel abgeschlossen. Filterbar nach Funnel; „Schritt betreten" zusätzlich nach
-  Schritt, weil dieser Auslöser sonst bei jedem Seitenaufruf feuert.
-- **Payments** (mit `goldnead/statamic-payments`): bezahlt, fehlgeschlagen. Filterbar nach Produkt.
-  Beide genau einmal je Zahlung, egal wie oft der Anbieter zustellt.
+- **Funnels** (with `goldnead/statamic-funnels`): step entered, form submitted, offer accepted,
+  funnel completed. Filterable by funnel; "step entered" additionally by step, because otherwise
+  that trigger fires on every page view.
+- **Payments** (with `goldnead/statamic-payments`): paid, failed. Filterable by product. Both
+  exactly once per payment, no matter how often the provider delivers.
 
-„Angebot angenommen" feuert **nach** der Zahlung, nicht auf den Klick.
+"Offer accepted" fires **after** the payment, not on the click.
 
-Registriert nur, wenn der jeweilige Nachbar installiert ist, wie bei LeadHub.
+Registered only when the respective sibling is installed, as with LeadHub.
 
-### Geändert
+### Changed
 
-- Der Zahlen-Streifen auf einer Knotenkarte nimmt jetzt eine Liste vom Wirt entgegen
-  (`goldnead/statamic-flow-canvas` ^1.1), statt drei fest benannte englische Zahlen mitzubringen.
-  Die alte Form wird weiter unverändert gezeichnet.
+- The figures strip on a node card now takes a list from the host
+  (`goldnead/statamic-flow-canvas` ^1.1), instead of bringing three fixed, English-named figures
+  with it. The old shape is still drawn unchanged.
 
 ## 2.7.1 — 2026-08-22
 
-### Fixed — der Serien-Ausstieg lief unter Mehrmarken-Betrieb ins 404
+### Fixed — the sequence opt-out ran into a 404 in multi-brand operation
 
-Die Marke der Seite kommt aus der Automation, die Anmeldung dahinter ist
-aber selbst markengebunden. Sobald beide auseinanderlagen, fand die Seite den
-Token nie und antwortete 404 — was aussah wie „diesen Token gibt es nicht",
-tatsächlich aber die fail-closed-Trennung war. Auf der Kommandozeile, wo gar
-keine Marke aktiv ist, schlug dieselbe Abfrage immer fehl.
+The page's brand comes from the automation, but the subscription behind it is
+brand-scoped itself. As soon as the two diverged, the page never found the
+token and answered 404 — which looked like "this token does not exist" but was
+in fact the fail-closed separation. On the command line, where no brand is
+active at all, the same query always failed.
 
-Der Token wird jetzt ohne Marken-Scope gelesen. Er adressiert genau eine Zeile
-über alle Marken hinweg, was das sicher macht; die Prüfung, ob Anmeldung und
-Serie zusammengehören, steht dafür ausdrücklich im Controller — dort, wo beide
-bekannt sind. Ohne sie könnte der Token der einen Marke einen Ausstieg bei der
-anderen auslösen.
+The token is now read without a brand scope. It addresses exactly one row
+across all brands, which is what makes that safe; the check that the
+subscription and the sequence belong together therefore sits explicitly in the
+controller — where both are known. Without it, one brand's token could trigger
+an opt-out at another.
 
-Gefunden beim Prüfen am laufenden System, nicht von einem Test: in einer
-Einzelmarken-Installation tritt der Fall nicht auf.
+Found by checking against the running system, not by a test: in a single-brand
+installation the case does not occur.
 
 ## 2.7.0 — 2026-08-22
 
-### Added — aus einer Serie aussteigen, ohne alles abzubestellen
+### Added — leaving one sequence without unsubscribing from everything
 
-Bis hierher gab es nur ganz oder gar nicht. Die Abmeldung von einer Liste
-stoppt zwar auch laufende Serien — der Sendeknoten prüft vor jedem Schritt, ob
-noch eine Anmeldung besteht —, aber sie kostet denjenigen eben auch den
-Newsletter. Wer eine fünfteilige Willkommensstrecke nicht zu Ende lesen will,
-sonst aber gerne Post bekommt, hatte keine Wahl außer der, die ihn ganz
-verliert.
+Up to here it was all or nothing. Unsubscribing from a list does stop running
+sequences too — the send node checks before every step whether a subscription
+still exists — but it also costs that person the newsletter. Anyone who does
+not want to read a five-part welcome series to the end but is otherwise happy
+to get mail had no choice except the one that loses them entirely.
 
-Neu ist die Zwischenstufe: eine Zeile in `automation_opt_outs` heißt „diese
-Person will von dieser Automation nichts mehr". Nicht mehr und nicht weniger —
-die Listen-Anmeldung bleibt unberührt.
+New is the intermediate step: a row in `automation_opt_outs` means "this person
+wants nothing more from this automation". No more and no less — the list
+subscription stays untouched.
 
-**Geprüft wird an zwei Punkten, und beide sind nötig.** Im `EnrollmentGate`,
-damit ein Ausstieg auch für einen späteren zweiten Durchlauf gilt; sonst hätte
-sich jemand aus der Willkommensstrecke abgemeldet und bekäme sie beim nächsten
-Anlass wieder. Und vor jedem Sendeschritt, weil eine Serie tagelang zwischen
-den Mails wartet: wer an Tag 3 aussteigt, darf Mail 4 nicht mehr bekommen, und
-zwischen den Wartezeiten läuft nichts außer diesem Knoten.
+**It is checked at two points, and both are necessary.** In the
+`EnrollmentGate`, so that an opt-out also applies to a later second run;
+otherwise somebody would have left the welcome series and would get it again on
+the next occasion. And before every send step, because a sequence waits for days
+between the mails: whoever opts out on day 3 must not receive mail 4, and
+between the waits nothing runs except this node.
 
-Die öffentliche Seite trennt Zeigen und Handeln wie das Double-Opt-in, und aus
-demselben Grund: der Link-Scanner eines Mailservers ruft jeden Link in einer
-Mail auf, bevor der Mensch sie überhaupt sieht. Ein GET, das schon austrägt,
-würde Leute aus Serien werfen, die nie geklickt haben. Der Weg zurück steht auf
-derselben Seite, damit ein versehentlicher Ausstieg nicht endgültig ist.
+The public page separates showing from acting, like the double opt-in, and for
+the same reason: a mail server's link scanner calls every link in a mail before
+the person even sees it. A GET that already removes somebody would throw people
+out of sequences who never clicked. The way back is on the same page, so that an
+accidental opt-out is not final.
 
-### Changed — der Kontext weiß jetzt, zu welcher Automation er gehört
+### Changed — the context now knows which automation it belongs to
 
-`WorkflowRunner` legt `_automation` in den Kontext, bevor der Graph läuft. Der
-Kontext war bisher reine Nutzlast; ein Knoten konnte nicht wissen, wovon er
-Teil ist. Der Sendeknoten braucht genau das, um zu fragen „will diese Person
-diese Serie noch?" — und ein nach zwei Tagen fortgesetzter Lauf braucht es
-genauso wie ein frischer, weshalb es in `walk()` steht und nicht in den drei
-Einstiegen darüber.
+`WorkflowRunner` puts `_automation` into the context before the graph runs. The
+context used to be pure payload; a node could not know what it is part of. The
+send node needs exactly that in order to ask "does this person still want this
+sequence?" — and a run resumed after two days needs it just as much as a fresh
+one, which is why it sits in `walk()` and not in the three entry points above
+it.
 
 ### Notes
 
-Der Routen-Parameter heißt `sequence`, nicht `automation`. Letzteres wäre der
-Name, den dieses Addon binden würde, wenn es je einen bindet — ein ungebundener
-Parameter mit genau diesem Namen ist eine Stolperfalle für den nächsten, der
-eine Bindung ergänzt. `RouteParameterCollisionTest` hält das fest.
+The route parameter is called `sequence`, not `automation`. The latter would be
+the name this addon would bind if it ever binds one — an unbound parameter with
+exactly that name is a trap for the next person who adds a binding.
+`RouteParameterCollisionTest` holds that in place.
 
 ## 2.6.1 — 2026-08-15
 
-### Fixed — `config:cache` hätte die Einstellungen eingefroren
+### Fixed — `config:cache` would have frozen the settings
 
-`config:cache` bootet die Anwendung vollständig und schreibt danach den
-aufgelösten Config-Baum auf die Platte. Die gespeicherten Overrides landeten
-mit darin, und ein eingebackener Override überlebt die Zeile, aus der er
-stammt: eine gelöschte Einstellung hätte bis zum nächsten `config:clear`
-weitergewirkt. Schlimmer, der nächste Boot hätte die eingebackene Datei als
-„ausgelieferten Default" gelesen — ein auf den Dateiwert zurückgesetzter Wert
-wäre dann als Zeile gespeichert statt gelöscht worden, also genau die
-Eigenschaft, die diese Klasse verspricht.
+`config:cache` boots the application fully and then writes the resolved config
+tree to disk. The stored overrides ended up in there, and a baked-in override
+outlives the row it came from: a deleted setting would have kept working until
+the next `config:clear`. Worse, the next boot would have read the baked-in file
+as "the shipped default" — a value reset to the file's value would then have
+been stored as a row instead of deleted, that is, exactly the property this
+class promises.
 
-Während des Cache-Baus wird jetzt nichts mehr angewendet. Die gecachte Datei
-trägt die Dateiwerte, und jeder Prozess legt seine Overrides beim eigenen Boot
-darüber.
+Nothing is applied during the cache build any more. The cached file carries the
+file values, and every process lays its overrides on top at its own boot.
 
-Dieselbe Falle steckte in den beiden Addons, die diese Bauform übernommen
-haben; dort wurde sie am 15.08. behoben. **Hier, im Original, war sie noch
-offen** — gefunden beim Schreiben des README gegen den Code, nicht von einem
-Test. Jetzt hält ein Test sie fest, der ohne den Fix umfällt.
+The same trap was in the two addons that adopted this construction; there it
+was fixed on 2026-08-15. **Here, in the original, it was still open** — found
+while writing the README against the code, not by a test. A test that fails
+without the fix now holds it in place.
 
-### Docs — das README beschreibt wieder, was das Addon tut
+### Docs — the README describes what the addon does again
 
-Ergänzt: die Aktivitätsansicht, die Mails einer Automation auf der
-Kontakt-Zeitleiste, die im Control Panel bearbeitbaren Einstellungen (seit
-v2.3.0 undokumentiert), `timeline.enabled` und
-`send_email.refuse_marketing_recipients` in der Config-Tabelle, und ein erster
-Datenschutz-Abschnitt (`subject_key`, Lauf-Kontexte, Zeitleisten-Einträge, und
-wie man das löscht).
+Added: the activity view, an automation's mails on the contact timeline, the
+settings editable in the Control Panel (undocumented since v2.3.0),
+`timeline.enabled` and `send_email.refuse_marketing_recipients` in the config
+table, and a first data protection section (`subject_key`, run contexts,
+timeline entries, and how to delete them).
 
-Korrigiert: die Zeile zu `runs.prune_after_days` sagte, `null` schalte das
-Aufräumen ab, ohne zu erwähnen, dass das Feld im Control Panel bewusst nicht
-unter 1 geht. Die feste Angabe „408 PHP tests / 141 JS tests" ist raus; eine
-Zahl im README ist Wartungsschuld.
+Corrected: the line about `runs.prune_after_days` said that `null` switches the
+pruning off, without mentioning that the field in the Control Panel
+deliberately does not go below 1. The fixed statement "408 PHP tests / 141 JS
+tests" is gone; a figure in a README is maintenance debt.
 
 ## 2.6.0 — 2026-08-15
 
-### Added — die Aktivitätsansicht
+### Added — the activity view
 
-Eine Automation zeigte, ob sie läuft, aber nicht, **was sie tut**. `RunStats`
-lieferte fünf Zahlen für das Ganze, `automation_node_runs` wurde nirgends
-ausgewertet, und einen Zeitraumfilter gab es überhaupt nicht.
+An automation showed whether it runs, but not **what it does**. `RunStats`
+supplied five figures for the whole thing, `automation_node_runs` was evaluated
+nowhere, and there was no period filter at all.
 
-Der Builder bekommt eine dritte Ansicht neben Flow und Mails:
+The builder gets a third view next to the flow and the mails:
 
-- **Zahlen am Knoten**, direkt auf der Leinwand. Ein Knoten ohne Läufe zeigt
-  nichts, keine Null — eine frische Automation soll nicht aussehen wie eine
-  kaputte.
-- **Trichter mit Zeitraum** (7/30/90 Tage oder alles), der zeigt, **wo** Leute
-  hängenbleiben, nicht nur wie viele.
-- **Protokoll** mit Filtern nach Schritt, Ergebnis und Zeitraum, echt
-  serverseitig paginiert, dazu ein CSV-Export derselben Auswahl.
-- **Kontakte im Ablauf**: wer gerade drinsteckt, seit wann und an welchem
-  Schritt. Läufe ohne Person (ein geplanter Lauf, ein Webhook ohne Adresse)
-  werden beziffert statt still geschluckt.
+- **Figures on the node**, right on the canvas. A node without runs shows
+  nothing, not a zero — a fresh automation should not look like a broken one.
+- **A funnel with a period** (7/30/90 days or everything), which shows **where**
+  people get stuck, not only how many.
+- **A log** with filters by step, result and period, genuinely paginated
+  server-side, plus a CSV export of the same selection.
+- **Contacts in the flow**: who is in it right now, since when and at which
+  step. Runs without a person (a scheduled run, a webhook without an address)
+  are counted rather than silently swallowed.
 
-Dafür tragen `automation_node_runs` jetzt `automation_uuid` und `is_test`. Beide
-stehen auf dem Elternlauf und werden bei dessen Erzeugung entschieden; kopiert
-sind sie, weil `is_test` im **Filter** gebraucht wird, nicht zum Beschriften —
-sonst bräuchte jede Kennzahl weiterhin den JOIN. Derselbe Grund, aus dem
-`brand_id` auf den Kindtabellen liegt.
+For that, `automation_node_runs` now carries `automation_uuid` and `is_test`.
+Both sit on the parent run and are decided when it is created; they are copied
+because `is_test` is needed in the **filter**, not for labelling — otherwise
+every figure would still need the JOIN. The same reason `brand_id` sits on the
+child tables.
 
-### Fixed — die Zahl am Knoten zählte Durchläufe, nicht Menschen
+### Fixed — the figure on the node counted passes, not people
 
-Der Trichter beschriftete `COUNT(*)` über Knotenläufe als „so viele haben
-diesen Schritt erreicht". Eine Schleife schreibt aber pro Durchlauf eine Zeile
-je Körperknoten, und ein Wait-Until wird beim Fortsetzen erneut geschrieben. Bei
-zehn Schleifendurchläufen meldete der Körperknoten das Zehnfache — und weil die
-Balken gegen den belebtesten Knoten gemessen werden, schrumpften alle anderen
-Schritte auf einen Bruchteil. Die Ansicht zeichnete einen Absturz genau dort, wo
-keiner war, also bei der einen Frage, für die es sie gibt.
+The funnel labelled `COUNT(*)` over node runs as "this many reached this step".
+But a loop writes one row per pass for each body node, and a wait-until is
+written again when it resumes. With ten loop passes the body node reported ten
+times as much — and because the bars are measured against the busiest node,
+every other step shrank to a fraction. The view drew a collapse exactly where
+there was none, that is, at the one question it exists for.
 
-Gezählt werden jetzt eigene Läufe (`COUNT(DISTINCT automation_run_id)`), und
-zwar je Knoten statt je Knoten und Ergebnis: ein Lauf, der einen Schritt erst
-verpatzt und beim zweiten Versuch schafft, ist einmal dort angekommen.
+What is counted now is distinct runs (`COUNT(DISTINCT automation_run_id)`), and
+per node rather than per node and result: a run that fumbles a step and manages
+it on the second attempt arrived there once.
 
-Nachgemessen an echten Daten: ein Schritt mit vier Zeilen für eine Person.
+Measured against real data: a step with four rows for one person.
 
-### Fixed — der Export
+### Fixed — the export
 
-- **Zellen sind sicher zu öffnen.** `subject` kommt aus dem Trigger-Kontext, den
-  ein Fremder über ein Formular oder einen Webhook füllt; der Einschreibungs-
-  Filter trimmt und kleinschreibt ihn, mehr nicht. Excel führt eine Zelle mit
-  führendem `=` beim Öffnen aus, bei der Person mit `view automation runs`.
-- **Backslashes bleiben stehen.** PHPs Standard-Escape gehört nicht zu RFC 4180
-  und zerlegt jeden Wert mit Backslash — also jede Fehlermeldung mit
-  Klassennamen. Dazu ein BOM, damit „Willkommensgruß" nicht als Buchstabensalat
-  ankommt.
-- **Die Datei folgt der Sortierung der Tabelle.** `Listing` merkt sich die Wahl
-  des Lesers; wer einmal aufsteigend sortiert hatte, bekam von da an jede Datei
-  in umgekehrter Reihenfolge zu der Tabelle, als die sie sich ausgibt.
-- Ein Schritt, dessen Knoten gelöscht wurde, ist in der Datei als solcher
-  benannt. Auf dem Schirm gab es dafür ein Kennzeichen, in der Datei nichts.
+- **Cells are safe to open.** `subject` comes from the trigger context, which a
+  stranger fills through a form or a webhook; the enrolment filter trims and
+  lowercases it, nothing more. Excel executes a cell with a leading `=` on
+  opening, as the person with `view automation runs`.
+- **Backslashes stay put.** PHP's default escaping is not part of RFC 4180 and
+  breaks up every value containing a backslash — that is, every error message
+  with a class name in it. Plus a BOM, so that "Willkommensgruß" does not arrive
+  as a jumble of letters.
+- **The file follows the table's sort order.** `Listing` remembers the reader's
+  choice; anyone who had sorted ascending once got every file from then on in
+  the reverse order of the table it claims to be.
+- A step whose node was deleted is named as such in the file. On screen there
+  was a marker for it, in the file nothing.
 
-### Fixed — „Im Ablauf" verschwieg die, auf die es ankommt
+### Fixed — "in the flow" concealed the ones that matter
 
-Der Zeitraum wurde auch auf diese Liste angewendet. Wer vor 40 Tagen
-eingeschrieben wurde und in einer 60-Tage-Wartezeit parkt, fiel bei der
-Voreinstellung „letzte 30 Tage" heraus — und aus der Zahl daneben gleich mit, so
-dass nichts auf dem Schirm auch nur andeutete, dass jemand fehlt. Die Frage
-lautet „wer steckt jetzt drin", und das ist keine Frage nach einem Zeitraum.
+The period was applied to that list as well. Somebody enrolled 40 days ago and
+parked in a 60-day wait fell out under the default "last 30 days" — and out of
+the count beside it along with them, so that nothing on the screen even hinted
+that somebody was missing. The question is "who is in it now", and that is not a
+question about a period.
 
-### Fixed — Kleinigkeiten
+### Fixed — small things
 
-- Die Statusspalte zeigte `success` und `failed` roh, während das Filtermenü
-  daneben „Erfolg" und „Fehlgeschlagen" anbot. Dieselbe Tatsache in zwei
-  Sprachen auf einem Schirm.
-- Die Kachel „Completed" heißt jetzt „Ran to the end" und hat eine eigene
-  Übersetzung. Der Schlüssel `Completed` gehört LeadHub (für eine erledigte
-  Aufgabe), und CP-weit gemergte Wörterbücher hätten deren Wort überschrieben.
-- Der Satz über den Läufen ohne Person sagte „:n weitere" über einer leeren
-  Tabelle.
-- Ein Knotenlauf ohne `created_at` hätte den Export an dieser Stelle still
-  abbrechen lassen.
+- The status column showed `success` and `failed` raw, while the filter menu
+  beside it offered "Erfolg" and "Fehlgeschlagen". The same fact in two
+  languages on one screen.
+- The "Completed" tile is now called "Ran to the end" and has a translation of
+  its own. The key `Completed` belongs to LeadHub (for a finished task), and
+  CP-wide merged dictionaries would have overwritten their word.
+- The sentence about the runs without a person said ":n more" above an empty
+  table.
+- A node run without `created_at` would have made the export abort silently at
+  that point.
 
 ## 2.5.0 — 2026-08-15
 
-### Added — die Mails einer Automation stehen jetzt am Kontakt
+### Added — an automation's mails now appear on the contact
 
-Die Kontaktseite in LeadHub beantwortet „was hat diese Person von uns bekommen".
-Kampagnen melden sich dort von Marketings Seite selbst; die Mails, die eine
-Automation verschickt — oft die allerersten, die jemand überhaupt bekommt —
-waren der eine fehlende Teil dieser Antwort.
+The contact page in LeadHub answers "what has this person received from us".
+Campaigns register there from marketing's side themselves; the mails an
+automation sends — often the very first ones somebody receives at all — were
+the one missing part of that answer.
 
-Was der Eintrag **nicht** sagen kann, sagt er selbst: eine Automations-Mail
-geht durch den Mailer, nicht durch Marketings gemessenen Sendepfad. Kein Pixel,
-keine umgeschriebenen Links, also keine Öffnung und kein Klick. Ein Eintrag,
-„versendet", mit dem Hinweis dazu. Eine Zeitleiste, die dazu schweigt, liest
-sich als „nie geöffnet", und das ist eine andere und unwahre Sache.
+What the entry **cannot** say, it says itself: an automation mail goes through
+the mailer, not through marketing's measured sending path. No pixel, no
+rewritten links, so no open and no click. One entry, "sent", with that note
+attached. A timeline that stays silent about it reads as "never opened", and
+that is a different and untrue thing.
 
-- **Kein Klassenname des Nachbar-Addons taucht hier auf.** Alles läuft über
-  `Integrations\LeadHub\LeadHubAdapter`, der LeadHub aus dem Container holt
-  und „nicht installiert" ohne Fehler beantwortet. Das ist es, was die
-  Integration optional hält.
-- **Nur für Kontakte, die es schon gibt**, und nie fatal: der Weg hängt hinten
-  an einem bereits erfolgreichen Versand.
-- **Testläufe schreiben nichts.** `automations.test_mode.send_real_emails` ist
-  eine ausgelieferte Option; mit ihr an liefert der Erfolgspfad wieder eine
-  echte Adresse.
-- `marketing.send_email` bleibt außen vor und meldet sich weiter selbst, sonst
-  stünde jede solche Mail zweimal am Kontakt.
+- **No class name of the sibling addon appears here.** Everything runs through
+  `Integrations\LeadHub\LeadHubAdapter`, which fetches LeadHub from the
+  container and answers "not installed" without an error. That is what keeps
+  the integration optional.
+- **Only for contacts that already exist**, and never fatal: the path hangs at
+  the end of an already successful send.
+- **Test runs write nothing.** `automations.test_mode.send_real_emails` is a
+  shipped option; with it on, the success path supplies a real address again.
+- `marketing.send_email` stays out of it and keeps registering itself,
+  otherwise every such mail would appear twice on the contact.
 
-Abschaltbar über `automations.timeline.enabled`.
+Can be switched off through `automations.timeline.enabled`.
 
 ### Fixed
 
-- `AutomationRun::automation()` ist jetzt als Beziehung dokumentiert, die auch
-  leer sein kann: ein Lauf überlebt die Automation, aus der er stammt. Damit
-  fällt ein Altbefund aus der phpstan-Baseline.
+- `AutomationRun::automation()` is now documented as a relation that can be
+  empty as well: a run outlives the automation it came from. That drops an old
+  finding from the phpstan baseline.
 
 ## 2.4.1 — 2026-08-14
 
-Alles aus der Kritiker-Runde zu 2.4.0. Die Sperre stand, der Katalog daneben
-zeigte weiter auf die Lücke.
+Everything from the critic round on 2.4.0. The bar was in place, and the
+catalogue beside it kept pointing at the gap.
 
-### Added — der zweite Weg zum selben Defekt wird benannt
+### Added — the second route to the same defect is named
 
-Die Sperre erkannte Werbepost nur am Marketing-Auslöser (`subscriber.*` im
-Kontext). Es gibt einen zweiten Weg zur identischen Mail, und der Katalog führt
-hin: `form_submitted` → `marketing.subscribe` → eine Mail an die eben
-angemeldete Adresse. Das ist die Vorlage „Form Submission to Newsletter" plus
-den naheliegenden nächsten Knoten.
+The bar recognised marketing mail only by the marketing trigger (`subscriber.*`
+in the context). There is a second route to the identical mail, and the
+catalogue leads there: `form_submitted` → `marketing.subscribe` → a mail to the
+address that was just subscribed. That is the "Form Submission to Newsletter"
+template plus the obvious next node.
 
-Dieser Fall wird **gewarnt, nicht verweigert**, und das ist der Punkt: derselbe
-Graph ist auch die Auslieferung einer angeforderten Datei an jemanden, den man
-vorher angemeldet hat. Beide Lesarten sind echt, nichts im Lauf trennt sie, und
-eine Verweigerung wäre geraten — geraten würde dabei, ob man jemandem seinen
-laufenden Ablauf zerbricht. Die Warnung nennt `marketing.send_email` beim Namen.
-Die Vorlage selbst sagt es jetzt in ihrer Beschreibung, weil dort entschieden
-wird, was als Nächstes gebaut wird (in `statamic-marketing` 2.7.2).
+This case is **warned about, not refused**, and that is the point: the same
+graph is also the delivery of a requested file to somebody who was subscribed
+beforehand. Both readings are real, nothing in the run separates them, and a
+refusal would be a guess — and what would be guessed is whether to break
+somebody's running flow. The warning names `marketing.send_email`. The template
+itself now says so in its description, because that is where the decision about
+what gets built next is made (in `statamic-marketing` 2.7.2).
 
-### Fixed — drei Löcher in der Sperre
+### Fixed — three holes in the bar
 
-- **Anzeigename und Empfängerliste.** `Lea <lea@example.test>` und
-  `team@example.com, lea@example.test` liefen an der Sperre vorbei, weil roh
-  verglichen wurde. Ein Anzeigename ist kein anderer Empfänger. Plus-Adressen
-  und Punkte bleiben absichtlich unnormalisiert — das wären andere Postfächer.
-- **Der Kill-Switch schwieg.** Wer `refuse_marketing_recipients` ausschaltet,
-  bekommt jetzt für jeden durchgelassenen Versand eine Warnung im Log. Ein
-  Schalter, der lautlos zum Ausgangsdefekt zurückführt, ist die stillste Art,
-  ihn wiederzubekommen.
-- **Die Naht zum Marketing-Addon war ungeprüft.** Die Sperre findet den
-  Nachbarn über einen Klassennamen als String; eine Umbenennung drüben hätte sie
-  klanglos zur Logzeile degradiert. Der Pin liegt jetzt in
-  `statamic-marketing`s Integrationssuite, wo beide Pakete wirklich installiert
-  sind.
+- **Display name and recipient list.** `Lea <lea@example.test>` and
+  `team@example.com, lea@example.test` slipped past the bar, because the
+  comparison was raw. A display name is not a different recipient. Plus
+  addresses and dots deliberately stay unnormalised — those would be different
+  mailboxes.
+- **The kill switch stayed silent.** Anyone switching
+  `refuse_marketing_recipients` off now gets a warning in the log for every send
+  that is let through. A switch that quietly returns you to the original defect
+  is the most silent way to get it back.
+- **The seam to the marketing addon was unverified.** The bar finds the sibling
+  through a class name as a string; a rename over there would have degraded it
+  soundlessly to a log line. The pin now sits in `statamic-marketing`'s
+  integration suite, where both packages are really installed.
 
-### Docs — die eine Vorlage, die an eine echte Person mailt, sagt jetzt warum sie darf
+### Docs — the one template that mails a real person now says why it may
 
-`lead_magnet_delivery` ist der einzige mitgelieferte Katalogeintrag, der nicht
-an die eigene Redaktion schreibt, sondern an `{{ form.email }}`. Er darf das:
-die Mail ist die Datei, die vor Sekunden angefordert wurde, und sie meldet
-niemanden zu irgendetwas an. Nur stand das nirgends — und neben einer frischen
-Warnung stand damit eine Vorlage, die wie ihr Gegenbeispiel aussah.
-Beschreibung, README und `docs/templates.md` sagen es jetzt, mitsamt dem Satz,
-auf den es ankommt: die nächste Mail danach ist Werbung und braucht eine
-Anmeldung und `marketing.send_email`.
+`lead_magnet_delivery` is the only shipped catalogue entry that does not write
+to your own editorial address but to `{{ form.email }}`. It is allowed to: the
+mail is the file that was requested seconds ago, and it subscribes nobody to
+anything. But that was written down nowhere — so next to a fresh warning stood a
+template that looked like its counter-example. The description, the README and
+`docs/templates.md` say so now, together with the sentence that matters: the
+next mail after it is marketing and needs a subscription and
+`marketing.send_email`.
 
-Dazu ein Hinweis am Fixture `tests/Fixtures/stored-automations/hub-2026-07-29.json`:
-die dortige Nurture-Strecke ist ein Foto des Defekts, den 2.4.0 abstellt, und
-bleibt absichtlich so stehen. Eine Kompatibilitätsprüfung gegen aufgeräumte
-Daten prüft nichts.
+Plus a note on the fixture `tests/Fixtures/stored-automations/hub-2026-07-29.json`:
+the nurture sequence in it is a photograph of the defect 2.4.0 stops, and stays
+that way deliberately. A compatibility check against tidied data checks nothing.
 
 ## 2.4.0 — 2026-08-14
 
-### Changed — „Send Email" ist der transaktionale Knoten, und sagt es jetzt auch
+### Changed — "Send Email" is the transactional node, and now says so
 
-Der Knoten beschrieb sich selbst als geeignet für „a transactional **or
-marketing** email". Er ist für das Zweite nicht geeignet und kann es nicht
-werden: er fragt niemanden nach Einwilligung, Sperrliste, Opt-out oder
-Frequenz-Deckel — ein Passwort-Reset muss trotz aller vier raus — und trägt aus
-demselben Grund weder Abmeldelink noch Anbieterkennzeichnung. Zwei echte
-Willkommensstrecken sind auf ihm gebaut worden, beide sahen richtig aus, beide
-verschickten ungeprüft.
+The node described itself as suitable for "a transactional **or marketing**
+email". It is not suitable for the second and cannot become so: it asks nobody
+about consent, suppression list, opt-out or frequency cap — a password reset has
+to go out despite all four — and for the same reason carries neither an
+unsubscribe link nor a sender identification. Two real welcome sequences were
+built on it, both looked right, both sent unchecked.
 
-Beschreibung, `help` am Empfängerfeld, README und `docs/sequences.md` sagen
-jetzt, wofür der Knoten da ist und wofür `marketing.send_email` aus
-`goldnead/statamic-marketing` da ist. Eine transaktionale Mail an jemanden, der
-zufällig Abonnent ist, gehört ebenfalls dorthin, mit Klassifizierung
-`transactional`: das nimmt sie vom Deckel aus und behält die Tore.
+The description, the `help` on the recipient field, the README and
+`docs/sequences.md` now say what the node is for and what `marketing.send_email`
+from `goldnead/statamic-marketing` is for. A transactional mail to somebody who
+happens to be a subscriber belongs there as well, classified as
+`transactional`: that exempts it from the cap and keeps the gates.
 
-### Added — der Knoten verweigert Werbepost, statt nur vor ihr zu warnen
+### Added — the node refuses marketing mail instead of only warning about it
 
-Worte haben es zweimal nicht gehalten. Ist `statamic-marketing` installiert,
-verweigert `send_email` **einen** Versand: eine Mail an genau die Person, um
-deren Abo der Lauf geht (`marketing.subscribed` / `.unsubscribed` legen sie als
-`subscriber.email` auf einer benannten Liste in den Kontext). Das ist die Form,
-die beide historischen Defekte hatten.
+Words failed to hold twice. If `statamic-marketing` is installed, `send_email`
+refuses **one** send: a mail to exactly the person whose subscription the run is
+about (`marketing.subscribed` / `.unsubscribed` put them into the context as
+`subscriber.email` on a named list). That is the shape both historical defects
+had.
 
-Verglichen werden **Adressen**, nicht Auslöser. Der Abmelde-Alarm und die
-„Kampagne verschickt"-Nachricht laufen auf denselben Auslösern, schreiben aber
-an die eigene Redaktion — sie sind unberührt und müssen es bleiben. Ohne das
-Marketing-Addon gibt es keinen Knoten, auf den zu verweisen wäre: dann bleibt es
-bei einer Warnung im Log und die Mail geht wie bisher raus. Die Prüfung läuft
-vor dem Testmodus-Kurzschluss, damit sie auf „Test" sichtbar wird und nicht drei
-Tage später.
+What is compared are **addresses**, not triggers. The unsubscribe alert and the
+"campaign sent" message run on the same triggers but write to your own editorial
+address — they are unaffected and have to stay that way. Without the marketing
+addon there is no node to point to: then it stays a warning in the log and the
+mail goes out as before. The check runs before the test-mode short circuit, so
+that it becomes visible on "test" and not three days later.
 
-Abschaltbar über `automations.send_email.refuse_marketing_recipients`
-(Standard: an) — bewusst site-weit und nicht als Häkchen am Knoten, weil ein
-Häkchen am Knoten in derselben Minute gesetzt wird, in der der Fehler passiert.
+Can be switched off through `automations.send_email.refuse_marketing_recipients`
+(default: on) — deliberately site-wide and not as a checkbox on the node,
+because a checkbox on the node gets ticked in the same minute the mistake
+happens.
 
 ## 2.3.0 — 2026-08-14
 
-Alles aus Adrians Durchgang durch das Control Panel des Hubs.
+Everything from Adrian's pass through the hub's Control Panel.
 
-### Added — die Einstellungen sind bearbeitbar
+### Added — the settings are editable
 
-Die Seite war ein Ausdruck von `config/automations.php` mit dem Hinweis, die Datei auf dem Server
-zu ändern. Sie ist jetzt ein Formular: Queue, Aufbewahrung der Läufe, Testmodus und die
-Redaktionsliste werden im Control Panel geschrieben (`manage automation settings`).
+The page was a printout of `config/automations.php` with a note to change the file on the server.
+It is a form now: the queue, the retention of runs, the test mode and the editorial list are
+written in the Control Panel (`manage automation settings`).
 
-Gespeichert werden **nur Abweichungen**, eine Zeile je geänderter Schlüssel in
-`automation_settings`. Wer einen Wert auf den Standard zurückstellt, löscht die Zeile — die
-Einstellung folgt danach wieder der Datei, auch wenn ein späteres Release den Standard verschiebt.
-Eine Tabelle, die jeden Schlüssel spiegelt, hätte die Standards des Installationstags eingefroren.
+**Only deviations are stored**, one row per changed key in `automation_settings`. Resetting a value
+to the default deletes the row — the setting then follows the file again, even if a later release
+moves the default. A table mirroring every key would have frozen the defaults of the day of
+installation.
 
-`Support\Settings` ist die einzige Definition: das Formular, die Validierung und das Überschreiben
-beim Booten lesen dieselbe Liste. Die alte Seite hielt ihre Beschriftungen in JavaScript und war
-damit eine zweite Beschreibung der Config-Datei, die ihr widersprechen konnte.
+`Support\Settings` is the single definition: the form, the validation and the override at boot read
+the same list. The old page held its labels in JavaScript and was therefore a second description of
+the config file, one that could contradict it.
 
-Nicht bearbeitbar und mit Absicht: `storage.driver` (entscheidet, wo Automationen liegen, und ist
-unter laufendem Betrieb nicht umschaltbar), alles aus `env()` — ein Schlüssel in der Datenbank
-läge im Backup statt im Secret-Store — und `integrations`, das keine Einstellung ist, sondern
-eine Erkennung.
+Not editable, and deliberately so: `storage.driver` (it decides where automations live and cannot
+be switched while the system is running), everything from `env()` — a key in the database would sit
+in the backup instead of in the secret store — and `integrations`, which is not a setting but a
+detection.
 
-Die Tabelle ist **nicht** brand-scoped, anders als jede andere in diesem Addon. Es sind
-Eigenschaften der Installation; ein Queue-Name je Marke hieße, dass der Worker die Jobs der einen
-Marke leert und die der anderen nicht, ohne dass irgendwo etwas dazu stünde.
+The table is **not** brand-scoped, unlike every other one in this addon. These are properties of the
+installation; a queue name per brand would mean the worker drains one brand's jobs and not the
+other's, without anything anywhere saying so.
 
-### Added — eine Mail aus der Liste öffnen und bearbeiten
+### Added — opening and editing a mail from the list
 
-In der Mails-Ansicht ließ sich eine Mail verschieben, zuweisen und löschen, aber nicht lesen. Ein
-Klick auf den Namen öffnet sie jetzt in einem Stack. Das Formular darin ist `ConfigPanel` — das
-gleiche, das die Canvas in ihrer rechten Spalte zeigt —, damit eine Mail einen Editor hat und
-nicht zwei, die auseinanderlaufen.
+In the mails view a mail could be moved, assigned and deleted, but not read. Clicking the name now
+opens it in a stack. The form inside it is `ConfigPanel` — the same one the canvas shows in its
+right-hand column — so that a mail has one editor and not two that drift apart.
 
-### Fixed — der Editor lief nicht über die volle Breite, und sein Kopf war grau
+### Fixed — the editor did not run full width, and its header was grey
 
-Drei Befunde, eine Ursache. Die Seite trug `bg-body-bg`, also den Seitenhintergrund, obwohl sie
-in der Content-Karte sitzt: daher das graue Band hinter dem Kopf, während jeder andere Schirm des
-Control Panels dort weiß ist. Und sie zog sich mit `lg:-mx-12` aus der Karte heraus, was den Kopf
-mitnahm — der Titel klebte am Fensterrand statt an der Rinne des Control Panels.
+Three findings, one cause. The page carried `bg-body-bg`, that is, the page background, although it
+sits in the content card: hence the grey band behind the header, while every other Control Panel
+screen is white there. And it pulled itself out of the card with `lg:-mx-12`, which took the header
+along — the title stuck to the window edge instead of to the Control Panel's gutter.
 
-Jetzt hebt die Seite die Breitenbegrenzung von innen auf (`[data-sa-full-bleed]`, siehe `cp.css`)
-und behält die Polsterung der Karte. Eine Canvas ist kein Lesetext; die 85rem-Grenze ließ den
-Graphen auf einem breiten Schirm in einer Spalte mit leeren Rändern stehen.
+The page now lifts the width limit from the inside (`[data-sa-full-bleed]`, see `cp.css`) and keeps
+the card's padding. A canvas is not reading text; the 85rem limit left the graph standing in a
+column with empty margins on a wide screen.
 
-### Fixed — die Menüs mit den drei Punkten hatten einen Rollbalken
+### Fixed — the three-dot menus had a scrollbar
 
-`DropdownItem` ist `grid-cols-subgrid`, und `DropdownMenu` ist das Raster, das diese Spalten
-definiert. An drei Stellen — Kopfzeile des Editors, Knotenkarte, Variablen-Einfüger — standen die
-Einträge ohne diesen Rahmen im Menü. Ohne Raster ist jede Zeile ein paar Pixel breiter als das
-Menü, und am unteren Rand erscheint ein waagerechter Rollbalken.
+`DropdownItem` is `grid-cols-subgrid`, and `DropdownMenu` is the grid that defines those columns. In
+three places — the editor's header, the node card, the variable inserter — the items sat in the menu
+without that frame. Without the grid every row is a few pixels wider than the menu, and a horizontal
+scrollbar appears at the bottom edge.
 
-### Fixed — der Stack des Laufprotokolls ging nie auf
+### Fixed — the run log's stack never opened
 
-`Stack` hat eine kontrollierte `open`-Eigenschaft mit Vorgabe `false`, und `name` ist gar keine
-Eigenschaft. Das Protokoll wurde also gemountet und nie gezeigt. Dazu heißt die Überschrift von
-`StackHeader` `title`, nicht `heading` — `heading` fiel als einfaches HTML-Attribut durch und die
-Leiste blieb leer.
+`Stack` has a controlled `open` property defaulting to `false`, and `name` is not a property at all.
+So the log was mounted and never shown. On top of that, `StackHeader`'s heading is called `title`,
+not `heading` — `heading` fell through as a plain HTML attribute and the bar stayed empty.
 
-### Changed — das Dashboard sieht aus wie der Rest der Familie
+### Changed — the dashboard looks like the rest of the family
 
-Die Kennzahlen benutzten `Widget`, ein Dashboard-Rahmen mit eigener Kopflinie und Mindesthöhe, in
-dem jede Zahl oben links in einer hohen leeren Kiste hing. Jetzt `Card` + `Subheading` +
-`Heading`, wie in `statamic-marketing`. Die Diagramme lagen direkt in einem `Panel`: ein Panel ist
-ein Bereich mit Überschrift, keine Fläche, deshalb nahm sein Rumpf den Seitenhintergrund an und
-las sich als grauer Klotz neben den weißen Kacheln. Sie liegen jetzt auf einer `Card`.
+The figures used `Widget`, a dashboard frame with a heading line of its own and a minimum height, in
+which every number hung in the top left of a tall empty box. Now `Card` + `Subheading` + `Heading`,
+as in `statamic-marketing`. The charts sat directly in a `Panel`: a panel is a section with a
+heading, not a surface, so its body took on the page background and read as a grey block next to the
+white tiles. They sit on a `Card` now.
 
-### Changed — „Mail rules" steht nur im Menü, wenn es welche gibt
+### Changed — "Mail rules" only appears in the menu when there are any
 
-Die Seite bearbeitet Automationen, die ein Auslöser und eine Mail sind, aus dem Satz heraus. Wo es
-keine gibt, ist sie leer und ihr einziger Link führt zur Canvas — sie las sich als Menüpunkt, der
-nichts tut außer weiterzuleiten. `Sequence\MailRules` beantwortet die Frage mit einem `exists()`,
-nicht mit dem Laden aller Automationen wie die Seite selbst: die Navigation fragt bei jedem
-Aufruf. Der Eintrag kommt mit der ersten passenden Automation von selbst zurück, und die Seite
-bleibt die ganze Zeit über ihre URL erreichbar.
+The page edits automations that are one trigger and one mail, from the sentence outwards. Where
+there are none, it is empty and its only link leads to the canvas — it read as a menu item that does
+nothing but redirect. `Sequence\MailRules` answers the question with an `exists()` rather than by
+loading every automation the way the page itself does: the navigation asks on every request. The
+entry comes back on its own with the first matching automation, and the page stays reachable through
+its URL the whole time.
 
 
 ## 2.2.1 — 2026-08-13
 
-### Fixed — die Wiedereintrittsregel wurde von vier Auslösern gar nicht gelesen
+### Fixed — the re-entry rule was not read at all by four triggers
 
-`EnrollmentGate` war für `TriggerDispatcher` geschrieben, und dort wurde sie auch gefragt. Die
-vier eigenen Listener — Marketing, LeadHub, Formulareinsendung, Eintrag veröffentlicht — bauen
-ihren Kontext selbst und riefen `createRun()` direkt auf. Für jede Automation, die von einem von
-ihnen startet, hat die Regel auf dem Trigger-Knoten **niemand gelesen**.
+`EnrollmentGate` was written for `TriggerDispatcher`, and it was asked there. The four listeners of
+this addon — marketing, LeadHub, form submission, entry published — build their context themselves
+and called `createRun()` directly. For every automation started by one of them, **nobody** read the
+rule on the trigger node.
 
-Der Fehler war still in der schlimmsten Form: das Feld steht in der Konfiguration, das Control
-Panel zeigt die Auswahl, ein Export trägt sie mit, und es passierte nichts. `marketing.subscribed`
-ist der Auslöser, mit dem eine Willkommensstrecke anfängt, und der, bei dem `ignore` am meisten
-zählt: wer sich abmeldet und neu anmeldet, bekam die ganze Strecke ein zweites Mal, parallel zur
-ersten, beide weiterlaufend. Genau das soll die Regel verhindern.
+The defect was silent in the worst way: the field is in the configuration, the Control Panel shows
+the choice, an export carries it along, and nothing happened. `marketing.subscribed` is the trigger
+a welcome sequence starts with, and the one where `ignore` matters most: somebody who unsubscribes
+and subscribes again got the whole sequence a second time, in parallel to the first, both of them
+still running. That is exactly what the rule is supposed to prevent.
 
-Dazu blieb `automation_runs.subject_key` bei diesen vier Auslösern immer `null` — der Wert, nach
-dem der Funnel verschiedene Personen zählt und an dem das nächste Ereignis derselben Person
-gemessen wird.
+On top of that, `automation_runs.subject_key` always stayed `null` for those four triggers — the
+value the funnel counts distinct people by, and the one the same person's next event is measured
+against.
 
-Neu: `Concerns\AppliesEnrollmentPolicy`, benutzt von allen vier Listenern. Für jede Automation auf
-der Vorgabe `always` ändert sich nichts, und das ist jede, bis jemand etwas anderes wählt. Der
-Test dazu fällt gegen die vorherige Fassung um (zwei Läufe statt einem).
+New: `Concerns\AppliesEnrollmentPolicy`, used by all four listeners. For every automation on the
+default `always` nothing changes, and that is every one of them until somebody chooses otherwise.
+The test for it fails against the previous version (two runs instead of one).
 
 ## 2.2.0 — 2026-08-12
 ### Changed
@@ -1204,61 +1169,60 @@ Test dazu fällt gegen die vorherige Fassung um (zwei Läufe statt einem).
 
 ## 2.1.0 — 2026-08-12
 
-### Fixed — der `send_email`-Knoten paarte die Adresse der einen Marke mit dem Relay der anderen
+### Fixed — the `send_email` node paired one brand's address with another's relay
 
-Der Knoten rief `Mail::html()` bzw. `Mail::raw()`. Der Transport war damit immer
-`config('mail.default')`, und der einzige Absender, den er je setzte, war der in den Knoten
-getippte. Auf einem Mehr-Marken-Host trennt das genau das Paar, auf das es ankommt: eine
-Nurture-Strecke, adressiert als `hallo@familystack.de`, ging über das Relay-Projekt raus, das
-`gldnr.studio` verifiziert. Ein Anbieter, der Sendedomains je Konto prüft (Scaleway TEM, Postmark,
-SES), lehnt die Adresse dann ab oder ersetzt sie durch die eigene verifizierte — und beides
-passiert still.
+The node called `Mail::html()` or `Mail::raw()`. The transport was therefore always
+`config('mail.default')`, and the only sender it ever set was the one typed into the node. On a
+multi-brand host that splits exactly the pair that matters: a nurture sequence addressed as
+`hallo@familystack.de` went out through the relay project that verifies `gldnr.studio`. A provider
+that checks sending domains per account (Scaleway TEM, Postmark, SES) then refuses the address or
+replaces it with its own verified one — and both happen silently.
 
-**Absender und Transport kommen jetzt zusammen aus `brands.settings.mail`.**
-`Contracts\SenderIdentityResolver` beantwortet „welcher Mailer, welche Adresse, welche Sprache für
-Brand N", `Sending\BrandMailer` ist die eine Stelle, die die Frage stellt.
+**Sender and transport now come together from `brands.settings.mail`.**
+`Contracts\SenderIdentityResolver` answers "which mailer, which address, which language for brand
+N", and `Sending\BrandMailer` is the one place that asks the question.
 
-| Schlüssel | Bedeutung |
+| Key | Meaning |
 | --- | --- |
-| `from_address` | Pflicht, sobald `mail` überhaupt gesetzt ist |
-| `from_name` | sonst der Brand-Name |
-| `mailer` | ein Mailer aus `config/mail.php` |
-| `locale` | die Sprache ihrer Post |
+| `from_address` | required as soon as `mail` is set at all |
+| `from_name` | otherwise the brand's name |
+| `mailer` | a mailer from `config/mail.php` |
+| `locale` | the language of their mail |
 
-Die Antwort steht an der Nachricht, nie in der Config: Laravel liest `mail.from` beim ersten
-Auflösen eines Mailers, brennt es per `alwaysFrom()` in die Instanz und hält die im Singleton
-`mail.manager` fest. Ein `Config::set` überlebt deshalb sein eigenes `finally`, auch mit sauberem
-Rückbau — das wäre derselbe Fehler eine Ebene tiefer.
+The answer sits on the message, never in the config: Laravel reads `mail.from` when it first
+resolves a mailer, burns it into the instance with `alwaysFrom()` and keeps that instance in the
+`mail.manager` singleton. A `Config::set` therefore outlives its own `finally`, even with a clean
+teardown — that would be the same mistake one level down.
 
-### Changed — die Brand gewinnt gegen das `from` des Knotens
+### Changed — the brand wins against the node's `from`
 
-Nur dort, wo eine Brand eine eigene Adresse deklariert. Eine Brand, die das tut, hat dem Host
-gesagt, welche Adresse ihr Relay-Konto besitzt; ein Knoten-Override gäbe diese Zusage an den
-zurück, der den Flow zuletzt bearbeitet hat. Wo keine Brand etwas deklariert — also in jeder
-Single-Brand-Installation — entscheidet weiterhin allein das `from` des Knotens, unverändert.
+Only where a brand declares an address of its own. A brand that does so has told the host which
+address its relay account owns; a node override would hand that assurance to whoever edited the
+flow last. Where no brand declares anything — that is, in every single-brand installation — the
+node's `from` still decides alone, unchanged.
 
-### Changed — eine Brand mit kaputter Mail-Identität verschickt nichts
+### Changed — a brand with a broken mail identity sends nothing
 
-Eine Brand, die `settings.mail` deklariert, aber keine `from_address` trägt, oder die einen Mailer
-nennt, den `config/mail.php` nicht kennt, verschickt **gar nichts**, wird auf Fehler-Ebene
-protokolliert (je Brand gedrosselt) und der Knoten meldet einen Fehlschlag. Die Alternative wäre
-die Zustellung unter der Host-Adresse, auf einem Mehr-Marken-Host also unter fremdem Namen.
+A brand that declares `settings.mail` but carries no `from_address`, or that names a mailer
+`config/mail.php` does not know, sends **nothing at all**, is logged at error level (throttled per
+brand), and the node reports a failure. The alternative would be delivery under the host's address,
+that is, under somebody else's name on a multi-brand host.
 
-**Der Dedupe-Schlüssel wird in diesem Fall nicht gesetzt.** Er ist ein Stempel mit einem Jahr
-Haltbarkeit; für eine Mail, die nie rausging, würde er genau den zweiten Versuch unterdrücken, den
-das Korrigieren der Brand-Einstellungen ermöglichen soll.
+**The dedupe key is not set in this case.** It is a stamp with a year's shelf life; for a mail that
+never went out it would suppress exactly the second attempt that fixing the brand's settings is
+supposed to enable.
 
-### Unverändert, mit Begründung — `FailureAlerter`
+### Unchanged, with a reason — `FailureAlerter`
 
-Die Störungsmail bleibt am Vorgabe-Transport. Das ist die Anwendung, die ihrem eigenen Betreiber
-von einem kaputten Lauf schreibt, an eine Adresse aus der Config; sie spricht für keine Marke. Die
-Brand aus dem Kontext aufzugreifen wäre schlechter statt besser — eine fehlschlagende Automation
-von Marke A sähe dann aus wie Marke A, die dem Administrator des Hosts schreibt.
+The failure mail stays on the default transport. This is the application writing to its own operator
+about a broken run, to an address from the config; it speaks for no brand. Picking up the brand from
+the context would be worse rather than better — a failing automation of brand A would then look like
+brand A writing to the host's administrator.
 
-**Eine Single-Brand-Installation ändert sich nicht, und das steht als Test da, nicht als Vorsatz.**
-Ebenso eine Mehr-Marken-Installation, deren Brands kein `settings.mail` tragen. Ein Host, der
-Absenderidentitäten anderswo führt, bindet `SenderIdentityResolver` in seinem eigenen Provider neu,
-statt dieses Addon zu ändern.
+**A single-brand installation does not change, and that stands there as a test, not as an
+intention.** The same goes for a multi-brand installation whose brands carry no `settings.mail`. A
+host that keeps sender identities elsewhere rebinds `SenderIdentityResolver` in its own provider,
+instead of changing this addon.
 
 ## 2.0.0 — 2026-08-09
 
@@ -1285,79 +1249,74 @@ read that route needs updating — hence a major version when this is released.
 
 ## 1.11.0 — 2026-08-05
 
-### Added — Mail-Regeln: eine Ein-Mail-Automation als Satz
+### Added — mail rules: a one-mail automation as a sentence
 
-Eine Automation, die genau eine Sache tut — wenn etwas passiert, sende eine Mail — liest sich als
-Satz: „Wenn ein Formular abgeschickt wird, sende die Dankesmail an den Absender." Dafür eine
-Leinwand mit zwei Kästen zu öffnen, ist die falsche Oberfläche. Neu ist der Bildschirm
-**Tools → Automations → Mail rules**, der jede Automation mit genau einem Mail-Knoten als Zeile
-zeigt und aus dieser Zeile heraus bearbeitbar macht.
+An automation that does exactly one thing — when something happens, send a mail — reads as a
+sentence: "When a form is submitted, send the thank-you mail to the sender." Opening a canvas with
+two boxes for that is the wrong interface. New is the screen
+**Tools → Automations → Mail rules**, which shows every automation with exactly one mail node as a
+row and makes it editable from that row.
 
 ```
 GET   /cp/automations/api/automations/{automation}/rule
 PATCH /cp/automations/api/automations/{automation}/rule
 ```
 
-Bearbeitbar sind Empfänger, Template, An/Aus und der Sync-Schalter aus 1.10. Geschrieben wird nur,
-was gesendet wurde — ein Statuswechsel in einer Zeile darf nicht das Template überschreiben, das
-jemand anders gerade gewählt hat.
+Editable are the recipient, the template, on/off and the sync switch from 1.10. Only what was sent
+is written — a status change in one row must not overwrite the template somebody else has just
+chosen.
 
-**Was die Ansicht ausdrücklich nicht kann.**
+**What the view explicitly cannot do.**
 
-*Anlegen.* Sie bearbeitet bestehende Automationen, wie die Mail-Listenansicht auch. Eine Automation
-aus einer Zeile zu erzeugen hieße, Trigger, Knotentyp und Handle auf einmal zu entscheiden; das ist
-ein eigener Schnitt. Auf der Leinwand gebaut, erscheint sie hier, sobald sie ein Trigger, eine Mail
-und eine Kante ist.
+*Create.* It edits existing automations, as the mail list view does. Creating an automation from a
+row would mean deciding the trigger, the node type and the handle all at once; that is a cut of its
+own. Built on the canvas, it appears here as soon as it is one trigger, one mail and one edge.
 
-*Eine Form bearbeiten, die keine Regel ist.* `Sequence\RuleShape` entscheidet das und setzt dafür
-auf `LinearityRule` auf, statt dieselben Graph-Regeln ein zweites Mal zu implementieren: jeder
-Grund, aus dem eine Mail-Liste nicht bearbeitbar ist, ist auch einer für eine Regel. Ein Delay
-zwischen Trigger und Mail, eine zweite Mail, eine Verzweigung — die Zeile wird trotzdem angezeigt,
-mit dem Grund daran und einem Link auf die Leinwand. Das Anzeigen ist der Punkt: „welche Mail geht
-raus, wenn das Kontaktformular abgeschickt wird" verdient eine Antwort, auch wenn der Flow
-dahinter inzwischen ein Delay hat.
+*Edit a shape that is not a rule.* `Sequence\RuleShape` decides that and builds on `LinearityRule`
+for it, instead of implementing the same graph rules a second time: every reason a mail list is not
+editable is also a reason for a rule. A delay between the trigger and the mail, a second mail, a
+branch — the row is shown regardless, with the reason attached and a link to the canvas. Showing it
+is the point: "which mail goes out when the contact form is submitted" deserves an answer, even if
+the flow behind it has grown a delay by now.
 
-*Ein Feld schreiben, das der Mail-Knoten nicht hat.* Empfänger ist `to`, Template ist `template` —
-aber beides wird zuerst im Schema des Knotens nachgesehen (`Sequence\RuleFields`). Ein Mail-Knoten,
-der seine Empfänger aus einer Liste zieht, hat kein `to`; es trotzdem zu schreiben, hinterließe
-einen Config-Key, den nichts liest — eine Änderung, die aussieht, als sei sie angekommen. Lese- und
-Schreibseite nutzen dieselbe Nachschlagestelle, also kann eine Zeile nie ein Feld zeigen und ein
-anderes schreiben.
+*Write a field the mail node does not have.* The recipient is `to`, the template is `template` — but
+both are looked up in the node's schema first (`Sequence\RuleFields`). A mail node that pulls its
+recipients from a list has no `to`; writing it regardless would leave a config key nothing reads —
+a change that looks as though it arrived. The reading and the writing side use the same lookup, so
+a row can never show one field and write another.
 
-**Die Warnung am Sync-Schalter sagt jetzt das Richtige.** Nicht „Fehler schlagen in den Request
-durch" (das tun sie nicht, siehe 1.10), sondern: der Request wartet auf den ganzen Lauf.
+**The warning on the sync switch now says the right thing.** Not "errors surface in the request"
+(they do not, see 1.10), but: the request waits for the whole run.
 
-**`statamic-notifications` bekommt keinen eigenen Sendeweg**, nur einen Nav-Eintrag hierher. Könnten
-beide Addons ein Ereignis in eine Mail verwandeln, hätte „warum kam diese Mail" zwei mögliche
-Antworten und keine Möglichkeit, sie zu unterscheiden.
+**`statamic-notifications` gets no sending path of its own**, only a nav entry pointing here. If
+both addons could turn an event into a mail, "why did this mail arrive" would have two possible
+answers and no way to tell them apart.
 
 ## 1.10.0 — 2026-08-05
 
-> Nie separat getaggt. Diese Änderungen sind mit 1.11.0 ausgeliefert worden: der Stand von
-> 1.10.0 hatte keinen eigenen grünen CI-Lauf, und getaggt wird in dieser Familie nur, was
-> vollständig grün war.
+> Never tagged separately. These changes shipped with 1.11.0: the state of 1.10.0 had no green CI
+> run of its own, and in this family only what was fully green gets tagged.
 
-### Added — Versand je Trigger synchron schaltbar
+### Added — sending can be switched to synchronous per trigger
 
-Jeder Lauf ging bisher über die Queue, ausnahmslos. Für die meisten Automationen ist das richtig;
-für eine Mail, die raus sein muss, bevor die Seite fertig geladen ist, nicht. Wer so eine Mail aus
-dem eigenen Controller in eine Automation verlagert, macht daraus still einen Queue-Job — die
-Verlagerung ist dann nicht verhaltensneutral, also verlagert sie niemand, und die
-Automations-Ebene bleibt genau für die Mails ungenutzt, denen sie am meisten helfen würde.
+Every run went through the queue so far, without exception. For most automations that is right; for
+a mail that has to be out before the page has finished loading, it is not. Anyone moving such a mail
+out of their own controller into an automation silently turns it into a queue job — the move is then
+not behaviour-neutral, so nobody makes it, and the automation layer stays unused for exactly the
+mails it would help most.
 
-Neu: `_dispatch_mode` am Trigger-Knoten, Default `async`. Ein unbekannter Wert wird als `async`
-gelesen — die konservative Richtung ist die, die nichts ändert.
+New: `_dispatch_mode` on the trigger node, default `async`. An unknown value is read as `async` —
+the conservative direction is the one that changes nothing.
 
-Am Trigger und nicht an der Automation, aus zwei Gründen. Eine Automation kann mehrere Trigger
-tragen, und nur einer davon ist der aus dem Request; ein nächtlicher Sweep derselben Automation
-gehört weiter in die Queue. Und die Einstellung liegt damit dort, wo ihre Nachbarin schon liegt:
-die Re-Entry-Policy wird zwei Zeilen früher aus demselben Node-Config gelesen.
+On the trigger and not on the automation, for two reasons. An automation can carry several triggers,
+and only one of them is the one from the request; a nightly sweep of the same automation still
+belongs in the queue. And that puts the setting where its neighbour already sits: the re-entry policy
+is read from the same node config two lines earlier.
 
-**Was der Schalter nicht tut: er ändert die Fehlerbehandlung nicht.** Ein Fehler landet auch
-synchron als `failed` auf dem Run und nicht beim Aufrufer, weil `WorkflowRunner` grundsätzlich
-nicht wirft. Was sich ändert, ist der Zeitpunkt: synchron ist der Lauf fertig, bevor der Aufrufer
-weitermacht. Der Preis dafür ist Zeit — der Request wartet auf jeden Knoten, jeden HTTP-Aufruf,
-jede Mail.
+**What the switch does not do: it does not change the error handling.** An error ends up as `failed`
+on the run and not with the caller, synchronously as well, because `WorkflowRunner` never throws.
+What changes is the timing: synchronously, the run is finished before the caller moves on. The price
+for that is time — the request waits for every node, every HTTP call, every mail.
 
 ## 1.9.1 — 2026-08-05
 
