@@ -20,6 +20,7 @@ import TemplatesIndex from './pages/Templates/Index.vue';
 import ImportPage from './pages/Import.vue';
 import AuditIndex from './pages/Audit/Index.vue';
 import RulesIndex from './pages/Rules/Index.vue';
+import SetupRequired from './pages/SetupRequired.vue';
 
 Statamic.booting(() => {
     Statamic.$inertia.register('statamic-automations::Dashboard', Dashboard);
@@ -33,4 +34,7 @@ Statamic.booting(() => {
     // (`brand-context::Settings`), one page for the whole suite.
     Statamic.$inertia.register('statamic-automations::Audit/Index', AuditIndex);
     Statamic.$inertia.register('statamic-automations::Rules/Index', RulesIndex);
+    // The one screen every listing above falls back to when its tables are not
+    // migrated yet. The name must read exactly as `Setup::guard()` writes it.
+    Statamic.$inertia.register('statamic-automations::SetupRequired', SetupRequired);
 });

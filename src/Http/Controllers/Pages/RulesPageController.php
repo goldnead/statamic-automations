@@ -9,6 +9,7 @@ use Goldnead\StatamicAutomations\Sequence\MailSteps;
 use Goldnead\StatamicAutomations\Sequence\RuleFields;
 use Goldnead\StatamicAutomations\Sequence\RuleProjection;
 use Goldnead\StatamicAutomations\Sequence\RuleShape;
+use Goldnead\StatamicAutomations\Support\Setup;
 use Inertia\Inertia;
 
 /**
@@ -31,6 +32,19 @@ class RulesPageController extends Controller
     public function index(RuleProjection $projection, MailSteps $mails, RuleFields $fields)
     {
         $this->authorizeAction('view automations');
+
+        // The four tables this screen reads: the flows and their graph through
+        // Eloquent rather than the repository — so `automations` is named
+        // outright — plus the runs, which `RuleProjection` counts per rule.
+        if ($setup = Setup::guard(
+            __('Mail rules'),
+            'automations',
+            'automation_nodes',
+            'automation_edges',
+            'automation_runs',
+        )) {
+            return $setup;
+        }
 
         // Resolved once per node type rather than once per row: a template
         // field's options are read out of the entries collection behind it, and

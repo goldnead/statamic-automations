@@ -12,6 +12,7 @@ use Goldnead\StatamicAutomations\Sequence\MailListProjection;
 use Goldnead\StatamicAutomations\Sequence\MailSteps;
 use Goldnead\StatamicAutomations\Support\ActivityWindow;
 use Goldnead\StatamicAutomations\Support\RunStats;
+use Goldnead\StatamicAutomations\Support\Setup;
 use Goldnead\StatamicAutomations\Templates\TemplateRegistry;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -29,6 +30,17 @@ class AutomationsPageController extends Controller
     public function index(Request $request)
     {
         $this->authorizeAction('view automations');
+
+        // The run counts and the funnel below both read the runs; the flows
+        // themselves come from the repository, which only touches its table
+        // when this install keeps them in the database rather than in YAML.
+        if ($setup = Setup::guard(
+            __('statamic-automations::automations.nav.automations'),
+            'automation_runs',
+            ...Setup::definitionTables('automations'),
+        )) {
+            return $setup;
+        }
 
         // Run counts keyed by automation uuid (set on every run in both
         // storage modes), so the list works for database and flat-file alike.

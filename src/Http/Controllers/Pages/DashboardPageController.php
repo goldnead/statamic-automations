@@ -6,6 +6,7 @@ use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Http\Controllers\Controller;
 use Goldnead\StatamicAutomations\Integrations\IntegrationDetector;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
+use Goldnead\StatamicAutomations\Support\Setup;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Statamic\CP\Column;
@@ -19,6 +20,17 @@ class DashboardPageController extends Controller
     public function index(Request $request, IntegrationDetector $detector)
     {
         $this->authorizeAction('view automations');
+
+        // Every figure on this screen is a count of runs; the two flow counts
+        // go through the repository. The integration panel needs no table at
+        // all — it answers from `class_exists()`.
+        if ($setup = Setup::guard(
+            __('statamic-automations::automations.nav.dashboard'),
+            'automation_runs',
+            ...Setup::definitionTables('automations'),
+        )) {
+            return $setup;
+        }
 
         $since = now()->subDays(30);
 

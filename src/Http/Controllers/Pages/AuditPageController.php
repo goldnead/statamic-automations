@@ -4,6 +4,7 @@ namespace Goldnead\StatamicAutomations\Http\Controllers\Pages;
 
 use Goldnead\StatamicAutomations\Http\Controllers\Controller;
 use Goldnead\StatamicAutomations\Models\AutomationAuditLog;
+use Goldnead\StatamicAutomations\Support\Setup;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Statamic\CP\Column;
@@ -16,6 +17,16 @@ class AuditPageController extends Controller
     public function index(Request $request)
     {
         $this->authorizeAction('view automations');
+
+        // The log, and the flows it names: the eager load below is an Eloquent
+        // relation onto `automations` whatever driver holds the definitions.
+        if ($setup = Setup::guard(
+            __('statamic-automations::automations.nav.audit'),
+            'automation_audit_logs',
+            'automations',
+        )) {
+            return $setup;
+        }
 
         $logs = AutomationAuditLog::query()
             ->with('automation:id,name,handle')

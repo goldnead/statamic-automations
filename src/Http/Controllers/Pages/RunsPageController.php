@@ -5,6 +5,7 @@ namespace Goldnead\StatamicAutomations\Http\Controllers\Pages;
 use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Http\Controllers\Controller;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
+use Goldnead\StatamicAutomations\Support\Setup;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Statamic\CP\Column;
@@ -14,6 +15,17 @@ class RunsPageController extends Controller
     public function index(Request $request)
     {
         $this->authorizeAction('view automation runs');
+
+        // `automations` is named unconditionally here, and not through
+        // definitionTables(): the eager load below is an Eloquent relation onto
+        // that table whatever driver holds the definitions.
+        if ($setup = Setup::guard(
+            __('statamic-automations::automations.nav.runs'),
+            'automation_runs',
+            'automations',
+        )) {
+            return $setup;
+        }
 
         $query = AutomationRun::query()
             ->with('automation:id,name,handle')
