@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.19.0 — 2026-09-22
 
 ### Die Mail-Vorschau steht jetzt im Node-Stack und zeigt, was im Formular steht
 
