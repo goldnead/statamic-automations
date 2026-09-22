@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Behoben: der Automatisierungs-Editor nimmt jetzt wirklich die volle Fensterbreite
+
+Die Regel dafür gibt es seit dem 14.08.2026 (v2.10.0), und sie hat nie gewirkt. Statamic legt
+jede CP-Seite in `[data-max-width-wrapper]` mit `max-width: 85rem` (1360px); das Addon markiert
+seine eigene Wurzel mit `data-sa-full-bleed` und hebt die Grenze für diese eine Seite auf. Im
+Browser blieb der Editor trotzdem 1360px breit, mit gleich breitem Weißraum links und rechts —
+auf einem 1920er Fenster sind das über 500px verschenkte Leinwand.
+
+Nicht der Selektor war schuld, sondern die Kaskadenschicht. Im laufenden CP gemessen
+(22.09.2026) lautet die Schichtreihenfolge `properties > base > addon-theme > addon-utilities >
+components > utilities > ui > ui-states > theme`. `addon-utilities` steht **vor** `utilities`,
+und bei Kaskadenschichten gewinnt die spätere Schicht, unabhängig von der Spezifität. Statamics
+`max-w-page` liegt in `utilities`. Die Regel matchte, war geladen, stand im Inspector — und
+verlor still.
+
+Die Regel steht jetzt ungeschichtet in `resources/css/cp.css`, nicht mehr in
+`@layer addon-utilities`. Ungeschichtet schlägt jede Schicht und hält auch, wenn Statamic seine
+Reihenfolge noch einmal ändert; `@layer utilities` täte das nicht. Gemessen am Editor bei
+Viewport 1920: vorher `max-width: 1360px`, Breite 1360px. Nachher `max-width: none`, Breite
+1622px. Zusätzlich wird `data-flow-full-bleed` als neutraler Name erkannt, den auch andere
+Hosts des geteilten Canvas benutzen; `data-sa-full-bleed` bleibt unverändert gültig.
+
+Wer eigene Regeln in `@layer addon-utilities` schreibt: das bleibt richtig für **neue eigene
+Klassen**. Nur Überschreibungen von Core-Utilities gehören dort nicht hinein.
+
 ## 2.18.1 (2026-09-22)
 
 ### Fixed: installierbar auf aktuellem Statamic 6
