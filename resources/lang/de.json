@@ -113,5 +113,19 @@
     "After “:label”": "Nach „:label“",
     "Export :count steps": ":count Schritte exportieren",
     "The mail was removed.": "Die Mail wurde entfernt.",
-    "The waiting time in front of each one goes too. Anything else in that gap is kept and moves to the next mail.": "Die Wartezeit davor geht jeweils mit. Alles andere in dieser Lücke bleibt und rückt zur nächsten Mail."
+    "The waiting time in front of each one goes too. Anything else in that gap is kept and moves to the next mail.": "Die Wartezeit davor geht jeweils mit. Alles andere in dieser Lücke bleibt und rückt zur nächsten Mail.",
+    "Email preview": "E-Mail-Vorschau",
+    "Preview width": "Breite der Vorschau",
+    "Sent": "Wie es rausging",
+    "Sent (:n times)": "Wie es rausging (:n Versände)",
+    "(no subject)": "(kein Betreff)",
+    "Loading…": "Wird geladen…",
+    "Nothing to preview yet.": "Noch nichts anzuzeigen.",
+    "This mail cannot be displayed.": "Diese Mail lässt sich nicht anzeigen.",
+    "Try again": "Erneut versuchen",
+    "The preview could not be loaded. The reason is in the Laravel log.": "Die Vorschau konnte nicht geladen werden. Der Grund steht im Laravel-Log.",
+    "The preview appears once this automation has been saved.": "Die Vorschau erscheint, sobald diese Automatisierung gespeichert ist.",
+    "How this mail went out": "Wie diese Mail rausging",
+    "The template this step sends, with sample data (Max Mustermann) — unsaved changes included.": "Die Vorlage, die dieser Schritt verschickt, mit Beispieldaten (Max Mustermann) — ungespeicherte Änderungen inbegriffen.",
+    "This step's own text, with sample data (Max Mustermann) — unsaved changes included.": "Der eigene Text dieses Schritts, mit Beispieldaten (Max Mustermann) — ungespeicherte Änderungen inbegriffen."
 }

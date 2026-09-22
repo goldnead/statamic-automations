@@ -3,6 +3,8 @@
 namespace Goldnead\StatamicAutomations\Http\Controllers;
 
 use Goldnead\EmailTemplates\Facades\EmailTemplates;
+use Goldnead\StatamicAutomations\Context\AutomationContext;
+use Goldnead\StatamicAutomations\Engine\TokenResolver;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Illuminate\Http\JsonResponse;
@@ -23,10 +25,14 @@ use Statamic\Facades\Entry;
  *   - GET  email-templates/preview  → {slug, title, subject, preview, html}
  *   - GET  automations/{flow}/mails/{nodeKey}/preview
  *                                   → {label, subject, html, source, snapshot}
+ *   - POST automations/{flow}/mails/{nodeKey}/preview  {config: {…}}
+ *                                   → dasselbe, aber aus dem Formular
  *
  * The third one is the mail of a stored node — the same mail the run sends,
  * template or inline body, rendered against sample data — plus a pointer to
  * what actually went out, if the suite's snapshot layer holds a version of it.
+ * Der vierte ist derselbe Endpunkt mit der ungespeicherten Konfiguration im
+ * Rumpf: die Vorschau im Node-Stack tippt mit. Siehe `node()`.
  *
  * The `preview` field is the template's preheader/preview text (a subtitle for
  * the list), NOT rendered HTML. The `html` field is the branded, email-layout
@@ -108,8 +114,9 @@ class EmailTemplatePreviewController extends Controller
         $sample = $this->sampleData();
 
         try {
-            // Returned raw (unescaped): the caller renders it inside a sandboxed
-            // iframe with `sandbox="allow-same-origin"` (no script execution).
+            // Returned raw (unescaped): the caller renders it inside an iframe
+            // with `sandbox=""` — no scripts, and not the Control Panel's
+            // origin. Gegenprobe: tests/js/preview-sandbox.test.js.
             $html = $this->renderWithSample((string) ($resolved->body ?? ''), $sample);
             $subject = $this->renderWithSample((string) ($resolved->subject ?? ''), $sample);
         } catch (\Throwable $e) {
@@ -151,22 +158,38 @@ class EmailTemplatePreviewController extends Controller
      * Null snapshot means: the layer is absent, switched off, or this node has
      * not sent anything yet. All three are the same answer for the caller — do
      * not offer the second tab.
+     *
+     * ── Gespeichert oder aus dem Formular ─────────────────────────────────
+     *
+     * Per GET ist es der Knoten aus der Datenbank. Per POST mit dem Rumpf
+     * `{ config: { template, subject, body } }` ist es das, was gerade im
+     * Formular steht — die Vorschau im Node-Stack tippt mit, und eine Vorschau,
+     * die beim Tippen die vorige Fassung zeigt, ist schlechter als keine.
+     *
+     * Beide Wege gehen durch dieselbe Berechtigungsprüfung und denselben
+     * Renderer; verschieden ist nur, woher die drei Werte kommen. Der
+     * Schnappschuss bleibt am gespeicherten Knoten hängen (was rausging, hat
+     * mit dem Entwurf nichts zu tun), und ein Knoten, den es in der Datenbank
+     * noch gar nicht gibt, ist per POST trotzdem darstellbar — sonst bliebe
+     * eine frisch eingefügte Mail bis zum ersten Speichern leer.
      */
-    public function node(Automation $automationFlow, string $nodeKey): JsonResponse
+    public function node(Request $request, Automation $automationFlow, string $nodeKey): JsonResponse
     {
         $this->authorizeAction('view automations');
+
+        $draft = $this->draftConfig($request);
 
         $automationFlow->loadMissing('nodes');
         $node = $automationFlow->nodes->firstWhere('node_key', $nodeKey);
 
-        if ($node === null) {
+        if ($node === null && $draft === null) {
             return $this->failure(
                 __('Dieser Ablauf hat keinen Schritt ":key". Vielleicht wurde er umbenannt oder gelöscht, seit die Liste geladen wurde.', ['key' => $nodeKey]),
                 404
             );
         }
 
-        $config = is_array($node->config) ? $node->config : [];
+        $config = $draft ?? (is_array($node?->config) ? $node->config : []);
         $slug = (string) ($config['template'] ?? '');
         $subject = (string) ($config['subject'] ?? '');
         $body = (string) ($config['body'] ?? '');
@@ -194,6 +217,27 @@ class EmailTemplatePreviewController extends Controller
                 $subject = (string) $resolved->subject;
             }
         } elseif ($body === '' && $subject === '') {
+            // Ein frisch eingefügter Mail-Knoten steht genau hier: keine
+            // Vorlage, kein Betreff, kein Text. Aus dem Formular heraus ist das
+            // kein Fehler, sondern der Anfang — die Vorschau soll „noch nichts
+            // anzuzeigen" sagen und nicht rot werden. Und sie fragt entprellt,
+            // also schriebe ein 404 hier eine Log-Warnung pro Tastendruck.
+            //
+            // Ein GESPEICHERTER Knoten ohne beides ist etwas anderes: den hat
+            // jemand so abgelegt, und die Mails-Liste soll sagen, dass daran
+            // etwas fehlt. Deshalb bleibt der 404 auf dem gespeicherten Weg.
+            if ($draft !== null) {
+                return response()->json(['data' => [
+                    'node_key' => $nodeKey,
+                    'label' => (string) ($node?->label ?: $nodeKey),
+                    'slug' => null,
+                    'subject' => '',
+                    'html' => '',
+                    'source' => 'empty',
+                    'snapshot' => $node !== null ? $this->snapshotFor($automationFlow, $node) : null,
+                ]]);
+            }
+
             return $this->failure(
                 __('Dieser Schritt trägt weder eine Vorlage noch einen eigenen Text, es gibt also nichts anzuzeigen.'),
                 404
@@ -215,7 +259,7 @@ class EmailTemplatePreviewController extends Controller
 
         return response()->json(['data' => [
             'node_key' => $nodeKey,
-            'label' => (string) ($node->label ?: $nodeKey),
+            'label' => (string) ($node?->label ?: $nodeKey),
             'slug' => $slug !== '' ? $slug : null,
             'subject' => $subject,
             // An inline body is plain text as often as not; the iframe would
@@ -223,8 +267,42 @@ class EmailTemplatePreviewController extends Controller
             // so a hand-written HTML body is untouched.
             'html' => $source === 'inline' && ! str_contains($html, '<') ? nl2br(e($html)) : $html,
             'source' => $source,
-            'snapshot' => $this->snapshotFor($automationFlow, $node),
+            'snapshot' => $node !== null ? $this->snapshotFor($automationFlow, $node) : null,
         ]]);
+    }
+
+    /**
+     * Die ungespeicherte Konfiguration aus dem Rumpf — oder null, wenn keine
+     * mitgeschickt wurde (dann gilt der Knoten aus der Datenbank).
+     *
+     * Nur die drei Schlüssel, aus denen eine Mail entsteht, und nur als
+     * Zeichenkette. Alles andere im Rumpf ist für eine Vorschau bedeutungslos,
+     * und was keine Zeichenkette ist, wird hier zu einer leeren — sonst stürbe
+     * der Renderer weiter unten an einer Typumwandlung, für einen Wert, den das
+     * Formular so gar nicht schicken kann.
+     *
+     * @return array<string, string>|null
+     */
+    protected function draftConfig(Request $request): ?array
+    {
+        if (! $request->isMethod('post')) {
+            return null;
+        }
+
+        $config = $request->input('config');
+
+        if (! is_array($config)) {
+            return null;
+        }
+
+        $draft = [];
+
+        foreach (['template', 'subject', 'body'] as $key) {
+            $value = $config[$key] ?? null;
+            $draft[$key] = is_string($value) ? $value : '';
+        }
+
+        return $draft;
     }
 
     /**
@@ -407,13 +485,30 @@ class EmailTemplatePreviewController extends Controller
      * A mail body or subject with sample values in the placeholders — and the
      * placeholder left standing wherever there is no sample for it.
      *
-     * Deliberately not `TokenResolver`, which is the engine's renderer and
-     * answers an unknown token with an empty string. That is right for a send
-     * (a missing value is nothing, not a stray `{{ … }}` in somebody's inbox)
-     * and wrong for a preview: a node addressing `{{ payment.name }}` rendered
-     * as "Hallo ," and "über Cent ()", which reads as a broken mail rather than
-     * as a placeholder nobody has a sample for. The reader has to be able to
-     * tell those two apart.
+     * **Aufgelöst wird mit `TokenResolver`, demselben Renderer wie der
+     * Versand.** Bis 2.18.1 stand hier ein eigener Ersetzer mit `data_get()`,
+     * und der konnte weniger als der Motor: `{{ contact.first_name | upper }}`
+     * blieb als Ganzes stehen, weil die Filterkette kein Bestandteil der
+     * Ersetzung war. Die Vorschau zeigte damit nachweislich etwas anderes als
+     * das, was rausging — der teuerste Fehler, den eine Vorschau machen kann.
+     *
+     * Eine Sache bleibt anders, und zwar mit Absicht: **ein Platzhalter, für
+     * den es kein Beispiel gibt, bleibt stehen.** Der Motor macht aus einem
+     * unbekannten Token eine leere Zeichenkette, was für einen Versand richtig
+     * ist (ein fehlender Wert ist nichts, kein verirrtes `{{ … }}` in einem
+     * fremden Posteingang) und für eine Vorschau falsch: ein Knoten mit
+     * `{{ payment.name }}` las sich als „Hallo ," und „über Cent ()", also als
+     * kaputte Mail statt als Platzhalter ohne Beispiel. Deshalb die Abfrage
+     * davor: nur was der Kontext kennt, geht durch den Resolver.
+     *
+     * Die Ausnahme von der Ausnahme ist `| default:`. Dieser Filter existiert
+     * genau für den fehlenden Wert, und der Versand schickt dafür den Ersatz
+     * raus. Ein Platzhalter mit `default:` gehört also aufgelöst, sonst zeigt
+     * die Vorschau einen rohen Token, wo eine Mail „Hallo Kunde" sagt.
+     *
+     * Nebenwirkung, die hier erwünscht ist: `{{ secret.* }}` kennt der Kontext
+     * nicht, also fragt auch niemand den SecretStore. Ein Zugangsschlüssel
+     * landet nicht in einer Vorschau.
      *
      * @param  array<string, mixed>  $sample
      */
@@ -423,10 +518,19 @@ class EmailTemplatePreviewController extends Controller
             return '';
         }
 
+        $context = AutomationContext::make($sample);
+        $resolver = app(TokenResolver::class);
+
         return (string) preg_replace_callback(
             '/\{\{\s*([\w.\-]+)\s*(\|[^}]*)?\}\}/',
-            function (array $match) use ($sample): string {
-                $resolved = data_get($sample, $match[1]);
+            function (array $match) use ($context, $resolver): string {
+                $hasDefault = preg_match('/\|\s*default\s*:/', $match[2] ?? '') === 1;
+
+                if (! $hasDefault && $context->get($match[1]) === null) {
+                    return $match[0];
+                }
+
+                $resolved = $resolver->resolveString($match[0], $context);
 
                 return is_scalar($resolved) ? (string) $resolved : $match[0];
             },

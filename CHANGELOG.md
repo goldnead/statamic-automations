@@ -2,6 +2,66 @@
 
 ## Unreleased
 
+### Die Mail-Vorschau steht jetzt im Node-Stack und zeigt, was im Formular steht
+
+Eine Vorschau gab es am `send_email`-Knoten schon, aber in einer Form, die zwei Dinge nicht
+leistete. Sie lag hinter einem Knopf „Vorschau", der ein **Modal** über das Formular zog — eine
+zweite Ebene über genau der Fläche, in die sie gehört. Und sie holte den **gespeicherten**
+Knoten aus der Datenbank: wer einen Betreff tippte und dann auf Vorschau klickte, sah die
+Fassung von vorhin.
+
+Beides ist weg. Die Vorschau ist ein eigener Abschnitt im Formular selbst
+(`MailPreviewPane.vue` in `ConfigPanel`), sie geht mit dem Mail-Knoten auf, ohne dass jemand
+einen zweiten Knopf sucht, und sie rendert den Formularzustand — 400 ms nach dem letzten
+Tastendruck, entprellt und mit Abbruch der vorigen Anfrage, wie das Vorschau-Panel in
+`statamic-funnels`. Dazu eine Gerätewahl Desktop/Mobil nach demselben Muster. Der Knopf
+„Vorlage wählen" bleibt, wo er war.
+
+Das gilt in **beiden** Verwendungen von `ConfigPanel`: im halbbreiten Stack, der aus der
+Mails-Liste aufgeht, und in der 360px-Spalte rechts neben der Leinwand. Es ist dieselbe
+Komponente, der Rahmen wird nur schmaler (gemessen im Playground: 862×352 im Stack, 309×352 in
+der Spalte).
+
+Serverseitig nimmt derselbe Endpunkt jetzt auch POST:
+`POST automations/{flow}/mails/{nodeKey}/preview` mit `{ config: { template, subject, body } }`
+rendert die ungespeicherte Konfiguration. GET rendert weiter den gespeicherten Knoten — die
+Mails-Liste ruft ihn so auf, und die Berechtigung (`view automations`) ist auf beiden Wegen
+dieselbe. Ein Mail-Schritt, den es erst auf der Leinwand und noch nicht in der Datenbank gibt,
+ist damit ebenfalls darstellbar.
+
+### Behoben: die Vorschau rendert jetzt wie der Versand
+
+`EmailTemplatePreviewController::renderWithSample()` hatte einen eigenen Ersetzer, und der
+konnte weniger als der Motor: `{{ contact.first_name | upper }}` blieb als Ganzes stehen, weil
+die Filterkette nicht Teil der Ersetzung war. Die Vorschau zeigte damit nachweislich etwas
+anderes, als rausging — der teuerste Fehler, den eine Vorschau machen kann. Aufgelöst wird
+jetzt mit `TokenResolver`, demselben Renderer wie der Versand.
+
+Eine Sache bleibt absichtlich anders: ein Platzhalter, für den es kein Beispiel gibt, bleibt
+stehen. Der Motor macht daraus eine leere Zeichenkette, was für einen Versand richtig ist und
+sich in einer Vorschau als kaputte Mail liest („Hallo ," / „über Cent ()"). Ausgenommen davon
+ist `| default:` — dieser Filter existiert genau für den fehlenden Wert, und der Versand
+schickt dafür den Ersatz raus, also löst die Vorschau ihn auch auf. Nebenwirkung, die hier
+erwünscht ist: `{{ secret.* }}` kennt der Vorschau-Kontext nicht, also fragt auch niemand den
+SecretStore — ein Zugangsschlüssel landet nicht in einer Vorschau.
+
+Und der frisch eingefügte Mail-Knoten — keine Vorlage, kein Betreff, kein Text — bekommt aus
+dem Formular heraus nicht mehr 404 („trägt weder eine Vorlage noch einen eigenen Text"),
+sondern `source: 'empty'` und den neutralen Satz „Noch nichts anzuzeigen". Der Normalfall sah
+sonst aus wie ein Defekt, und weil die Vorschau entprellt fragt, schrieb jeder Tastendruck eine
+Log-Warnung. Auf dem gespeicherten Weg (GET, Mails-Liste) bleibt der 404: einen Knoten ohne
+beides hat dort jemand so abgelegt.
+
+### Behoben: die Vorschau-Rahmen im CP waren zu großzügig eingestellt
+
+Alle drei `srcdoc`-Rahmen (Node-Vorschau, Mails-Liste, Vorlagen-Wähler) trugen
+`sandbox="allow-same-origin"`. Im Rahmen steht HTML, das ein CP-Benutzer geschrieben hat, und
+`allow-same-origin` gibt ihm die Herkunft des Control Panels zurück; zusammen mit einem später
+einmal hinzugefügten `allow-scripts` wäre das laut Spezifikation dasselbe wie gar kein
+Sandkasten. Der Inhalt kommt aus `srcdoc` und braucht keine Herkunft, also steht dort jetzt
+`sandbox=""`. `tests/js/preview-sandbox.test.js` prüft das für jeden `srcdoc`-Rahmen im Addon,
+auch für den nächsten, den jemand baut.
+
 ### Behoben: der Automatisierungs-Editor nimmt jetzt wirklich die volle Fensterbreite
 
 Die Regel dafür gibt es seit dem 14.08.2026 (v2.10.0), und sie hat nie gewirkt. Statamic legt

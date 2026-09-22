@@ -88,26 +88,20 @@
                             @update:model-value="setField(field.handle, $event)"
                         />
 
-                        <!-- Email template affordances: rendered preview +
-                             master-detail picker, next to the template select.
+                        <!-- Email template affordance: der master-detail Wähler,
+                             neben der Vorlagen-Auswahl.
 
-                             Die Vorschau zeigt die Mail dieses Schritts, wie
-                             sie GESPEICHERT ist — mit Vorlage oder mit eigenem
-                             Text — und daneben, was davon rausging. Deshalb
-                             hängt sie nicht mehr daran, ob im Formular gerade
-                             eine Vorlage steht. Was im Formular steht und noch
-                             nicht gespeichert ist, zeigt der Wähler daneben. -->
+                             Der zweite Knopf „Vorschau" ist hier weg. Er öffnete
+                             ein Modal über dem Formular, und darin stand die
+                             GESPEICHERTE Mail. Beides war falsch herum: die
+                             Vorschau gehört in dieselbe Fläche wie die Felder,
+                             und sie zeigt, was im Formular steht. Sie steht
+                             darum weiter unten als eigener Abschnitt und geht
+                             mit dem Knoten auf, ohne einen zweiten Klick. -->
                         <div
                             v-if="isEmailTemplateField(field)"
                             class="mt-2 flex items-center gap-2"
                         >
-                            <Button
-                                size="xs"
-                                variant="filled"
-                                icon="eye"
-                                :text="__('Vorschau')"
-                                @click="openEmailPreview(field)"
-                            />
                             <Button
                                 size="xs"
                                 variant="ghost"
@@ -132,7 +126,24 @@
                     />
                 </PropertiesSection>
 
-                <!-- 3 · Properties (read-only; only fields the backend actually provides) -->
+                <!-- 3 · Die Mail, so wie sie im Formular steht.
+                     Kein Knopf davor: wer einen Mail-Knoten öffnet, will die
+                     Mail sehen. Derselbe Abschnitt in beiden Verwendungen von
+                     ConfigPanel — im Stack der Mails-Liste und in der rechten
+                     Spalte der Leinwand —, weil beide dieselbe Komponente sind.
+                     Der Rahmen liegt in einer Spalte von 360 px genauso wie in
+                     einem halbbreiten Stack, er wird nur schmaler. -->
+                <PropertiesSection v-if="hasEmailPreview" :title="__('Email preview')">
+                    <MailPreviewPane
+                        :key="node.node_key"
+                        :api-base="apiBase"
+                        :automation-id="automation?.id ?? null"
+                        :node-key="node.node_key"
+                        :config="config"
+                    />
+                </PropertiesSection>
+
+                <!-- 4 · Properties (read-only; only fields the backend actually provides) -->
                 <PropertiesSection :title="__('Properties')" :default-open="false">
                     <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-xs">
                         <dt class="text-gray-500 dark:text-gray-400">{{ __('Type') }}</dt>
@@ -201,15 +212,8 @@
                 </Dropdown>
             </footer>
 
-            <!-- Email template preview + picker (mounted once; driven by the
-                 field buttons above via emailFieldHandle). -->
-            <MailPreviewModal
-                v-model:open="emailPreviewOpen"
-                :api-base="apiBase"
-                :automation-id="automation?.id ?? null"
-                :mails="[{ node_key: node.node_key, label: node.label || node.node_key }]"
-                :node-key="node.node_key"
-            />
+            <!-- Der Vorlagen-Wähler (einmal gemountet; die Feldknöpfe oben
+                 zeigen über emailFieldHandle auf ihn). -->
             <EmailTemplatePicker
                 v-model:open="emailPickerOpen"
                 :model-value="emailSlug"
@@ -238,7 +242,7 @@ import {
     Icon,
 } from '@statamic/cms/ui';
 import ConditionBuilder from './ConditionBuilder.vue';
-import MailPreviewModal from './MailPreviewModal.vue';
+import MailPreviewPane from './MailPreviewPane.vue';
 import EmailTemplatePicker from './EmailTemplatePicker.vue';
 import KeyValueField from './KeyValueField.vue';
 import PropertiesSection from './PropertiesSection.vue';
@@ -486,19 +490,17 @@ function fieldComponent(field) {
 // A field opts into the rendered-preview + master-detail picker by declaring
 // `preview: 'email'` in its schema (see SendEmailAction's `template` field).
 // Declarative, so any future field can reuse the same treatment.
-const emailPreviewOpen = ref(false);
 const emailPickerOpen = ref(false);
 const emailFieldHandle = ref(null);
 
 // Selecting another node reuses this component instance (Edit.vue mounts the
-// panel with `v-if`, not `:key`), so these three refs survived the switch.
+// panel with `v-if`, not `:key`), so these two refs survived the switch.
 // `emailFieldHandle` in particular is the target `setField()` writes to when a
 // template is picked: left pointing at the previous node's field, the pick
 // landed on a handle the current node may not even have.
 watch(
     () => props.node?.node_key ?? null,
     () => {
-        emailPreviewOpen.value = false;
         emailPickerOpen.value = false;
         emailFieldHandle.value = null;
     },
@@ -508,15 +510,16 @@ function isEmailTemplateField(field) {
     return field.preview === 'email';
 }
 
-// Slug currently selected on the field that owns the open modal.
+// Ein Knoten, dessen Schema ein Feld mit `preview: 'email'` trägt, ist ein
+// Mail-Knoten — dieselbe deklarative Regel wie für den Vorlagen-Wähler, damit
+// `send_email` und `marketing.send_email` (und jedes künftige Mail-Feld) die
+// Vorschau bekommen, ohne dass hier eine Liste von Knotentypen gepflegt wird.
+const hasEmailPreview = computed(() => fields.value.some(isEmailTemplateField));
+
+// Slug currently selected on the field that owns the open picker.
 const emailSlug = computed(() =>
     emailFieldHandle.value ? (config.value[emailFieldHandle.value] ?? null) : null,
 );
-
-function openEmailPreview(field) {
-    emailFieldHandle.value = field.handle;
-    emailPreviewOpen.value = true;
-}
 
 function openEmailPicker(field) {
     emailFieldHandle.value = field.handle;

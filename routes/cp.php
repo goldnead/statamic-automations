@@ -204,6 +204,14 @@ Route::prefix('automations')
                 ->where('nodeKey', '[A-Za-z0-9_.-]+')
                 ->name('automations.mails.preview');
 
+            // Derselbe Endpunkt, aber mit der ungespeicherten Konfiguration im
+            // Rumpf: die Vorschau im Node-Stack rendert, was im Formular steht,
+            // nicht was in der Datenbank liegt. Gleiche Berechtigung, gleicher
+            // Renderer — nur die Quelle der drei Werte ist eine andere.
+            Route::post('automations/{automationFlow}/mails/{nodeKey}/preview', [EmailTemplatePreviewController::class, 'node'])
+                ->where('nodeKey', '[A-Za-z0-9_.-]+')
+                ->name('automations.mails.preview.draft');
+
             // Versions + audit
             Route::get('automations/{automationFlow}/versions', [VersionsController::class, 'index'])->name('automations.versions');
             Route::post('automations/{automationFlow}/versions/{timestamp}/revert', [VersionsController::class, 'revert'])

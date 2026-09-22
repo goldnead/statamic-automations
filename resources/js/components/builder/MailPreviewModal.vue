@@ -93,10 +93,15 @@
                         class="sa-email-canvas block w-full h-[42vh] min-h-72 border-0"
                         :title="__('Wie diese Mail rausging')"
                     />
+                    <!-- `sandbox` ohne Token: der Inhalt kommt aus `srcdoc`
+                         und braucht keine Herkunft. `allow-same-origin` gäbe
+                         dem Rahmen die des Control Panels zurück, und im Rahmen
+                         steht HTML, das ein CP-Benutzer geschrieben hat.
+                         Gegenprobe: tests/js/preview-sandbox.test.js. -->
                     <iframe
                         v-else
                         :srcdoc="mail.html"
-                        sandbox="allow-same-origin"
+                        sandbox=""
                         class="sa-email-canvas block w-full h-[42vh] min-h-72 border-0"
                         :title="__('E-Mail-Vorschau')"
                         loading="lazy"

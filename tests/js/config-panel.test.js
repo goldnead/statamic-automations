@@ -1,7 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 
 import ConfigPanel from '../../resources/js/components/builder/ConfigPanel.vue';
+
+// Der Mail-Knoten bringt seit 2.19.0 eine Vorschau mit, und die fragt beim
+// Mounten den Server. Hier geht es um das Formular, nicht um die Vorschau —
+// die hat ihre eigene Datei (mail-preview-pane.test.js).
+vi.mock('axios', () => ({
+    default: {
+        post: vi.fn(() => new Promise(() => {})),
+        get: vi.fn(() => new Promise(() => {})),
+        isCancel: () => false,
+    },
+}));
 
 /**
  * The config panel is the builder's single most stateful component and the one
@@ -100,6 +111,66 @@ describe('falling back when the backend sends an empty string', () => {
             .map((el) => el.attributes('data-attr-placeholder'));
 
         expect(placeholders).toContain('add_user_to_group');
+    });
+});
+
+describe('the mail preview', () => {
+    const emailSchema = {
+        handle: 'send_email',
+        label: 'Send email',
+        schema: [{ handle: 'template', label: 'Template', type: 'text', preview: 'email' }],
+    };
+
+    function emailPanel(type = 'send_email') {
+        return mount(ConfigPanel, {
+            props: {
+                node: node(type),
+                library: { triggers: [], logic: [], actions: [emailSchema, groupSchema] },
+                apiBase: '/cp/automations/api',
+                automation: { id: 7, nodes: [], edges: [] },
+            },
+        });
+    }
+
+    it('stands in the panel itself, not behind a button', () => {
+        // Das Ticket in einem Satz: wer einen Mail-Knoten öffnet, sieht die
+        // Mail. Bis 2.18.1 stand hier ein Knopf „Vorschau", der ein Modal über
+        // dem Formular aufzog — eine zweite Ebene über der Fläche, in die die
+        // Vorschau gehört.
+        const wrapper = emailPanel();
+
+        expect(wrapper.findComponent({ name: 'MailPreviewPane' }).exists()).toBe(true);
+
+        const buttons = wrapper.findAll('[data-attr-text]')
+            .map((el) => el.attributes('data-attr-text'));
+
+        expect(buttons).not.toContain('Vorschau');
+        expect(buttons).toContain('Vorlage wählen');
+    });
+
+    it('hands the pane the live config of the node, not just its key', () => {
+        const wrapper = mount(ConfigPanel, {
+            props: {
+                node: { ...node('send_email'), config: { template: 'willkommen', subject: 'Hallo' } },
+                library: { triggers: [], logic: [], actions: [emailSchema] },
+                apiBase: '/cp/automations/api',
+                automation: { id: 7, nodes: [], edges: [] },
+            },
+        });
+
+        const pane = wrapper.findComponent({ name: 'MailPreviewPane' });
+
+        expect(pane.props('config')).toEqual({ template: 'willkommen', subject: 'Hallo' });
+        expect(pane.props('automationId')).toBe(7);
+    });
+
+    it('stays away from nodes that send no mail', () => {
+        // Deklarativ an `preview: 'email'` gehängt, nicht an einer Liste von
+        // Knotentypen — `marketing.send_email` bekommt die Vorschau damit ohne
+        // Zutun, und ein Webhook-Knoten keine leere Fläche.
+        const wrapper = emailPanel('add_user_to_group');
+
+        expect(wrapper.findComponent({ name: 'MailPreviewPane' }).exists()).toBe(false);
     });
 });
 

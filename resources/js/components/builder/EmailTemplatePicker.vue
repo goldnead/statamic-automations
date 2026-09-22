@@ -110,9 +110,14 @@
                     </header>
 
                     <div class="sa-email-canvas overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800 shadow-sm">
+                        <!-- `sandbox` ohne Token: der Inhalt kommt aus `srcdoc`
+                             und braucht keine Herkunft. `allow-same-origin`
+                             gäbe dem Rahmen die des Control Panels zurück.
+                             Begründung und Gegenprobe: MailPreviewPane.vue und
+                             tests/js/preview-sandbox.test.js. -->
                         <iframe
                             :srcdoc="preview.html"
-                            sandbox="allow-same-origin"
+                            sandbox=""
                             class="sa-email-canvas block w-full h-[40vh] min-h-72 border-0"
                             :title="__('Vorschau der Vorlage')"
                             loading="lazy"
