@@ -14,6 +14,9 @@ namespace Goldnead\StatamicAutomations\Integrations\Courses\Triggers;
  */
 class TeamMemberAddedTrigger extends CourseTrigger
 {
+    /** The member is the subject, by address; the buyer need not be found. */
+    protected static bool $needsLearner = false;
+
     public static function handle(): string
     {
         return 'courses.team_member_added';

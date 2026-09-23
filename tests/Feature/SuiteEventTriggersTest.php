@@ -162,7 +162,12 @@ class SuiteEventTriggersTest extends TestCase
         foreach ($this->allNewTriggers() as $class) {
             $trigger = new $class;
 
-            $this->assertTrue($trigger->matches(new \stdClass, []), $class::handle());
+            // A course trigger about a learner declines an event that names
+            // nobody (see SuiteEventBrandTest); every other one accepts it.
+            $learner = is_subclass_of($class, CT\CourseTrigger::class)
+                && ! is_a($class, CT\TeamMemberAddedTrigger::class, true);
+
+            $this->assertSame(! $learner, $trigger->matches(new \stdClass, []), $class::handle());
             $this->assertIsArray($trigger->buildContext([], [])->all(), $class::handle());
         }
     }
@@ -379,8 +384,11 @@ class SuiteEventTriggersTest extends TestCase
 
     public function test_a_lesson_event_reads_its_state(): void
     {
+        $user = User::make()->email('atem@example.com');
+        $user->save();
+
         $state = (object) [
-            'user_id' => 'u-1',
+            'user_id' => (string) $user->id(),
             'course_entry_id' => 'c-1',
             'course_slug' => 'stimme',
             'lesson_entry_id' => 'l-1',
@@ -399,8 +407,11 @@ class SuiteEventTriggersTest extends TestCase
 
     public function test_a_course_filter_accepts_the_entry_id_or_the_slug(): void
     {
+        $user = User::make()->email('quiz@example.com');
+        $user->save();
+
         $trigger = new CT\QuizFailedTrigger;
-        $event = new QuizFailed('u', 'c-1', 'stimme', 'atem', 'quiz-1', 40, null, 9);
+        $event = new QuizFailed((string) $user->id(), 'c-1', 'stimme', 'atem', 'quiz-1', 40, null, 9);
 
         $this->assertTrue($trigger->matches($event, ['course' => 'c-1']));
         $this->assertTrue($trigger->matches($event, ['course' => 'stimme']));

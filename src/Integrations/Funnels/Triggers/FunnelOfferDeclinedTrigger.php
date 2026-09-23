@@ -32,7 +32,7 @@ class FunnelOfferDeclinedTrigger implements AutomationTrigger
 
     public static function description(): ?string
     {
-        return 'Triggered when a visitor declines an offer in a funnel, for example an upsell after the purchase.';
+        return 'Triggered on every decline of an offer in a funnel. After a paid purchase funnels.upsell_declined fires on the same click; use that one to reach buyers only.';
     }
 
     public static function group(): string

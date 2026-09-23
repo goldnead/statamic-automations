@@ -2,10 +2,14 @@
 
 namespace Goldnead\StatamicAutomations\Concerns;
 
+use Goldnead\BrandContext\Models\Brand;
+use Goldnead\StatamicAutomations\Contracts\AutomationTrigger;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
+use Goldnead\StatamicAutomations\Support\EventBrand;
+use Illuminate\Support\Facades\Log;
 
 /**
  * The body every sister-addon listener shares: take a trigger handle and a
@@ -64,6 +68,55 @@ trait RunsAutomationsForEvent
             return;
         }
 
+        $brands = app('brand-context');
+
+        if (! $brands->multiBrandEnabled()) {
+            $this->startRuns($handle, $trigger, $event);
+
+            return;
+        }
+
+        // The brand the event belongs to, not the one that happens to be
+        // current: a scheduler has none, a webhook has the default. See
+        // EventBrand for where it is read from.
+        $brand = app(EventBrand::class)->of($event);
+
+        if ($brand === null) {
+            if ($brands->hasCurrent()) {
+                $this->startRuns($handle, $trigger, $event);
+
+                return;
+            }
+
+            Log::warning('Automations: event carries no brand and none is current; no automation started.', [
+                'trigger' => $handle,
+                'event' => $event::class,
+            ]);
+
+            return;
+        }
+
+        if (! Brand::query()->whereKey($brand)->exists()) {
+            Log::warning('Automations: event names a brand that does not exist; no automation started.', [
+                'trigger' => $handle,
+                'event' => $event::class,
+                'brand_id' => $brand,
+            ]);
+
+            return;
+        }
+
+        // Search and dispatch both inside the brand: the run is stamped with
+        // it, and the queued job carries it on to the worker.
+        $brands->runFor($brand, fn () => $this->startRuns($handle, $trigger, $event));
+    }
+
+    /**
+     * Start every automation of the current brand that begins on `$handle` and
+     * accepts this event.
+     */
+    protected function startRuns(string $handle, AutomationTrigger $trigger, object $event): void
+    {
         $automations = Automation::query()
             ->where('enabled', true)
             ->whereHas('nodes', fn ($q) => $q->where('type', $handle))

@@ -148,6 +148,7 @@ namespace Goldnead\Courses\Events {
                 public readonly string $userId,
                 public readonly string $courseId,
                 public readonly string $courseSlug,
+                public readonly ?int $brandId = null,
             ) {}
         }
     }
@@ -159,6 +160,7 @@ namespace Goldnead\Courses\Events {
                 public readonly string $userId,
                 public readonly string $courseId,
                 public readonly string $courseSlug,
+                public readonly ?int $brandId = null,
             ) {}
         }
     }
@@ -169,6 +171,7 @@ namespace Goldnead\Courses\Events {
             public function __construct(
                 public readonly object $state,
                 public readonly string $source,
+                public readonly ?int $brandId = null,
             ) {}
         }
     }
@@ -182,6 +185,7 @@ namespace Goldnead\Courses\Events {
                 public readonly string $courseSlug,
                 public readonly string $lessonSlug,
                 public readonly string $source,
+                public readonly ?int $brandId = null,
             ) {}
         }
     }
@@ -198,6 +202,7 @@ namespace Goldnead\Courses\Events {
                 public readonly int $score,
                 public readonly ?string $resultKey,
                 public readonly ?int $responseId,
+                public readonly ?int $brandId = null,
             ) {}
         }
     }
@@ -214,6 +219,7 @@ namespace Goldnead\Courses\Events {
                 public readonly int $score,
                 public readonly ?string $resultKey,
                 public readonly ?int $responseId,
+                public readonly ?int $brandId = null,
             ) {}
         }
     }
@@ -226,6 +232,7 @@ namespace Goldnead\Courses\Events {
                 public readonly string $courseId,
                 public readonly string $courseSlug,
                 public readonly string $reason,
+                public readonly ?int $brandId = null,
             ) {}
         }
     }
@@ -239,6 +246,7 @@ namespace Goldnead\Courses\Events {
                 public readonly string $courseSlug,
                 public readonly int $pausedSeconds,
                 public readonly string $reason,
+                public readonly ?int $brandId = null,
             ) {}
         }
     }
@@ -251,6 +259,7 @@ namespace Goldnead\Courses\Events {
                 public readonly string $courseId,
                 public readonly string $courseSlug,
                 public readonly string $reason,
+                public readonly ?int $brandId = null,
             ) {}
         }
     }
@@ -263,6 +272,7 @@ namespace Goldnead\Courses\Events {
                 public readonly string $courseId,
                 public readonly string $courseSlug,
                 public readonly string $reason,
+                public readonly ?int $brandId = null,
             ) {}
         }
     }
@@ -276,6 +286,7 @@ namespace Goldnead\Courses\Events {
                 public readonly string $courseSlug,
                 public readonly string $email,
                 public readonly string $product = '',
+                public readonly ?int $brandId = null,
             ) {}
         }
     }
@@ -289,6 +300,7 @@ namespace Goldnead\Courses\Events {
                 public readonly string $courseSlug,
                 public readonly string $email,
                 public readonly string $product = '',
+                public readonly ?int $brandId = null,
             ) {}
         }
     }

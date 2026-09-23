@@ -36,7 +36,7 @@ class UpsellDeclinedTrigger extends FunnelOfferDeclinedTrigger
 
     public static function description(): ?string
     {
-        return 'Triggered when a buyer declines an offer after a paid purchase in the same funnel. Carries what they bought.';
+        return 'Triggered when a buyer declines an offer after a paid purchase in the same funnel. Carries what they bought. funnels.offer_declined fires on the same click.';
     }
 
     public static function schema(): array

@@ -559,6 +559,34 @@ class NativeOptionSources
             return [];
         }
 
+        // courses 0ec0f86 and later: its own list, narrowed to the reader's
+        // brand (plus courses without one). Older releases have no brand on a
+        // course; the collection read below is then the whole answer.
+        $progress = 'Goldnead\\Courses\\CourseProgress';
+
+        if (class_exists($progress)) {
+            try {
+                $service = app($progress);
+
+                if (method_exists($service, 'courses')) {
+                    $brands = app('brand-context');
+                    $brandId = $brands->multiBrandEnabled() && $brands->hasCurrent() ? $brands->currentId() : null;
+
+                    return collect($service->courses($brandId))
+                        ->filter(fn ($course) => is_array($course) && isset($course['id']))
+                        ->map(fn (array $course) => [
+                            'value' => (string) $course['id'],
+                            'label' => (string) (($course['title'] ?? '') !== '' ? $course['title'] : ($course['slug'] ?? $course['id'])),
+                        ])
+                        ->sortBy('label')
+                        ->values()
+                        ->all();
+                }
+            } catch (\Throwable) {
+                // Fall through to the collection.
+            }
+        }
+
         try {
             $collection = (string) config('courses.collections.courses', 'courses');
 

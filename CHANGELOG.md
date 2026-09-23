@@ -45,6 +45,38 @@ Zahlweise (`offer:kurs:raten3`). *Product* bleibt exakt, damit gespeicherte Abl�
 Neue Auswahlquellen `offers.offers`, `offers.pricing_options` (nach Marke eingeengt) und
 `courses.courses`.
 
+### Die Marke kommt aus dem Ereignis, nicht aus dem Zufall
+
+Bisher suchten die Listener der Geschwister-Addons Abläufe nur in der Marke, die gerade gesetzt
+war. Ein Befehl wie `payments:reminders` hat keine, also starteten seine Erinnerungen nichts; ein
+Webhook fällt auf die Standardmarke zurück, also starteten dort Abläufe der falschen Marke, mit
+dem falschen Absender. Das galt auch für die alten `payments.*`-, `entitlements.*`-,
+`booking.*`- und `invoices.*`-Auslöser.
+
+Jetzt liest `Support\EventBrand` die Marke aus dem Ereignis: zuerst ein ausdrückliches `brandId`
+(courses ab `0ec0f86` trägt es an jedem Ereignis), dann `brand_id` an Abo, Zahlung, Partner,
+Provision oder Zugang, bei Kurs-Ereignissen ohne beides die Seite des Kurs-Eintrags über
+`brand-context.sites`. Suche und Dispatch laufen in `brand-context->runFor()`, die Marke der
+Anfrage bleibt danach unverändert. Ohne Marke im Ereignis gilt die gesetzte; ist auch keine
+gesetzt, steht eine Warnung im Log statt nichts. Eine Marke, die es nicht gibt, ebenso. Ohne
+`multi_brand` ändert sich nichts.
+
+### Weitere Nachbesserungen aus der Prüfung
+
+- **Deutsch in der Knoten-Bibliothek.** Beschriftung, Beschreibung und Gruppe aller payments-,
+  funnels-, courses- und affiliates-Auslöser kommen aus `resources/lang/de/triggers.php`, nach
+  Handle geordnet und im Namensraum des Addons, damit „Courses" oder „Quiz Passed" nicht in
+  anderen Addons mitübersetzt werden. Die Suche der Bibliothek findet damit „abo".
+- Auslöser, die auf denselben Moment feuern, sagen es in der Beschreibung:
+  `offer_declined` und `upsell_declined`, `subscription_ended` und `subscription_plan_completed`.
+- `payments.checkout_blocked`: keine volle IP-Adresse mehr im Kontext, nur das Netz
+  (`blocked.ip_prefix`, /24 bzw. /48). Die Beschreibung warnt vor Mails an `blocked.email`.
+- Kurs-Auslöser für eine Person, die sich nicht finden lässt (gelöscht), starten nicht mit leerem
+  Betreff, sondern werden übersprungen, mit Warnung im Log. Teamplätze laufen weiter, dort ist
+  das Mitglied per Adresse der Betreff.
+- `courses.courses` nimmt, wo vorhanden, `CourseProgress::courses($brandId)` mit der aktuellen
+  Marke (Kurse der Marke und ohne Marke).
+
 `IntegrationDetector` kennt dafür `courses`, `affiliates` und `offers` (Schlüssel
 `automations.integrations.<name>.detect` wie bei den anderen). Keine Migration, keine neuen
 Pflicht-Config-Schlüssel.

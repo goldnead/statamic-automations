@@ -4,6 +4,7 @@ namespace Goldnead\StatamicAutomations\Integrations\Courses\Triggers;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationTrigger;
+use Illuminate\Support\Facades\Log;
 use Statamic\Facades\Entry;
 use Statamic\Facades\User;
 
@@ -25,6 +26,12 @@ abstract class CourseTrigger implements AutomationTrigger
 {
     /** Whether this trigger's event names a lesson, which adds the lesson filter. */
     protected static bool $hasLesson = false;
+
+    /** Whether the run is about the learner, who must then be found. */
+    protected static bool $needsLearner = true;
+
+    /** @var array<string, array{id: string|null, email: string|null, name: string|null}> */
+    private array $users = [];
 
     public static function group(): string
     {
@@ -64,6 +71,21 @@ abstract class CourseTrigger implements AutomationTrigger
 
     public function matches(object|array $event, array $config): bool
     {
+        // A learner who cannot be found has no address, so the run would have
+        // no subject: "only once per person" would not hold and a mail would
+        // have nobody to go to. Skipped, and said so, rather than started
+        // half-empty. The team triggers are about the member's address and
+        // switch this off.
+        if (static::$needsLearner && ($this->userOf($this->userIdOf($event))['email'] ?? null) === null) {
+            Log::warning('Automations: course event for a learner who cannot be found; skipped.', [
+                'trigger' => static::handle(),
+                'user_id' => $this->userIdOf($event),
+                'course' => $this->courseIds($event)['slug'],
+            ]);
+
+            return false;
+        }
+
         $course = $this->configured($config, 'course');
 
         if ($course !== null) {
@@ -122,6 +144,11 @@ abstract class CourseTrigger implements AutomationTrigger
      */
     protected function userOf(?string $id): array
     {
+        // Asked twice per event (matches, then buildContext); looked up once.
+        if ($id !== null && isset($this->users[$id])) {
+            return $this->users[$id];
+        }
+
         $email = null;
         $name = null;
 
@@ -141,7 +168,13 @@ abstract class CourseTrigger implements AutomationTrigger
             }
         }
 
-        return ['id' => $id, 'email' => $email, 'name' => $name];
+        $found = ['id' => $id, 'email' => $email, 'name' => $name];
+
+        // Only the last one: the trigger instance lives as long as the worker,
+        // and an address changed an hour ago must not come back from here.
+        $this->users = $id === null ? [] : [$id => $found];
+
+        return $found;
     }
 
     /**

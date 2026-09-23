@@ -29,7 +29,7 @@ class SubscriptionPlanCompletedTrigger implements AutomationTrigger
 
     public static function description(): ?string
     {
-        return 'Triggered once when the last instalment of a payment plan is paid.';
+        return 'Triggered once when the last instalment of a payment plan is paid. payments.subscription_ended fires at the same moment; use one of the two, not both.';
     }
 
     public static function group(): string

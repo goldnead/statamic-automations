@@ -154,7 +154,7 @@ touch.
 | Payment Plan Completed _(Payments)_ | Payments | The last instalment is paid. Only the good ending, unlike Subscription Ended. |
 | Subscription Changed _(Payments)_ | Payments | Upgrade or downgrade, filterable by direction. Old product and amounts under `change`. |
 | Subscription Replaced _(Payments)_ | Payments | A purchase ended an earlier agreement, as the product says it should. Cancelled fires too; this one says why. |
-| Checkout Blocked _(Payments)_ | Payments | Block list, rate limit or captcha refused a checkout. For alerts to your team. |
+| Checkout Blocked _(Payments)_ | Payments | Block list, rate limit or captcha refused a checkout. For alerts to your team, never a mail to `blocked.email`. Carries the network (`blocked.ip_prefix`, /24 or /48), not the address. |
 | Payment Charged Back _(Payments)_ | Payments | The bank reversed a payment. Access is already withdrawn; tell a person in time. |
 | Access Granted _(Entitlements)_ | Entitlements | A grant became active. Where the welcome mail belongs; the entitlements addon sends nothing itself. |
 | Access Revoked _(Entitlements)_ | Entitlements | Withdrawn deliberately, with the reason and **who did it**. A chargeback and a goodwill refund are the same row. |
@@ -166,7 +166,7 @@ touch.
 | Booking Rescheduled _(Booking)_ | Booking | Moved to a different time. The only one here that can repeat on a redelivery. |
 | Invoice Issued _(Invoices)_ | Invoices | A document was written. Fires only on a real write, never when an existing invoice is handed back. |
 | Credit Note Issued _(Invoices)_ | Invoices | Carries both documents, because a credit note alone says nothing about what it undid. |
-| Learner Enrolled / Course Completed _(Courses)_ | Courses | Once per learner and course. The learner is looked up by id and lands under `user` (id, email, name), the course under `course` with its title. |
+| Learner Enrolled / Course Completed _(Courses)_ | Courses | Once per learner and course. The learner is looked up by id and lands under `user` (id, email, name), the course under `course` with its title. A learner who cannot be found is skipped with a log warning. |
 | Lesson Completed / Lesson Unlocked _(Courses)_ | Courses | Filterable by course and lesson slug. Unlocked fires only for writes, not for lessons opened by date alone. |
 | Quiz Passed / Quiz Failed _(Courses)_ | Courses | Score, result and assessment under `quiz`. Failed fires on every attempt. |
 | Drip Paused / Drip Resumed _(Courses)_ | Courses | `reason` is `payment_failed`, `payment_recovered` or `manual`. |
@@ -324,6 +324,13 @@ Note that both Automations and Webhook Manager can react to the same Statamic ev
 ## Optional integrations
 
 Sister addons are detected automatically through `class_exists`. The package keeps working without them.
+
+**Which brand runs.** With `brand-context.multi_brand` on, a sister addon's event starts the
+automations of the brand it belongs to, not of the brand that happens to be current: an explicit
+`brandId` on the event, else `brand_id` on the subscription, payment, partner, commission or grant it
+carries, else (course events) the site of the course entry via `brand-context.sites`. A scheduler
+without a brand and a webhook that fell back to the default brand both land in the right place. An
+event with no brand while none is current starts nothing and logs a warning.
 
 | Integration | Class | Adds |
 |---|---|---|

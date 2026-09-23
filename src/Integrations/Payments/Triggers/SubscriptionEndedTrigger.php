@@ -28,7 +28,7 @@ class SubscriptionEndedTrigger implements AutomationTrigger
 
     public static function description(): ?string
     {
-        return 'Triggered when a subscription reaches its own end, for example a payment plan that is paid off.';
+        return 'Triggered when a subscription reaches its own end, for example a payment plan that is paid off. For a paid-off plan payments.subscription_plan_completed fires at the same moment.';
     }
 
     public static function group(): string

@@ -78,6 +78,26 @@ class NodeRegistry
     }
 
     /**
+     * A node's text in the CP's language, looked up by handle in
+     * `resources/lang/<locale>/triggers.php`, or its own English text.
+     *
+     * By handle and in the addon's namespace, not as a JSON key: JSON
+     * translations are site-wide, and "Courses" or "Quiz Passed" as keys would
+     * have renamed the same words in other addons' screens.
+     */
+    protected function translate(string $key, ?string $fallback): ?string
+    {
+        if ($fallback === null || $fallback === '') {
+            return $fallback;
+        }
+
+        $full = 'statamic-automations::triggers.'.$key;
+        $translated = __($full);
+
+        return is_string($translated) && $translated !== $full ? $translated : $fallback;
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     public function all(): array
@@ -136,9 +156,13 @@ class NodeRegistry
         $description = [
             'handle' => $entry['handle'],
             'kind' => $entry['kind'],
-            'label' => $class::label(),
-            'description' => $class::description(),
-            'group' => $class::group(),
+            // Translated here, where the CP reads them, and nowhere else: the
+            // classes keep returning English, which is what tests, exports and
+            // third-party nodes already rely on. A node without a translation
+            // keeps its English text.
+            'label' => $this->translate("{$entry['handle']}.label", $class::label()),
+            'description' => $this->translate("{$entry['handle']}.description", $class::description()),
+            'group' => $this->translate('groups.'.$class::group(), $class::group()),
             'schema' => $this->withCommonFields($entry['kind'], $class::schema()),
             'supports_test_mode' => $class::supportsTestMode(),
             // The node's output handles, as a spec the canvas resolves
