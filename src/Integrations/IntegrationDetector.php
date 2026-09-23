@@ -58,6 +58,47 @@ class IntegrationDetector
         return $this->detect('invoices', $this->invoicesClasses());
     }
 
+    public function hasCourses(): bool
+    {
+        return $this->detect('courses', $this->classesFor('courses', [
+            'Goldnead\\Courses\\ServiceProvider',
+            'Goldnead\\Courses\\CourseProgress',
+        ]));
+    }
+
+    public function hasAffiliates(): bool
+    {
+        return $this->detect('affiliates', $this->classesFor('affiliates', [
+            'Goldnead\\Affiliates\\ServiceProvider',
+            'Goldnead\\Affiliates\\Models\\Partner',
+        ]));
+    }
+
+    public function hasOffers(): bool
+    {
+        return $this->detect('offers', $this->classesFor('offers', [
+            'Goldnead\\StatamicOffers\\Models\\Offer',
+            'Goldnead\\StatamicOffers\\ServiceProvider',
+        ]));
+    }
+
+    /**
+     * The configured probe classes for an integration, then the defaults.
+     *
+     * Courses and affiliates share the namespace trap of entitlements and
+     * invoices: the PSR-4 roots are `Goldnead\Courses` and
+     * `Goldnead\Affiliates`, with no `Statamic` in them.
+     *
+     * @param  array<int, string>  $defaults
+     * @return array<int, string>
+     */
+    protected function classesFor(string $key, array $defaults): array
+    {
+        $configured = config("automations.integrations.{$key}.detect", []);
+
+        return array_filter(array_merge((array) $configured, $defaults));
+    }
+
     /**
      * Reset the cache — primarily used by tests.
      */
@@ -82,6 +123,9 @@ class IntegrationDetector
             'entitlements' => $this->hasEntitlements(),
             'booking' => $this->hasBooking(),
             'invoices' => $this->hasInvoices(),
+            'courses' => $this->hasCourses(),
+            'affiliates' => $this->hasAffiliates(),
+            'offers' => $this->hasOffers(),
         ];
     }
 

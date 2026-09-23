@@ -88,6 +88,10 @@ trait FlattensPayments
             'next_payment_at' => $this->dateOf($subscription->next_payment_at ?? null),
             'cancelled_at' => $this->dateOf($subscription->cancelled_at ?? null),
             'ended_at' => $this->dateOf($subscription->ended_at ?? null),
+            // Since the pause (payments P1). Null on every agreement that
+            // never paused, and on a payments release older than the column.
+            'paused_at' => $this->dateOf($subscription->paused_at ?? null),
+            'resumes_at' => $this->dateOf($subscription->resumes_at ?? null),
         ];
     }
 
@@ -137,6 +141,8 @@ trait FlattensPayments
             'next_payment_at' => 'string',
             'cancelled_at' => 'string',
             'ended_at' => 'string',
+            'paused_at' => 'string',
+            'resumes_at' => 'string',
         ];
     }
 
@@ -153,27 +159,142 @@ trait FlattensPayments
      */
     protected function matchesProduct(object|array $event, array $config): bool
     {
-        $product = $config['product'] ?? null;
+        $product = $this->filterValue($config, 'product');
+        $offer = $this->filterValue($config, 'offer');
+        $option = $this->filterValue($config, 'pricing_option');
 
-        if (! $product) {
+        if ($product === null && $offer === null && $option === null) {
             return true;
         }
 
-        $candidates = [
-            $this->subscriptionOf($event)['product'] ?? null,
-            $this->paymentOf($event)['product'] ?? null,
-        ];
+        // One candidate has to satisfy every filter that is set. Spread over
+        // two candidates, "offer A" and "option of offer B" would both pass on
+        // a renewal that carries A on the subscription and B on the payment.
+        foreach ($this->productCandidates($event) as $candidate) {
+            if ($product !== null && $candidate !== $product) {
+                continue;
+            }
 
-        // Filtered on null rather than on falsiness. A plain array_filter drops
-        // the string "0", and a product handle of "0" would then stop matching
-        // a filter set to exactly that.
-        $candidates = array_filter($candidates, fn ($candidate) => $candidate !== null);
+            $parsed = ($offer !== null || $option !== null) ? self::parseOfferHandle($candidate) : null;
 
-        return in_array($product, $candidates, true);
+            if ($offer !== null && ($parsed === null || $parsed['offer'] !== $offer)) {
+                continue;
+            }
+
+            if ($option !== null) {
+                $wanted = self::parseOfferHandle($option);
+
+                if ($parsed === null || $wanted === null || $wanted['option'] === null
+                    || $parsed['offer'] !== $wanted['offer'] || $parsed['option'] !== $wanted['option']) {
+                    continue;
+                }
+            }
+
+            return true;
+        }
+
+        return false;
     }
 
     /**
-     * The product filter field, identical on every trigger in this group.
+     * The product handles an event names, in the order they are checked.
+     *
+     * A subscription event names its product on the subscription, a payment
+     * event on the payment, and `SubscriptionRenewed` carries both. A trigger
+     * whose event names its models differently overrides this.
+     *
+     * Filtered on null rather than on falsiness. A plain array_filter drops
+     * the string "0", and a product handle of "0" would then stop matching a
+     * filter set to exactly that.
+     *
+     * @return list<string>
+     */
+    protected function productCandidates(object|array $event): array
+    {
+        return $this->handlesOf([
+            $this->subscriptionOf($event)['product'] ?? null,
+            $this->paymentOf($event)['product'] ?? null,
+        ]);
+    }
+
+    /**
+     * @param  array<int, mixed>  $values
+     * @return list<string>
+     */
+    protected function handlesOf(array $values): array
+    {
+        return array_values(array_map(
+            'strval',
+            array_filter($values, fn ($value) => is_string($value) || is_int($value)),
+        ));
+    }
+
+    /**
+     * A configured filter value, or null when it is not set.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    protected function filterValue(array $config, string $key): ?string
+    {
+        $value = $config[$key] ?? null;
+
+        return is_string($value) && trim($value) !== '' ? trim($value) : (is_int($value) ? (string) $value : null);
+    }
+
+    /**
+     * Split a sold handle into the offer and the pricing option it names.
+     *
+     * `offer:kurs`, `offer:kurs:raten3`, `offer:kurs:=2500` and
+     * `offer:kurs:+setup` are all a purchase of the offer `kurs`; only the
+     * second names an option. The offers addon's own parser decides when it is
+     * installed, because the prefix is configurable there and a second opinion
+     * about the grammar would drift. Without it the same rule is applied here:
+     * the offer ends at the first colon after the prefix, and a suffix is an
+     * option only when it is a plain key.
+     *
+     * @return array{offer: string, option: string|null}|null
+     */
+    protected static function parseOfferHandle(string $handle): ?array
+    {
+        $parser = 'Goldnead\\StatamicOffers\\Support\\OfferHandle';
+
+        if (class_exists($parser)) {
+            try {
+                $parsed = $parser::parse($handle);
+            } catch (\Throwable) {
+                $parsed = null;
+            }
+
+            return $parsed === null ? null : ['offer' => (string) $parsed->offer, 'option' => $parsed->option];
+        }
+
+        $prefix = (string) config('statamic-offers.handle_prefix', 'offer:');
+        $prefix = $prefix === '' ? 'offer:' : $prefix;
+
+        if (! str_starts_with($handle, $prefix)) {
+            return null;
+        }
+
+        $parts = explode(':', substr($handle, strlen($prefix)), 2);
+
+        if ($parts[0] === '') {
+            return null;
+        }
+
+        $suffix = $parts[1] ?? null;
+        $option = $suffix !== null && preg_match('/^[a-z0-9][a-z0-9_-]*$/', $suffix) === 1 ? $suffix : null;
+
+        return ['offer' => $parts[0], 'option' => $option];
+    }
+
+    /**
+     * The product filter fields, identical on every trigger in this group.
+     *
+     * Three of them, because they answer three different questions. `product`
+     * is the exact handle and stays exact: flows stored before the other two
+     * existed rely on `offer:kurs` not also catching `offer:kurs:raten3`.
+     * `offer` is every way of buying one offer, whichever option or amount.
+     * `pricing_option` is exactly one option of one offer.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -188,6 +309,22 @@ trait FlattensPayments
                 'required' => false,
                 'help' => 'Leave empty for every product.',
             ],
+            [
+                'handle' => 'offer',
+                'label' => 'Offer',
+                'type' => 'select',
+                'options_source' => 'offers.offers',
+                'required' => false,
+                'help' => 'Only purchases through this offer, whichever pricing option was chosen. Leave empty for every offer.',
+            ],
+            [
+                'handle' => 'pricing_option',
+                'label' => 'Pricing option',
+                'type' => 'select',
+                'options_source' => 'offers.pricing_options',
+                'required' => false,
+                'help' => 'Only purchases of exactly this pricing option, for example the instalment plan.',
+            ],
         ];
     }
 
@@ -201,6 +338,16 @@ trait FlattensPayments
     protected function propertyOf(object|array $event, string $key): mixed
     {
         return is_array($event) ? ($event[$key] ?? null) : ($event->{$key} ?? null);
+    }
+
+    protected function stringOf(mixed $value): ?string
+    {
+        return is_string($value) && $value !== '' ? $value : null;
+    }
+
+    protected function intOf(mixed $value): ?int
+    {
+        return is_numeric($value) ? (int) $value : null;
     }
 
     /**

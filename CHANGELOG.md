@@ -1,5 +1,54 @@
 # Changelog
 
+## Unreleased
+
+### Auslöser für die neuen Abo-, Kurs-, Partner- und Funnel-Ereignisse
+
+payments, courses, affiliates und funnels feuern seit dem Suite-Bau vom 23.09.2026 Ereignisse, die
+im Editor nicht zu finden waren. Jetzt gibt es für jedes einen Auslöser, gebaut wie die
+bestehenden `payments.*`: Kopplung nur über `class_exists` und den `IntegrationDetector`, flache
+Felder im Kontext für Mails und Bedingungen, Filter am Auslöser.
+
+- **payments (11):** `payments.subscription_paused`, `…_resumed`, `…_payment_upcoming`,
+  `…_card_expiring`, `…_card_expired`, `…_attempt_failed` (Filter „Only failure number"),
+  `…_plan_completed`, `…_changed` (Filter Upgrade/Downgrade), `…_replaced` (Filter auf das
+  ersetzte Produkt), `payments.checkout_blocked` (Filter Grund), `payments.charged_back`. Das
+  Abo im Kontext trägt dazu `paused_at` und `resumes_at`. Nicht verdrahtet:
+  `SubscriptionCycleFailed` (feuert je Zustellung, `…_attempt_failed` deckt ihn einmal je Fehlschlag
+  ab) und `PaymentCommunicationLogged`.
+- **courses (12):** `courses.learner_enrolled`, `…lesson_completed`, `…lesson_unlocked`,
+  `…quiz_passed`, `…quiz_failed`, `…course_completed`, `…drip_paused`, `…drip_resumed`,
+  `…access_suspended`, `…access_restored`, `…team_member_added`, `…team_member_removed`. Die
+  Ereignisse tragen nur Kennungen; der Auslöser schlägt die Person nach und legt sie unter `user`
+  ab (id, email, name), den Kurs unter `course` mit Titel. `user.email` ist damit der Betreff des
+  Durchlaufs, „nur einmal je Person" greift ohne Einstellung. Bei Teamplätzen ist das Mitglied der
+  Betreff (`member.email`), der Käufer steht unter `owner`. Filter: Kurs (Eintrag-ID oder Slug),
+  bei Lektionen zusätzlich der Lektions-Slug.
+- **affiliates (4):** `affiliates.commission_earned`, `…commission_reversed` (Filter Art),
+  `affiliates.partner_applied`, `…partner_approved`. Partner mit Adresse und Code im Kontext,
+  Auszahlungsdaten bewusst nicht.
+- **funnels (2):** `funnels.offer_declined` auf `FunnelOfferDeclined`, bei jedem Nein. Filter
+  Funnel, Schritt und Angebot; `step.offer` nennt das abgelehnte Angebot.
+  `funnels.upsell_declined` auf `UpsellDeclined` (funnels ab `6167932`): nur ein Nein, nachdem im
+  selben Lauf schon bezahlt wurde. Der Kauf davor steht unter `payment`, zusätzlicher Filter
+  „Bought offer" (gleich welche Zahlweise). Beide feuern auf denselben Klick; wer nur Käufer nachfassen will, nimmt den
+  zweiten.
+
+### Filter je Angebot und Zahlweise an den Kauf-Auslösern
+
+Jeder payments-Auslöser mit Produkt hat neben *Product* zwei neue Felder. *Offer* trifft jeden
+Kauf über ein Angebot, gleich welche Zahlweise oder welcher frei gewählte Betrag
+(`offer:kurs`, `offer:kurs:raten3`, `offer:kurs:=2500`). *Pricing option* trifft genau eine
+Zahlweise (`offer:kurs:raten3`). *Product* bleibt exakt, damit gespeicherte Abläufe mit
+`offer:kurs` nicht plötzlich auch auf die Ratenzahlung anspringen. Zerlegt wird mit
+`OfferHandle::parse()` aus statamic-offers, wenn es da ist, sonst mit derselben Regel hier.
+Neue Auswahlquellen `offers.offers`, `offers.pricing_options` (nach Marke eingeengt) und
+`courses.courses`.
+
+`IntegrationDetector` kennt dafür `courses`, `affiliates` und `offers` (Schlüssel
+`automations.integrations.<name>.detect` wie bei den anderen). Keine Migration, keine neuen
+Pflicht-Config-Schlüssel.
+
 ## 2.19.0 — 2026-09-22
 
 ### Die Mail-Vorschau steht jetzt im Node-Stack und zeigt, was im Formular steht

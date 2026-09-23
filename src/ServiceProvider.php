@@ -19,9 +19,11 @@ use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Export\AutomationExporter;
 use Goldnead\StatamicAutomations\Export\AutomationFileSync;
 use Goldnead\StatamicAutomations\Export\AutomationImporter;
+use Goldnead\StatamicAutomations\Integrations\Affiliates\Triggers as AfT;
 use Goldnead\StatamicAutomations\Integrations\Booking\Triggers as BT;
 use Goldnead\StatamicAutomations\Integrations\CalCom\Actions as CalA;
 use Goldnead\StatamicAutomations\Integrations\CalCom\Triggers as CalT;
+use Goldnead\StatamicAutomations\Integrations\Courses\Triggers as CoT;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\Actions as EA;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\EntitlementsAdapter;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\Triggers as ET;
@@ -673,6 +675,9 @@ class ServiceProvider extends AddonServiceProvider
         $automations->registerOptionSource('leadhub.tags', fn ($request) => $this->app->make($native)->leadHubTags($request));
         $automations->registerOptionSource('payments.products', fn ($request) => $this->app->make($native)->paymentProducts($request));
         $automations->registerOptionSource('funnels.funnels', fn ($request) => $this->app->make($native)->funnels($request));
+        $automations->registerOptionSource('offers.offers', fn ($request) => $this->app->make($native)->offers($request));
+        $automations->registerOptionSource('offers.pricing_options', fn ($request) => $this->app->make($native)->offerPricingOptions($request));
+        $automations->registerOptionSource('courses.courses', fn ($request) => $this->app->make($native)->courses($request));
         $webhookDestinations = fn ($request) => $this->app->make($native)->webhookDestinations($request);
         $automations->registerOptionSource('webhook_manager.destinations', $webhookDestinations);
         $automations->registerOptionSource('webhooks', $webhookDestinations);
@@ -759,6 +764,8 @@ class ServiceProvider extends AddonServiceProvider
                 FT\FunnelFormSubmittedTrigger::class,
                 FT\FunnelStepEnteredTrigger::class,
                 FT\FunnelOfferAcceptedTrigger::class,
+                FT\FunnelOfferDeclinedTrigger::class,
+                FT\UpsellDeclinedTrigger::class,
             ] as $triggerClass) {
                 $automations->registerBuiltIn($triggerClass::handle());
                 $automations->trigger($triggerClass::handle(), $triggerClass);
@@ -781,6 +788,17 @@ class ServiceProvider extends AddonServiceProvider
                 PT\SubscriptionCancelledTrigger::class,
                 PT\SubscriptionEndedTrigger::class,
                 PT\SubscriptionStartFailedTrigger::class,
+                PT\SubscriptionPausedTrigger::class,
+                PT\SubscriptionResumedTrigger::class,
+                PT\SubscriptionPaymentUpcomingTrigger::class,
+                PT\SubscriptionCardExpiringTrigger::class,
+                PT\SubscriptionCardExpiredTrigger::class,
+                PT\SubscriptionAttemptFailedTrigger::class,
+                PT\SubscriptionPlanCompletedTrigger::class,
+                PT\SubscriptionChangedTrigger::class,
+                PT\SubscriptionReplacedTrigger::class,
+                PT\CheckoutBlockedTrigger::class,
+                PT\PaymentChargedBackTrigger::class,
             ] as $triggerClass) {
                 $automations->registerBuiltIn($triggerClass::handle());
                 $automations->trigger($triggerClass::handle(), $triggerClass);
@@ -874,6 +892,42 @@ class ServiceProvider extends AddonServiceProvider
             }
 
             $this->listenForSisterEvents(HandleCommerceEvent::INVOICE_TRIGGERS, HandleCommerceEvent::class);
+        }
+
+        if ($detector->hasCourses()) {
+            foreach ([
+                CoT\LearnerEnrolledTrigger::class,
+                CoT\LessonCompletedTrigger::class,
+                CoT\LessonUnlockedTrigger::class,
+                CoT\QuizPassedTrigger::class,
+                CoT\QuizFailedTrigger::class,
+                CoT\CourseCompletedTrigger::class,
+                CoT\DripPausedTrigger::class,
+                CoT\DripResumedTrigger::class,
+                CoT\CourseAccessSuspendedTrigger::class,
+                CoT\CourseAccessRestoredTrigger::class,
+                CoT\TeamMemberAddedTrigger::class,
+                CoT\TeamMemberRemovedTrigger::class,
+            ] as $triggerClass) {
+                $automations->registerBuiltIn($triggerClass::handle());
+                $automations->trigger($triggerClass::handle(), $triggerClass);
+            }
+
+            $this->listenForSisterEvents(HandleCommerceEvent::COURSE_TRIGGERS, HandleCommerceEvent::class);
+        }
+
+        if ($detector->hasAffiliates()) {
+            foreach ([
+                AfT\CommissionEarnedTrigger::class,
+                AfT\CommissionReversedTrigger::class,
+                AfT\PartnerAppliedTrigger::class,
+                AfT\PartnerApprovedTrigger::class,
+            ] as $triggerClass) {
+                $automations->registerBuiltIn($triggerClass::handle());
+                $automations->trigger($triggerClass::handle(), $triggerClass);
+            }
+
+            $this->listenForSisterEvents(HandleCommerceEvent::AFFILIATE_TRIGGERS, HandleCommerceEvent::class);
         }
     }
 

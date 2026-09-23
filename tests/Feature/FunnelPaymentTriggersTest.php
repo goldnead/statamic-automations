@@ -22,15 +22,20 @@ it('maps every funnel and payment event to a trigger handle', function () {
     // The payments map covers all nine events the addon fires. It used to
     // cover three, and the six that were missing — every refund and every
     // subscription transition — went nowhere at all.
-    expect(HandleFunnelOrPaymentEvent::FUNNEL_TRIGGERS)->toHaveCount(4)
-        ->and(HandleFunnelOrPaymentEvent::PAYMENT_TRIGGERS)->toHaveCount(9)
+    //
+    // The eleven added in the Suite build of 23.09.2026 are held one by one in
+    // SuiteEventTriggersTest; here only the first nine keep their order.
+    expect(HandleFunnelOrPaymentEvent::FUNNEL_TRIGGERS)->toHaveCount(6)
+        ->and(HandleFunnelOrPaymentEvent::PAYMENT_TRIGGERS)->toHaveCount(20)
         ->and(array_values(HandleFunnelOrPaymentEvent::FUNNEL_TRIGGERS))->toBe([
             'funnels.completed',
             'funnels.form_submitted',
             'funnels.step_entered',
             'funnels.offer_accepted',
+            'funnels.offer_declined',
+            'funnels.upsell_declined',
         ])
-        ->and(array_values(HandleFunnelOrPaymentEvent::PAYMENT_TRIGGERS))->toBe([
+        ->and(array_slice(array_values(HandleFunnelOrPaymentEvent::PAYMENT_TRIGGERS), 0, 9))->toBe([
             'payments.paid',
             'payments.failed',
             'payments.checkout_abandoned',

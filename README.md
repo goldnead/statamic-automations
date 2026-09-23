@@ -136,6 +136,8 @@ touch.
 | Funnel Form Submitted _(Funnels)_ | Funnels | Somebody hands over their address inside a funnel |
 | Funnel Offer Accepted _(Funnels)_ | Funnels | An offer was accepted **and paid**, not merely clicked |
 | Funnel Completed _(Funnels)_ | Funnels | A visitor reaches the end of a funnel |
+| Funnel Offer Declined _(Funnels)_ | Funnels | An upsell or downsell was turned down. Filterable by funnel, step and offer; `step.offer` names what was declined. |
+| Upsell Declined _(Funnels)_ | Funnels | Only a no **after a paid purchase** in the same funnel. Carries that purchase under `payment`; filterable by the declined offer and the offer bought before. |
 | Payment Paid _(Payments)_ | Payments | The provider confirmed the money. Once per payment, however often the webhook arrives. |
 | Payment Failed _(Payments)_ | Payments | Failed, expired or cancelled. Reported once, not per redelivery. |
 | Checkout Abandoned _(Payments)_ | Payments | Started and left unpaid past the waiting period. Reported once; a later payment ends it. |
@@ -145,6 +147,15 @@ touch.
 | Subscription Cancelled _(Payments)_ | Payments | Somebody left. Cancelled is not over: `ended_at` says when access stops. |
 | Subscription Ended _(Payments)_ | Payments | It ran to its end, for example a payment plan paid off. Deliberately not the same as cancelled. |
 | Subscription Start Failed _(Payments)_ | Payments | The money arrived and no subscription exists. Put an alert to a person behind this, not a customer mail. |
+| Subscription Paused / Resumed _(Payments)_ | Payments | Paused from the CP or the portal; `resumes_at` is empty when nobody set a date. Resumed says `by`, `schedule` when the date was reached. |
+| Subscription Payment Upcoming _(Payments)_ | Payments | A set number of days before the next charge. Once per charge date. |
+| Card Expiring / Card Expired _(Payments)_ | Payments | Stripe cards and Mollie credit card mandates only. A SEPA mandate never fires these. |
+| Subscription Charge Failed _(Payments)_ | Payments | Once per failed charge, with `attempt` counting failures in a row. Filter "Only failure number" answers the third one differently. |
+| Payment Plan Completed _(Payments)_ | Payments | The last instalment is paid. Only the good ending, unlike Subscription Ended. |
+| Subscription Changed _(Payments)_ | Payments | Upgrade or downgrade, filterable by direction. Old product and amounts under `change`. |
+| Subscription Replaced _(Payments)_ | Payments | A purchase ended an earlier agreement, as the product says it should. Cancelled fires too; this one says why. |
+| Checkout Blocked _(Payments)_ | Payments | Block list, rate limit or captcha refused a checkout. For alerts to your team. |
+| Payment Charged Back _(Payments)_ | Payments | The bank reversed a payment. Access is already withdrawn; tell a person in time. |
 | Access Granted _(Entitlements)_ | Entitlements | A grant became active. Where the welcome mail belongs; the entitlements addon sends nothing itself. |
 | Access Revoked _(Entitlements)_ | Entitlements | Withdrawn deliberately, with the reason and **who did it**. A chargeback and a goodwill refund are the same row. |
 | Access Expired _(Entitlements)_ | Entitlements | The window closed on its own. Comes from a scheduled pass, so it can arrive after the fact. |
@@ -155,6 +166,19 @@ touch.
 | Booking Rescheduled _(Booking)_ | Booking | Moved to a different time. The only one here that can repeat on a redelivery. |
 | Invoice Issued _(Invoices)_ | Invoices | A document was written. Fires only on a real write, never when an existing invoice is handed back. |
 | Credit Note Issued _(Invoices)_ | Invoices | Carries both documents, because a credit note alone says nothing about what it undid. |
+| Learner Enrolled / Course Completed _(Courses)_ | Courses | Once per learner and course. The learner is looked up by id and lands under `user` (id, email, name), the course under `course` with its title. |
+| Lesson Completed / Lesson Unlocked _(Courses)_ | Courses | Filterable by course and lesson slug. Unlocked fires only for writes, not for lessons opened by date alone. |
+| Quiz Passed / Quiz Failed _(Courses)_ | Courses | Score, result and assessment under `quiz`. Failed fires on every attempt. |
+| Drip Paused / Drip Resumed _(Courses)_ | Courses | `reason` is `payment_failed`, `payment_recovered` or `manual`. |
+| Course Access Suspended / Restored _(Courses)_ | Courses | The course closed or opened again for a learner, whatever the entitlement says. |
+| Team Member Added / Removed _(Courses)_ | Courses | About the member, not the buyer: `member.email` is the subject, the buyer is under `owner`. |
+| Commission Earned / Reversed _(Affiliates)_ | Affiliates | Once per commission row, with the partner. Filterable by kind (sale, recurring, bump, upsell, joint venture). |
+| Partner Applied / Approved _(Affiliates)_ | Affiliates | The partner's address is the subject; `partner.code` is the referral code. |
+
+**Offer and pricing option.** Every payment trigger that carries a product has three filters:
+*Product* (the exact handle, as before), *Offer* (every way of buying one offer, whichever pricing
+option or amount) and *Pricing option* (exactly one option, for example `offer:kurs:raten3`). The
+last two need statamic-offers for their pickers; the matching works on the handle alone.
 | Booking Created _(cal.com)_ | cal.com | Somebody booked and it stands. Filterable by event type slug or ID. |
 | Booking Requested _(cal.com)_ | cal.com | Booked but still awaiting confirmation. Not the place for a confirmation mail. |
 | Booking Cancelled _(cal.com)_ | cal.com | An appointment that stood was called off, with the reason. |
@@ -305,8 +329,11 @@ Sister addons are detected automatically through `class_exists`. The package kee
 |---|---|---|
 | Webhook Manager | `Goldnead\WebhookManager\Facades\WebhookManager` | "Send Webhook (via Webhook Manager)" action with Webhook Manager destinations |
 | LeadHub | `Goldnead\Leadhub\Facades\LeadHub` | 5 LeadHub triggers + 7 LeadHub actions |
-| Funnels | `Goldnead\StatamicFunnels\Models\Funnel` | 4 funnel triggers |
-| Payments | `Goldnead\StatamicPayments\Models\Payment` | 9 payment triggers |
+| Funnels | `Goldnead\StatamicFunnels\Models\Funnel` | 6 funnel triggers |
+| Payments | `Goldnead\StatamicPayments\Models\Payment` | 20 payment triggers |
+| Offers | `Goldnead\StatamicOffers\Models\Offer` | Offer and pricing option pickers on the payment triggers |
+| Courses | `Goldnead\Courses\ServiceProvider` | 12 course triggers |
+| Affiliates | `Goldnead\Affiliates\ServiceProvider` | 4 partner triggers |
 | Entitlements | `Goldnead\Entitlements\EntitlementManager` | 5 entitlement triggers + 2 actions |
 | Booking | `Goldnead\StatamicBooking\Models\Booking` | 3 booking triggers |
 | Invoices | `Goldnead\Invoices\InvoiceWriter` | 2 invoice triggers + 2 actions |

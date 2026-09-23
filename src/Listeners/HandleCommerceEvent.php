@@ -65,6 +65,35 @@ class HandleCommerceEvent
         'Goldnead\\Invoices\\Events\\CreditNoteIssued' => 'invoices.credit_note_issued',
     ];
 
+    /**
+     * Courses event class => automation trigger handle.
+     *
+     * Same namespace trap as entitlements and invoices: the package is
+     * `statamic-courses`, the PSR-4 root is `Goldnead\Courses`.
+     */
+    public const COURSE_TRIGGERS = [
+        'Goldnead\\Courses\\Events\\LearnerEnrolled' => 'courses.learner_enrolled',
+        'Goldnead\\Courses\\Events\\LessonCompleted' => 'courses.lesson_completed',
+        'Goldnead\\Courses\\Events\\LessonUnlocked' => 'courses.lesson_unlocked',
+        'Goldnead\\Courses\\Events\\QuizPassed' => 'courses.quiz_passed',
+        'Goldnead\\Courses\\Events\\QuizFailed' => 'courses.quiz_failed',
+        'Goldnead\\Courses\\Events\\CourseCompleted' => 'courses.course_completed',
+        'Goldnead\\Courses\\Events\\DripPaused' => 'courses.drip_paused',
+        'Goldnead\\Courses\\Events\\DripResumed' => 'courses.drip_resumed',
+        'Goldnead\\Courses\\Events\\CourseAccessSuspended' => 'courses.access_suspended',
+        'Goldnead\\Courses\\Events\\CourseAccessRestored' => 'courses.access_restored',
+        'Goldnead\\Courses\\Events\\TeamMemberAdded' => 'courses.team_member_added',
+        'Goldnead\\Courses\\Events\\TeamMemberRemoved' => 'courses.team_member_removed',
+    ];
+
+    /** Affiliates event class => automation trigger handle. PSR-4 root `Goldnead\Affiliates`. */
+    public const AFFILIATE_TRIGGERS = [
+        'Goldnead\\Affiliates\\Events\\CommissionEarned' => 'affiliates.commission_earned',
+        'Goldnead\\Affiliates\\Events\\CommissionReversed' => 'affiliates.commission_reversed',
+        'Goldnead\\Affiliates\\Events\\PartnerApplied' => 'affiliates.partner_applied',
+        'Goldnead\\Affiliates\\Events\\PartnerApproved' => 'affiliates.partner_approved',
+    ];
+
     public function handle(object $event): void
     {
         $handle = $this->handleForEvent(
@@ -72,6 +101,8 @@ class HandleCommerceEvent
             self::ENTITLEMENT_TRIGGERS,
             self::BOOKING_TRIGGERS,
             self::INVOICE_TRIGGERS,
+            self::COURSE_TRIGGERS,
+            self::AFFILIATE_TRIGGERS,
         );
 
         if ($handle === null) {

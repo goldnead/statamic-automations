@@ -464,6 +464,118 @@ class NativeOptionSources
     }
 
     /**
+     * The offers of the optional offers addon, for the offer filter on the
+     * payment triggers and the declined-offer trigger.
+     *
+     * The value is the bare offer handle (`kurs`), not the product handle
+     * (`offer:kurs`): the filter matches every way of buying the offer, and the
+     * prefix is a setting of the offers addon that this list should not freeze.
+     * Narrowed to the reader's brand the way the offers addon's own pickers are.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function offers(Request $request): array
+    {
+        return collect($this->offerRows())
+            ->map(fn ($offer) => [
+                'value' => (string) $offer->handle,
+                'label' => (string) ($offer->name ?: $offer->handle),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Every pricing option of every offer, as the handle a purchase of it
+     * carries: `offer:kurs:raten3`, labelled "3 Raten · Kurs".
+     *
+     * One flat list rather than a second select that depends on the first:
+     * the editor's fields do not depend on each other, and a full handle is
+     * unambiguous on its own. Offers without options do not appear here; for
+     * those the offer filter is the whole answer.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function offerPricingOptions(Request $request): array
+    {
+        $prefix = (string) config('statamic-offers.handle_prefix', 'offer:');
+        $prefix = $prefix === '' ? 'offer:' : $prefix;
+
+        return collect($this->offerRows())
+            ->flatMap(function ($offer) use ($prefix) {
+                $options = method_exists($offer, 'pricingOptions') ? $offer->pricingOptions() : [];
+                $name = (string) ($offer->name ?: $offer->handle);
+
+                // The option first: the config column is narrow, a selected
+                // value is cut at the right, and the option is what tells two
+                // entries of the same offer apart.
+                return collect($options)->map(fn (array $option) => [
+                    'value' => $prefix.$offer->handle.':'.$option['key'],
+                    'label' => (($option['label'] ?? '') !== '' ? $option['label'] : $option['key']).' · '.$name,
+                ]);
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @return iterable<int, object>
+     */
+    protected function offerRows(): iterable
+    {
+        $model = 'Goldnead\\StatamicOffers\\Models\\Offer';
+
+        if (! class_exists($model)) {
+            return [];
+        }
+
+        try {
+            $query = $model::query();
+
+            // An offers release from before brands has no such scope; the
+            // list is then simply every offer, as it was on that release.
+            try {
+                $query->forBrand();
+            } catch (\BadMethodCallException) {
+                $query = $model::query();
+            }
+
+            return $query->orderBy('name')->get();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * The courses of the optional courses addon, for the course filter on its
+     * triggers. The value is the entry id, which the events carry and which
+     * survives a changed slug; the filter accepts a slug as well.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function courses(Request $request): array
+    {
+        if (! class_exists('Goldnead\\Courses\\ServiceProvider')) {
+            return [];
+        }
+
+        try {
+            $collection = (string) config('courses.collections.courses', 'courses');
+
+            return Entry::whereCollection($collection)
+                ->map(fn ($entry) => [
+                    'value' => (string) $entry->id(),
+                    'label' => (string) ($entry->value('title') ?? $entry->slug()),
+                ])
+                ->sortBy('label')
+                ->values()
+                ->all();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * The funnels of the optional funnels addon, for the funnel filter on its
      * triggers. Referenced by name so this class stays loadable without it.
      *
