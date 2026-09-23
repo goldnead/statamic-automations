@@ -136,7 +136,9 @@ class ServiceProvider extends AddonServiceProvider
      * public/vendor/<package>/build/ and serves them in the CP via the Vite
      * tag — so there is no end-user build step.
      *
-     * @var array<string, mixed>
+     * No `@var` of its own: the parent's PHPDoc changed between Statamic 6
+     * releases (`list<string>`, then a keyed array shape), and any type written
+     * here is wrong against one of them. Inheriting it is right against both.
      */
     protected $vite = [
         'input' => [

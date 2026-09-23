@@ -703,12 +703,6 @@ parameters:
 			path: src/Repositories/FlatFileAutomationRepository.php
 
 		-
-			message: '#^PHPDoc type array\<string, mixed\> of property Goldnead\\StatamicAutomations\\ServiceProvider\:\:\$vite is not covariant with PHPDoc type list\<string\> of overridden property Statamic\\Providers\\AddonServiceProvider\:\:\$vite\.$#'
-			identifier: property.phpDocType
-			count: 1
-			path: src/ServiceProvider.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Foundation\\Auth\\User\:\:\$email\.$#'
 			identifier: property.notFound
 			count: 1

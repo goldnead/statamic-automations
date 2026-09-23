@@ -25,6 +25,18 @@ parameters:
             message: '#Parameter \#1 \$view of function view expects view-string\|null, string given#'
             path: src/Http/Controllers/Web/SequenceOptOutController.php
 
+        # `$vite` hat seinen Typ von Statamic geerbt, und Statamic hat ihn
+        # zwischen zwei 6er-Releases geaendert: bis 6.33 `list<string>` (dagegen
+        # ist die gebaute Konfiguration ein Fehler), danach eine Form mit
+        # `input` und `publicDirectory` (dagegen ist sie richtig). Die CI loest
+        # die neuere auf, die Lockdatei die aeltere. Nur fuer die aeltere gilt
+        # die Ausnahme, deshalb ohne Meldung, wenn sie nicht greift.
+        -
+            identifier: property.defaultValue
+            message: '#ServiceProvider\:\:\$vite \(list\<string\>\) does not accept default value#'
+            path: src/ServiceProvider.php
+            reportUnmatched: false
+
     # Das Analytics-Addon ist ein `suggest`, kein `require`: die Kennzahlen
     # unter src/Integrations/Insights erweitern seinen Vertrag, und es liegt
     # nicht in vendor/. Gelesen wird der Stellvertreter aus der Testsuite —
