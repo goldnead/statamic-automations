@@ -11,12 +11,19 @@ use Goldnead\StatamicAutomations\Models\AutomationConnection;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationNodeRun;
+use Goldnead\StatamicAutomations\Support\HostGuard;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Statamic\Facades\User;
 
 const SECRET = 'sk-live-7f3a9c1e5b';
+
+// `api.example.test` never resolves, and the host guard refuses a name that
+// does not; answer with a public address instead of asking real DNS.
+beforeEach(function () {
+    app(HostGuard::class)->resolveUsing(fn () => ['93.184.216.34']);
+});
 
 function makeConnection(array $overrides = []): AutomationConnection
 {

@@ -121,6 +121,33 @@ class AutomationConnectionOperation extends Model
     }
 
     /**
+     * Registry entries already looked up, by brand and handle.
+     *
+     * The registry asks for the same handle several times per node (class,
+     * kind, describe, outputSpec), and each ask was a query. Keyed by brand
+     * because a long-running worker serves several. Any save or delete of a
+     * connection or an operation in this process empties it; an edit made by
+     * another process can leave a worker with a stale label or schema, which
+     * is harmless — execute() loads the operation fresh.
+     *
+     * @var array<string, array<string, array<string, mixed>>>
+     */
+    protected static array $entries = [];
+
+    protected static function booted(): void
+    {
+        static::saved(fn () => static::flushCache());
+        static::deleted(fn () => static::flushCache());
+    }
+
+    /** Forget every remembered lookup, and whether the tables exist. */
+    public static function flushCache(): void
+    {
+        static::$entries = [];
+        AutomationConnection::forgetSchemaReady();
+    }
+
+    /**
      * The registry entry for a `connection.<conn>.<op>` handle.
      *
      * A handle whose operation is gone still resolves, to a bare entry: the
@@ -136,17 +163,13 @@ class AutomationConnectionOperation extends Model
             return null;
         }
 
-        $operation = static::findByNodeType($type);
-
-        if ($operation !== null) {
-            return $operation->nodeEntry();
-        }
-
         if (! AutomationConnection::schemaReady()) {
             return null;
         }
 
-        return [
+        $brand = app()->bound('brand-context') ? (string) app('brand-context')->currentId() : '';
+
+        return static::$entries[$brand][$type] ??= static::findByNodeType($type)?->nodeEntry() ?? [
             'handle' => $type,
             'class' => ConnectionOperationAction::class,
             'kind' => 'action',

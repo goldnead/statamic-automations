@@ -41,6 +41,8 @@ class AutomationConnection extends Model
 
     protected $table = 'automation_connections';
 
+    protected static bool $schemaReady = false;
+
     protected $fillable = [
         'handle',
         'name',
@@ -69,7 +71,22 @@ class AutomationConnection extends Model
     /** See {@see Automation::schemaReady()}: nothing here may query before migrate. */
     public static function schemaReady(): bool
     {
-        return Schema::hasTable('automation_connections');
+        // Remembered once true: tables do not disappear while a process runs,
+        // and the registry asks on every lookup.
+        return static::$schemaReady = static::$schemaReady || Schema::hasTable('automation_connections');
+    }
+
+    protected static function booted(): void
+    {
+        // A renamed connection renames the group and handle of its nodes.
+        static::saved(fn () => AutomationConnectionOperation::flushCache());
+        static::deleted(fn () => AutomationConnectionOperation::flushCache());
+    }
+
+    /** Forget {@see schemaReady()}; see AutomationConnectionOperation::flushCache(). */
+    public static function forgetSchemaReady(): void
+    {
+        static::$schemaReady = false;
     }
 
     /** @return HasMany<AutomationConnectionOperation, $this> */
@@ -100,11 +117,22 @@ class AutomationConnection extends Model
      * the header values built from them (a Basic header is base64, not the
      * password, and a service may echo either).
      *
+     * Two stored values are left out. A header's NAME is not secret and is
+     * what the preview shows. A short Basic username ("ada") is not worth
+     * masking and would turn "canada" in a response into "can••••".
+     *
      * @return array<int, string>
      */
     public function secretValues(): array
     {
-        $values = [...array_values($this->auth_config ?? []), ...array_values($this->authHeaders())];
+        $stored = $this->auth_config ?? [];
+        unset($stored['name']);
+
+        if (strlen((string) ($stored['username'] ?? '')) < 8) {
+            unset($stored['username']);
+        }
+
+        $values = [...array_values($stored), ...array_values($this->authHeaders())];
 
         return array_values(array_unique(array_filter(
             array_map('strval', $values),
@@ -150,8 +178,24 @@ class AutomationConnection extends Model
         return AutomationConnectionOperation::keyValue($this->default_headers);
     }
 
-    public function url(string $path): string
+    /**
+     * `base_url` + `$path`, keeping a query either of them already carries
+     * (`?api-version=2`) and appending `$query` after it.
+     *
+     * @param  array<string, mixed>  $query
+     */
+    public function url(string $path, array $query = []): string
     {
-        return rtrim($this->base_url, '/').'/'.ltrim($path, '/');
+        [$base, $baseQuery] = array_pad(explode('?', $this->base_url, 2), 2, '');
+        [$path, $pathQuery] = array_pad(explode('?', $path, 2), 2, '');
+
+        $queries = array_filter(
+            [$baseQuery, $pathQuery, http_build_query($query, '', '&', PHP_QUERY_RFC3986)],
+            fn (string $part) => $part !== '',
+        );
+
+        $url = rtrim($base, '/').'/'.ltrim($path, '/');
+
+        return $queries === [] ? $url : $url.'?'.implode('&', $queries);
     }
 }

@@ -7,6 +7,8 @@ use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationConnection;
 use Goldnead\StatamicAutomations\Models\AutomationConnectionOperation;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
+use Goldnead\StatamicAutomations\Support\HostGuard;
+use Goldnead\StatamicAutomations\Support\UnsafeHostException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -92,11 +94,16 @@ class ConnectionsController extends Controller
         $this->authorizeAction(self::PERMISSION);
 
         $started = microtime(true);
+        $url = $automationConnection->url((string) ($automationConnection->test_path ?: '/'));
 
         try {
-            $response = Http::withHeaders([...$automationConnection->defaultHeaders(), ...$automationConnection->authHeaders()])
+            // Checked again here and pinned, like every operation call; no
+            // redirects, so a credential header cannot follow one elsewhere.
+            $response = Http::withOptions(app(HostGuard::class)->guard($url))
+                ->withHeaders([...$automationConnection->defaultHeaders(), ...$automationConnection->authHeaders()])
+                ->withoutRedirecting()
                 ->timeout(max(1, (int) $automationConnection->timeout))
-                ->get($automationConnection->url((string) ($automationConnection->test_path ?: '/')));
+                ->get($url);
         } catch (\Throwable $e) {
             return response()->json([
                 'ok' => false,
@@ -160,7 +167,13 @@ class ConnectionsController extends Controller
                 $connection ? $unique->ignore($connection->id) : $unique,
             ],
             'name' => ['required', 'string', 'max:255'],
-            'base_url' => ['required', 'url', 'max:2048'],
+            'base_url' => ['required', 'url', 'max:2048', function (string $attribute, mixed $value, \Closure $fail) {
+                try {
+                    app(HostGuard::class)->guard((string) $value);
+                } catch (UnsafeHostException $e) {
+                    $fail($e->getMessage());
+                }
+            }],
             'auth_type' => ['required', Rule::in(AutomationConnection::AUTH_TYPES)],
             'auth_config' => ['nullable', 'array'],
             'default_headers' => ['nullable', 'array'],

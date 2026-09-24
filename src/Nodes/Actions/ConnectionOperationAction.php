@@ -6,6 +6,8 @@ use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationAction;
 use Goldnead\StatamicAutomations\Models\AutomationConnectionOperation;
 use Goldnead\StatamicAutomations\Support\ActionResult;
+use Goldnead\StatamicAutomations\Support\HostGuard;
+use Goldnead\StatamicAutomations\Support\UnsafeHostException;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -93,7 +95,13 @@ class ConnectionOperationAction implements AutomationAction
             $inputs[$field['handle']] = $value;
         }
 
+        if (($dotted = $this->dotSegmentInput((string) $operation->path, $inputs)) !== null) {
+            return ActionResult::failed("The input '{$dotted}' may not be '.' or '..' where it is used in the path.");
+        }
+
         $path = $this->fill((string) $operation->path, $inputs, encode: true);
+        // An empty optional input leaves its parameter out rather than
+        // sending `?name=`.
         $query = array_filter(
             array_map(fn ($value) => $this->fill($value, $inputs), AutomationConnectionOperation::keyValue($operation->query)),
             fn ($value) => $value !== null && $value !== '',
@@ -101,12 +109,12 @@ class ConnectionOperationAction implements AutomationAction
         $body = array_map(fn ($value) => $this->fill($value, $inputs), AutomationConnectionOperation::keyValue($operation->body));
 
         $method = strtoupper((string) $operation->method);
-        $url = $connection->url($path);
+        $url = $connection->url($path, $query);
         $headers = $connection->defaultHeaders();
 
         $preview = [
             'method' => $method,
-            'url' => $query === [] ? $url : $url.'?'.http_build_query($query),
+            'url' => $url,
             // Names only: the values of the auth headers never leave the call.
             'headers' => array_keys([...$headers, ...$connection->authHeaders()]),
             'body' => $body,
@@ -125,14 +133,23 @@ class ConnectionOperationAction implements AutomationAction
             return ActionResult::failed('Required input missing: '.implode(', ', $missing).'.');
         }
 
+        // Again at call time, not only on save: the name may resolve elsewhere
+        // by now. The options pin the call to the address just checked.
         try {
-            $options = ['query' => $query];
+            $pinned = app(HostGuard::class)->guard($url);
+        } catch (UnsafeHostException $e) {
+            return ActionResult::failed($e->getMessage(), ['preview' => $connection->mask($preview)]);
+        }
 
-            if ($body !== [] && $method !== 'GET') {
-                $options['json'] = $body;
-            }
+        try {
+            $options = $body !== [] && $method !== 'GET' ? ['json' => $body] : [];
 
-            $response = Http::withHeaders([...$headers, ...$connection->authHeaders()])
+            // No redirects: Guzzle strips only Authorization and Cookie on a
+            // redirect to another host, so a custom credential header would
+            // follow. A 3xx is answered like any other non-2xx status.
+            $response = Http::withOptions($pinned)
+                ->withHeaders([...$headers, ...$connection->authHeaders()])
+                ->withoutRedirecting()
                 ->timeout(max(1, (int) $connection->timeout))
                 ->send($method, $url, $options);
         } catch (\Throwable $e) {
@@ -154,6 +171,41 @@ class ConnectionOperationAction implements AutomationAction
         }
 
         return ActionResult::success($output);
+    }
+
+    /**
+     * The handle of an input that would put a `.` or `..` segment into the
+     * path — also percent-encoded, also after a slash — or null. The value is
+     * encoded before it goes in, but a server or proxy that decodes it first
+     * would walk out of the API's path.
+     *
+     * @param  array<string, mixed>  $inputs
+     */
+    protected function dotSegmentInput(string $path, array $inputs): ?string
+    {
+        preg_match_all('/\{\{\s*input\.([A-Za-z0-9_]+)\s*\}\}/', $path, $matches);
+
+        foreach (array_unique($matches[1]) as $handle) {
+            $value = $inputs[$handle] ?? null;
+
+            if (! is_scalar($value)) {
+                continue;
+            }
+
+            $decoded = (string) $value;
+
+            for ($i = 0; $i < 3; $i++) {
+                $decoded = rawurldecode($decoded);
+            }
+
+            foreach (preg_split('#[/\\\\]#', $decoded) ?: [] as $segment) {
+                if ($segment === '.' || $segment === '..') {
+                    return $handle;
+                }
+            }
+        }
+
+        return null;
     }
 
     /**

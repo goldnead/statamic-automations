@@ -115,6 +115,7 @@ use Goldnead\StatamicAutomations\Repositories\FlatFileAutomationRepository;
 use Goldnead\StatamicAutomations\Sending\BrandMailer;
 use Goldnead\StatamicAutomations\Sending\BrandSenderIdentity;
 use Goldnead\StatamicAutomations\Sequence\MailRules;
+use Goldnead\StatamicAutomations\Support\HostGuard;
 use Goldnead\StatamicAutomations\Support\OptionSources\NativeOptionSources;
 use Goldnead\StatamicAutomations\Support\Settings;
 use Goldnead\StatamicAutomations\Templates\TemplateRegistry;
@@ -191,6 +192,7 @@ class ServiceProvider extends AddonServiceProvider
         $this->app->singleton(ActionRegistry::class);
         $this->app->singleton(NodeRegistry::class);
         $this->app->singleton(OptionSourceRegistry::class);
+        $this->app->singleton(HostGuard::class);
         $this->app->singleton(NativeOptionSources::class);
 
         // Integration helpers (cheap singletons; the underlying sister
@@ -657,6 +659,10 @@ class ServiceProvider extends AddonServiceProvider
      */
     protected function registerConnectionNodes(): void
     {
+        // The lookups are remembered in statics; a fresh application (a test,
+        // an Octane worker's first boot) starts without them.
+        AutomationConnectionOperation::flushCache();
+
         $this->app->make(NodeRegistry::class)->registerSource(
             AutomationConnectionOperation::NODE_PREFIX,
             fn (string $handle) => AutomationConnectionOperation::nodeEntryFor($handle),
