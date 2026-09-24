@@ -106,6 +106,12 @@ Route::prefix('automations')
         Route::get('connections', [ConnectionsPageController::class, 'index'])
             ->name('connections.index');
 
+        Route::get('connections/create', [ConnectionsPageController::class, 'create'])
+            ->name('connections.create');
+
+        Route::get('connections/{automationConnection}/edit', [ConnectionsPageController::class, 'edit'])
+            ->name('connections.edit');
+
         // ================================================================
         // JSON API (consumed by Vue Flow canvas + Listing AJAX)
         // ================================================================

@@ -245,8 +245,13 @@ class ConnectionsController extends Controller
         return $config === [] ? null : $config;
     }
 
-    /** @return array<string, mixed> */
-    protected function present(AutomationConnection $connection, bool $detailed = false): array
+    /**
+     * Public so the CP pages hand the browser exactly what this API does —
+     * one presenter, so there is one place a credential could leak from.
+     *
+     * @return array<string, mixed>
+     */
+    public function present(AutomationConnection $connection, bool $detailed = false): array
     {
         $data = [
             'id' => $connection->id,
@@ -266,6 +271,7 @@ class ConnectionsController extends Controller
             'operations_count' => $connection->operations_count ?? $connection->operations()->count(),
             'show_url' => cp_route('statamic-automations.api.connections.show', $connection->id),
             'test_url' => cp_route('statamic-automations.api.connections.test', $connection->id),
+            'edit_url' => cp_route('statamic-automations.connections.edit', $connection->id),
         ];
 
         if ($detailed) {
