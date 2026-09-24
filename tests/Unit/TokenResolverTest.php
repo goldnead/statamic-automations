@@ -89,4 +89,16 @@ class TokenResolverTest extends TestCase
         $this->assertSame('***REDACTED***', $redacted['token']);
         $this->assertSame('visible', $redacted['safe']);
     }
+
+    public function test_default_patterns_redact_api_key_header_spellings(): void
+    {
+        $redacted = $this->resolver()->redact([
+            'headers' => ['X-Api-Key' => 'k1', 'Api-Key' => 'k2', 'apikey' => 'k3', 'Accept' => 'application/json'],
+        ]);
+
+        $this->assertSame('***REDACTED***', $redacted['headers']['X-Api-Key']);
+        $this->assertSame('***REDACTED***', $redacted['headers']['Api-Key']);
+        $this->assertSame('***REDACTED***', $redacted['headers']['apikey']);
+        $this->assertSame('application/json', $redacted['headers']['Accept']);
+    }
 }

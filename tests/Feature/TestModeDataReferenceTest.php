@@ -170,6 +170,10 @@ function expectedTestRunFailures(): array
         // and refuses, which is the right answer to a node that cannot work.
         'cal_com.get_slots' => 'No cal.com API key is configured in the test app.',
         'call_automation' => 'The dummy target automation handle does not exist.',
+        // The class alone names no operation: the engine hands it the node
+        // handle (`connection.<conn>.<op>`) and the sweep has none, so it asks
+        // for an operation that does not exist — a configuration error.
+        'connection' => 'The bare class is not a connection operation node.',
         'marketing.send_campaign' => 'The dummy campaign handle does not exist (statamic-marketing is not installed).',
     ];
 }

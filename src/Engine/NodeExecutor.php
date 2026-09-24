@@ -60,7 +60,10 @@ class NodeExecutor
         try {
             return match ($kind) {
                 'logic' => $this->executeLogicNode($class, $node, $context, $config),
-                'action' => $this->executeAction($class, $context, $config),
+                // The handle rides along for actions that serve many handles
+                // from one class (connection operations). Every other action
+                // ignores the key.
+                'action' => $this->executeAction($class, $context, [...$config, '_node_type' => $node->type]),
                 default => ActionResult::failed("Cannot execute node of kind '{$kind}'."),
             };
         } catch (\Throwable $e) {

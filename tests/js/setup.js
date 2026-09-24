@@ -161,7 +161,44 @@ const listingStub = defineComponent({
     },
 });
 
-const namedStubs = { Listing: listingStub };
+/**
+ * `CommandPaletteItem` hands its default slot `{ text, url, action }` — the
+ * page's primary button is rendered from those. The generic stub calls the
+ * slot with nothing, and a `v-slot="{ text }"` destructure of nothing throws
+ * before the page has rendered at all.
+ */
+const commandPaletteItemStub = defineComponent({
+    name: 'CommandPaletteItem',
+    inheritAttrs: false,
+    setup(_props, { attrs, slots }) {
+        return () => h(
+            'div',
+            { 'data-stub': 'CommandPaletteItem', 'data-attr-text': String(attrs.text ?? '') },
+            slots.default ? slots.default({ text: attrs.text, url: attrs.url, action: attrs.action }) : null,
+        );
+    },
+});
+
+/**
+ * `Stack` renders its footer slots next to the content. A form in a stack puts
+ * its save button in `footer-end`, and a stub that dropped it left the one
+ * interaction worth testing unreachable. Rendered only while open, as core does.
+ */
+const stackStub = defineComponent({
+    name: 'Stack',
+    inheritAttrs: false,
+    setup(_props, { attrs, slots }) {
+        return () => (attrs.open
+            ? h('div', { 'data-stub': 'Stack', 'data-attr-title': String(attrs.title ?? '') }, [
+                slots.default ? slots.default({ close: () => {} }) : null,
+                slots['footer-start'] ? slots['footer-start']() : null,
+                slots['footer-end'] ? slots['footer-end']() : null,
+            ])
+            : null);
+    },
+});
+
+const namedStubs = { Listing: listingStub, CommandPaletteItem: commandPaletteItemStub, Stack: stackStub };
 
 /** Anything asked of `__STATAMIC__.ui` is a component. */
 const componentBag = () => new Proxy({}, {

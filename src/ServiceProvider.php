@@ -59,6 +59,8 @@ use Goldnead\StatamicAutomations\Listeners\HandleFormSubmitted;
 use Goldnead\StatamicAutomations\Listeners\HandleFunnelOrPaymentEvent;
 use Goldnead\StatamicAutomations\Listeners\HandleLeadHubEvent;
 use Goldnead\StatamicAutomations\Listeners\HandleMarketingEvent;
+use Goldnead\StatamicAutomations\Models\AutomationConnection;
+use Goldnead\StatamicAutomations\Models\AutomationConnectionOperation;
 use Goldnead\StatamicAutomations\Nodes\Actions\AddLogEntryAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\AddUserToGroupAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\AiGenerateAction;
@@ -114,6 +116,7 @@ use Goldnead\StatamicAutomations\Repositories\FlatFileAutomationRepository;
 use Goldnead\StatamicAutomations\Sending\BrandMailer;
 use Goldnead\StatamicAutomations\Sending\BrandSenderIdentity;
 use Goldnead\StatamicAutomations\Sequence\MailRules;
+use Goldnead\StatamicAutomations\Support\HostGuard;
 use Goldnead\StatamicAutomations\Support\OptionSources\NativeOptionSources;
 use Goldnead\StatamicAutomations\Support\Settings;
 use Goldnead\StatamicAutomations\Templates\TemplateRegistry;
@@ -190,6 +193,7 @@ class ServiceProvider extends AddonServiceProvider
         $this->app->singleton(ActionRegistry::class);
         $this->app->singleton(NodeRegistry::class);
         $this->app->singleton(OptionSourceRegistry::class);
+        $this->app->singleton(HostGuard::class);
         $this->app->singleton(NativeOptionSources::class);
 
         // Integration helpers (cheap singletons; the underlying sister
@@ -274,6 +278,15 @@ class ServiceProvider extends AddonServiceProvider
                 ->find($value) ?? abort(404);
         });
 
+        // Both through the brand scope: an id from another brand is a 404.
+        Route::bind('automationConnection', function ($value) {
+            return AutomationConnection::query()->find($value) ?? abort(404);
+        });
+
+        Route::bind('automationConnectionOperation', function ($value) {
+            return AutomationConnectionOperation::query()->whereHas('automationConnection')->find($value) ?? abort(404);
+        });
+
         // Translations: PHP keys (backend) under the "statamic-automations"
         // namespace, plus JSON strings consumed by the Vue CP via __().
         $this->loadTranslationsFrom(__DIR__.'/../resources/lang', 'statamic-automations');
@@ -308,6 +321,7 @@ class ServiceProvider extends AddonServiceProvider
 
         $this->registerBuiltInOptionSources();
         $this->registerBuiltInNodes();
+        $this->registerConnectionNodes();
         $this->registerOptionalIntegrations();
         $this->registerEventListeners();
         $this->registerEventTriggers();
@@ -634,6 +648,31 @@ class ServiceProvider extends AddonServiceProvider
                 $automations->registerBuiltIn($class::handle())->registerAction($class);
             }
         }
+    }
+
+    /**
+     * One action node per connection operation, `connection.<conn>.<op>`.
+     *
+     * Registered as a source and not handle by handle: the operations are
+     * rows, and reading them here would query the database on every boot —
+     * including every command that runs before `migrate`. The registry asks
+     * when a handle with the prefix is looked up or the library is listed.
+     */
+    protected function registerConnectionNodes(): void
+    {
+        // The lookups are remembered in statics; a fresh application (a test,
+        // an Octane worker's first boot) starts without them.
+        AutomationConnectionOperation::flushCache();
+
+        $this->app->make(NodeRegistry::class)->registerSource(
+            AutomationConnectionOperation::NODE_PREFIX,
+            fn (string $handle) => AutomationConnectionOperation::nodeEntryFor($handle),
+            function () {
+                foreach (AutomationConnectionOperation::allForLibrary() as $operation) {
+                    yield $operation->nodeEntry();
+                }
+            },
+        );
     }
 
     /**
@@ -1089,6 +1128,7 @@ class ServiceProvider extends AddonServiceProvider
             Permission::register('view automation runs')->label(__('statamic-automations::automations.permissions.view_runs'));
             Permission::register('retry automation runs')->label(__('statamic-automations::automations.permissions.retry_runs'));
             Permission::register('manage automation settings')->label(__('statamic-automations::automations.permissions.settings'));
+            Permission::register('manage automation connections')->label(__('statamic-automations::automations.permissions.connections'));
         });
     }
 
@@ -1146,6 +1186,11 @@ class ServiceProvider extends AddonServiceProvider
                     // overrules the core's. See tests/Unit/TranslationKeyOwnershipTest.
                     $nav->item(__('Automation templates'))->route('statamic-automations.templates.index'),
                     $nav->item(__('Import'))->route('statamic-automations.import'),
+                    // Credentials live behind this screen, so it has a
+                    // permission of its own rather than `view automations`.
+                    $nav->item(__('Connections'))
+                        ->route('statamic-automations.connections.index')
+                        ->can('manage automation connections'),
                     // No `Settings` item any more. The screen moved into
                     // brand-context, which builds its own entry under the
                     // Control Panel's `Settings` section — where Statamic core

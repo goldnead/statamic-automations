@@ -272,6 +272,23 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | Connections
+    |--------------------------------------------------------------------------
+    |
+    | A connection's base URL must resolve to a public address: loopback,
+    | private, link-local and reserved ranges are refused, on save and again
+    | before every call. Set this to true to allow them, e.g. to call an n8n
+    | running on the same machine. Only do so if everyone who may manage
+    | connections may also reach your internal network.
+    |
+    */
+
+    'connections' => [
+        'allow_private_hosts' => (bool) env('STATAMIC_AUTOMATIONS_CONNECTIONS_ALLOW_PRIVATE_HOSTS', false),
+    ],
+
     'security' => [
         'redact_keys' => [
             'password',
@@ -279,6 +296,10 @@ return [
             'token',
             'secret',
             'api_key',
+            // Header spellings: `x-api-key`, `api-key`, `apikey` slipped past
+            // `api_key` because the match is a substring match.
+            'api-key',
+            'apikey',
             'authorization',
             'credit_card',
             'card_number',

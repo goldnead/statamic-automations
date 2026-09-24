@@ -23,6 +23,16 @@ class NodeRegistry
     protected array $nodes = [];
 
     /**
+     * Handles that are not registered at boot but looked up when asked for,
+     * by prefix — the connection operations a customer sets up in the CP.
+     * Lazy on purpose: they live in the database, and a query at boot would
+     * break every command that runs before `migrate`.
+     *
+     * @var array<string, array{resolve: callable(string): ?array, all: callable(): iterable}>
+     */
+    protected array $sources = [];
+
+    /**
      * Register a node.
      *
      * The optional $meta lets a caller supply a pre-built, schema-rich
@@ -54,9 +64,21 @@ class NodeRegistry
         $this->nodes[$handle] = $entry;
     }
 
+    /**
+     * Resolve every handle starting with `$prefix` on demand.
+     *
+     * `$resolve(handle)` returns the entry (`handle`, `class`, `kind`, `meta`)
+     * or null; `$all()` returns every entry of the source, for the library.
+     * A handle registered with {@see register()} always wins.
+     */
+    public function registerSource(string $prefix, callable $resolve, callable $all): void
+    {
+        $this->sources[$prefix] = ['resolve' => $resolve, 'all' => $all];
+    }
+
     public function has(string $handle): bool
     {
-        return isset($this->nodes[$handle]);
+        return $this->get($handle) !== null;
     }
 
     /**
@@ -64,17 +86,49 @@ class NodeRegistry
      */
     public function get(string $handle): ?array
     {
-        return $this->nodes[$handle] ?? null;
+        if (isset($this->nodes[$handle])) {
+            return $this->nodes[$handle];
+        }
+
+        foreach ($this->sources as $prefix => $source) {
+            if (str_starts_with($handle, $prefix)) {
+                $entry = ($source['resolve'])($handle);
+
+                return is_array($entry) ? $entry : null;
+            }
+        }
+
+        return null;
     }
 
     public function class(string $handle): ?string
     {
-        return $this->nodes[$handle]['class'] ?? null;
+        return $this->get($handle)['class'] ?? null;
     }
 
     public function kind(string $handle): ?string
     {
-        return $this->nodes[$handle]['kind'] ?? null;
+        return $this->get($handle)['kind'] ?? null;
+    }
+
+    /**
+     * The described entries of every source, e.g. each connection operation.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function sourced(): array
+    {
+        $described = [];
+
+        foreach ($this->sources as $source) {
+            foreach (($source['all'])() as $entry) {
+                if (is_array($entry) && ! isset($this->nodes[$entry['handle']])) {
+                    $described[] = $this->describeEntry($entry);
+                }
+            }
+        }
+
+        return $described;
     }
 
     /**
@@ -102,10 +156,13 @@ class NodeRegistry
      */
     public function all(): array
     {
-        return array_values(array_map(
-            fn (array $entry) => $this->describe($entry['handle']),
-            $this->nodes,
-        ));
+        return [
+            ...array_values(array_map(
+                fn (array $entry) => $this->describeEntry($entry),
+                $this->nodes,
+            )),
+            ...$this->sourced(),
+        ];
     }
 
     /**
@@ -126,12 +183,17 @@ class NodeRegistry
      */
     public function describe(string $handle): array
     {
-        $entry = $this->nodes[$handle] ?? null;
+        $entry = $this->get($handle);
 
-        if ($entry === null) {
-            return [];
-        }
+        return $entry === null ? [] : $this->describeEntry($entry);
+    }
 
+    /**
+     * @param  array{handle: string, class: class-string, kind: string, meta?: array<string, mixed>}  $entry
+     * @return array<string, mixed>
+     */
+    protected function describeEntry(array $entry): array
+    {
         // A registration may carry a pre-built description (config-driven
         // nodes that cannot express per-handle metadata via static methods).
         if (isset($entry['meta']) && is_array($entry['meta'])) {
@@ -245,10 +307,19 @@ class NodeRegistry
      */
     public function outputSpec(string $handle): array
     {
-        $class = $this->class($handle);
+        $entry = $this->get($handle);
+        $class = $entry['class'] ?? null;
 
         if ($class === null) {
             return NodeOutputs::defaultSpec();
+        }
+
+        // A meta registration is one class serving many handles, so the class
+        // cannot know this handle's outputs; answer what describe() answers.
+        if (isset($entry['meta'])) {
+            return isset($entry['meta']['outputs']) && is_array($entry['meta']['outputs'])
+                ? $entry['meta']['outputs']
+                : NodeOutputs::defaultSpec();
         }
 
         if (method_exists($class, 'outputSpec')) {
@@ -317,5 +388,6 @@ class NodeRegistry
     public function flush(): void
     {
         $this->nodes = [];
+        $this->sources = [];
     }
 }

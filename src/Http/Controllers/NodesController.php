@@ -54,7 +54,11 @@ class NodesController extends Controller
             array_keys($actions->all()),
         );
 
-        return response()->json(['data' => $data]);
+        // Connection operations live in the database, not in the action
+        // registry: one node per operation, looked up when asked for.
+        $sourced = array_filter($registry->sourced(), fn (array $node) => $node['kind'] === 'action');
+
+        return response()->json(['data' => [...$data, ...array_values($sourced)]]);
     }
 
     public function describe(string $handle, NodeRegistry $registry): JsonResponse
