@@ -55,6 +55,7 @@ For most Statamic projects an external automation tool is overkill, and custom c
 - 📋 **Node-by-node execution logs** with redacted sensitive payloads
 - 📊 **Activity view** — per-step numbers on the canvas, a funnel over a timeframe, a filterable log with CSV export, and who is inside the flow right now
 - 🧩 Optional **Webhook Manager** + **LeadHub** integrations (auto-detected, never required)
+- 🔌 **Connections** — set up an external API once (base URL, auth, test button); each operation becomes an action in the builder
 - 📦 **Templates** that copy into user-owned automations
 - 📤 **JSON export / import** for version control, starter kits and cross-environment moves
 - 👨‍💻 Public **developer API** for custom triggers, actions and conditions
@@ -392,6 +393,18 @@ stayed quiet about it would read as "never opened", which is a different and unt
 
 Turn it off with `automations.timeline.enabled`.
 
+## Connections
+
+**Automations → Connections** lets a CP user wire up an external service without code. It needs the permission `manage automation connections`.
+
+- **Connection:** name, handle, base URL, timeout, default headers and a test path. Auth is `none`, `bearer`, `basic` or a custom `header`. Credentials are stored encrypted (`encrypted:array`), never sent back to the browser (a placeholder stands in; empty on save keeps the stored value), and *Test connection* answers with status and duration only, never the body.
+- **Operation:** method, path, URL parameters and a JSON body built from key/value rows, all fed by the operation's inputs as `{{ input.x }}`. Output fields map dot paths of the JSON answer (`message_id` → `ts`). A non-2xx status fails the step unless *Fail on an error status* is switched off.
+- **In the builder:** each operation is an action `connection.<connection>.<operation>`, grouped under the connection's name. Its output is `status`, the mapped fields and `body`. Test runs send nothing and show a preview with header names only.
+
+Security: the base URL must resolve to a public address, checked on save and before every call, with the call pinned to the checked IP; `STATAMIC_AUTOMATIONS_CONNECTIONS_ALLOW_PRIVATE_HOSTS=true` lifts that for a local service. Redirects are not followed. Credentials are applied only at call time, so they never reach the run log, and a service echoing one back gets it masked as `••••`.
+
+Full guide with a Slack example: <https://docs.adriangoldner.dev/automations/connections>.
+
 ## Extending Automations
 
 The addon exposes a full public extensibility API. A third-party addon (or your host app) registers custom nodes and data sources from any service provider's `boot()` — the very same surface the built-ins are registered through. Server-registered nodes appear in the CP node library with **no frontend build**, and their `schema()` becomes the config form automatically.
@@ -590,6 +603,7 @@ The user documentation lives at **<https://docs.adriangoldner.dev/automations/>*
 | [Export / import](https://docs.adriangoldner.dev/automations/export-import) | JSON moves and `automations:sync` |
 | [Configuration](https://docs.adriangoldner.dev/automations/configuration) | Every config key |
 | [Integrations](https://docs.adriangoldner.dev/automations/integrations) | LeadHub, Webhook Manager, Marketing |
+| [Connections](https://docs.adriangoldner.dev/automations/connections) | External APIs as actions, set up in the CP |
 | [Extending](https://docs.adriangoldner.dev/automations/extending) | Custom triggers, actions, conditions |
 | [Reference](https://docs.adriangoldner.dev/automations/reference) | The CP JSON API |
 | [Sequences](https://docs.adriangoldner.dev/automations/sequences) | The mail list, the linearity rule, re-entry, enrollment numbers |

@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased
+
+### Upgrading
+
+- Two new tables, `automation_connections` and `automation_connection_operations`: run
+  `php artisan migrate`.
+- New permission `manage automation connections`. Nobody has it until a role is given it;
+  super users see the new **Connections** item under Automations right away.
+- New optional config key `connections.allow_private_hosts` (env
+  `STATAMIC_AUTOMATIONS_CONNECTIONS_ALLOW_PRIVATE_HOSTS`, default `false`).
+
+### Added: connections and operations
+
+A service can now be set up in the CP and used in the builder without code. A connection
+holds a base URL, the auth (`none`, `bearer`, `basic` or a custom `header`), default headers,
+a timeout and a test path. Each operation on it becomes its own action,
+`connection.<connection>.<operation>`, grouped under the connection's name, with a form built
+from the operation's inputs. Path, URL parameters and JSON body take those inputs as
+`{{ input.x }}`; output fields name dot paths in the JSON answer. The output is `status`, the
+mapped fields and `body`. A non-2xx answer fails the step, unless the operation's *Fail on an
+error status* switch is off, which differs from `send_webhook` on purpose.
+
+Credentials are stored encrypted and never leave the server: the CP gets placeholders, an empty
+field on save keeps the stored value, *Test connection* answers with status and duration only,
+and a test pointed at another host does not carry the stored credentials along. They are put on
+the request at call time only, so they never reach the node input in the run log, and a value a
+service echoes back is masked as `••••`. Test runs send nothing and preview header names only.
+
+The base URL has to resolve to a public address, checked on save and again before every call
+and every test, with the call pinned to the checked address against DNS rebinding. Redirects
+are not followed, so a credential header cannot follow one to another host. Deleting a
+connection lists the automations that still use it.
+
+### Fixed: `X-Api-Key` slipped past the log redaction
+
+`security.redact_keys` matched `api_key` but not the header spellings. `api-key` and `apikey`
+are now in the defaults. A published config keeps its own list; add them there.
+
 ## 2.21.0 — 2026-09-24
 
 ### Upgrading
