@@ -23,6 +23,7 @@ return [
         'view_runs' => 'View automation runs',
         'retry_runs' => 'Retry automation runs',
         'settings' => 'Manage automation settings',
+        'connections' => 'Manage connections and their credentials',
     ],
     'errors' => [
         'max_depth' => 'Maximum sub-automation depth (:max) reached.',

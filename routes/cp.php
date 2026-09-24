@@ -3,12 +3,14 @@
 use Goldnead\StatamicAutomations\Http\Controllers\ActivityController;
 use Goldnead\StatamicAutomations\Http\Controllers\AuditController;
 use Goldnead\StatamicAutomations\Http\Controllers\AutomationsController;
+use Goldnead\StatamicAutomations\Http\Controllers\ConnectionsController;
 use Goldnead\StatamicAutomations\Http\Controllers\EmailTemplatePreviewController;
 use Goldnead\StatamicAutomations\Http\Controllers\ExportImportController;
 use Goldnead\StatamicAutomations\Http\Controllers\MailListController;
 use Goldnead\StatamicAutomations\Http\Controllers\NodesController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\AuditPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\AutomationsPageController;
+use Goldnead\StatamicAutomations\Http\Controllers\Pages\ConnectionsPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\DashboardPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\ImportPageController;
 use Goldnead\StatamicAutomations\Http\Controllers\Pages\RulesPageController;
@@ -100,6 +102,9 @@ Route::prefix('automations')
 
         Route::get('audit', [AuditPageController::class, 'index'])
             ->name('audit');
+
+        Route::get('connections', [ConnectionsPageController::class, 'index'])
+            ->name('connections.index');
 
         // ================================================================
         // JSON API (consumed by Vue Flow canvas + Listing AJAX)
@@ -236,6 +241,22 @@ Route::prefix('automations')
             // Inertia rather than axios. Not redirected like the page route
             // above: these two were consumed by this addon's own Vue screen and
             // nothing else, and a redirected PATCH loses its body.
+
+            // Connections — a service's base URL and credentials, and the
+            // operations that become action nodes. Credentials never come back
+            // in a response; see ConnectionsController.
+            Route::get('connections', [ConnectionsController::class, 'index'])->name('connections.index');
+            Route::post('connections', [ConnectionsController::class, 'store'])->name('connections.store');
+            Route::get('connections/{automationConnection}', [ConnectionsController::class, 'show'])->name('connections.show');
+            Route::patch('connections/{automationConnection}', [ConnectionsController::class, 'update'])->name('connections.update');
+            Route::delete('connections/{automationConnection}', [ConnectionsController::class, 'destroy'])->name('connections.destroy');
+            Route::post('connections/{automationConnection}/test', [ConnectionsController::class, 'test'])->name('connections.test');
+            Route::post('connections/{automationConnection}/operations', [ConnectionsController::class, 'storeOperation'])
+                ->name('connections.operations.store');
+            Route::patch('connections/{automationConnection}/operations/{automationConnectionOperation}', [ConnectionsController::class, 'updateOperation'])
+                ->name('connections.operations.update');
+            Route::delete('connections/{automationConnection}/operations/{automationConnectionOperation}', [ConnectionsController::class, 'destroyOperation'])
+                ->name('connections.operations.destroy');
 
             // Export / Import
             Route::get('automations/{automationFlow}/export', [ExportImportController::class, 'export'])->name('automations.export');

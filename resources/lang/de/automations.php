@@ -23,6 +23,7 @@ return [
         'view_runs' => 'Durchläufe ansehen',
         'retry_runs' => 'Durchläufe erneut ausführen',
         'settings' => 'Einstellungen verwalten',
+        'connections' => 'Verbindungen und ihre Zugangsdaten verwalten',
     ],
     'errors' => [
         'max_depth' => 'Maximale Verschachtelungstiefe (:max) erreicht.',

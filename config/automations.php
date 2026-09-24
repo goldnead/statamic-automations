@@ -279,6 +279,10 @@ return [
             'token',
             'secret',
             'api_key',
+            // Header spellings: `x-api-key`, `api-key`, `apikey` slipped past
+            // `api_key` because the match is a substring match.
+            'api-key',
+            'apikey',
             'authorization',
             'credit_card',
             'card_number',
