@@ -42,7 +42,7 @@ class CommerceIntegrationAbsentTest extends TestCase
         // cannot exist so a stray autoloader cannot make this pass by accident.
         IntegrationDetector::flush();
 
-        foreach (['entitlements', 'booking', 'invoices', 'payments', 'courses', 'affiliates'] as $integration) {
+        foreach (['entitlements', 'booking', 'invoices', 'payments', 'courses', 'affiliates', 'offers'] as $integration) {
             $app['config']->set("automations.integrations.{$integration}.detect", ['No\\Such\\Class']);
         }
     }
@@ -82,6 +82,9 @@ class CommerceIntegrationAbsentTest extends TestCase
             'courses.team_member_added',
             'affiliates.commission_earned',
             'affiliates.partner_approved',
+            'offers.seat_accepted',
+            'offers.coupon_redeemed',
+            'invoices.delivered',
             'entitlements.granted',
             'entitlements.revoked',
             'entitlements.expired',

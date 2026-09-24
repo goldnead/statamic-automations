@@ -17,6 +17,58 @@ return [
         'Funnels' => 'Funnels',
         'Courses' => 'Kurse',
         'Affiliates' => 'Partnerprogramm',
+        'Offers' => 'Angebote',
+        'Invoices' => 'Rechnungen',
+    ],
+
+    'offers' => [
+        'seat_pool_opened' => [
+            'label' => 'Angebot: Plätze eröffnet',
+            'description' => 'Wenn ein Kauf mehrerer Plätze einen Platzvorrat öffnet, den die Käuferin verteilt.',
+        ],
+        'seat_invited' => [
+            'label' => 'Angebot: Platz vergeben',
+            'description' => 'Wenn eine Käuferin jemanden auf einen ihrer Plätze einlädt. Der Durchlauf gilt der eingeladenen Person.',
+        ],
+        'seat_accepted' => [
+            'label' => 'Angebot: Platz angenommen',
+            'description' => 'Wenn eine eingeladene Person ihren Platz annimmt. Der Durchlauf gilt dieser Person.',
+        ],
+        'seat_revoked' => [
+            'label' => 'Angebot: Platz zurückgeholt',
+            'description' => 'Wenn ein Platz zurückgeholt wird, ob schon angenommen oder nur eingeladen.',
+        ],
+        'seat_pool_closed' => [
+            'label' => 'Angebot: Plätze geschlossen',
+            'description' => 'Wenn ein Platzvorrat schließt, zum Beispiel nach einer Erstattung. Seine Plätze verlieren den Zugang mit.',
+        ],
+        'sold_out' => [
+            'label' => 'Angebot ausverkauft',
+            'description' => 'Einmal, wenn ein Angebot sein Kontingent erreicht. Für dein Team oder eine Warteliste, nicht für Käufer.',
+        ],
+        'coupon_redeemed' => [
+            'label' => 'Gutschein eingelöst',
+            'description' => 'Wenn ein bezahlter Kauf einen Gutschein genutzt hat. Nach Code filterbar.',
+        ],
+        'link_switched' => [
+            'label' => 'Angebotslink umgeschaltet',
+            'description' => 'Wenn ein Angebotslink auf sein Ausweichziel schaltet, nach dem Stichtag oder weil ausverkauft. Nach dem Stichtag feuert er beim ersten Besuch danach.',
+        ],
+    ],
+
+    'invoices' => [
+        'issued' => [
+            'label' => 'Rechnung ausgestellt',
+            'description' => 'Wenn eine Rechnung geschrieben wird, mit Nummer, Beträgen und Käufer.',
+        ],
+        'credit_note_issued' => [
+            'label' => 'Gutschrift ausgestellt',
+            'description' => 'Wenn eine Gutschrift geschrieben wird, zusammen mit der Rechnung, die sie aufhebt.',
+        ],
+        'delivered' => [
+            'label' => 'Rechnung zugestellt',
+            'description' => 'Wenn eine Rechnung an die Käuferin verschickt wurde, mit der Adresse, an die sie ging.',
+        ],
     ],
 
     'payments' => [

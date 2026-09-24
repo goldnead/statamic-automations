@@ -47,6 +47,7 @@ use Goldnead\StatamicAutomations\Integrations\Marketing\Actions\UnsubscribeFromL
 use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\CampaignSentTrigger;
 use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\SubscriberConfirmedTrigger;
 use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\SubscriberUnsubscribedTrigger;
+use Goldnead\StatamicAutomations\Integrations\Offers\Triggers as OfT;
 use Goldnead\StatamicAutomations\Integrations\Payments\Triggers as PT;
 use Goldnead\StatamicAutomations\Integrations\VocalFlow\Actions as VfA;
 use Goldnead\StatamicAutomations\Integrations\VocalFlow\Triggers as VfT;
@@ -919,6 +920,7 @@ class ServiceProvider extends AddonServiceProvider
             foreach ([
                 IT\InvoiceIssuedTrigger::class,
                 IT\CreditNoteIssuedTrigger::class,
+                IT\InvoiceDeliveredTrigger::class,
             ] as $triggerClass) {
                 $automations->registerBuiltIn($triggerClass::handle());
                 $automations->trigger($triggerClass::handle(), $triggerClass);
@@ -969,6 +971,24 @@ class ServiceProvider extends AddonServiceProvider
             }
 
             $this->listenForSisterEvents(HandleCommerceEvent::AFFILIATE_TRIGGERS, HandleCommerceEvent::class);
+        }
+
+        if ($detector->hasOffers()) {
+            foreach ([
+                OfT\SeatPoolOpenedTrigger::class,
+                OfT\SeatInvitedTrigger::class,
+                OfT\SeatAcceptedTrigger::class,
+                OfT\SeatRevokedTrigger::class,
+                OfT\SeatPoolClosedTrigger::class,
+                OfT\OfferSoldOutTrigger::class,
+                OfT\CouponRedeemedTrigger::class,
+                OfT\ShortLinkSwitchedTrigger::class,
+            ] as $triggerClass) {
+                $automations->registerBuiltIn($triggerClass::handle());
+                $automations->trigger($triggerClass::handle(), $triggerClass);
+            }
+
+            $this->listenForSisterEvents(HandleCommerceEvent::OFFER_TRIGGERS, HandleCommerceEvent::class);
         }
     }
 

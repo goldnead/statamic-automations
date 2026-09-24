@@ -95,6 +95,7 @@ class CommerceTriggersTest extends TestCase
         $this->assertSame([
             'invoices.issued',
             'invoices.credit_note_issued',
+            'invoices.delivered',
         ], array_values(HandleCommerceEvent::INVOICE_TRIGGERS));
     }
 

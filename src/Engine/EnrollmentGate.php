@@ -7,6 +7,7 @@ use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Models\AutomationScheduledJob;
+use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Services\SequenceOptOut;
 use Goldnead\StatamicAutomations\Support\RestartPolicy;
 use Illuminate\Database\Eloquent\Builder;
@@ -48,7 +49,7 @@ class EnrollmentGate
         AutomationContext $context,
     ): array {
         $policy = RestartPolicy::fromValue(
-            $this->stringConfig($triggerNode, RestartPolicy::CONFIG_KEY)
+            $this->configOrDefault($triggerNode, RestartPolicy::CONFIG_KEY)
         );
 
         $subjectKey = $this->subjectKey($triggerNode, $context);
@@ -185,7 +186,7 @@ class EnrollmentGate
      */
     public function subjectKey(AutomationNode $triggerNode, AutomationContext $context): ?string
     {
-        $configured = $this->stringConfig($triggerNode, RestartPolicy::SUBJECT_CONFIG_KEY);
+        $configured = $this->configOrDefault($triggerNode, RestartPolicy::SUBJECT_CONFIG_KEY);
 
         if ($configured !== null && $configured !== '') {
             $resolved = str_contains($configured, '{{')
@@ -217,6 +218,35 @@ class EnrollmentGate
         // A token that resolved to nothing comes back as the empty string or as
         // the literal it could not replace. Neither is a person.
         return ($value === '' || str_contains($value, '{{')) ? null : $value;
+    }
+
+    /**
+     * The node's own setting, or the trigger's default where the node has none.
+     *
+     * A trigger may declare `enrollmentDefaults()` (`_restart_policy`,
+     * `_subject_key`) for events that can arrive twice for the same thing:
+     * `offers.coupon_redeemed` says "once per payment" that way, so an older
+     * offers release that announces a redelivered payment twice starts one
+     * run, not two. A value set on the node always wins, including an explicit
+     * "always".
+     */
+    protected function configOrDefault(AutomationNode $node, string $key): ?string
+    {
+        $own = $this->stringConfig($node, $key);
+
+        if ($own !== null && $own !== '') {
+            return $own;
+        }
+
+        $class = app(NodeRegistry::class)->class((string) $node->type);
+
+        if ($class === null || ! method_exists($class, 'enrollmentDefaults')) {
+            return $own;
+        }
+
+        $default = $class::enrollmentDefaults()[$key] ?? null;
+
+        return is_string($default) && $default !== '' ? $default : $own;
     }
 
     protected function stringConfig(AutomationNode $node, string $key): ?string

@@ -63,6 +63,23 @@ class HandleCommerceEvent
     public const INVOICE_TRIGGERS = [
         'Goldnead\\Invoices\\Events\\InvoiceIssued' => 'invoices.issued',
         'Goldnead\\Invoices\\Events\\CreditNoteIssued' => 'invoices.credit_note_issued',
+        'Goldnead\\Invoices\\Events\\InvoiceDelivered' => 'invoices.delivered',
+    ];
+
+    /**
+     * Offers event class => automation trigger handle. The handles are the
+     * offers addon's own webhook handles, so a flow and a webhook name the
+     * same moment the same way.
+     */
+    public const OFFER_TRIGGERS = [
+        'Goldnead\\StatamicOffers\\Events\\SeatPoolOpened' => 'offers.seat_pool_opened',
+        'Goldnead\\StatamicOffers\\Events\\SeatInvited' => 'offers.seat_invited',
+        'Goldnead\\StatamicOffers\\Events\\SeatAccepted' => 'offers.seat_accepted',
+        'Goldnead\\StatamicOffers\\Events\\SeatRevoked' => 'offers.seat_revoked',
+        'Goldnead\\StatamicOffers\\Events\\SeatPoolClosed' => 'offers.seat_pool_closed',
+        'Goldnead\\StatamicOffers\\Events\\OfferSoldOut' => 'offers.sold_out',
+        'Goldnead\\StatamicOffers\\Events\\CouponRedeemed' => 'offers.coupon_redeemed',
+        'Goldnead\\StatamicOffers\\Events\\ShortLinkSwitched' => 'offers.link_switched',
     ];
 
     /**
@@ -103,6 +120,7 @@ class HandleCommerceEvent
             self::INVOICE_TRIGGERS,
             self::COURSE_TRIGGERS,
             self::AFFILIATE_TRIGGERS,
+            self::OFFER_TRIGGERS,
         );
 
         if ($handle === null) {

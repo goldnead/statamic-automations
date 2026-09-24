@@ -95,8 +95,12 @@ class EventBrand
         }
     }
 
+    /**
+     * Zero and below are "no brand", the way the sibling addons write it
+     * (`brand_id > 0 ? … : null`), so the next source is asked.
+     */
     protected function idOf(mixed $value): ?int
     {
-        return is_numeric($value) ? (int) $value : null;
+        return is_numeric($value) && (int) $value > 0 ? (int) $value : null;
     }
 }

@@ -163,7 +163,7 @@ class SuiteEventBrandTest extends TestCase
 
         $flow = $this->automationIn($this->brandB, 'payments.subscription_payment_upcoming');
 
-        event(new SubscriptionPaymentUpcoming((object) ['id' => 1, 'brand_id' => 0], Carbon::parse('2026-10-01'), 3));
+        event(new SubscriptionPaymentUpcoming((object) ['id' => 1, 'brand_id' => 999], Carbon::parse('2026-10-01'), 3));
 
         $this->assertCount(0, $this->runsOf($flow));
         Log::shouldHaveReceived('warning')->withArgs(fn ($message) => str_contains($message, 'brand'))->once();
