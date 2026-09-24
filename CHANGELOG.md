@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+### Auslöser für die Ereignisse von statamic-offers und für die Rechnungszustellung
+
+offers feuert ab `8a4b92f` Ereignisse zu Plätzen, Kontingent, Gutscheinen und Link-Weiche. Jedes
+hat jetzt einen Auslöser, unter demselben Handle wie der Webhook von offers:
+`offers.seat_pool_opened`, `offers.seat_invited`, `offers.seat_accepted`, `offers.seat_revoked`,
+`offers.seat_pool_closed`, `offers.sold_out`, `offers.coupon_redeemed`, `offers.link_switched`.
+Dazu `invoices.delivered` auf `InvoiceDelivered` (invoices `8993a73`); `invoices.issued` und
+`invoices.credit_note_issued` gab es schon.
+
+- Kontext in der Form der offers-Webhooks: `offer {id, handle, name}`, `pool {…, owner {email,
+  name}}`, `seat`, `coupon`, `payment` wie bei den payments-Auslösern. **Nie ein Token:** weder der
+  Einlöse-Token eines Platzes noch der Verwaltungs-Token eines Pools landet im Kontext (Test).
+- Betreff des Durchlaufs (`email`): bei Platz-Ereignissen der Platz, bei Pool-Ereignissen die
+  Käuferin, der der Pool gehört, beim Gutschein die Käuferin, bei der Zustellung die Adresse, an
+  die die Rechnung ging. Ausverkauft und Link-Weiche haben keinen.
+- Filter: Angebot an allen, dazu der Gutschein-Code (Groß- und Kleinschreibung egal) und der
+  Grund der Link-Weiche.
+- `offers.coupon_redeemed` läuft von sich aus **einmal je Zahlung**: Wiedereintritt „ignore" mit
+  `{{ payment.id }}` als Gegenstand. Ältere offers-Stände melden eine neu zugestellte Zahlung
+  zweimal; daraus wird kein zweiter Lauf. Dafür kann ein Auslöser jetzt `enrollmentDefaults()`
+  angeben, die `EnrollmentGate` nimmt, solange am Knoten nichts eingestellt ist. Ein am Knoten
+  gesetztes „always" gewinnt weiter.
+- Marke aus `brandId` am Ereignis, wie bei den anderen Suite-Auslösern. `brand_id` 0 zählt jetzt
+  überall als „keine Marke" und nicht als unbekannte Marke.
+- Deutsche Beschriftungen in `resources/lang/de/triggers.php`, auch für die drei
+  Rechnungs-Auslöser.
+
 ## 2.20.0 — 2026-09-23
 
 ### Upgrading

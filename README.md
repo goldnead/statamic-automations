@@ -166,6 +166,12 @@ touch.
 | Booking Rescheduled _(Booking)_ | Booking | Moved to a different time. The only one here that can repeat on a redelivery. |
 | Invoice Issued _(Invoices)_ | Invoices | A document was written. Fires only on a real write, never when an existing invoice is handed back. |
 | Credit Note Issued _(Invoices)_ | Invoices | Carries both documents, because a credit note alone says nothing about what it undid. |
+| Invoice Delivered _(Invoices)_ | Invoices | The invoice went out. `email` is the address it actually left for. |
+| Seat Pool Opened / Closed _(Offers)_ | Offers | A purchase of several seats opened a pool, or it closed (a refund). About the buyer who owns it (`pool.owner.email`). |
+| Seat Invited / Accepted / Revoked _(Offers)_ | Offers | About the seat's person (`seat.email`). No claim or manage token is ever in the context. |
+| Offer Sold Out _(Offers)_ | Offers | Once, when the quantity limit is reached. For the team or a waiting list; no person attached. |
+| Coupon Redeemed _(Offers)_ | Offers | A paid purchase used a coupon. Filterable by code, in any case. |
+| Offer Link Switched _(Offers)_ | Offers | The short link now sends to its fallback: `date` or `sold_out`. After a deadline it fires on the first visit after it. |
 | Learner Enrolled / Course Completed _(Courses)_ | Courses | Once per learner and course. The learner is looked up by id and lands under `user` (id, email, name), the course under `course` with its title. A learner who cannot be found is skipped with a log warning. |
 | Lesson Completed / Lesson Unlocked _(Courses)_ | Courses | Filterable by course and lesson slug. Unlocked fires only for writes, not for lessons opened by date alone. |
 | Quiz Passed / Quiz Failed _(Courses)_ | Courses | Score, result and assessment under `quiz`. Failed fires on every attempt. |
@@ -338,12 +344,12 @@ event with no brand while none is current starts nothing and logs a warning.
 | LeadHub | `Goldnead\Leadhub\Facades\LeadHub` | 5 LeadHub triggers + 7 LeadHub actions |
 | Funnels | `Goldnead\StatamicFunnels\Models\Funnel` | 6 funnel triggers |
 | Payments | `Goldnead\StatamicPayments\Models\Payment` | 20 payment triggers |
-| Offers | `Goldnead\StatamicOffers\Models\Offer` | Offer and pricing option pickers on the payment triggers |
+| Offers | `Goldnead\StatamicOffers\Models\Offer` | 8 offer triggers, and the offer and pricing option pickers on the payment triggers |
 | Courses | `Goldnead\Courses\ServiceProvider` | 12 course triggers |
 | Affiliates | `Goldnead\Affiliates\ServiceProvider` | 4 partner triggers |
 | Entitlements | `Goldnead\Entitlements\EntitlementManager` | 5 entitlement triggers + 2 actions |
 | Booking | `Goldnead\StatamicBooking\Models\Booking` | 3 booking triggers |
-| Invoices | `Goldnead\Invoices\InvoiceWriter` | 2 invoice triggers + 2 actions |
+| Invoices | `Goldnead\Invoices\InvoiceWriter` | 3 invoice triggers + 2 actions |
 
 **cal.com is the exception**: not an addon, not detected, no dependency. The connector brings its
 own route, signature check, replay guard and redelivery guard, and registers its five triggers like
