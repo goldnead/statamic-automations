@@ -1,33 +1,39 @@
 # Changelog
 
-## Unreleased
+## 2.21.0 — 2026-09-24
 
-### Auslöser für die Ereignisse von statamic-offers und für die Rechnungszustellung
+### Upgrading
 
-offers feuert ab `8a4b92f` Ereignisse zu Plätzen, Kontingent, Gutscheinen und Link-Weiche. Jedes
-hat jetzt einen Auslöser, unter demselben Handle wie der Webhook von offers:
-`offers.seat_pool_opened`, `offers.seat_invited`, `offers.seat_accepted`, `offers.seat_revoked`,
-`offers.seat_pool_closed`, `offers.sold_out`, `offers.coupon_redeemed`, `offers.link_switched`.
-Dazu `invoices.delivered` auf `InvoiceDelivered` (invoices `8993a73`); `invoices.issued` und
-`invoices.credit_note_issued` gab es schon.
+- No migration, no new required config key.
+- The eight offer triggers appear once statamic-offers 1.13 is installed; it is the first version
+  that fires these events. `invoices.delivered` works with every statamic-invoices version that
+  already offered `invoices.issued`.
+- A brand id of 0 on an event now counts as "no brand", the way the sibling addons write it, not
+  as an unknown brand: the next source of the brand is asked, as when no brand is given.
 
-- Kontext in der Form der offers-Webhooks: `offer {id, handle, name}`, `pool {…, owner {email,
-  name}}`, `seat`, `coupon`, `payment` wie bei den payments-Auslösern. **Nie ein Token:** weder der
-  Einlöse-Token eines Platzes noch der Verwaltungs-Token eines Pools landet im Kontext (Test).
-- Betreff des Durchlaufs (`email`): bei Platz-Ereignissen der Platz, bei Pool-Ereignissen die
-  Käuferin, der der Pool gehört, beim Gutschein die Käuferin, bei der Zustellung die Adresse, an
-  die die Rechnung ging. Ausverkauft und Link-Weiche haben keinen.
-- Filter: Angebot an allen, dazu der Gutschein-Code (Groß- und Kleinschreibung egal) und der
-  Grund der Link-Weiche.
-- `offers.coupon_redeemed` läuft von sich aus **einmal je Zahlung**: Wiedereintritt „ignore" mit
-  `{{ payment.id }}` als Gegenstand. Ältere offers-Stände melden eine neu zugestellte Zahlung
-  zweimal; daraus wird kein zweiter Lauf. Dafür kann ein Auslöser jetzt `enrollmentDefaults()`
-  angeben, die `EnrollmentGate` nimmt, solange am Knoten nichts eingestellt ist. Ein am Knoten
-  gesetztes „always" gewinnt weiter.
-- Marke aus `brandId` am Ereignis, wie bei den anderen Suite-Auslösern. `brand_id` 0 zählt jetzt
-  überall als „keine Marke" und nicht als unbekannte Marke.
-- Deutsche Beschriftungen in `resources/lang/de/triggers.php`, auch für die drei
-  Rechnungs-Auslöser.
+### Added: triggers for the statamic-offers events and for invoice delivery
+
+statamic-offers 1.13 fires events for seats, quantity, coupons and the short-link switch. Each
+now has a trigger, under the same handle as offers' own webhook: `offers.seat_pool_opened`,
+`offers.seat_invited`, `offers.seat_accepted`, `offers.seat_revoked`, `offers.seat_pool_closed`,
+`offers.sold_out`, `offers.coupon_redeemed`, `offers.link_switched`. Plus `invoices.delivered` on
+`InvoiceDelivered`; `invoices.issued` and `invoices.credit_note_issued` existed already.
+
+- Context in the shape of the offers webhooks: `offer {id, handle, name}`, `pool {…, owner {email,
+  name}}`, `seat`, `coupon`, and `payment` as on the payments triggers. **Never a token:** neither
+  a seat's redemption token nor a pool's management token reaches the context (tested).
+- Subject of the run (`email`): for seat events the seat, for pool events the buyer who owns the
+  pool, for the coupon the buyer, for the delivery the address the invoice went to. Sold out and
+  the link switch have none.
+- Filters: offer on all of them, plus the coupon code (case-insensitive) and the reason of the link
+  switch.
+- `offers.coupon_redeemed` runs **once per payment** by itself: re-entry "ignore" with
+  `{{ payment.id }}` as the subject. A payment delivered again, which older offers versions
+  report twice, starts no second run. For this a trigger can now declare `enrollmentDefaults()`,
+  which `EnrollmentGate` uses as long as nothing is set on the node. "Always" set on the node
+  still wins.
+- Brand from `brandId` on the event, as with the other suite triggers.
+- German labels in `resources/lang/de/triggers.php`, also for the three invoice triggers.
 
 ## 2.20.0 — 2026-09-23
 
