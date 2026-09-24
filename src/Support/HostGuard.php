@@ -55,7 +55,9 @@ class HostGuard
         $host = (string) ($parts['host'] ?? '');
 
         if (! in_array($scheme, ['http', 'https'], true) || $host === '') {
-            throw new UnsafeHostException("Only http and https URLs can be called, not '{$url}'.");
+            // Translated: the message is what the CP shows at the base URL
+            // field and in the test result. Placeholders keep it one key.
+            throw new UnsafeHostException(__("Only http and https URLs can be called, not ':url'.", ['url' => $url]));
         }
 
         if (config('automations.connections.allow_private_hosts', false)) {
@@ -66,12 +68,12 @@ class HostGuard
         $ips = filter_var($literal, FILTER_VALIDATE_IP) ? [$literal] : $this->resolve($host);
 
         if ($ips === []) {
-            throw new UnsafeHostException("The host '{$host}' could not be resolved.");
+            throw new UnsafeHostException(__("The host ':host' could not be resolved.", ['host' => $host]));
         }
 
         foreach ($ips as $ip) {
             if ($this->isBlocked($ip)) {
-                throw new UnsafeHostException("The host '{$host}' points to a private or reserved address ({$ip}).");
+                throw new UnsafeHostException(__("The host ':host' points to a private or reserved address (:ip).", ['host' => $host, 'ip' => $ip]));
             }
         }
 

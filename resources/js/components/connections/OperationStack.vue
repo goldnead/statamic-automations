@@ -3,6 +3,13 @@
  * One operation of a connection, edited in a stack from the right — the
  * surface core uses to edit an item that belongs to the page behind it.
  *
+ * Ordered for someone setting up a service without its docs open: first the
+ * name, then the inputs the action will ask for, then the request that uses
+ * them. Every input shows the exact `{{ input.<handle> }}` to put into the
+ * path or the body, and the request panel lists the ones that exist. The
+ * handle and the description sit in a collapsed "Advanced" panel; the handle
+ * follows the name the way core derives field handles.
+ *
  * Saves straight to the JSON API (`POST …/operations` or `PATCH …/{id}`) and
  * hands the stored operation back to the page. Validation errors stay in the
  * stack, each at its field; `inputs.N.key` lands on row N of the inputs.
@@ -23,12 +30,12 @@ import {
     Select,
     Switch,
     Button,
-    Alert,
     Description,
 } from '@statamic/cms/ui';
 
 import KeyValueField from '../builder/KeyValueField.vue';
 import { errorBag, firstMessage } from '../../support/serverErrors.js';
+import { handleFrom } from '../../support/handle.js';
 
 const props = defineProps({
     open: { type: Boolean, default: false },
@@ -46,6 +53,7 @@ const form = ref(blank());
 const errors = ref({});
 const saving = ref(false);
 const handleTouched = ref(false);
+const showAdvanced = ref(false);
 
 const isNew = computed(() => !props.operation?.id);
 const title = computed(() => (isNew.value ? __('Add operation') : props.operation.name));
@@ -60,6 +68,15 @@ const inputTypeLabels = {
 };
 const inputTypeOptions = computed(() =>
     props.inputTypes.map((t) => ({ value: t, label: inputTypeLabels[t] ?? t })),
+);
+
+function token(handle) {
+    return `{{ input.${handle} }}`;
+}
+
+// The placeholders this operation offers right now, for the request panel.
+const availableTokens = computed(() =>
+    form.value.inputs.map((input) => input.handle).filter(Boolean).map(token),
 );
 
 function blank() {
@@ -79,20 +96,26 @@ function blank() {
 
 let rowSeq = 0;
 
+function inputRow(input = {}) {
+    return {
+        _key: ++rowSeq,
+        // A stored input keeps its handle; a new one follows its label.
+        _handleTouched: Boolean(input.handle),
+        handle: input.handle ?? '',
+        label: input.label ?? '',
+        type: input.type ?? 'text',
+        required: Boolean(input.required),
+        default: input.default ?? '',
+        options: optionsToMap(input.options),
+    };
+}
+
 function fromApi(operation) {
     return {
         ...blank(),
         ...operation,
         description: operation.description ?? '',
-        inputs: (operation.inputs ?? []).map((input) => ({
-            _key: ++rowSeq,
-            handle: input.handle ?? '',
-            label: input.label ?? '',
-            type: input.type ?? 'text',
-            required: Boolean(input.required),
-            default: input.default ?? '',
-            options: optionsToMap(input.options),
-        })),
+        inputs: (operation.inputs ?? []).map(inputRow),
     };
 }
 
@@ -141,39 +164,30 @@ watch(
         form.value = props.operation ? fromApi(props.operation) : blank();
         errors.value = {};
         handleTouched.value = !isNew.value;
+        showAdvanced.value = false;
     },
     { immediate: true },
 );
 
-// A new operation's handle follows its name until the handle is typed into.
 watch(
     () => form.value.name,
     (name) => {
-        if (handleTouched.value) return;
-        form.value.handle = snake(name);
+        if (!handleTouched.value) form.value.handle = handleFrom(name);
     },
 );
 
-function snake(value) {
-    return String(value ?? '')
-        .normalize('NFKD')
-        .replace(/[̀-ͯ]/g, '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^[^a-z]+/, '')
-        .replace(/_+$/, '');
+function labelChanged(input, label) {
+    input.label = label;
+    if (!input._handleTouched) input.handle = handleFrom(label);
+}
+
+function handleChanged(input, handle) {
+    input.handle = handle;
+    input._handleTouched = true;
 }
 
 function addInput() {
-    form.value.inputs.push({
-        _key: ++rowSeq,
-        handle: '',
-        label: '',
-        type: 'text',
-        required: false,
-        default: '',
-        options: {},
-    });
+    form.value.inputs.push(inputRow());
 }
 
 function removeInput(index) {
@@ -186,21 +200,26 @@ function inputError(index, key) {
 
 async function save() {
     saving.value = true;
+    globalThis.Statamic?.$progress?.start?.('connection-operation');
     try {
         const { data } = isNew.value
             ? await axios.post(props.operationsUrl, payload())
             : await axios.patch(`${props.operationsUrl}/${props.operation.id}`, payload());
         errors.value = {};
-        window?.Statamic?.$toast?.success?.(__('Saved'));
+        globalThis.Statamic?.$toast?.success?.(__('Saved'));
         emit('saved', data.data);
         emit('update:open', false);
     } catch (e) {
         errors.value = errorBag(e);
-        window?.Statamic?.$toast?.error?.(
+        // A handle refused by the server is in the collapsed panel.
+        if (errors.value.handle || errors.value.description) showAdvanced.value = true;
+        // One generic toast; the messages themselves stand at the fields.
+        globalThis.Statamic?.$toast?.error?.(
             Object.keys(errors.value).length ? __('Something went wrong') : firstMessage(e, __('Something went wrong')),
         );
     } finally {
         saving.value = false;
+        globalThis.Statamic?.$progress?.complete?.('connection-operation');
     }
 }
 </script>
@@ -214,73 +233,29 @@ async function save() {
         @update:open="emit('update:open', $event)"
     >
         <div class="space-y-6" data-operation-form>
-            <Alert v-if="Object.keys(errors).length" variant="error" data-operation-errors>
-                {{ __('The operation could not be saved. The fields below say why.') }}
-            </Alert>
-
-            <Panel :heading="__('Operation')">
-                <Card class="space-y-6">
-                    <div class="grid sm:grid-cols-2 gap-6 *:min-w-0">
-                        <Field id="operation_name" :label="__('Name')" required :error="errors.name">
-                            <Input id="operation_name" v-model="form.name" />
-                        </Field>
-                        <Field
-                            id="operation_handle"
-                            :label="__('Handle')"
-                            required
-                            :error="errors.handle"
-                            instructions-below
-                            :instructions="__('Lowercase letters, digits and underscores. Part of the node type.')"
-                        >
-                            <Input
-                                id="operation_handle"
-                                v-model="form.handle"
-                                class="font-mono"
-                                @update:model-value="handleTouched = true"
-                            />
-                        </Field>
-                    </div>
-                    <Field id="operation_description" :label="__('Description')" :error="errors.description">
-                        <Textarea id="operation_description" v-model="form.description" :rows="2" elastic />
-                    </Field>
-                </Card>
-            </Panel>
-
-            <Panel :heading="__('Request')">
-                <Card class="space-y-6">
-                    <div class="grid sm:grid-cols-[10rem_1fr] gap-6 *:min-w-0">
-                        <Field id="operation_method" :label="__('Method')" required :error="errors.method">
-                            <Select id="operation_method" v-model="form.method" :options="methodOptions" />
-                        </Field>
-                        <Field
-                            id="operation_path"
-                            :label="__('Path')"
-                            required
-                            :error="errors.path"
-                            :instructions="__('Appended to the base URL. Use {{ input.handle }} for an input.')"
-                        >
-                            <Input id="operation_path" v-model="form.path" class="font-mono" placeholder="/messages" />
-                        </Field>
-                    </div>
-                    <Field :label="__('Query parameters')" :error="errors.query">
-                        <KeyValueField v-model="form.query" :key-label="__('Parameter')" />
-                    </Field>
+            <Panel>
+                <Card>
                     <Field
-                        :label="__('Body')"
-                        :error="errors.body"
-                        :instructions="__('Sent as JSON. Leave empty for a request without a body.')"
+                        id="operation_name"
+                        :label="__('Name')"
+                        required
+                        :error="errors.name"
+                        :instructions="__('What the action is called in the automation builder, e.g. Post message.')"
                     >
-                        <KeyValueField v-model="form.body" :key-label="__('Field')" />
+                        <Input id="operation_name" v-model="form.name" />
                     </Field>
                 </Card>
             </Panel>
 
-            <Panel :heading="__('Inputs')" :subheading="__('The fields this action shows on the canvas. Each one takes tokens from earlier steps.')">
+            <Panel
+                :heading="__('Inputs')"
+                :subheading="__('What someone fills in when they add this action to an automation. Each input is used in the request as the placeholder shown next to it.')"
+            >
                 <template #header-actions>
                     <Button size="sm" icon="plus" :text="__('Add input')" data-operation-add-input @click="addInput" />
                 </template>
                 <Card v-if="form.inputs.length === 0">
-                    <Description :text="__('No inputs yet. An operation without inputs sends the same request every time.')" />
+                    <Description :text="__('No inputs yet. For Slack, add Channel and Text.')" />
                 </Card>
                 <Card
                     v-for="(input, index) in form.inputs"
@@ -289,18 +264,34 @@ async function save() {
                     :class="{ 'mt-2': index > 0 }"
                     :data-operation-input="index"
                 >
-                    <div class="grid sm:grid-cols-3 gap-6 *:min-w-0">
-                        <Field :id="`input_${input._key}_handle`" :label="__('Handle')" required :error="inputError(index, 'handle')">
-                            <Input :id="`input_${input._key}_handle`" v-model="input.handle" class="font-mono" />
-                        </Field>
+                    <div class="grid sm:grid-cols-2 gap-6 *:min-w-0">
                         <Field :id="`input_${input._key}_label`" :label="__('Label')" :error="inputError(index, 'label')">
-                            <Input :id="`input_${input._key}_label`" v-model="input.label" />
+                            <Input
+                                :id="`input_${input._key}_label`"
+                                :model-value="input.label"
+                                @update:model-value="labelChanged(input, $event)"
+                            />
                         </Field>
+                        <Field
+                            :id="`input_${input._key}_handle`"
+                            :label="__('Handle')"
+                            required
+                            :error="inputError(index, 'handle')"
+                            instructions-below
+                            :instructions="input.handle ? __('In the request: :token', { token: token(input.handle) }) : null"
+                        >
+                            <Input
+                                :id="`input_${input._key}_handle`"
+                                :model-value="input.handle"
+                                class="font-mono"
+                                @update:model-value="handleChanged(input, $event)"
+                            />
+                        </Field>
+                    </div>
+                    <div class="grid sm:grid-cols-[1fr_1fr_auto_auto] gap-6 *:min-w-0">
                         <Field :id="`input_${input._key}_type`" :label="__('Type')" required :error="inputError(index, 'type')">
                             <Select :id="`input_${input._key}_type`" v-model="input.type" :options="inputTypeOptions" />
                         </Field>
-                    </div>
-                    <div class="grid sm:grid-cols-3 gap-6 *:min-w-0">
                         <Field :id="`input_${input._key}_default`" :label="__('Default')" :error="inputError(index, 'default')">
                             <Input :id="`input_${input._key}_default`" v-model="input.default" />
                         </Field>
@@ -327,12 +318,50 @@ async function save() {
                 </Card>
             </Panel>
 
+            <Panel
+                :heading="__('Request')"
+                :subheading="availableTokens.length
+                    ? __('Placeholders you can use: :tokens', { tokens: availableTokens.join(', ') })
+                    : __('Add inputs above to get placeholders for the path and the content.')"
+            >
+                <Card class="space-y-6">
+                    <div class="grid sm:grid-cols-[10rem_1fr] gap-6 *:min-w-0">
+                        <Field id="operation_method" :label="__('Method')" required :error="errors.method">
+                            <Select id="operation_method" v-model="form.method" :options="methodOptions" />
+                        </Field>
+                        <Field
+                            id="operation_path"
+                            :label="__('Path')"
+                            required
+                            :error="errors.path"
+                            :instructions="__('Appended to the base URL, e.g. /chat.postMessage.')"
+                        >
+                            <Input id="operation_path" v-model="form.path" class="font-mono" placeholder="/chat.postMessage" />
+                        </Field>
+                    </div>
+                    <Field
+                        :label="__('Request content (JSON)')"
+                        :error="errors.body"
+                        :instructions="__('One field per row, e.g. text → {{ input.text }} and channel → {{ input.channel }}. Leave empty for a request without content.')"
+                    >
+                        <KeyValueField v-model="form.body" :key-label="__('Field')" />
+                    </Field>
+                    <Field
+                        :label="__('URL parameters')"
+                        :error="errors.query"
+                        :instructions="__('Added to the address after the ?, e.g. limit → 10. Most services do not need them.')"
+                    >
+                        <KeyValueField v-model="form.query" :key-label="__('Parameter')" />
+                    </Field>
+                </Card>
+            </Panel>
+
             <Panel :heading="__('Response')">
                 <Card class="space-y-6">
                     <Field
                         :label="__('Output fields')"
                         :error="errors.response_map"
-                        :instructions="__('Name an output and the path in the JSON response it reads, e.g. message.ts. Later steps use it as a token.')"
+                        :instructions="__('Name a value from the answer so later steps can use it, e.g. message_id → ts.')"
                     >
                         <KeyValueField v-model="form.response_map" :key-label="__('Output')" :value-label="__('Path in response')" />
                     </Field>
@@ -340,9 +369,42 @@ async function save() {
                         id="operation_fail_on_error_status"
                         :label="__('Fail on an error status')"
                         :error="errors.fail_on_error_status"
-                        :instructions="__('Marks the step as failed when the service answers with a status outside 2xx.')"
+                        :instructions="__('Marks the step as failed when the service answers with an error.')"
                     >
                         <Switch id="operation_fail_on_error_status" v-model="form.fail_on_error_status" />
+                    </Field>
+                </Card>
+            </Panel>
+
+            <Panel :heading="__('Advanced')">
+                <template #header-actions>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        :icon="showAdvanced ? 'chevron-up' : 'chevron-down'"
+                        :text="showAdvanced ? __('Hide') : __('Show')"
+                        :aria-expanded="showAdvanced ? 'true' : 'false'"
+                        data-operation-advanced
+                        @click="showAdvanced = !showAdvanced"
+                    />
+                </template>
+                <Card v-if="showAdvanced" class="space-y-6">
+                    <Field
+                        id="operation_handle"
+                        :label="__('Handle')"
+                        required
+                        :error="errors.handle"
+                        :instructions="__('Filled in from the name. Change it only if you know why.')"
+                    >
+                        <Input
+                            id="operation_handle"
+                            v-model="form.handle"
+                            class="font-mono"
+                            @update:model-value="handleTouched = true"
+                        />
+                    </Field>
+                    <Field id="operation_description" :label="__('Description')" :error="errors.description">
+                        <Textarea id="operation_description" v-model="form.description" :rows="2" elastic />
                     </Field>
                 </Card>
             </Panel>

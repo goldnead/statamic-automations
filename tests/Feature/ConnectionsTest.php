@@ -222,3 +222,56 @@ it('never sends credentials back to the cp', function () {
     expect($index->getContent())->not->toContain(SECRET);
     expect($show->getContent())->not->toContain(SECRET);
 });
+
+it('tests the unsaved form values when they are sent, and saves nothing', function () {
+    Http::fake(['*' => Http::response('ok', 200)]);
+    $this->actingAsSuperUser();
+    $connection = makeConnection(['test_path' => '/auth.test']);
+
+    $this->postJson(cp_route('statamic-automations.api.connections.test', $connection), [
+        'base_url' => 'https://api.example.test/v2',
+        'test_path' => '/me',
+        'auth_type' => 'bearer',
+        // Empty means "the stored token", as on save.
+        'auth_config' => ['token' => ''],
+        'default_headers' => ['X-Trace' => 'on'],
+    ])->assertOk()->assertJson(['ok' => true, 'status' => 200]);
+
+    Http::assertSent(fn (Request $r) => $r->url() === 'https://api.example.test/v2/me'
+        && $r->header('Authorization') === ['Bearer '.SECRET]
+        && $r->header('X-Trace') === ['on']);
+
+    expect($connection->fresh()->base_url)->toBe('https://api.example.test/v1/')
+        ->and($connection->fresh()->test_path)->toBe('/auth.test');
+});
+
+it('refuses a submitted private base url in the test without sending anything', function () {
+    Http::fake();
+    $this->actingAsSuperUser();
+    $connection = makeConnection();
+
+    // The guard resolves every name to a public address in this file; a
+    // literal private address never reaches the resolver.
+    $response = $this->postJson(cp_route('statamic-automations.api.connections.test', $connection), [
+        'base_url' => 'http://169.254.169.254/latest',
+    ])->assertOk();
+
+    expect($response->json('ok'))->toBeFalse()
+        ->and($response->json('error'))->toContain('private or reserved address');
+    Http::assertNothingSent();
+});
+
+it('does not send a stored secret to a host that was only typed into the test', function () {
+    Http::fake(['*' => Http::response('ok', 200)]);
+    $this->actingAsSuperUser();
+    $connection = makeConnection();
+
+    $this->postJson(cp_route('statamic-automations.api.connections.test', $connection), [
+        'base_url' => 'https://elsewhere.example.test',
+        'auth_type' => 'bearer',
+        'auth_config' => ['token' => ''],
+    ])->assertOk();
+
+    Http::assertSent(fn (Request $r) => str_starts_with($r->url(), 'https://elsewhere.example.test'));
+    Http::assertNotSent(fn (Request $r) => str_contains(implode(',', $r->header('Authorization')), SECRET));
+});

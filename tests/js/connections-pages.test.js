@@ -73,8 +73,43 @@ it('never puts a stored credential back into its field, and marks it as stored',
     const token = wrapper.find('[data-auth-field="token"]');
 
     expect(token.attributes('data-attr-model-value')).toBe(undefined);
-    expect(token.attributes('data-attr-placeholder')).toBe('••••••••');
+    expect(token.attributes('data-attr-placeholder')).toBe('Stored credential');
     expect(token.attributes('data-attr-type')).toBe('password');
+    // An eye on a field that holds nothing would reveal nothing.
+    expect(token.attributes('data-attr-viewable')).toBe('false');
+});
+
+it('tests what the form holds, not what is stored', async () => {
+    axios.post.mockResolvedValueOnce({ data: { ok: true, status: 200, duration_ms: 12 } });
+    const wrapper = mountEdit();
+
+    wrapper.vm.$.setupState.form.base_url = 'https://api.example.test/v2';
+    await wrapper.find('[data-connection-test]').trigger('click');
+    await flushPromises();
+
+    const [url, body] = axios.post.mock.calls[0];
+    expect(url).toBe(connection.test_url);
+    expect(body).toMatchObject({ base_url: 'https://api.example.test/v2', auth_type: 'bearer', auth_config: { token: '' } });
+    expect(body).not.toHaveProperty('handle');
+});
+
+it('registers unsaved changes with core and clears them on save', async () => {
+    const dirty = { add: vi.fn(), remove: vi.fn() };
+    globalThis.Statamic = { ...(globalThis.Statamic ?? {}), $dirty: dirty };
+    axios.patch.mockResolvedValueOnce({ data: { data: connection } });
+
+    try {
+        const wrapper = mountEdit();
+        wrapper.vm.$.setupState.form.name = 'CRM live';
+        await flushPromises();
+        expect(dirty.add).toHaveBeenCalledWith('automations-connection');
+
+        await wrapper.find('[data-connection-save]').trigger('click');
+        await flushPromises();
+        expect(dirty.remove).toHaveBeenCalledWith('automations-connection');
+    } finally {
+        delete globalThis.Statamic.$dirty;
+    }
 });
 
 it('sends an untouched credential empty, which the API reads as unchanged', async () => {
@@ -180,4 +215,31 @@ it('saves an operation with its inputs, and puts a refused input back on its row
     expect(second.find('[data-stub="Field"][data-attr-error]').attributes('data-attr-error'))
         .toBe('The inputs.1.handle field format is invalid.');
     expect(wrapper.find('[data-operation-input="0"] [data-attr-error]').exists()).toBe(false);
+});
+
+it('derives handles from names and shows each input as the placeholder to use', async () => {
+    const wrapper = mount(OperationStack, {
+        props: {
+            open: true,
+            operation: null,
+            operationsUrl: '/cp/automations/api/connections/7/operations',
+            methods: ['GET', 'POST'],
+            inputTypes: ['text', 'select'],
+        },
+    });
+
+    // The handle is tucked away until asked for.
+    expect(wrapper.find('#operation_handle').exists()).toBe(false);
+
+    wrapper.vm.$.setupState.form.name = 'Nachricht senden';
+    // The button sits in the panel's header-actions slot, which the stub
+    // Panel does not render; its handler is what is under test.
+    wrapper.vm.$.setupState.addInput();
+    wrapper.vm.$.setupState.labelChanged(wrapper.vm.$.setupState.form.inputs[0], 'Kanal Name');
+    await flushPromises();
+
+    expect(wrapper.vm.$.setupState.form.handle).toBe('nachricht_senden');
+    expect(wrapper.vm.$.setupState.form.inputs[0].handle).toBe('kanal_name');
+    expect(wrapper.find('[data-operation-input="0"]').html()).toContain('{{ input.kanal_name }}');
+    expect(wrapper.html()).toContain('Placeholders you can use: {{ input.kanal_name }}');
 });

@@ -35,6 +35,17 @@ const props = defineProps({
 });
 
 const isEmpty = computed(() => props.rows.length === 0);
+
+// Core's Listing has no per-breakpoint columns, but it honours `visible` on a
+// column and still lets the user switch one back on. On a phone the name and
+// the base URL are what tells two connections apart; the rest starts hidden.
+const NARROW_HIDDEN = ['auth_type', 'operations_count'];
+const narrow = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 640px)').matches;
+const listingColumns = computed(() =>
+    props.columns.map((column) =>
+        narrow && NARROW_HIDDEN.includes(column.field) ? { ...column, visible: false } : column,
+    ),
+);
 const pendingDelete = ref(null);
 const actionErrors = ref([]);
 
@@ -99,7 +110,7 @@ function deleteFailed(e) {
 
         <Listing
             :items="rows"
-            :columns="columns"
+            :columns="listingColumns"
             preferences-prefix="statamic-automations.connections"
             @refreshing="reloadPage"
         >

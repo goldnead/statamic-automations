@@ -88,10 +88,19 @@ class ConnectionsController extends Controller
      * One GET on `base_url + test_path` with the connection's auth. Answers
      * whether it worked and never with the body — a service's answer to an
      * authenticated request is not something to hand to the browser.
+     *
+     * With a body, it tests what the form holds rather than what is stored:
+     * the edit page sends its unsaved values, so "Test" answers for the screen
+     * the operator is looking at. Nothing is saved. The submitted base URL
+     * goes through the same HostGuard as every call, below.
      */
-    public function test(AutomationConnection $automationConnection): JsonResponse
+    public function test(Request $request, AutomationConnection $automationConnection): JsonResponse
     {
         $this->authorizeAction(self::PERMISSION);
+
+        if ($request->hasAny(['base_url', 'auth_type', 'auth_config', 'default_headers', 'timeout', 'test_path'])) {
+            $automationConnection = $this->draft($request, $automationConnection);
+        }
 
         $started = microtime(true);
         $url = $automationConnection->url((string) ($automationConnection->test_path ?: '/'));
@@ -154,6 +163,49 @@ class ConnectionsController extends Controller
         $automationConnectionOperation->delete();
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * An unsaved copy of the connection with the submitted values over it.
+     *
+     * Stored credentials fill empty fields only while the host stays the
+     * stored one. Pointed at another host, the draft carries only what was
+     * typed: a test must not become the way to send a saved secret somewhere
+     * new without anyone typing it.
+     */
+    protected function draft(Request $request, AutomationConnection $stored): AutomationConnection
+    {
+        $data = $request->validate([
+            'base_url' => ['sometimes', 'required', 'url', 'max:2048'],
+            'auth_type' => ['sometimes', 'required', Rule::in(AutomationConnection::AUTH_TYPES)],
+            'auth_config' => ['nullable', 'array'],
+            'default_headers' => ['nullable', 'array'],
+            'timeout' => ['nullable', 'integer', 'min:1', 'max:120'],
+            'test_path' => ['nullable', 'string', 'max:1024'],
+        ]);
+
+        $draft = $stored->replicate();
+        $draft->fill(array_filter([
+            'base_url' => $data['base_url'] ?? null,
+            'auth_type' => $data['auth_type'] ?? null,
+            'default_headers' => $data['default_headers'] ?? null,
+            'timeout' => $data['timeout'] ?? null,
+        ], fn ($value) => $value !== null));
+
+        if ($request->has('test_path')) {
+            $draft->test_path = $data['test_path'] ?? null;
+        }
+
+        $sameHost = strtolower((string) parse_url((string) $draft->base_url, PHP_URL_HOST))
+            === strtolower((string) parse_url((string) $stored->base_url, PHP_URL_HOST));
+
+        $draft->auth_config = $this->authConfig(
+            (string) $draft->auth_type,
+            $request->input('auth_config'),
+            $sameHost ? $stored : null,
+        );
+
+        return $draft;
     }
 
     /** @return array<string, mixed> */

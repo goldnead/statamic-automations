@@ -14,7 +14,7 @@
  * status and the time it took, or with why it could not connect — including
  * the refusal to call a private or local address.
  */
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import axios from 'axios';
 import { Head, router } from '@statamic/cms/inertia';
 import {
@@ -44,6 +44,7 @@ import KeyValueField from '../../components/builder/KeyValueField.vue';
 import OperationStack from '../../components/connections/OperationStack.vue';
 import DeleteConnectionModal from '../../components/connections/DeleteConnectionModal.vue';
 import { errorBag, errorMessages, firstMessage } from '../../support/serverErrors.js';
+import { handleFrom } from '../../support/handle.js';
 
 const props = defineProps({
     title: { type: String, required: true },
@@ -104,22 +105,51 @@ function isStored(key) {
     return form.value.auth_type === stored.value.auth_type && Boolean(stored.value.auth_config?.[key]);
 }
 
+// Where a credential comes from, per field. Generic first, Slack as the one
+// example everybody has seen.
+const fieldInstructions = {
+    token: __('Create it at the service, usually under Settings, API or Developer. Slack: create an app at api.slack.com, then copy the Bot User OAuth Token (xoxb-…) from OAuth & Permissions.'),
+    name: __('The header the service expects the key in, e.g. X-Api-Key. The service documentation names it.'),
+    value: __('The API key from the service, usually under Settings, API or Developer.'),
+    username: __('The user the service gave you for API access.'),
+    password: __('The password or app password for that user.'),
+};
+
+function authInstructions(key) {
+    const base = fieldInstructions[key] ?? '';
+    return isStored(key) ? `${base} ${__('Stored. Leave empty to keep it; type to replace it.')}`.trim() : base || null;
+}
+
 watch(
     () => form.value.name,
     (name) => {
-        if (!handleTouched.value) form.value.handle = snake(name);
+        if (!handleTouched.value) form.value.handle = handleFrom(name);
     },
 );
 
-function snake(value) {
-    return String(value ?? '')
-        .normalize('NFKD')
-        .replace(/[̀-ͯ]/g, '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^[^a-z]+/, '')
-        .replace(/_+$/, '');
+// ── Unsaved changes ─────────────────────────────────────────────────────
+// Core's dirty state owns the leave-page warnings (Inertia links, reload,
+// back button); this page only says whether it has something unsaved.
+
+const DIRTY = 'automations-connection';
+let snapshot = JSON.stringify(form.value);
+
+const isDirty = computed(() => JSON.stringify(form.value) !== snapshot);
+
+watch(isDirty, (dirty) => {
+    const state = globalThis.Statamic?.$dirty;
+    if (!state) return;
+    dirty ? state.add(DIRTY) : state.remove(DIRTY);
+});
+
+function markClean() {
+    snapshot = JSON.stringify(form.value);
+    // The computed only re-reads the form; the snapshot is not reactive.
+    form.value = { ...form.value };
+    globalThis.Statamic?.$dirty?.remove?.(DIRTY);
 }
+
+onBeforeUnmount(() => globalThis.Statamic?.$dirty?.remove?.(DIRTY));
 
 // ── Tabs and where the errors are ───────────────────────────────────────
 
@@ -159,12 +189,22 @@ function payload() {
     };
 }
 
+// Saved over axios, not `router.post`: the API is JSON and answers with the
+// stored connection, which this page swaps in without a reload (and so keeps
+// the open tab and the test result). The progress bar is started by hand for
+// that reason, and the dirty state is cleared before any navigation.
 async function save() {
     saving.value = true;
+    globalThis.Statamic?.$progress?.start?.('connection-save');
     try {
         if (props.isNew) {
             const { data } = await axios.post(props.storeUrl, payload());
-            window?.Statamic?.$toast?.success?.(__('Saved'));
+            globalThis.Statamic?.$toast?.success?.(__('Saved'));
+            markClean();
+            // Core switches its leave-page prompt off in a watcher, which runs
+            // after this tick; visiting first would ask "leave unsaved?"
+            // about the record that was just saved.
+            await nextTick();
             router.visit(data.data.edit_url);
             return;
         }
@@ -173,7 +213,8 @@ async function save() {
         stored.value = data.data;
         form.value.auth_config = {};
         errors.value = {};
-        window?.Statamic?.$toast?.success?.(__('Saved'));
+        markClean();
+        globalThis.Statamic?.$toast?.success?.(__('Saved'));
     } catch (e) {
         errors.value = errorBag(e);
         const first = ['connection', 'access'].find((t) => tabsWithErrors.value.has(t));
@@ -185,6 +226,7 @@ async function save() {
         );
     } finally {
         saving.value = false;
+        globalThis.Statamic?.$progress?.complete?.('connection-save');
     }
 }
 
@@ -205,7 +247,10 @@ async function runTest() {
     testing.value = true;
     testResult.value = null;
     try {
-        const { data } = await axios.post(stored.value.test_url);
+        // The form as it stands, saved or not: the API tests these values and
+        // stores nothing. Empty credentials mean the stored ones, as on save.
+        const { name: _name, handle: _handle, ...values } = payload();
+        const { data } = await axios.post(stored.value.test_url, values);
         testResult.value = data;
     } catch (e) {
         testResult.value = { ok: false, status: null, duration_ms: null, error: firstMessage(e, __('Request failed.')) };
@@ -284,7 +329,9 @@ async function destroyOperation() {
 
 const pendingDelete = ref(null);
 
-function connectionDeleted() {
+async function connectionDeleted() {
+    globalThis.Statamic?.$dirty?.remove?.(DIRTY);
+    await nextTick();
     router.visit(props.indexUrl);
 }
 
@@ -371,7 +418,7 @@ function deleteFailed(e) {
                                 required
                                 :error="errors.handle"
                                 instructions-below
-                                :instructions="__('Lowercase letters, digits and underscores. Part of every node type of this connection.')"
+                                :instructions="__('Filled in from the name. Lowercase letters, digits and underscores.')"
                             >
                                 <Input id="handle" v-model="form.handle" class="font-mono" @update:model-value="handleTouched = true" />
                             </Field>
@@ -381,18 +428,18 @@ function deleteFailed(e) {
                             :label="__('Base URL')"
                             required
                             :error="errors.base_url"
-                            :instructions="__('Every operation path is appended to it. Private and local addresses are refused.')"
+                            :instructions="__('The address all requests of this service start with, e.g. https://slack.com/api. Private and local addresses are refused.')"
                         >
-                            <Input id="base_url" v-model="form.base_url" type="url" class="font-mono" placeholder="https://api.example.com/v1" />
+                            <Input id="base_url" v-model="form.base_url" type="url" class="font-mono" placeholder="https://slack.com/api" />
                         </Field>
                         <div class="grid sm:grid-cols-2 gap-6 *:min-w-0">
                             <Field
                                 id="test_path"
                                 :label="__('Test path')"
                                 :error="errors.test_path"
-                                :instructions="__('What “Test connection” sends a GET to. Empty means the base URL itself.')"
+                                :instructions="__('Where “Test connection” sends a harmless request, e.g. /auth.test for Slack. Empty means the base URL itself.')"
                             >
-                                <Input id="test_path" v-model="form.test_path" class="font-mono" placeholder="/me" />
+                                <Input id="test_path" v-model="form.test_path" class="font-mono" placeholder="/auth.test" />
                             </Field>
                             <Field
                                 id="timeout"
@@ -406,7 +453,7 @@ function deleteFailed(e) {
                         <Field
                             :label="__('Default headers')"
                             :error="errors.default_headers"
-                            :instructions="__('Sent with every request of this connection. Credentials belong on the Access tab.')"
+                            :instructions="__('Extra details sent with every request, e.g. Accept → application/json. Most services need none. Keys and passwords belong on the Access tab.')"
                         >
                             <KeyValueField v-model="form.default_headers" :key-label="__('Header')" />
                         </Field>
@@ -423,7 +470,7 @@ function deleteFailed(e) {
 
                         <Description
                             v-if="!isNew && stored.auth_configured && form.auth_type !== stored.auth_type"
-                            :text="__('Changing the authentication discards the stored credentials when you save.')"
+                            :text="__('On save, the stored credentials are discarded.')"
                         />
 
                         <Field
@@ -432,14 +479,14 @@ function deleteFailed(e) {
                             :key="key"
                             :label="fieldLabels[key] ?? key"
                             :error="errors[`auth_config.${key}`]"
-                            :instructions="isStored(key) ? __('Stored. Leave empty to keep it; type to replace it.') : null"
+                            :instructions="authInstructions(key)"
                         >
                             <Input
                                 :id="`auth_${key}`"
                                 v-model="form.auth_config[key]"
                                 :type="secretFields.includes(key) ? 'password' : 'text'"
-                                :placeholder="isStored(key) ? placeholder : ''"
-                                :viewable="secretFields.includes(key)"
+                                :placeholder="isStored(key) ? __('Stored credential') : ''"
+                                :viewable="secretFields.includes(key) && !isStored(key)"
                                 autocomplete="off"
                                 :data-auth-field="key"
                             />
@@ -447,7 +494,7 @@ function deleteFailed(e) {
 
                         <Description
                             v-if="currentAuthFields.length === 0"
-                            :text="__('Requests go out without credentials. Default headers still apply.')"
+                            :text="__('Requests go out without credentials.')"
                         />
                     </Card>
                 </Panel>
