@@ -2,6 +2,7 @@
 
 return [
     'activity' => [
+        'heading' => 'Aktivität',
         'node_removed_suffix' => '(nicht mehr im Ablauf)',
     ],
 

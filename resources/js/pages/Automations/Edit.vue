@@ -945,7 +945,7 @@ watch(view, scheduleHeightUpdate);
                         v-if="showActivity"
                         value="activity"
                         icon="chart-monitoring-indicator"
-                        :label="__('Activity')"
+                        :label="__('statamic-automations::automations.activity.heading')"
                     />
                 </ToggleGroup>
 

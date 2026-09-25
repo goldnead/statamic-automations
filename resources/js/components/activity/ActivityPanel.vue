@@ -17,7 +17,7 @@
     <div class="space-y-4" data-activity>
         <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
-                <Heading :text="__('Activity')" icon="chart-monitoring-indicator" />
+                <Heading :text="__('statamic-automations::automations.activity.heading')" icon="chart-monitoring-indicator" />
                 <Description>
                     {{ __('Where people are in this automation, what each step did, and who is still inside it.') }}
                 </Description>

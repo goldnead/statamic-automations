@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.22.2 — 2026-09-25
+
+### Fixed
+
+- `resources/lang/de.json` no longer translates "Activity" globally (it renamed the Activity addon to "Aktivität" in the addon list). The activity panel uses `statamic-automations::automations.activity.heading`.
+
 ## 2.22.1 — 2026-09-25
 
 ### Fixed

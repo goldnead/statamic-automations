@@ -2,7 +2,6 @@
     ":count mails were removed.": ":count Mails wurden entfernt.",
     ":key (removed)": ":key (entfernt)",
     "Action": "Aktion",
-    "Activity": "Aktivität",
     "All time": "Gesamter Zeitraum",
     "Also in the flow: :n runs with no person attached — a scheduled sweep, or a webhook that named nobody.": "Ebenfalls im Ablauf: :n Durchläufe ohne zugehörige Person, etwa ein geplanter Lauf oder ein Webhook ohne Adresse.",
     "Any outcome": "Alle Ergebnisse",

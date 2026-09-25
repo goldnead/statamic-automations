@@ -2,6 +2,7 @@
 
 return [
     'activity' => [
+        'heading' => 'Activity',
         'node_removed_suffix' => '(no longer in the flow)',
     ],
 
