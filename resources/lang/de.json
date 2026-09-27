@@ -234,5 +234,8 @@
     "Delete failed.": "Löschen fehlgeschlagen.",
     "Disable": "Deaktivieren",
     "Enable": "Aktivieren",
-    "Export JSON": "JSON exportieren"
+    "Export JSON": "JSON exportieren",
+    ":count step|:count steps": ":count Schritt|:count Schritte",
+    "Collapse “:title”": "„:title“ einklappen",
+    "Expand “:title”": "„:title“ ausklappen"
 }

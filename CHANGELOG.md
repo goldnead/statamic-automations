@@ -1,5 +1,51 @@
 # Changelog
 
+## 2.24.0 — 2026-09-27
+
+### Upgrading
+
+- Needs `goldnead/statamic-flow-canvas` **^1.6** (installed by Composer as usual).
+- No migration, no change to the saved graph, the engine, the validator or the export format.
+
+### Added: a Loop reads as a loop on the canvas
+
+A Loop's body used to be a long chain hanging under the Loop, with nothing saying where it ends
+or that it comes back — the data model deliberately has no loop-back edge.
+
+- **Frame.** A Loop and its body sit inside one tinted, rounded frame drawn behind them, with the
+  Loop card as the frame's head (a thin strip above it holds the fold chevron and the step count;
+  no second title). The body is worked out from the graph on every render: everything reachable
+  from *For each item*, up to where a path runs into what follows *After loop*. A nested Loop
+  gets its own frame inside the outer one. Rows inside a body are half the usual distance apart
+  (except under a branch, where the pills need the room).
+- **After the loop comes after the frame.** The auto-layout treats a framed Loop as one tall node:
+  the step on *After loop* is placed below the whole frame, never level with its content. The
+  *After loop* edge leaves the Loop card's side, runs down outside the frame and comes in under
+  it; its "+" and its label sit there. Neighbouring columns keep clear of the frame.
+- **Way back.** A dashed 2px line runs from each end of the body, inside the frame's left padding,
+  into the side of the Loop, with an arrowhead at the Loop. Each frame's line runs in its own
+  padding, so an inner and an outer line never touch. Drawn, not an edge: it cannot be selected,
+  deleted or saved, and nothing that reads the graph sees it.
+- **Fold.** The chevron folds the body into one card ("13 Schritte", first → last step) that stays
+  inside the Loop's frame with a short line back, so a folded Loop still reads as a loop. Folds
+  are remembered per automation and Loop in the browser (localStorage, guarded), every body
+  starts unfolded. The fold control is one button top-left in the frame's head, chevron and
+  step count together (core's ghost button), with `aria-expanded` and a label naming the Loop.
+- **Output names as pills.** The Loop's outputs are named on their edges, like *If true* / *If
+  false* on a Branch ("Für jedes Element", "Nach der Schleife" in a German CP, translated where
+  the node library is described; the spec the validator reads keeps its English), and beside the
+  "+" while an output is still open. The two-line grey legend in the Loop card's footer is gone.
+- **Cards.** A node's title has the card's full width and wraps to two lines; type and kind badge
+  moved to the line below. Long `{{ … }}` chips end in an ellipsis inside the card instead of
+  running past its edge. Applies to every node.
+- **One "+" size.** A step's append "+" (an open output) is the same 24px dashed circle as the
+  insert "+" on an edge; only the entry "+" on an empty canvas stays larger.
+
+### Fixed
+
+- **"Replace trigger" did nothing.** The page listened for `replace-trigger`, but the shared canvas
+  emits `replace-unique`; the trigger card's menu item now arms the replace pick again.
+
 ## 2.23.0 — 2026-09-27
 
 ### Upgrading

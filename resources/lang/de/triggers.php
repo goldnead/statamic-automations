@@ -270,4 +270,13 @@ return [
             'description' => 'Liest die Textblöcke einer Notion-Seite, Callouts mit Überschrift und Zeilen, als Baum und als Klartext.',
         ],
     ],
+
+    // Die Ausgänge der Schleife, wie der Canvas sie beschriftet. Die Handles
+    // (`loop`, `done`) bleiben, nur die Beschriftung ist deutsch.
+    'loop' => [
+        'outputs' => [
+            'loop' => 'Für jedes Element',
+            'done' => 'Nach der Schleife',
+        ],
+    ],
 ];

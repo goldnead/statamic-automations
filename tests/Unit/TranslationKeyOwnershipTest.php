@@ -181,9 +181,11 @@ function automationsSourceStrings(): array
 
             $contents = (string) file_get_contents($file->getPathname());
 
-            // __('single') and __("double"), the two forms the tree uses.
-            preg_match_all("/__\\(\\s*'((?:[^'\\\\]|\\\\.)*)'/", $contents, $single);
-            preg_match_all('/__\(\s*"((?:[^"\\\\]|\\\\.)*)"/', $contents, $double);
+            // __('single') and __("double"), the two forms the tree uses, and
+            // the plural helper __n('one|many', n), whose key is the whole
+            // piped string.
+            preg_match_all("/__n?\\(\\s*'((?:[^'\\\\]|\\\\.)*)'/", $contents, $single);
+            preg_match_all('/__n?\(\s*"((?:[^"\\\\]|\\\\.)*)"/', $contents, $double);
 
             foreach (array_merge($single[1], $double[1]) as $match) {
                 $found[] = stripcslashes($match);

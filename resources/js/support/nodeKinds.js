@@ -43,6 +43,30 @@ export const ADDER_LABELS = {
     step: __('Add a step'),
 };
 
+/**
+ * Node types whose one output opens a body rather than continuing the flow.
+ *
+ * A Loop runs whatever hangs off `loop` once per item and then carries on
+ * through `done` (see LoopNode.php); there is no loop-back edge in the data.
+ * The canvas draws that body inside a frame with a line back to the Loop and
+ * can fold it into one card. Purely a drawing: nothing of it is saved,
+ * validated or exported.
+ */
+export const SCOPES = {
+    loop: { output: 'loop', continuation: 'done' },
+};
+
+export const SCOPE_LABELS = {
+    steps: (count) => __n(':count step|:count steps', count),
+    collapse: (title) => __('Collapse “:title”', { title }),
+    expand: (title) => __('Expand “:title”', { title }),
+};
+
+/** Where the canvas remembers the folded loops of one automation. */
+export function scopeViewStateKey(automationId) {
+    return automationId ? `statamic-automations.canvas.${automationId}.collapsed` : null;
+}
+
 export const PICK_LABELS = {
     entry: __('Choose a trigger to start the flow.'),
     replaceEntry: __('Choose a trigger to replace the current one.'),
