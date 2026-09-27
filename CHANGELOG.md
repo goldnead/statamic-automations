@@ -1,5 +1,154 @@
 # Changelog
 
+## 2.23.0 — 2026-09-27
+
+### Upgrading
+
+- One migration adds five nullable columns to `automation_connection_operations` (`body_mode`,
+  `content_type`, `raw_body`, `headers`, `response_format`) and widens `method` to 32 characters:
+  run `php artisan migrate`. Existing operations read `null` as before (JSON body from rows,
+  answer detected automatically, no extra headers) and behave exactly as they did.
+- `composer.json` now requires `ext-dom` and `ext-libxml` (XML answers, CalDAV).
+- **Behaviour change:** a Filter that does not match inside a loop body now skips only that
+  item instead of stopping the run (see Changed: loops). Outside loops nothing changes.
+
+### Added: raw requests on connection operations
+
+- **Any method.** An operation accepts any RFC 7230 token, uppercased on save (`REPORT`,
+  `PROPFIND`, `MKCALENDAR`). The CP lists the common ones and has *Other method* for the rest.
+- **Raw body.** *Request content* can be *Raw text*: a template with its own content type, where
+  `{{ input.x }}` inserts text, `{{ input.x | json }}` a JSON literal and `{{ input.x | xml }}` an
+  XML-escaped value. A raw body goes out on GET too.
+- **Operation headers.** Templated key/value headers per operation, over the connection's default
+  headers. The connection's auth header always wins, so an operation can neither replace nor read it.
+
+### Added: response formats
+
+- `response_format`: `auto` (by Content-Type), `json`, `xml` or `text`. XML is read into an array
+  without namespaces (`d:href` is `href`), so response map paths like
+  `multistatus.response.0.href` work; an element that repeats becomes a list.
+- Every operation's output now carries `headers`: the response headers, names lowercased, masked
+  like the rest of the output, without `set-cookie`. `{{ node.headers.etag }}` is the ETag.
+
+### Added: CalDAV
+
+- `caldav.find_events` (connection, range, optional `url_contains`): one `REPORT` calendar-query,
+  a list of `{href, etag, uid, summary, dtstart, url, url_id, description}`. `url_id` is the id at
+  the end of the URL (32 hex or a UUID), which for a Notion link is the page id. No raw calendar
+  text in the output or the run log.
+- `caldav.upsert_description_block` (connection, href, block text, two markers): fresh `GET`, the
+  block set between the markers in DESCRIPTION, `PUT` with `If-Match` only when something changed.
+  `status` is `written`, `unchanged`, `skipped_empty` (empty block, nothing touched), `conflict`
+  (412, fails so a retry reads again) or `error` with a `reason`; `marker_missing` (start marker
+  without end marker) never writes. A test run reads and reports `would_write` without a PUT.
+- Only DESCRIPTION, DTSTAMP and LAST-MODIFIED change; the rest of the event goes back byte for
+  byte (VALARM, other folding, `LANGUAGE`/`ALTREP` parameters), lines fold at 75 octets without
+  cutting UTF-8, and the written text is always CRLF. Ported with its tests from the
+  anders-band.de gig calendar.
+- **Every VEVENT of the resource gets the block, intentionally.** A changed occurrence of a
+  recurring series (`RECURRENCE-ID`) has its own DESCRIPTION, and that is what the calendar app
+  shows on that date; written into the series only, the block would be missing exactly where
+  someone moved a date.
+- A `200` without any VEVENT (login page, empty body) fails with `reason: not_ics` instead of
+  passing as `unchanged`.
+- Header names compare case-insensitively: a default or operation header named like the auth
+  header (`authorization`, `X-API-KEY` against `x-api-key`) is dropped, never merged with the
+  credential. `Host` and `Content-Length` cannot be configured (refused on save, dropped at
+  send time), and a raw body's content type replaces any `Content-Type` header.
+- The credential is a connection (base URL = calendar collection, Basic auth), so each brand has
+  its own calendar and there is no env key. Without one both actions do nothing and say so. An
+  `href` on another host than the collection is refused, not sent the credential.
+- New option source `connections` for pickers of the current brand's connections.
+
+### Added: token filters
+
+- `join:sep` (default `", "`, `\n` for a line break), `pluck:key` (dot notation), `first`, `last`,
+  `split:sep`, `replace:from,to`, `json_decode`, `where:key,value`.
+- `date:format,zone` formats in a time zone (`{{ x | date:H:i,Europe/Berlin }}`). A date
+  given as a Notion date value formats its start.
+- Quoted arguments keep their spaces and may contain `|` and `,` (`join:" | "`,
+  `replace:",",";"`). A quote only counts right after `:` or `,`, so unquoted arguments,
+  apostrophes included, behave as before.
+
+### Added: Compose Text
+
+`compose_text` builds a block of plain text from the run data with Antlers: loops,
+conditions, modifiers, timezone date formatting. Output `text` and `is_empty`. Sandboxed:
+only the run context as data, no cascade, no tags except `foreach`, only data modifiers, no
+PHP and no method calls; anything else fails the node with the reason. Data named like a tag
+(`user`, `form`) reads as data. A render stops at 64 KB of text or 50,000 steps. **Tidy blank lines**
+(on by default) collapses the blank lines conditions and loops leave behind. Pure, so a test
+run renders what a real run would.
+
+A schema field can now declare `resolve_tokens: false`; the executor hands it over as stored.
+The Compose Text template uses it, so the variables inside a loop reach Antlers instead of
+being emptied as tokens first.
+
+### Added: Notion (read only)
+
+- `notion.query_data_source`: rows of a data source, with a raw JSON filter and sorts, a
+  **Related to any of** filter (relation property plus page IDs), pagination up to a request
+  cap with `has_more`. An empty ID list reads no rows and asks nothing.
+- `notion.get_pages`: pages by ID, from a list, JSON or text, IDs or Notion links. A page
+  that cannot be read fails the node unless **Skip pages that cannot be read** is on.
+- `notion.page_text`: the text blocks of a page as a tree and as plain text, 1 to 3 levels;
+  callouts carry `heading` (their text or a leading quote) and `body`; empty blocks and empty
+  template labels (`Zimmer gebucht:`) can be skipped.
+
+Properties come as plain values (text, numbers, option names, relation IDs, rollups as
+lists, formula values). Dates carry the time zone applied: `start`/`end` in ISO 8601 with the
+offset written in, plus `start_date`, `start_time`, `end_date`, `end_time` in a chosen zone.
+
+The credential is a connection with bearer auth (handle `notion` by default); the nodes
+always call `https://api.notion.com/v1/` with `Notion-Version: 2025-09-03`, sending only the
+token (no default headers). Without a connection or token, or with a connection whose auth is
+not bearer, they read nothing and fail with that reason. Limits per run: 50 requests per
+query, 1000 children per block, 300 requests per node. All three run for real in a test run,
+since they only read.
+
+### Changed: loops skip items instead of ending the run
+
+- **A Filter inside a loop body ends only the current item.** Before, the first item that did
+  not match stopped the whole run and every later item was never processed. In nested loops a
+  Filter ends the item of the loop it sits in. A Stop node inside a loop still ends the run; a
+  Filter outside any loop still stops it.
+- **New Loop option `on_item_error`**: `stop` (default, as before) fails the run when a node in
+  the body fails; `continue` ends only that item and goes on with the next. The failed node
+  stays in the run log as failed, the loop's output gains `failed_items` and `failed`
+  (`[{index, error}]`, readable after the loop as `{{ nodes.<loop>.failed_items }}`), and the
+  run keeps its status but carries an error message naming the loop, the count and the failed
+  indexes, so it shows on the run and in the lists. There is no separate partial status and no
+  failure alert for such a run. Only a node's failed result skips the item; an error of the
+  engine itself (database, run log) still fails the run. The failures are written to the run's
+  context as they happen, so they survive a Delay in a later item.
+- A Delay or Wait inside a loop body still ends the loop, as before: the run resumes as a plain
+  path, the remaining items do not run, and in the rest of the body a Filter stops the run and
+  `on_item_error` does not apply. Documented in `docs/architecture.md`.
+- `_on_error: continue` on a node is unchanged and different: without an `error` edge it
+  continues on the default edge, so the next step runs without the failed node's output. The
+  Loop option ends the item at the failed node instead. See `docs/architecture.md`.
+
+### Added: import updates an existing automation in place
+
+- Import strategy `update` (API `handle_strategy: "update"`, `automations:sync --strategy=update`,
+  and the **Update the automation with the same handle** switch on the Import page): the
+  automation with the file's handle gets its name, description, nodes and edges; id, uuid,
+  handle, enabled state and run history stay, and the graph before the import is saved as a
+  revision. Nodes whose `node_key` survives keep their uuid. Without a matching automation it
+  creates one. The API needs `edit automations` for it and answers `200` with
+  `meta.updated: true`. A file that says what the automation already holds (order of nodes,
+  edges and config keys aside) writes nothing: no revision, no audit entry, no version bump,
+  `meta.unchanged: true`, and the sync command prints `(unchanged)`, so `--watch` does not
+  pile up revisions. The default is unchanged: a new, disabled automation with a suffixed
+  handle.
+
+### Fixed: file sync wrote to `/` with the default config
+
+- `automations.file_storage.path` ships as `null`, and `config($key, $default)` does not fall
+  back on null, so *Sync to file* and `automations:sync --from=db` wrote `/{handle}.json` (or
+  failed on permissions). An unset or empty path now means `resource_path('automations')`; a
+  path that is only `/` is refused with an error.
+
 ## 2.22.2 — 2026-09-25
 
 ### Fixed

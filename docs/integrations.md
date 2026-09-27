@@ -359,6 +359,220 @@ link, and only applies to Cal Video.
 its payload looks like, and a trigger whose fields are guesses falls over on the
 first real webhook.
 
+## CalDAV
+
+Two actions for a CalDAV calendar (iCloud, Nextcloud, Fastmail, mailbox.org,
+any server that speaks CalDAV): find the events in a range, and keep a block of
+text inside an event's description up to date. They were built for a shared
+band calendar whose events are made by hand in a calendar app and get their
+details (programme, schedule, hotel) filled in from Notion, but nothing in them
+knows about Notion.
+
+### Setting it up
+
+The credential is a **connection** (Automations → Connections), not an env key,
+so each brand brings its own calendar:
+
+- **Base URL:** the calendar collection itself, e.g.
+  `https://p42-caldav.icloud.com/1234567/calendars/ABCD-…/`. For iCloud, the
+  collection URL is what a CalDAV client like DAVx⁵ or Thunderbird shows after
+  discovery.
+- **Authentication:** Basic, with the account and an **app password** (iCloud:
+  appleid.apple.com → Sign-In and Security → App-Specific Passwords).
+- No operations are needed on the connection; the two actions talk to it
+  directly.
+
+Without a connection picked on the node, or with one that does not exist in the
+current brand, both actions do nothing and fail with that message. Nothing is
+read or written.
+
+Every call goes through the same fences as a connection operation: the host
+guard with the pinned address, no redirects, and an `href` that points at
+another host, scheme or port than the collection is refused rather than sent
+the credential.
+
+### `caldav.find_events`
+
+Inputs: `connection`, `range_start`, `range_end` (anything a date parser reads,
+in the site's time zone unless it says otherwise) and optionally `url_contains`
+(only events whose URL field contains the text, case-insensitive).
+
+One `REPORT` calendar-query with `Depth: 1`. The output:
+
+| Field | |
+| --- | --- |
+| `events` | list of `{href, etag, uid, summary, dtstart, url, url_id, description}` |
+| `count` | number of events |
+
+One entry per event resource. A recurring series with changed occurrences
+(several VEVENTs in one resource, the changed ones with `RECURRENCE-ID`) is one
+entry describing the series. `dtstart` is the ICS value as it stands
+(`20260911` for an all-day event, `20260911T190000Z` or a local time).
+
+`url_id` is the id at the end of the URL's path, 32 hex digits or a UUID,
+returned without dashes and lowercased; the query and fragment do not count.
+For a Notion link (`…/Sheet-Bevern-2026-3c8739f36bad809f90ebd3762307e5a1`)
+that is the page id, which is what makes it the join key between a calendar
+event and a Notion page.
+
+The raw calendar text never goes into the output, so it never reaches the run
+log. The action only reads, so a test run reads too.
+
+### `caldav.upsert_description_block`
+
+Inputs: `connection`, `href` (usually `{{ item.href }}` from `find_events`
+inside a loop), `block_text`, `marker_start`, `marker_end`.
+
+It fetches the event fresh (`GET`), sets `block_text` between the two marker
+lines in the DESCRIPTION, and writes it back with `PUT` and `If-Match` on the
+ETag of that fetch, **only if something changed**. Text people wrote before or
+after the block stays. Where there is no block yet, it is appended after a
+blank line.
+
+Only DESCRIPTION, DTSTAMP and LAST-MODIFIED change. The rest of the event goes
+back byte for byte: the folding of other lines, the DESCRIPTION of a VALARM,
+parameters like `LANGUAGE` or `ALTREP` on the description. Lines are folded at
+75 octets without cutting a UTF-8 character, TEXT values are escaped, and the
+written text always uses CRLF (the XML of a REPORT hands out LF, so it is never
+copied from there).
+
+**Every VEVENT in the resource gets the block, on purpose.** A recurring
+series with a changed occurrence is one resource holding the series and, for
+each changed date, its own VEVENT with a `RECURRENCE-ID` and its own
+DESCRIPTION. A calendar app shows that occurrence's description, not the
+series', so a block written only into the series would be missing exactly on
+the dates someone moved. Text people wrote into an occurrence stays, as it
+does everywhere else.
+
+| `status` | Node | Meaning |
+| --- | --- | --- |
+| `written` | success | changed and accepted by the server; `etag` is the new one if the server names it |
+| `unchanged` | success | the block already stands so; no PUT went out |
+| `skipped_empty` | success | `block_text` is empty; nothing is read or written, an existing block stays |
+| `would_write` | success | test run: read, computed, not written |
+| `conflict` | failed | 412, the event changed after it was read; a retry reads it again |
+| `error` | failed | `reason` says why: `marker_missing`, `not_ics` (a 200 without any VEVENT, e.g. a login page), `not_found`, `no_etag`, `foreign_host`, `http_<status>`, `request_failed` |
+
+`marker_missing` means the description holds the start marker but not the end
+marker. There is then no telling where the block ends, and rather than cut off
+what someone typed after it, nothing is written. A person fixes the markers.
+
+Pick the markers once. A block under an old marker is not found again, and the
+next run appends a second one.
+
+## Notion
+
+Three read-only action nodes (group **Notion**, 2.23): rows of a data source,
+pages by ID, the text of a page. Nothing here writes to Notion.
+
+### Setting it up
+
+1. In Notion, create an integration (Settings, Connections, Develop or manage
+   integrations) and copy its token. Invite the integration to every page and
+   database it should read: Notion answers 404 for anything not shared with it.
+2. Under Automations, Connections, add a connection with the handle `notion`,
+   base URL `https://api.notion.com` and **bearer** auth with the token.
+
+The nodes take only the bearer token and the timeout from the connection (not
+its default headers) and always call `https://api.notion.com/v1/` with
+`Notion-Version: 2025-09-03`. A node's **Connection** field names another
+connection by handle (for a second workspace). Without a connection, with one
+that has no token, or with one whose auth is not **bearer** (basic, custom
+header, none), the nodes read nothing and fail with that reason, so a
+credential meant for another service never reaches Notion. 429 and 5xx
+answers are retried twice.
+
+Limits per node run: a query sends at most 50 requests (`max_pages` above 50
+counts as 50), the children of one block are read up to 1000 (more fails the
+node rather than returning part of the page), and one node sends at most 300
+requests in all.
+
+### Nodes
+
+| Node | Reads | Output |
+|---|---|---|
+| `notion.query_data_source` | rows of a data source, with a raw JSON `filter` and `sorts`, and **Related to any of**: a relation property plus a list of page IDs | `pages`, `count`, `has_more`, `data_source_id` |
+| `notion.get_pages` | pages by ID (a list, JSON, or text; IDs or Notion links), at most 100 | `pages`, `count`, `missing` |
+| `notion.page_text` | the text blocks of a page, 1 to 3 levels deep | `blocks`, `plain`, `page_id` |
+
+The data source ID is not the database ID: since API version 2025-09-03 a
+database can hold several data sources (database menu, Manage data sources,
+Copy data source ID).
+
+**Related to any of** with an empty ID list reads no rows and does not ask
+Notion; without the filter, the query would have returned every row.
+`max_pages` caps the requests (100 rows each, default 10), and `has_more` says
+whether the cap cut the list short.
+
+### Page values
+
+Every page comes as `{id, url, title, created_time, last_edited_time,
+properties}`, each property as a plain value under its name:
+
+| Notion type | Value |
+|---|---|
+| title, rich_text | text |
+| number, checkbox, url, email, phone_number | the value |
+| select, status | the option's name |
+| multi_select | list of names |
+| date | `{start, end, time_zone, has_time, start_date, start_time, end_date, end_time}` |
+| relation | list of page IDs (Notion includes at most 25 per page) |
+| rollup | array rollup: list of values, relation entries spread into page IDs; number or date rollup: the value |
+| formula | its value |
+| people, files, unique_id | names, URLs, `PREFIX-12` |
+
+**Dates and time zones.** Notion sends a time either with an offset in the
+string, or without one plus a `time_zone`, meaning local time in that zone.
+Read naively, the second form is off by the zone's offset (the same trap as a
+`Time` formula built in Notion). `start` and `end` therefore come out as ISO
+8601 with the offset written in, which every filter and modifier reads
+correctly; `start_date`, `start_time`, `end_date`, `end_time` are the same
+moments in the node's **Time zone for dates** (default: the site's display
+time zone). A date without a time stays `2026-12-12`.
+
+### Page text
+
+`blocks` is a tree: `{type, text, children}` for paragraphs, headings, list
+items, to-dos (`checked`), toggles, quotes, callouts and code. Columns and
+synced blocks give way to their children; images, embeds, child databases and
+dividers are skipped. A callout also has `heading` (its own text, or else a
+quote at its top) and `body` (its children without that quote). `plain` is the
+whole tree as lines, with bullets and check boxes.
+
+**Skip empty blocks** (on) drops blocks without text or children. **Skip
+empty template labels** (off) drops lines that are only a label with a colon,
+such as `Zimmer gebucht:`, left over from a page template.
+
+### A gig sheet on the canvas
+
+Manual or scheduled trigger, then:
+
+1. `notion.query_data_source` on the sheets (`sheets`).
+2. Loop over `{{ nodes.sheets.pages }}`.
+3. In the loop: `notion.query_data_source` on the timetable (`zeitplan`),
+   **Related to any of** `Konzertkalender` = `{{ item.properties.Konzertkalender }}`,
+   sorted by `Date`, time zone `Europe/Berlin`.
+4. [Compose Text](extending.md#compose-text):
+
+```antlers
+{{ item.title }}
+
+Zeitplan{{ days = nodes.zeitplan.pages | pluck('properties.Date.start_date') | unique | count }}
+{{ nodes.zeitplan.pages }}{{ if days > 1 }}{{ properties.Date.start_date | format('d.m.') }} {{ /if }}{{ properties.Date.start_time }}{{ if properties.Date.end_time }}–{{ properties.Date.end_time }}{{ /if }} {{ title }}
+{{ /nodes.zeitplan.pages }}
+
+Notion: {{ item.url }}
+```
+
+A timetable over several days puts the date in front of each line; one day
+shows only the times. Venue and hotel pages behind a rollup come from
+`notion.get_pages` with `{{ item.properties.Venue }}`; callout sections from
+`notion.page_text` with `{{ item.id }}`.
+
+### Test runs
+
+All three only read, so a test run reads for real and shows the actual rows.
+
 ## Secrets across integrations
 
 Never embed an API key or signing secret in a node config — it would be

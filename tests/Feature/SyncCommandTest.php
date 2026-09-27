@@ -66,6 +66,44 @@ class SyncCommandTest extends TestCase
         $this->assertDatabaseHas('automations', ['name' => 'Imported']);
     }
 
+    public function test_update_strategy_updates_the_existing_automation_in_place(): void
+    {
+        $existing = $this->seedAutomation('alpha');
+        $existing->forceFill(['enabled' => true])->save();
+
+        File::put("{$this->syncPath}/alpha.json", json_encode([
+            'schema_version' => 1,
+            'automation' => ['name' => 'Alpha from file', 'handle' => 'alpha'],
+            'requires' => [],
+            'nodes' => [
+                ['node_key' => 't', 'type' => 'manual'],
+                ['node_key' => 'log', 'type' => 'add_log_entry', 'config' => ['message' => 'from file']],
+            ],
+            'edges' => [
+                ['from_node_key' => 't', 'to_node_key' => 'log'],
+            ],
+        ]));
+
+        $this->artisan('automations:sync', ['--from' => 'files', '--strategy' => 'update'])
+            ->expectsOutputToContain('alpha → alpha (updated)')
+            ->assertExitCode(0);
+
+        $this->assertSame(1, Automation::count());
+        $after = Automation::with('nodes')->find($existing->id);
+        $this->assertSame('Alpha from file', $after->name);
+        $this->assertTrue((bool) $after->enabled);
+        $this->assertSame('from file', $after->nodes->firstWhere('node_key', 'log')->config['message']);
+
+        // A second run over the same file (every 2s with --watch) changes nothing.
+        $version = (int) $after->version;
+
+        $this->artisan('automations:sync', ['--from' => 'files', '--strategy' => 'update'])
+            ->expectsOutputToContain('alpha → alpha (unchanged)')
+            ->assertExitCode(0);
+
+        $this->assertSame($version, (int) Automation::find($existing->id)->version);
+    }
+
     public function test_dry_run_changes_nothing(): void
     {
         $this->seedAutomation('only-in-db');

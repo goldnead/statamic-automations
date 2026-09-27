@@ -250,4 +250,24 @@ return [
             'description' => 'Wenn ein Partner freigegeben ist und empfehlen kann.',
         ],
     ],
+
+    'compose_text' => [
+        'label' => 'Text zusammensetzen',
+        'description' => 'Baut aus den Daten des Durchlaufs einen Klartext mit Antlers: Schleifen, Bedingungen, Modifier.',
+    ],
+
+    'notion' => [
+        'query_data_source' => [
+            'label' => 'Notion: Datenquelle abfragen',
+            'description' => 'Liest die Zeilen einer Notion-Datenquelle, gefiltert und sortiert, jede Eigenschaft als einfacher Wert.',
+        ],
+        'get_pages' => [
+            'label' => 'Notion: Seiten holen',
+            'description' => 'Liest Notion-Seiten über ihre ID, etwa die Seiten hinter einer Relation.',
+        ],
+        'page_text' => [
+            'label' => 'Notion: Seitentext holen',
+            'description' => 'Liest die Textblöcke einer Notion-Seite, Callouts mit Überschrift und Zeilen, als Baum und als Klartext.',
+        ],
+    ],
 ];

@@ -87,7 +87,8 @@ WorkflowRunner::execute(run, context)
    │     ├─ Execute it                     ← NodeExecutor
    │     └─ Persist a node run             ← RunLogger (with redaction)
    ├─ Branch nodes: pick `true` or `false` edge
-   ├─ Filter nodes: stop the flow on no-match
+   ├─ Filter nodes: stop the flow on no-match (inside a loop body: skip the item)
+   ├─ Loop nodes: walk the `loop` output once per item, then `done`
    └─ Delay nodes: pause + write scheduled_job, return WAITING
        │
        ▼
@@ -113,6 +114,44 @@ Activation is blocked while any error-level issue is present. Warnings are surfa
 `ConditionEvaluator` evaluates a condition list against the context. Each condition is shaped like `{ field, operator, value }`. The evaluator supports `equals`, `does_not_equal`, `contains`, `starts_with`, `ends_with`, `is_empty`, `is_not_empty`, numeric comparisons, date comparisons (`date_before`, `date_after`), `includes_tag`, plus convenience aliases (`status_is`, `form_is`, `collection_is`, `site_is`).
 
 Condition mode is `all` or `any`. Filter nodes stop the flow when the conditions fail; branch nodes route to `true` / `false`.
+
+## Loops and errors
+
+An inline **Loop** runs the nodes on its *For each item* output once per item, with `{{ item }}`,
+`{{ index }}` and `{{ loop.* }}` set, then continues on *After loop*. Nested loops shadow the
+outer loop's variables and restore them afterwards.
+
+Inside a loop body:
+
+| What happens | Effect |
+|---|---|
+| A **Filter** does not match | Only this item ends; the next item runs. Outside a loop a Filter still stops the run. A Filter inside a nested loop ends the item of the loop it sits in. |
+| A **Stop** node | Ends the whole run, as at the top level. |
+| A **Delay / Wait** | Pauses the whole run, as at the top level. |
+| A node **fails**, Loop `on_item_error: stop` (default) | The whole run fails. |
+| A node **fails**, Loop `on_item_error: continue` | Only this item ends; the next item runs. |
+
+With `on_item_error: continue` the failed node stays in the run log as failed, the loop's output
+gains `failed_items` (count) and `failed` (`[{index, error}]`), readable after the loop as
+`{{ nodes.<loop>.failed_items }}`, and the run finishes with its normal status (usually
+`success`) but with an error message like `Loop 'loop': 2 of 5 items failed and were skipped
+(index 1, 3). First error: …`. There is no separate "partial" status; the message is what shows the
+failure on the run, the dashboard and the activity list. A failure alert is only sent for runs
+that fail.
+
+**A Delay or Wait inside a loop body ends the loop.** The run pauses there and, when it resumes,
+walks on from the Delay as a plain path, not as a loop pass: the rest of that item's body runs
+once, the items after it do not run, *After loop* is not taken, and in that rest of the body a
+Filter stops the run and `on_item_error` no longer applies (a failing node fails the run). This
+is how loops and delays behaved before 2.23 as well. Failures of items before the Delay are kept
+and still show on the finished run. Put the Delay before or after the loop, not inside it.
+
+**Not the same as `_on_error: continue` on a node.** That reserved key keeps a failed node from
+failing the run by moving on: down the node's `error` edge if it has one, otherwise down its
+**default** edge, so the next step runs without the failed node's output (and may write
+incomplete data). The Loop option instead ends the item's pass at the failed node. Use
+`_on_error` when you wire an `error` edge that handles the failure, and the Loop option to skip
+an item that cannot be processed.
 
 ## Tokens
 

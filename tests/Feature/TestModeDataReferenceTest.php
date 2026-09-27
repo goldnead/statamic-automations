@@ -169,12 +169,22 @@ function expectedTestRunFailures(): array
         // nothing. Without an API key it therefore does what it says it does
         // and refuses, which is the right answer to a node that cannot work.
         'cal_com.get_slots' => 'No cal.com API key is configured in the test app.',
+        // Same reasoning for CalDAV: both nodes read in a test run, and the
+        // sweep names no connection, so they refuse instead of reading nothing.
+        'caldav.find_events' => 'No CalDAV connection is configured in the test app.',
+        'caldav.upsert_description_block' => 'No CalDAV connection is configured in the test app.',
         'call_automation' => 'The dummy target automation handle does not exist.',
         // The class alone names no operation: the engine hands it the node
         // handle (`connection.<conn>.<op>`) and the sweep has none, so it asks
         // for an operation that does not exist — a configuration error.
         'connection' => 'The bare class is not a connection operation node.',
         'marketing.send_campaign' => 'The dummy campaign handle does not exist (statamic-marketing is not installed).',
+        // Same reasoning as cal.com's slots: the Notion nodes only read, so a
+        // test run reads for real, and without a `notion` connection in the
+        // test app they refuse. `notion.get_pages` is not here because its
+        // dummy config names no page, and no page is nothing to read.
+        'notion.page_text' => 'No Notion connection exists in the test app.',
+        'notion.query_data_source' => 'No Notion connection exists in the test app.',
     ];
 }
 

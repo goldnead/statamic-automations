@@ -2,11 +2,13 @@
 
 namespace Goldnead\StatamicAutomations\Export;
 
+use Goldnead\StatamicAutomations\Engine\VersionManager;
 use Goldnead\StatamicAutomations\Integrations\IntegrationDetector;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
+use Goldnead\StatamicAutomations\Support\AuditLogger;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -19,14 +21,25 @@ use InvalidArgumentException;
  * created automation so the caller can surface them in the UI.
  *
  * Behavior:
- *   - imports always create a new automation (we do not overwrite)
- *   - automations are imported in the disabled state by default
+ *   - by default an import creates a new automation, disabled
  *   - handle conflicts are auto-resolved by appending a short suffix
  *     (caller can opt out via $options['handle_strategy'] = 'fail')
+ *   - $options['handle_strategy'] = 'update' updates the automation that
+ *     already has the handle instead: name, description, nodes and edges
+ *     come from the file, the enabled state and the handle stay, the
+ *     previous graph is kept as a revision. Nodes keep their uuid when
+ *     their node_key survives, so a sent mail's snapshot still finds its
+ *     node. Without such an automation it creates one, as by default.
  */
 class AutomationImporter
 {
     public const SCHEMA_VERSION = 1;
+
+    public const STRATEGY_AUTO = 'auto';
+
+    public const STRATEGY_FAIL = 'fail';
+
+    public const STRATEGY_UPDATE = 'update';
 
     public function __construct(
         protected NodeRegistry $registry,
@@ -36,7 +49,7 @@ class AutomationImporter
     /**
      * @param  array<string, mixed>  $payload
      * @param  array<string, mixed>  $options
-     * @return array{automation: Automation, warnings: array<int, string>, missing_integrations: array<int, string>, missing_node_types: array<int, string>}
+     * @return array{automation: Automation, updated: bool, unchanged: bool, warnings: array<int, string>, missing_integrations: array<int, string>, missing_node_types: array<int, string>}
      */
     public function import(array $payload, array $options = []): array
     {
@@ -55,6 +68,28 @@ class AutomationImporter
                 .'. They will be imported as-is and need to be replaced before activation.';
         }
 
+        if (($options['handle_strategy'] ?? self::STRATEGY_AUTO) === self::STRATEGY_UPDATE) {
+            $existing = Automation::query()
+                ->where('handle', $this->slugHandle($payload['automation']['handle'] ?? null))
+                ->first();
+
+            if ($existing !== null) {
+                // Same content as stored: nothing to write, and no revision,
+                // audit entry or version bump (`automations:sync --watch`
+                // runs this every two seconds).
+                $unchanged = $this->sameContent($existing, $payload);
+
+                return [
+                    'automation' => $unchanged ? $existing->fresh(['nodes', 'edges']) : $this->updateInPlace($existing, $payload),
+                    'updated' => ! $unchanged,
+                    'unchanged' => $unchanged,
+                    'warnings' => $warnings,
+                    'missing_integrations' => $missingIntegrations,
+                    'missing_node_types' => $missingNodeTypes,
+                ];
+            }
+        }
+
         $handle = $this->resolveHandle($payload['automation']['handle'] ?? null, $options);
 
         $automation = DB::transaction(function () use ($payload, $handle) {
@@ -66,38 +101,164 @@ class AutomationImporter
                 'created_by' => optional(auth()->user())->id,
             ]);
 
-            foreach (($payload['nodes'] ?? []) as $node) {
-                AutomationNode::create([
-                    'automation_id' => $automation->id,
-                    'node_key' => $node['node_key'],
-                    'type' => $node['type'],
-                    'label' => $node['label'] ?? null,
-                    'position_x' => (int) ($node['position_x'] ?? 0),
-                    'position_y' => (int) ($node['position_y'] ?? 0),
-                    'config' => $node['config'] ?? [],
-                    'disabled' => (bool) ($node['disabled'] ?? false),
-                ]);
-            }
-
-            foreach (($payload['edges'] ?? []) as $edge) {
-                AutomationEdge::create([
-                    'automation_id' => $automation->id,
-                    'from_node_key' => $edge['from_node_key'],
-                    'from_output' => $edge['from_output'] ?? 'default',
-                    'to_node_key' => $edge['to_node_key'],
-                    'to_input' => $edge['to_input'] ?? 'default',
-                ]);
-            }
+            $this->createGraph($automation, $payload);
 
             return $automation;
         });
 
         return [
             'automation' => $automation->fresh(['nodes', 'edges']),
+            'updated' => false,
+            'unchanged' => false,
             'warnings' => $warnings,
             'missing_integrations' => $missingIntegrations,
             'missing_node_types' => $missingNodeTypes,
         ];
+    }
+
+    /**
+     * Whether the payload says what the automation already holds: name,
+     * description, and nodes and edges with the fields an import writes.
+     * Order does not matter; config compares by value, so a file whose keys
+     * are ordered differently still counts as the same.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    protected function sameContent(Automation $automation, array $payload): bool
+    {
+        $automation->loadMissing(['nodes', 'edges']);
+
+        if ((string) $automation->name !== (string) $payload['automation']['name']
+            || ($automation->description ?? null) !== ($payload['automation']['description'] ?? null)) {
+            return false;
+        }
+
+        $current = [
+            $this->normalizeNodes($automation->nodes->map(fn (AutomationNode $n) => $n->only(
+                ['node_key', 'type', 'label', 'position_x', 'position_y', 'config', 'disabled'],
+            ))->all()),
+            $this->normalizeEdges($automation->edges->map(fn (AutomationEdge $e) => $e->only(
+                ['from_node_key', 'from_output', 'to_node_key', 'to_input'],
+            ))->all()),
+        ];
+
+        $incoming = [
+            $this->normalizeNodes($payload['nodes'] ?? []),
+            $this->normalizeEdges($payload['edges'] ?? []),
+        ];
+
+        return $current == $incoming;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $nodes
+     * @return array<string, array<string, mixed>>
+     */
+    protected function normalizeNodes(array $nodes): array
+    {
+        $out = [];
+
+        foreach ($nodes as $node) {
+            $out[(string) $node['node_key']] = [
+                'type' => (string) $node['type'],
+                'label' => $node['label'] ?? null,
+                'position_x' => (int) ($node['position_x'] ?? 0),
+                'position_y' => (int) ($node['position_y'] ?? 0),
+                'config' => $node['config'] ?? [],
+                'disabled' => (bool) ($node['disabled'] ?? false),
+            ];
+        }
+
+        ksort($out);
+
+        return $out;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $edges
+     * @return array<int, string>
+     */
+    protected function normalizeEdges(array $edges): array
+    {
+        $out = array_map(fn (array $edge) => implode("\0", [
+            (string) $edge['from_node_key'],
+            (string) ($edge['from_output'] ?? 'default'),
+            (string) $edge['to_node_key'],
+            (string) ($edge['to_input'] ?? 'default'),
+        ]), $edges);
+
+        sort($out);
+
+        return $out;
+    }
+
+    /**
+     * Replace an existing automation's content with the payload, keeping
+     * what identifies it and what an editor switched: id, uuid, handle,
+     * enabled state, run history. The graph before the import is saved as a
+     * revision first, so the import can be rolled back in the CP.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    protected function updateInPlace(Automation $automation, array $payload): Automation
+    {
+        app(VersionManager::class)->snapshot($automation, 'Before import');
+
+        $automation = DB::transaction(function () use ($automation, $payload) {
+            $uuids = $automation->nodes()->pluck('uuid', 'node_key')->all();
+
+            $automation->fill([
+                'name' => $payload['automation']['name'],
+                'description' => $payload['automation']['description'] ?? null,
+            ]);
+            $automation->version = (int) $automation->version + 1;
+            $automation->save();
+
+            $automation->edges()->delete();
+            $automation->nodes()->delete();
+
+            $this->createGraph($automation, $payload, $uuids);
+
+            return $automation;
+        });
+
+        app(AuditLogger::class)->record('updated', $automation, [
+            'version' => $automation->version,
+            'source' => 'import',
+        ]);
+
+        return $automation->fresh(['nodes', 'edges']);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, string>  $uuids  node_key => uuid to keep
+     */
+    protected function createGraph(Automation $automation, array $payload, array $uuids = []): void
+    {
+        foreach (($payload['nodes'] ?? []) as $node) {
+            AutomationNode::create([
+                'uuid' => $uuids[$node['node_key']] ?? null,
+                'automation_id' => $automation->id,
+                'node_key' => $node['node_key'],
+                'type' => $node['type'],
+                'label' => $node['label'] ?? null,
+                'position_x' => (int) ($node['position_x'] ?? 0),
+                'position_y' => (int) ($node['position_y'] ?? 0),
+                'config' => $node['config'] ?? [],
+                'disabled' => (bool) ($node['disabled'] ?? false),
+            ]);
+        }
+
+        foreach (($payload['edges'] ?? []) as $edge) {
+            AutomationEdge::create([
+                'automation_id' => $automation->id,
+                'from_node_key' => $edge['from_node_key'],
+                'from_output' => $edge['from_output'] ?? 'default',
+                'to_node_key' => $edge['to_node_key'],
+                'to_input' => $edge['to_input'] ?? 'default',
+            ]);
+        }
     }
 
     /**
@@ -192,14 +353,18 @@ class AutomationImporter
         return array_values(array_unique($missing));
     }
 
+    protected function slugHandle(?string $candidate): string
+    {
+        return Str::slug($candidate ?: 'imported-automation');
+    }
+
     /**
      * @param  array<string, mixed>  $options
      */
     protected function resolveHandle(?string $candidate, array $options): string
     {
-        $strategy = $options['handle_strategy'] ?? 'auto';
-        $candidate = $candidate ?: 'imported-automation';
-        $candidate = Str::slug($candidate);
+        $strategy = $options['handle_strategy'] ?? self::STRATEGY_AUTO;
+        $candidate = $this->slugHandle($candidate);
 
         if (! Automation::where('handle', $candidate)->exists()) {
             return $candidate;

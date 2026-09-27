@@ -2,6 +2,7 @@
 
 namespace Goldnead\StatamicAutomations\Tests\Unit;
 
+use Goldnead\StatamicAutomations\Engine\VersionManager;
 use Goldnead\StatamicAutomations\Export\AutomationImporter;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Tests\TestCase;
@@ -110,6 +111,93 @@ class AutomationImporterTest extends TestCase
     {
         $result = app(AutomationImporter::class)->import($this->basePayload());
 
+        $this->assertFalse((bool) $result['automation']->enabled);
+        $this->assertFalse($result['updated']);
+    }
+
+    public function test_update_strategy_replaces_the_graph_of_the_automation_with_the_same_handle(): void
+    {
+        $first = app(AutomationImporter::class)->import($this->basePayload())['automation'];
+        $first->forceFill(['enabled' => true])->save();
+        $keptUuid = $first->nodes->firstWhere('node_key', 't')->uuid;
+
+        $payload = $this->basePayload();
+        $payload['automation']['name'] = 'Imported Flow v2';
+        $payload['nodes'][1] = ['node_key' => 'log2', 'type' => 'add_log_entry', 'config' => ['message' => 'v2']];
+        $payload['edges'][0] = ['from_node_key' => 't', 'to_node_key' => 'log2'];
+
+        $result = app(AutomationImporter::class)->import($payload, ['handle_strategy' => 'update']);
+        $updated = $result['automation'];
+
+        $this->assertTrue($result['updated']);
+        $this->assertSame($first->id, $updated->id);
+        $this->assertSame($first->uuid, $updated->uuid);
+        $this->assertSame('imported-flow', $updated->handle);
+        $this->assertSame('Imported Flow v2', $updated->name);
+        $this->assertTrue((bool) $updated->enabled, 'An update keeps the enabled state.');
+        $this->assertSame(['log2', 't'], $updated->nodes->pluck('node_key')->sort()->values()->all());
+        $this->assertSame(['log2'], $updated->edges->pluck('to_node_key')->all());
+        $this->assertSame($keptUuid, $updated->nodes->firstWhere('node_key', 't')->uuid, 'A surviving node keeps its uuid.');
+        $this->assertSame(1, Automation::where('handle', 'like', 'imported-flow%')->count());
+    }
+
+    public function test_update_strategy_keeps_a_disabled_automation_disabled(): void
+    {
+        app(AutomationImporter::class)->import($this->basePayload());
+
+        $payload = $this->basePayload();
+        $payload['automation']['name'] = 'Renamed';
+
+        $result = app(AutomationImporter::class)->import($payload, ['handle_strategy' => 'update']);
+
+        $this->assertTrue($result['updated']);
+        $this->assertFalse((bool) $result['automation']->enabled);
+    }
+
+    public function test_update_strategy_writes_nothing_when_the_file_matches_the_automation(): void
+    {
+        $first = app(AutomationImporter::class)->import($this->basePayload())['automation'];
+        $nodeIds = $first->nodes->pluck('id')->sort()->values()->all();
+
+        // Same content, keys in another order: still the same.
+        $payload = $this->basePayload();
+        $payload['nodes'] = array_reverse($payload['nodes']);
+        $payload['nodes'][0] = array_reverse($payload['nodes'][0], true);
+
+        $this->mock(VersionManager::class, fn ($mock) => $mock->shouldNotReceive('snapshot'));
+
+        $result = app(AutomationImporter::class)->import($payload, ['handle_strategy' => 'update']);
+
+        $this->assertTrue($result['unchanged']);
+        $this->assertFalse($result['updated']);
+        $after = $first->fresh(['nodes']);
+        $this->assertSame((int) $first->version, (int) $after->version);
+        $this->assertSame($nodeIds, $after->nodes->pluck('id')->sort()->values()->all(), 'Nodes were not rewritten.');
+    }
+
+    public function test_update_strategy_saves_a_revision_when_something_changed(): void
+    {
+        app(AutomationImporter::class)->import($this->basePayload());
+
+        $this->mock(VersionManager::class, fn ($mock) => $mock->shouldReceive('snapshot')->once()->withArgs(
+            fn ($automation, $message) => $automation->handle === 'imported-flow' && $message === 'Before import',
+        ));
+
+        $payload = $this->basePayload();
+        $payload['nodes'][1]['config']['message'] = 'changed';
+
+        $result = app(AutomationImporter::class)->import($payload, ['handle_strategy' => 'update']);
+
+        $this->assertTrue($result['updated']);
+        $this->assertFalse($result['unchanged']);
+    }
+
+    public function test_update_strategy_creates_when_no_automation_has_the_handle(): void
+    {
+        $result = app(AutomationImporter::class)->import($this->basePayload(), ['handle_strategy' => 'update']);
+
+        $this->assertFalse($result['updated']);
+        $this->assertSame('imported-flow', $result['automation']->handle);
         $this->assertFalse((bool) $result['automation']->enabled);
     }
 }

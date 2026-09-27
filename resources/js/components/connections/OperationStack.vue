@@ -58,7 +58,36 @@ const showAdvanced = ref(false);
 const isNew = computed(() => !props.operation?.id);
 const title = computed(() => (isNew.value ? __('Add operation') : props.operation.name));
 
-const methodOptions = computed(() => props.methods.map((m) => ({ value: m, label: m })));
+// The common methods to pick from, and "Other" for any other token the
+// server accepts (REPORT, PROPFIND, MKCALENDAR, …), typed in a field below.
+const OTHER_METHOD = '__other';
+const customMethod = ref(false);
+const methodOptions = computed(() => [
+    ...props.methods.map((m) => ({ value: m, label: m })),
+    { value: OTHER_METHOD, label: __('Other method') },
+]);
+const methodChoice = computed({
+    get: () => (customMethod.value || !props.methods.includes(form.value.method) ? OTHER_METHOD : form.value.method),
+    set: (value) => {
+        if (value === OTHER_METHOD) {
+            customMethod.value = true;
+            return;
+        }
+        customMethod.value = false;
+        form.value.method = value;
+    },
+});
+
+const bodyModeOptions = computed(() => [
+    { value: 'form_json', label: __('JSON from fields') },
+    { value: 'raw', label: __('Raw text') },
+]);
+const responseFormatOptions = computed(() => [
+    { value: 'auto', label: __('Detect automatically') },
+    { value: 'json', label: 'JSON' },
+    { value: 'xml', label: 'XML' },
+    { value: 'text', label: __('Text') },
+]);
 const inputTypeLabels = {
     text: __('Text'),
     textarea: __('Textarea'),
@@ -91,6 +120,11 @@ function blank() {
         inputs: [],
         response_map: {},
         fail_on_error_status: true,
+        body_mode: 'form_json',
+        content_type: '',
+        raw_body: '',
+        headers: {},
+        response_format: 'auto',
     };
 }
 
@@ -115,6 +149,11 @@ function fromApi(operation) {
         ...blank(),
         ...operation,
         description: operation.description ?? '',
+        body_mode: operation.body_mode || 'form_json',
+        content_type: operation.content_type ?? '',
+        raw_body: operation.raw_body ?? '',
+        headers: operation.headers ?? {},
+        response_format: operation.response_format || 'auto',
         inputs: (operation.inputs ?? []).map(inputRow),
     };
 }
@@ -135,10 +174,15 @@ function payload() {
         name: f.name,
         handle: f.handle,
         description: f.description || null,
-        method: f.method,
+        method: (f.method || '').trim().toUpperCase(),
         path: f.path,
         query: f.query,
         body: f.body,
+        body_mode: f.body_mode,
+        content_type: f.content_type || null,
+        raw_body: f.raw_body || null,
+        headers: f.headers,
+        response_format: f.response_format,
         inputs: f.inputs.map((input) => {
             const out = {
                 handle: input.handle,
@@ -165,6 +209,7 @@ watch(
         errors.value = {};
         handleTouched.value = !isNew.value;
         showAdvanced.value = false;
+        customMethod.value = !props.methods.includes(form.value.method);
     },
     { immediate: true },
 );
@@ -325,9 +370,18 @@ async function save() {
                     : __('Add inputs above to get placeholders for the path and the content.')"
             >
                 <Card class="space-y-6">
-                    <div class="grid sm:grid-cols-[10rem_1fr] gap-6 *:min-w-0">
+                    <div class="grid sm:grid-cols-[12rem_1fr] gap-6 *:min-w-0">
                         <Field id="operation_method" :label="__('Method')" required :error="errors.method">
-                            <Select id="operation_method" v-model="form.method" :options="methodOptions" />
+                            <Select id="operation_method" v-model="methodChoice" :options="methodOptions" />
+                            <Input
+                                v-if="methodChoice === OTHER_METHOD"
+                                id="operation_method_custom"
+                                v-model="form.method"
+                                class="font-mono mt-2"
+                                placeholder="REPORT"
+                                :aria-label="__('Method')"
+                                data-operation-method-custom
+                            />
                         </Field>
                         <Field
                             id="operation_path"
@@ -339,12 +393,53 @@ async function save() {
                             <Input id="operation_path" v-model="form.path" class="font-mono" placeholder="/chat.postMessage" />
                         </Field>
                     </div>
+                    <Field id="operation_body_mode" :label="__('Request content')" :error="errors.body_mode">
+                        <Select id="operation_body_mode" v-model="form.body_mode" :options="bodyModeOptions" />
+                    </Field>
                     <Field
+                        v-if="form.body_mode !== 'raw'"
                         :label="__('Request content (JSON)')"
                         :error="errors.body"
                         :instructions="__('One field per row, e.g. text → {{ input.text }} and channel → {{ input.channel }}. Leave empty for a request without content.')"
                     >
                         <KeyValueField v-model="form.body" :key-label="__('Field')" />
+                    </Field>
+                    <template v-else>
+                        <Field
+                            id="operation_content_type"
+                            :label="__('Content type')"
+                            :error="errors.content_type"
+                            :instructions="__('Sent as the Content-Type header, e.g. application/xml; charset=utf-8.')"
+                        >
+                            <Input
+                                id="operation_content_type"
+                                v-model="form.content_type"
+                                class="font-mono"
+                                placeholder="text/plain; charset=utf-8"
+                            />
+                        </Field>
+                        <Field
+                            id="operation_raw_body"
+                            :label="__('Raw content')"
+                            :error="errors.raw_body"
+                            :instructions="__('Sent exactly as written. {{ input.x }} inserts the value as text, {{ input.x | json }} as a JSON value, {{ input.x | xml }} escaped for XML.')"
+                        >
+                            <Textarea
+                                id="operation_raw_body"
+                                v-model="form.raw_body"
+                                class="font-mono"
+                                :rows="8"
+                                elastic
+                                data-operation-raw-body
+                            />
+                        </Field>
+                    </template>
+                    <Field
+                        :label="__('Headers')"
+                        :error="errors.headers"
+                        :instructions="__('Sent with this operation only, e.g. Depth → 1. Placeholders work here too. The authentication of the connection always wins.')"
+                    >
+                        <KeyValueField v-model="form.headers" :key-label="__('Header')" />
                     </Field>
                     <Field
                         :label="__('URL parameters')"
@@ -358,6 +453,14 @@ async function save() {
 
             <Panel :heading="__('Response')">
                 <Card class="space-y-6">
+                    <Field
+                        id="operation_response_format"
+                        :label="__('Response format')"
+                        :error="errors.response_format"
+                        :instructions="__('How the answer is read for the output fields. XML is read without namespaces, so d:href is href.')"
+                    >
+                        <Select id="operation_response_format" v-model="form.response_format" :options="responseFormatOptions" />
+                    </Field>
                     <Field
                         :label="__('Output fields')"
                         :error="errors.response_map"

@@ -243,3 +243,56 @@ it('derives handles from names and shows each input as the placeholder to use', 
     expect(wrapper.find('[data-operation-input="0"]').html()).toContain('{{ input.kanal_name }}');
     expect(wrapper.html()).toContain('Placeholders you can use: {{ input.kanal_name }}');
 });
+
+it('keeps a method outside the list as a typed one and saves the raw body settings', async () => {
+    const wrapper = mount(OperationStack, {
+        props: {
+            open: true,
+            operation: {
+                id: 9,
+                handle: 'find',
+                name: 'Find',
+                method: 'REPORT',
+                path: '/',
+                query: {},
+                body: {},
+                inputs: [],
+                response_map: {},
+                fail_on_error_status: true,
+                body_mode: 'raw',
+                content_type: 'application/xml',
+                raw_body: '<x/>',
+                headers: { Depth: '1' },
+                response_format: 'xml',
+            },
+            operationsUrl: '/cp/automations/api/connections/7/operations',
+            methods: ['GET', 'POST'],
+            inputTypes: ['text'],
+        },
+    });
+
+    // A stored REPORT shows the typed field, with the method in it.
+    expect(wrapper.vm.$.setupState.methodChoice).toBe('__other');
+    expect(wrapper.find('[data-operation-method-custom]').exists()).toBe(true);
+    expect(wrapper.find('[data-operation-raw-body]').exists()).toBe(true);
+
+    wrapper.vm.$.setupState.form.method = 'propfind';
+    await wrapper.find('[data-operation-save]').trigger('click');
+    await flushPromises();
+
+    const payload = axios.patch.mock.calls.at(-1)[1];
+    expect(payload).toMatchObject({
+        method: 'PROPFIND',
+        body_mode: 'raw',
+        content_type: 'application/xml',
+        raw_body: '<x/>',
+        headers: { Depth: '1' },
+        response_format: 'xml',
+    });
+
+    // Picking a listed method again hides the typed field.
+    wrapper.vm.$.setupState.methodChoice = 'GET';
+    await flushPromises();
+    expect(wrapper.vm.$.setupState.form.method).toBe('GET');
+    expect(wrapper.find('[data-operation-method-custom]').exists()).toBe(false);
+});

@@ -44,7 +44,7 @@ class SyncAutomations extends Command
 {
     protected $signature = 'automations:sync
         {--from=auto : Where the source of truth lives — files | db | auto}
-        {--strategy=db_wins : Conflict strategy — db_wins | file_wins}
+        {--strategy=db_wins : Conflict strategy — db_wins | file_wins | update (file content into the existing automation, enabled state kept)}
         {--brand= : Which brand to sync (handle or id). Required on a multi-brand install.}
         {--dry-run : Print what would happen without writing anything}
         {--watch : Re-run periodically (every 2 seconds) for development}';
@@ -215,7 +215,33 @@ class SyncAutomations extends Command
             }
 
             if ($dryRun) {
-                $this->line("  · {$entry['handle']} — would ".($existing ? 'replace' : 'create'));
+                $action = match (true) {
+                    ! $existing => 'create',
+                    $strategy === 'update' => 'update in place',
+                    default => 'replace',
+                };
+                $this->line("  · {$entry['handle']} — would {$action}");
+
+                continue;
+            }
+
+            // update → the file's name, description, nodes and edges go into
+            // the existing automation; its id, uuid, enabled state and run
+            // history stay. file_wins, below, replaces it with a new,
+            // disabled automation.
+            if ($strategy === 'update') {
+                $result = $importer->import($payload, ['handle_strategy' => AutomationImporter::STRATEGY_UPDATE]);
+
+                foreach ($result['warnings'] as $w) {
+                    $this->warn("    ⚠ {$w}");
+                }
+
+                $verb = match (true) {
+                    $result['unchanged'] => 'unchanged',
+                    $result['updated'] => 'updated',
+                    default => 'created',
+                };
+                $this->line("  ✓ {$entry['handle']} → {$result['automation']->handle} ({$verb})");
 
                 continue;
             }

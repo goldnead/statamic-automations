@@ -48,9 +48,17 @@ class ExportImportController extends Controller
             ], 422);
         }
 
+        $strategy = (string) $request->input('handle_strategy', AutomationImporter::STRATEGY_AUTO);
+
+        // Updating in place changes an existing automation, so it takes the
+        // edit permission on top of the create permission an import needs.
+        if ($strategy === AutomationImporter::STRATEGY_UPDATE) {
+            $this->authorizeAction('edit automations');
+        }
+
         try {
             $result = $importer->import($payload, [
-                'handle_strategy' => $request->input('handle_strategy', 'auto'),
+                'handle_strategy' => $strategy,
             ]);
         } catch (\InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
@@ -59,11 +67,13 @@ class ExportImportController extends Controller
         return response()->json([
             'data' => (new AutomationResource($result['automation']))->toArray($request),
             'meta' => [
+                'updated' => $result['updated'],
+                'unchanged' => $result['unchanged'],
                 'warnings' => $result['warnings'],
                 'missing_integrations' => $result['missing_integrations'],
                 'missing_node_types' => $result['missing_node_types'],
             ],
-        ], 201);
+        ], $result['updated'] || $result['unchanged'] ? 200 : 201);
     }
 
     public function syncToFile(Automation $automationFlow, AutomationFileSync $sync): JsonResponse

@@ -89,6 +89,24 @@ class AutomationConnection extends Model
         static::$schemaReady = false;
     }
 
+    /**
+     * The connections of the current brand as select options (the option
+     * source `connections`), value = handle. Empty before migrate.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    public static function options(): array
+    {
+        if (! static::schemaReady()) {
+            return [];
+        }
+
+        return static::query()->orderBy('name')->get(['handle', 'name'])
+            ->map(fn (self $connection) => ['value' => $connection->handle, 'label' => $connection->name])
+            ->values()
+            ->all();
+    }
+
     /** @return HasMany<AutomationConnectionOperation, $this> */
     public function operations(): HasMany
     {
@@ -176,6 +194,54 @@ class AutomationConnection extends Model
     public function defaultHeaders(): array
     {
         return AutomationConnectionOperation::keyValue($this->default_headers);
+    }
+
+    /**
+     * Header names nobody configures: the transport sets them, and a second
+     * value would at best be refused and at worst smuggle a request.
+     */
+    public const RESERVED_HEADERS = ['host', 'content-length'];
+
+    /**
+     * Every header a request to this service carries: the default headers,
+     * then `$extra` over them, then the credential over both.
+     *
+     * Compared by lowercased name, because HTTP names are case-insensitive
+     * and Guzzle keeps `authorization` and `Authorization` as one header with
+     * both values (`Bearer stolen, Basic …`). So a default or extra header
+     * named like an auth header is dropped, not merged; so are the reserved
+     * names and whatever `$drop` lists (a raw body's own Content-Type).
+     *
+     * @param  array<string, mixed>  $extra
+     * @param  array<int, string>  $drop
+     * @return array<string, string>
+     */
+    public function requestHeaders(array $extra = [], array $drop = []): array
+    {
+        $auth = $this->authHeaders();
+        $blocked = array_map('strtolower', [...array_keys($auth), ...self::RESERVED_HEADERS, ...$drop]);
+        $headers = [];
+
+        foreach ([$this->defaultHeaders(), $extra] as $layer) {
+            foreach ($layer as $name => $value) {
+                $lower = strtolower(trim((string) $name));
+
+                if ($lower === '' || in_array($lower, $blocked, true)) {
+                    continue;
+                }
+
+                // A later layer replaces an earlier one whatever its case.
+                foreach (array_keys($headers) as $existing) {
+                    if (strtolower($existing) === $lower) {
+                        unset($headers[$existing]);
+                    }
+                }
+
+                $headers[trim((string) $name)] = (string) $value;
+            }
+        }
+
+        return [...$headers, ...$auth];
     }
 
     /**

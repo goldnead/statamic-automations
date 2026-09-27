@@ -23,6 +23,7 @@ use Goldnead\StatamicAutomations\Integrations\Affiliates\Triggers as AfT;
 use Goldnead\StatamicAutomations\Integrations\Booking\Triggers as BT;
 use Goldnead\StatamicAutomations\Integrations\CalCom\Actions as CalA;
 use Goldnead\StatamicAutomations\Integrations\CalCom\Triggers as CalT;
+use Goldnead\StatamicAutomations\Integrations\CalDav\Actions as CalDavA;
 use Goldnead\StatamicAutomations\Integrations\Courses\Triggers as CoT;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\Actions as EA;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\EntitlementsAdapter;
@@ -47,6 +48,7 @@ use Goldnead\StatamicAutomations\Integrations\Marketing\Actions\UnsubscribeFromL
 use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\CampaignSentTrigger;
 use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\SubscriberConfirmedTrigger;
 use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\SubscriberUnsubscribedTrigger;
+use Goldnead\StatamicAutomations\Integrations\Notion\Actions as NoA;
 use Goldnead\StatamicAutomations\Integrations\Offers\Triggers as OfT;
 use Goldnead\StatamicAutomations\Integrations\Payments\Triggers as PT;
 use Goldnead\StatamicAutomations\Integrations\VocalFlow\Actions as VfA;
@@ -66,6 +68,7 @@ use Goldnead\StatamicAutomations\Nodes\Actions\AddUserToGroupAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\AiGenerateAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\AssignUserRoleAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\CallAutomationAction;
+use Goldnead\StatamicAutomations\Nodes\Actions\ComposeTextAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\CreateEntryAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\CreateTermAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\CreateUserAction;
@@ -597,6 +600,7 @@ class ServiceProvider extends AddonServiceProvider
             'assign_user_role' => AssignUserRoleAction::class,
             'add_user_to_group' => AddUserToGroupAction::class,
             'set_global_value' => SetGlobalValueAction::class,
+            'compose_text' => ComposeTextAction::class,
 
             // VocalFlow, die Gegenrichtung zu den Auslösern oben. Genau zwei,
             // die beiden Schritte des Onboardings; alles Weitere, was die
@@ -623,6 +627,20 @@ class ServiceProvider extends AddonServiceProvider
             'cal_com.cancel_booking' => CalA\CancelBookingAction::class,
             'cal_com.create_booking' => CalA\CreateBookingAction::class,
             'cal_com.get_slots' => CalA\GetSlotsAction::class,
+
+            // CalDAV (2.23.0). The credential is a connection from the CP
+            // (base URL = calendar collection, Basic auth), not an env key, so
+            // each brand brings its own calendar. Without one both do nothing
+            // and say so.
+            'caldav.find_events' => CalDavA\FindEventsAction::class,
+            'caldav.upsert_description_block' => CalDavA\UpsertDescriptionBlockAction::class,
+
+            // Notion, read only: rows of a data source, pages by ID, the text
+            // of a page. The credential is a connection (bearer auth), so
+            // without one the nodes read nothing and say so.
+            'notion.query_data_source' => NoA\QueryDataSourceAction::class,
+            'notion.get_pages' => NoA\GetPagesAction::class,
+            'notion.page_text' => NoA\PageTextAction::class,
         ];
 
         $automations = $this->app->make('automations');
@@ -723,6 +741,7 @@ class ServiceProvider extends AddonServiceProvider
         $webhookDestinations = fn ($request) => $this->app->make($native)->webhookDestinations($request);
         $automations->registerOptionSource('webhook_manager.destinations', $webhookDestinations);
         $automations->registerOptionSource('webhooks', $webhookDestinations);
+        $automations->registerOptionSource('connections', fn ($request) => AutomationConnection::options());
     }
 
     /**

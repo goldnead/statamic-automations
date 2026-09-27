@@ -41,6 +41,12 @@ class LoopNode implements AutomationLogicNode
     /** Output handle taken once, after all items have been processed. */
     public const OUTPUT_DONE = 'done';
 
+    /** A node failing inside the body fails the whole run (the default, as before 2.23). */
+    public const ON_ITEM_ERROR_STOP = 'stop';
+
+    /** A node failing inside the body ends only that item; the next item runs. */
+    public const ON_ITEM_ERROR_CONTINUE = 'continue';
+
     public function __construct(protected WorkflowRunner $runner) {}
 
     /**
@@ -132,6 +138,17 @@ class LoopNode implements AutomationLogicNode
                 'type' => 'integer',
                 'default' => 100,
             ],
+            [
+                'handle' => 'on_item_error',
+                'label' => 'When a step fails for one item',
+                'type' => 'select',
+                'options' => [
+                    ['value' => self::ON_ITEM_ERROR_STOP, 'label' => 'Stop the whole run'],
+                    ['value' => self::ON_ITEM_ERROR_CONTINUE, 'label' => 'Skip that item and go on with the next'],
+                ],
+                'default' => self::ON_ITEM_ERROR_STOP,
+                'help' => 'With "Skip", a failed step ends only that item. The run names the failed items in its error message, and the steps after the loop can read its failed_items output.',
+            ],
         ];
     }
 
@@ -155,16 +172,19 @@ class LoopNode implements AutomationLogicNode
         $itemKey = (string) ($config['item_key'] ?? 'item') ?: 'item';
         $maxIterations = max(1, (int) ($config['max_iterations'] ?? 100));
         $items = array_slice($items, 0, $maxIterations);
+        $onItemError = ($config['on_item_error'] ?? null) === self::ON_ITEM_ERROR_CONTINUE
+            ? self::ON_ITEM_ERROR_CONTINUE
+            : self::ON_ITEM_ERROR_STOP;
 
         if (empty($items)) {
             return ActionResult::success(
-                ['iterations' => 0, 'items' => [], 'item_key' => $itemKey],
+                ['iterations' => 0, 'items' => [], 'item_key' => $itemKey, 'on_item_error' => $onItemError],
                 self::OUTPUT_DONE,
             );
         }
 
         return ActionResult::success(
-            ['iterations' => count($items), 'items' => $items, 'item_key' => $itemKey],
+            ['iterations' => count($items), 'items' => $items, 'item_key' => $itemKey, 'on_item_error' => $onItemError],
             self::OUTPUT_LOOP,
         );
     }
