@@ -33,7 +33,10 @@ const stub = (name, props, emits) => defineComponent({ name, props, emits, setup
 const CanvasStub = stub(
     'CanvasStub',
     ['nodes', 'edges', 'selectedKey', 'validation', 'library', 'pendingTarget'],
-    ['select', 'remove-node', 'duplicate-node'],
+    // The names the shared Canvas really emits (see its defineEmits), so a
+    // listener the page wires under any other name is never called — as in
+    // the Control Panel.
+    ['select', 'remove-node', 'duplicate-node', 'replace-unique'],
 );
 const ConfigPanelStub = stub('ConfigPanelStub', ['node', 'library'], ['update:label', 'update:config']);
 
@@ -388,6 +391,19 @@ describe('Automations/Edit', () => {
             expect(editor.wrapper.find('[data-mail-list-dirty]').exists()).toBe(true);
             expect(editor.wrapper.findAll('[data-attr-icon="arrow-down"]')).toHaveLength(0);
         });
+    });
+
+    it('arms "Replace trigger" when the trigger card asks for it', async () => {
+        // The card's menu item makes the canvas emit `replace-unique`. The
+        // page listened for `replace-trigger`, a name the canvas has not
+        // emitted since the editor moved into @goldnead/flow-canvas, so the
+        // menu item did nothing at all.
+        const editor = mountEditor();
+
+        editor.canvas().vm.$emit('replace-unique', 't');
+        await flushPromises();
+
+        expect(editor.canvas().props('pendingTarget')).toEqual({ kind: 'replace', nodeKey: 't' });
     });
 
     it('duplicates a branch node onto an output the branch has', async () => {

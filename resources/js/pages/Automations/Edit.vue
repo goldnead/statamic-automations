@@ -1231,7 +1231,7 @@ watch(view, scheduleHeightUpdate);
                     @rename-node="renameNode"
                     @duplicate-node="duplicateNode"
                     @toggle-node-disabled="toggleNodeDisabled"
-                    @replace-trigger="onReplaceTrigger"
+                    @replace-unique="onReplaceTrigger"
                 />
             </div>
 
