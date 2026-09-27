@@ -218,6 +218,8 @@ last two need statamic-offers for their pickers; the matching works on the handl
 | Create / Update User | Statamic | Create or merge field data on a user |
 | Assign User Role · Add User to Group | Statamic | Add/remove a role or group membership |
 | Set Global Value | Statamic | Set a key on a global set (per site) |
+| Compose Text | Logic | Plain text from the run data with sandboxed Antlers: loops, conditions, modifiers. Output `text`, `is_empty` |
+| Query Data Source · Get Pages · Get Page Text _(Notion)_ | Notion | Read only, credential from a connection. Properties come as plain values, dates with their time zone applied. See [Integrations](docs/integrations.md#notion) |
 | Stop Flow | Logic | Ends the flow intentionally |
 | Create or Update Lead _(LeadHub)_ | LeadHub | Email-based upsert |
 | Change Lead Status _(LeadHub)_ | LeadHub | |

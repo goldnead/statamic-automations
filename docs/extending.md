@@ -359,6 +359,9 @@ The dynamic config panel renders these field types out of the box:
 | `data_reference` | Reference to a context node (defaults to `{{ source.id }}`) |
 | `condition_list` | Filter / Branch condition builder |
 
+A field with `'resolve_tokens' => false` reaches `execute()` exactly as stored,
+without token resolution (2.23). See [Compose Text](#compose-text).
+
 ## Tokens
 
 Tokens use dot notation against the `AutomationContext`:
@@ -376,6 +379,79 @@ Resolution rules:
 - A single-token string returns the **structured** value (array, object).
 - Multi-token strings always interpolate to strings.
 - Missing tokens render as empty strings.
+
+### Filters
+
+A token takes a chain of filters after `|`, each with an optional argument
+after `:`. A single token keeps the filtered value's type (a list stays a
+list); inside text, a list is written as JSON.
+
+| Filter | Does | Example |
+|---|---|---|
+| `lower`, `upper`, `ucfirst`, `title`, `trim`, `slug` | text case and cleanup | `{{ form.name \| title }}` |
+| `length` | items of a list, characters of text | `{{ lead.tags \| length }}` |
+| `json` | the value as JSON | `{{ lead \| json }}` |
+| `default:x` | `x` when the value is null or empty | `{{ form.phone \| default:none }}` |
+| `date:format` | formats a date | `{{ entry.date \| date:d.m.Y }}` |
+| `date:format,zone` (2.23) | formats a date in a time zone; the zone is the part after the last comma when it names a real zone | `{{ item.start \| date:H:i,Europe/Berlin }}` |
+| `join:sep` (2.23) | joins a list, default `", "` | `{{ tags \| join }}`, `{{ tags \| join:\n }}` |
+| `pluck:key` (2.23) | the value of `key` (dot notation) from every item | `{{ nodes.q.pages \| pluck:properties.Status }}` |
+| `first`, `last` (2.23) | first or last item of a list, null for an empty one | `{{ nodes.q.pages \| first }}` |
+| `split:sep` (2.23) | text to a list, default `,`, parts trimmed | `{{ form.tags \| split }}` |
+| `replace:from,to` (2.23) | replaces text | `{{ form.phone \| replace:" ", }}` |
+| `json_decode` (2.23) | JSON text to a value; invalid JSON stays text | `{{ webhook.body \| json_decode }}` |
+| `where:key,value` (2.23) | the items whose `key` equals `value`, compared as text (`true`/`false` for booleans) | `{{ nodes.q.pages \| where:properties.Status,Fix }}` |
+
+Arguments are trimmed. Put an argument in quotes to keep its spaces and to
+use `|` or `,` inside it (`join:" | "`, `replace:",",";"`), and write `\n` or
+`\t` for a line break or a tab. A quote only counts when it opens an argument,
+right after `:` or `,`; an apostrophe inside a word (`default:it's`) is text.
+Unquoted, `|` separates filters and the first `,` separates two arguments.
+
+A date filter given a Notion date value (`{start, end, time_zone}`) formats its
+start.
+
+## Compose Text
+
+`compose_text` (group **Logic**, 2.23) builds a block of plain text with
+Antlers from the whole run context: loops, conditions, modifiers. Output:
+`{{ nodes.<key>.text }}` and `{{ nodes.<key>.is_empty }}`.
+
+```antlers
+{{ item.title }}
+
+Zeitplan
+{{ nodes.zeitplan.pages }}{{ properties.Date.start | timezone('Europe/Berlin') | format('H:i') }} {{ title }}
+{{ /nodes.zeitplan.pages }}
+{{ if item.properties.Programm }}
+Programm
+{{ item.properties.Programm | join("\n") }}
+{{ /if }}
+```
+
+- **The template is not token-resolved.** Its field declares
+  `resolve_tokens: false`, and the executor hands such fields over as stored.
+  Any schema field can declare it; use it for a field that holds a template
+  of its own.
+- **Sandboxed.** Only the run data is available: no cascade (`site`,
+  `current_user`, globals and config are unknown), no tags except `foreach`,
+  only data modifiers (text, lists, numbers, dates), no PHP, no method calls.
+  A template that uses anything else fails the node with the reason instead
+  of rendering around it.
+- **Data before tags.** A key of the run data named like a tag (`user`,
+  `form`, `collection`) is read as data: `{{ user.name }}` and `{{ user:email }}`
+  print the values. Only when no such key exists does the name reach the tag,
+  and the tag is refused.
+- **A budget.** A render stops at 64 KB of text or 50,000 Antlers steps
+  (nested loops over large lists get there first), and the node fails with
+  that reason. No padding modifiers.
+- **Tidy blank lines** (on by default) strips trailing spaces, keeps at most
+  one blank line in a row and trims start and end. Conditions and loops leave
+  blank lines behind otherwise.
+- A loop body starts right after its opening tag: write
+  `{{ list }}…line…` on one line and the closing tag at the start of the next,
+  or every item gets a blank line of its own.
+- Pure: a test run renders exactly what a real run would.
 
 ## Appearing in the mail list
 

@@ -52,10 +52,12 @@ class NodeExecutor
             'key' => (string) $node->node_key,
         ]);
 
-        $config = $this->tokens->resolve($node->config ?? [], $context);
+        $raw = $this->unresolvedFields($class, $node->config ?? []);
+        $config = $this->tokens->resolve(array_diff_key($node->config ?? [], $raw), $context);
         if (! is_array($config)) {
             $config = [];
         }
+        $config = [...$config, ...$raw];
 
         try {
             return match ($kind) {
@@ -73,6 +75,35 @@ class NodeExecutor
                 'line' => $e->getLine(),
             ]);
         }
+    }
+
+    /**
+     * The config values of fields that declare `resolve_tokens: false`, as
+     * stored. Such a field carries a template of its own (Antlers in
+     * Compose Text) whose `{{ }}` belong to that template: resolved here,
+     * the variables inside a loop would be looked up in the run and emptied
+     * before the template saw them.
+     *
+     * @param  array<mixed>  $config
+     * @return array<string, mixed>
+     */
+    protected function unresolvedFields(string $class, array $config): array
+    {
+        if (! method_exists($class, 'schema')) {
+            return [];
+        }
+
+        $raw = [];
+
+        foreach ((array) $class::schema() as $field) {
+            $handle = is_array($field) ? ($field['handle'] ?? null) : null;
+
+            if (is_string($handle) && ($field['resolve_tokens'] ?? true) === false && array_key_exists($handle, $config)) {
+                $raw[$handle] = $config[$handle];
+            }
+        }
+
+        return $raw;
     }
 
     protected function executeAction(string $class, AutomationContext $context, array $config): ActionResult

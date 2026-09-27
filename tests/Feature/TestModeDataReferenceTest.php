@@ -179,6 +179,12 @@ function expectedTestRunFailures(): array
         // for an operation that does not exist — a configuration error.
         'connection' => 'The bare class is not a connection operation node.',
         'marketing.send_campaign' => 'The dummy campaign handle does not exist (statamic-marketing is not installed).',
+        // Same reasoning as cal.com's slots: the Notion nodes only read, so a
+        // test run reads for real, and without a `notion` connection in the
+        // test app they refuse. `notion.get_pages` is not here because its
+        // dummy config names no page, and no page is nothing to read.
+        'notion.page_text' => 'No Notion connection exists in the test app.',
+        'notion.query_data_source' => 'No Notion connection exists in the test app.',
     ];
 }
 

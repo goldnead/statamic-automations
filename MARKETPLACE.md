@@ -30,7 +30,9 @@ You shouldn't need Zapier and a glue server to email a team member when a form c
 - Triggers: form submitted, entry published/saved, manual run
 - Logic nodes: filter, branch, delay, stop
 - Actions: send email, send webhook, add log entry
-- Token interpolation (`{{ form.email }}`) across node config
+- Token interpolation (`{{ form.email }}`) across node config, with filters for lists, text and dates in any time zone
+- Compose Text: build a block of plain text from run data with sandboxed Antlers
+- Notion: read data sources, pages and page text, with a connection as the credential
 - Per-run logging with node-by-node status and retry-from-node
 - Built-in template catalog to install common flows in one click
 - Export to JSON + flat-file sync for version control
