@@ -4,10 +4,7 @@
 
 ### Upgrading
 
-- Needs `goldnead/statamic-flow-canvas` **1.6.0** (not yet released; this branch was built
-  against its `feat/loop-frame` branch). Before merging: release flow-canvas 1.6.0, raise the
-  constraint here to `^1.6`, `composer update goldnead/statamic-flow-canvas`, rebuild
-  `resources/dist`. Until then the dist-fresh check sees a bundle built from newer canvas code.
+- Needs `goldnead/statamic-flow-canvas` **^1.6** (installed by Composer as usual).
 - No migration, no change to the saved graph, the engine, the validator or the export format.
 
 ### Added: a Loop reads as a loop on the canvas
@@ -32,7 +29,8 @@ or that it comes back — the data model deliberately has no loop-back edge.
 - **Fold.** The chevron folds the body into one card ("13 Schritte", first → last step) that stays
   inside the Loop's frame with a short line back, so a folded Loop still reads as a loop. Folds
   are remembered per automation and Loop in the browser (localStorage, guarded), every body
-  starts unfolded. The button has `aria-expanded` and a label naming the Loop.
+  starts unfolded. The fold control is one button top-left in the frame's head, chevron and
+  step count together (core's ghost button), with `aria-expanded` and a label naming the Loop.
 - **Output names as pills.** The Loop's outputs are named on their edges, like *If true* / *If
   false* on a Branch ("Für jedes Element", "Nach der Schleife" in a German CP, translated where
   the node library is described; the spec the validator reads keeps its English), and beside the
@@ -40,6 +38,8 @@ or that it comes back — the data model deliberately has no loop-back edge.
 - **Cards.** A node's title has the card's full width and wraps to two lines; type and kind badge
   moved to the line below. Long `{{ … }}` chips end in an ellipsis inside the card instead of
   running past its edge. Applies to every node.
+- **One "+" size.** A step's append "+" (an open output) is the same 24px dashed circle as the
+  insert "+" on an edge; only the entry "+" on an empty canvas stays larger.
 
 ### Fixed
 

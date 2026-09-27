@@ -289,7 +289,12 @@
                bg-content-bg text-gray-400 dark:text-gray-500
                shadow-sm transition-colors cursor-pointer;
     }
+    /* A step's "+" is the same 24px circle as the insert "+" on an edge;
+     * only the empty canvas's entry "+" is larger. Dashed on both, as ever. */
     .sa-adder__btn {
+        @apply size-6;
+    }
+    .sa-adder__btn.sa-adder__btn--root {
         @apply size-9;
     }
     .sa-edge-insert__btn {
