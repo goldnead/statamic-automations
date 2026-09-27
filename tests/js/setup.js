@@ -265,6 +265,15 @@ config.global.mocks = { __: translate };
 // tested. Installed globally, exactly as the CP does it.
 globalThis.__ = translate;
 
+// `__n()` picks the plural form. The stub takes the second form for anything
+// but one, which is what the English and German strings in this addon need.
+globalThis.__n = (key, count, replacements = {}) => {
+    const forms = String(key ?? '').split('|');
+    const form = forms.length > 1 && Number(count) !== 1 ? forms[1] : forms[0];
+
+    return translate(form, { count, ...replacements });
+};
+
 // Statamic's remaining Vue 2-era global components are not registered here.
 config.global.stubs = {
     'date-time': true,

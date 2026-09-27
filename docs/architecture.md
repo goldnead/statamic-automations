@@ -121,6 +121,16 @@ An inline **Loop** runs the nodes on its *For each item* output once per item, w
 `{{ index }}` and `{{ loop.* }}` set, then continues on *After loop*. Nested loops shadow the
 outer loop's variables and restore them afterwards.
 
+**On the canvas** the body is everything reachable from *For each item*, up to where a path runs
+into what follows *After loop*. It is drawn inside a tinted frame titled with the Loop's name and
+its step count, with a dashed line from each end of the body back into the side of the Loop, so
+the repetition is visible without a loop-back edge. A nested loop gets its own frame inside the
+outer one. The chevron in the title bar folds the body into a single card ("Für jeden Termin ·
+13 Schritte") and back; folds are remembered per automation in the browser (localStorage), every
+body starts unfolded. None of this is part of the graph: frames, lines and folded cards are
+derived on every render, never saved, never exported, and the validator never sees them. The
+layout leaves room around a body so its frame does not reach into a neighbouring column.
+
 Inside a loop body:
 
 | What happens | Effect |

@@ -1,6 +1,39 @@
 # Changelog
 
-## 2.23.0 — 2026-09-27
+## Unreleased (2.24.0)
+
+### Upgrading
+
+- Needs `goldnead/statamic-flow-canvas` **1.6.0** (not yet released; this branch was built
+  against its `feat/loop-frame` branch). Before merging: release flow-canvas 1.6.0, raise the
+  constraint here to `^1.6`, `composer update goldnead/statamic-flow-canvas`, rebuild
+  `resources/dist`. Until then the dist-fresh check sees a bundle built from newer canvas code.
+- No migration, no change to the saved graph, the engine, the validator or the export format.
+
+### Added: a Loop reads as a loop on the canvas
+
+A Loop's body used to be a long chain hanging under the Loop, with nothing saying where it ends
+or that it comes back — the data model deliberately has no loop-back edge.
+
+- **Frame.** Every step of a Loop body sits inside a tinted, rounded frame drawn behind it, with a
+  title bar naming the Loop ("Für jeden Termin") and its step count. The body is worked out from
+  the graph on every render: everything reachable from *For each item*, up to where a path runs
+  into what follows *After loop*. A nested Loop gets its own frame inside the outer one.
+- **Way back.** A dashed line runs from each end of the body, outside the frame's left edge, into
+  the side of the Loop, with an arrowhead. It is drawn, not an edge: it cannot be selected,
+  deleted or saved, and nothing that reads the graph sees it. The ends of a nested body go back
+  to their own Loop, not to the outer one.
+- **Fold.** The chevron in the title bar folds the body into one card ("Für jeden Termin ·
+  13 Schritte"); edges into and out of the body are drawn to that card. Folds are remembered per
+  automation and Loop in the browser (localStorage, guarded), every body starts unfolded. The
+  button is a real `<button>` with `aria-expanded` and a label naming the Loop.
+- **Layout.** The auto-layout leaves room above a body for its title bar and on both sides of it
+  for the frame and the line back, so a frame never reaches into a neighbouring column.
+- **Output names.** *For each item* / *After loop* are German in a German CP ("Für jedes
+  Element" / "Nach der Schleife", translated where the node library is described, the spec the
+  validator reads keeps its English). An open *After loop* is named beside its "+" instead of on
+  the ten-pixel stub, where the label used to sit on the Loop card's own bottom edge.
+
 
 ### Upgrading
 

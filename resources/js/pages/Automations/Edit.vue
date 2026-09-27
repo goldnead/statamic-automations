@@ -22,7 +22,15 @@ import {
 } from '@statamic/cms/ui';
 import axios from 'axios';
 
-import { ADDER_LABELS, NODE_KINDS, PICK_LABELS, nodeIcon } from '../../support/nodeKinds.js';
+import {
+    ADDER_LABELS,
+    NODE_KINDS,
+    PICK_LABELS,
+    SCOPES,
+    SCOPE_LABELS,
+    nodeIcon,
+    scopeViewStateKey,
+} from '../../support/nodeKinds.js';
 import Canvas from '../../components/builder/Canvas.vue';
 import NodeLibrary from '../../components/builder/NodeLibrary.vue';
 import ConfigPanel from '../../components/builder/ConfigPanel.vue';
@@ -1214,6 +1222,9 @@ watch(view, scheduleHeightUpdate);
                     :node-stats="nodeStats"
                     :library="library"
                     :pending-target="pendingTarget"
+                    :scopes="SCOPES"
+                    :scope-labels="SCOPE_LABELS"
+                    :view-state-key="scopeViewStateKey(automation.id)"
                     @select="selectedNodeKey = $event"
                     @toggle-pick="onTogglePick"
                     @remove-node="removeNode"

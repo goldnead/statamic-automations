@@ -407,3 +407,10 @@
         background: transparent;
     }
 }
+
+@layer addon-utilities {
+    /* The frame around a loop body, the line back to the loop and the folded
+       block (Canvas `scopes`). From the shared package, not copied here: the
+       rules above predate the package and are this addon's own. */
+    @import "@goldnead/flow-canvas/scope-frames.css";
+}

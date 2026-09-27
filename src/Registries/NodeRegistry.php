@@ -152,6 +152,43 @@ class NodeRegistry
     }
 
     /**
+     * The labels of a spec's fixed outputs, translated for the CP the same way
+     * as the node's own label: `{handle}.outputs.{output}`. Only the copy sent
+     * to the canvas is touched — `outputSpec()` itself, which the validator
+     * and the exporter read, keeps its English, and the handles never change.
+     *
+     * @param  array<string, mixed>  $spec
+     * @return array<string, mixed>
+     */
+    protected function translateOutputs(string $handle, array $spec): array
+    {
+        if (! isset($spec['clauses']) || ! is_array($spec['clauses'])) {
+            return $spec;
+        }
+
+        foreach ($spec['clauses'] as $i => $clause) {
+            foreach (['outputs', 'append'] as $list) {
+                if (! is_array($clause) || ! isset($clause[$list]) || ! is_array($clause[$list])) {
+                    continue;
+                }
+
+                foreach ($clause[$list] as $j => $output) {
+                    if (! is_array($output) || ! isset($output['handle']) || ! is_string($output['label'] ?? null)) {
+                        continue;
+                    }
+
+                    $spec['clauses'][$i][$list][$j]['label'] = $this->translate(
+                        "{$handle}.outputs.{$output['handle']}",
+                        $output['label'],
+                    );
+                }
+            }
+        }
+
+        return $spec;
+    }
+
+    /**
      * @return array<int, array<string, mixed>>
      */
     public function all(): array
@@ -230,7 +267,7 @@ class NodeRegistry
             // The node's output handles, as a spec the canvas resolves
             // against the node's live config. Present on every node, so the
             // canvas never has to know a node type by name.
-            'outputs' => $this->outputSpec($entry['handle']),
+            'outputs' => $this->translateOutputs($entry['handle'], $this->outputSpec($entry['handle'])),
         ];
 
         // Triggers expose outputSchema() via the AutomationTrigger contract;

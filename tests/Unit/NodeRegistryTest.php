@@ -39,6 +39,33 @@ class NodeRegistryTest extends TestCase
         $this->assertNotEmpty($description['schema']);
     }
 
+    /**
+     * The canvas names a Loop's two outputs on the card and beside their "+";
+     * in a German CP those names were English. Only the copy sent to the CP
+     * is translated: the spec the validator and exporter read keeps its
+     * English, and the handles never change.
+     */
+    public function test_describe_translates_the_loop_output_labels_for_the_cp(): void
+    {
+        $registry = app(NodeRegistry::class);
+        $labels = fn (array $spec) => array_column($spec['clauses'][0]['outputs'], 'label', 'handle');
+
+        $this->assertSame(['loop' => 'For each item', 'done' => 'After loop'], $labels($registry->describe('loop')['outputs']));
+
+        app()->setLocale('de');
+
+        try {
+            $this->assertSame(
+                ['loop' => 'Für jedes Element', 'done' => 'Nach der Schleife'],
+                $labels($registry->describe('loop')['outputs']),
+            );
+            $this->assertSame(['loop' => 'For each item', 'done' => 'After loop'], $labels($registry->outputSpec('loop')));
+            $this->assertSame('done', $registry->describe('loop')['outputs']['primary']);
+        } finally {
+            app()->setLocale('en');
+        }
+    }
+
     public function test_can_register_custom_action(): void
     {
         Automations::action('test.custom', TestCustomAction::class);
