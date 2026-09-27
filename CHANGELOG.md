@@ -9,6 +9,8 @@
   run `php artisan migrate`. Existing operations read `null` as before (JSON body from rows,
   answer detected automatically, no extra headers) and behave exactly as they did.
 - `composer.json` now requires `ext-dom` and `ext-libxml` (XML answers, CalDAV).
+- **Behaviour change:** a Filter that does not match inside a loop body now skips only that
+  item instead of stopping the run (see Changed: loops). Outside loops nothing changes.
 
 ### Added: raw requests on connection operations
 
@@ -103,6 +105,41 @@ token (no default headers). Without a connection or token, or with a connection 
 not bearer, they read nothing and fail with that reason. Limits per run: 50 requests per
 query, 1000 children per block, 300 requests per node. All three run for real in a test run,
 since they only read.
+
+### Changed: loops skip items instead of ending the run
+
+- **A Filter inside a loop body ends only the current item.** Before, the first item that did
+  not match stopped the whole run and every later item was never processed. In nested loops a
+  Filter ends the item of the loop it sits in. A Stop node inside a loop still ends the run; a
+  Filter outside any loop still stops it.
+- **New Loop option `on_item_error`**: `stop` (default, as before) fails the run when a node in
+  the body fails; `continue` ends only that item and goes on with the next. The failed node
+  stays in the run log as failed, the loop's output gains `failed_items` and `failed`
+  (`[{index, error}]`, readable after the loop as `{{ nodes.<loop>.failed_items }}`), and the
+  run keeps its status but carries an error message naming the loop, the count and the failed
+  indexes, so it shows on the run and in the lists. There is no separate partial status and no
+  failure alert for such a run.
+- `_on_error: continue` on a node is unchanged and different: without an `error` edge it
+  continues on the default edge, so the next step runs without the failed node's output. The
+  Loop option ends the item at the failed node instead. See `docs/architecture.md`.
+
+### Added: import updates an existing automation in place
+
+- Import strategy `update` (API `handle_strategy: "update"`, `automations:sync --strategy=update`,
+  and the **Update the automation with the same handle** switch on the Import page): the
+  automation with the file's handle gets its name, description, nodes and edges; id, uuid,
+  handle, enabled state and run history stay, and the graph before the import is saved as a
+  revision. Nodes whose `node_key` survives keep their uuid. Without a matching automation it
+  creates one. The API needs `edit automations` for it and answers `200` with
+  `meta.updated: true`. The default is unchanged: a new, disabled automation with a suffixed
+  handle.
+
+### Fixed: file sync wrote to `/` with the default config
+
+- `automations.file_storage.path` ships as `null`, and `config($key, $default)` does not fall
+  back on null, so *Sync to file* and `automations:sync --from=db` wrote `/{handle}.json` (or
+  failed on permissions). An unset or empty path now means `resource_path('automations')`; a
+  path that is only `/` is refused with an error.
 
 ## 2.22.2 — 2026-09-25
 
