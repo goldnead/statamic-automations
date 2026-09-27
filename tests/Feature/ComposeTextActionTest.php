@@ -154,6 +154,42 @@ it('leaves the site templates outside the sandbox after a render', function () {
         ->and(GlobalRuntimeState::$isEvaluatingUserData)->toBe($userData);
 });
 
+it('stops a template whose output runs over 64 KB, with the reason', function () {
+    $result = composeRun('{{ rows }}{{ text }}{{ /rows }}', ['rows' => array_fill(0, 100, ['text' => str_repeat('x', 1000)])]);
+
+    expect($result->isFailed())->toBeTrue()
+        ->and((string) $result->error)->toContain('64 KB');
+});
+
+it('stops nested loops before they multiply out, with the reason', function () {
+    $list = range(1, 60);
+
+    $result = composeRun('{{ a }}{{ b }}{{ c }}.{{ /c }}{{ /b }}{{ /a }}', ['a' => $list, 'b' => $list, 'c' => $list]);
+
+    expect($result->isFailed())->toBeTrue()
+        ->and((string) $result->error)->toContain('steps');
+});
+
+it('offers no padding modifier to inflate a short value', function () {
+    $result = composeRun("{{ name | str_pad(100000, 'x') }}", ['name' => 'a']);
+
+    expect($result->isFailed())->toBeTrue()
+        ->and((string) $result->error)->toContain('could not be rendered');
+});
+
+it('reads data named like a tag (user, form, collection) as data', function () {
+    $data = [
+        'user' => ['name' => 'Ada', 'email' => 'ada@example.org'],
+        'form' => ['message' => 'Hallo'],
+        'collection' => ['a', 'b'],
+    ];
+
+    $result = composeRun('{{ user.name }} {{ user:email }} {{ form.message }} {{ collection | join(",") }}{{ if user }} ja{{ /if }}', $data);
+
+    expect($result->isSuccess())->toBeTrue((string) $result->error)
+        ->and($result->output['text'])->toBe('Ada ada@example.org Hallo a,b ja');
+});
+
 it('still resolves tokens in every other node', function () {
     $node = new AutomationNode([
         'node_key' => 'vars',

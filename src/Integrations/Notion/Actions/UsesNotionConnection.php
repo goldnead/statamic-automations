@@ -75,7 +75,14 @@ trait UsesNotionConnection
 
         $client = new NotionClient($connection);
 
-        if (! $client->hasCredential()) {
+        if ($connection->auth_type !== 'bearer') {
+            return ActionResult::failed(
+                "The connection '{$handle}' uses '{$connection->auth_type}' auth. The Notion nodes only send a bearer token, "
+                    .'so a credential meant for another service never goes to Notion. Nothing was read.',
+            );
+        }
+
+        if (! $client->hasBearerToken()) {
             return ActionResult::failed("The connection '{$handle}' has no token. Nothing was read.");
         }
 

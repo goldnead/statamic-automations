@@ -101,7 +101,7 @@ class QueryDataSourceAction implements AutomationAction
                 'type' => 'number',
                 'required' => false,
                 'default' => self::DEFAULT_MAX_PAGES,
-                'help' => 'Notion answers 100 rows per request. Default 10, so 1000 rows; has_more tells when there were more.',
+                'help' => 'Notion answers 100 rows per request. Default 10, so 1000 rows, at most 50; has_more tells when there were more.',
             ],
             self::timeZoneField(),
         ];

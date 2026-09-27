@@ -402,9 +402,11 @@ list); inside text, a list is written as JSON.
 | `json_decode` (2.23) | JSON text to a value; invalid JSON stays text | `{{ webhook.body \| json_decode }}` |
 | `where:key,value` (2.23) | the items whose `key` equals `value`, compared as text (`true`/`false` for booleans) | `{{ nodes.q.pages \| where:properties.Status,Fix }}` |
 
-Arguments are trimmed. Put an argument in quotes to keep its spaces
-(`join:" / "`), and write `\n` or `\t` for a line break or a tab. A `|` cannot
-appear inside an argument, since it separates the filters.
+Arguments are trimmed. Put an argument in quotes to keep its spaces and to
+use `|` or `,` inside it (`join:" | "`, `replace:",",";"`), and write `\n` or
+`\t` for a line break or a tab. A quote only counts when it opens an argument,
+right after `:` or `,`; an apostrophe inside a word (`default:it's`) is text.
+Unquoted, `|` separates filters and the first `,` separates two arguments.
 
 A date filter given a Notion date value (`{start, end, time_zone}`) formats its
 start.
@@ -436,6 +438,13 @@ Programm
   only data modifiers (text, lists, numbers, dates), no PHP, no method calls.
   A template that uses anything else fails the node with the reason instead
   of rendering around it.
+- **Data before tags.** A key of the run data named like a tag (`user`,
+  `form`, `collection`) is read as data: `{{ user.name }}` and `{{ user:email }}`
+  print the values. Only when no such key exists does the name reach the tag,
+  and the tag is refused.
+- **A budget.** A render stops at 64 KB of text or 50,000 Antlers steps
+  (nested loops over large lists get there first), and the node fails with
+  that reason. No padding modifiers.
 - **Tidy blank lines** (on by default) strips trailing spaces, keeps at most
   one blank line in a row and trims start and end. Conditions and loops leave
   blank lines behind otherwise.

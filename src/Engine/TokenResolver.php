@@ -47,7 +47,12 @@ class TokenResolver
      */
     public function resolveString(string $value, AutomationContext $context): mixed
     {
-        $token = '([\w\.\-]+)\s*((?:\|\s*\w+(?::[^|}]*)?\s*)*)';
+        // An argument runs to the next `|` or `}`, unless those sit inside a
+        // quoted part ("…" or '…') that opens right after the `:` or a `,`.
+        // A quote anywhere else, or one without its partner, is a plain
+        // character, so arguments written before quoting existed
+        // (`default:it's`) match as they always did.
+        $token = '([\w\.\-]+)\s*((?:\|\s*\w+(?::(?:(?<=[:,])\s*"[^"]*"|(?<=[:,])\s*\'[^\']*\'|[^|}])*)?\s*)*)';
 
         // Single-token shortcut → preserve structured values when there are
         // no filters; otherwise apply the filter chain and return the result.
@@ -104,7 +109,7 @@ class TokenResolver
      */
     public function applyFilters(mixed $value, string $chain): mixed
     {
-        $filters = array_filter(array_map('trim', explode('|', $chain)));
+        $filters = array_filter(array_map('trim', $this->splitOutsideQuotes($chain, '|')));
 
         foreach ($filters as $filter) {
             [$name, $arg] = array_pad(explode(':', $filter, 2), 2, null);
@@ -203,9 +208,52 @@ class TokenResolver
      */
     protected function pair(?string $arg): array
     {
-        [$first, $second] = array_pad(explode(',', (string) $arg, 2), 2, '');
+        [$first, $second] = array_pad($this->splitOutsideQuotes((string) $arg, ',', 2), 2, '');
 
         return [$this->literal(trim($first), ''), $this->literal(trim($second), '')];
+    }
+
+    /**
+     * `explode()` that leaves separators inside a quoted part ("…" or '…')
+     * alone. A quote opens such a part only at the start of an argument,
+     * right after `:` or `,` (spaces allowed), and only when its partner
+     * follows; anywhere else it is an ordinary character (`don't`), so text
+     * written without quoting splits exactly as `explode()` does.
+     *
+     * @return list<string>
+     */
+    protected function splitOutsideQuotes(string $value, string $separator, int $limit = PHP_INT_MAX): array
+    {
+        $parts = [];
+        $current = '';
+        $length = strlen($value);
+
+        for ($i = 0; $i < $length; $i++) {
+            $char = $value[$i];
+
+            $opensArgument = in_array(substr(rtrim($current), -1), [':', ','], true)
+                || ($separator === ',' && trim($current) === '');
+
+            if (($char === '"' || $char === "'") && $opensArgument && ($close = strpos($value, $char, $i + 1)) !== false) {
+                $current .= substr($value, $i, $close - $i + 1);
+                $i = $close;
+
+                continue;
+            }
+
+            if ($char === $separator && count($parts) < $limit - 1) {
+                $parts[] = $current;
+                $current = '';
+
+                continue;
+            }
+
+            $current .= $char;
+        }
+
+        $parts[] = $current;
+
+        return $parts;
     }
 
     protected function join(mixed $value, ?string $arg): mixed

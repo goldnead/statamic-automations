@@ -154,6 +154,31 @@ it('formats a date in a given time zone', function () {
         ->and($r->resolveString('{{ utc | date:D, d.m. }}', listContext()))->toBe('Sat, 03.10.');
 });
 
+it('keeps a | and a , inside a quoted argument', function () {
+    $r = new TokenResolver;
+
+    expect($r->resolveString('{{ tags | join:" | " }}', listContext()))->toBe('Chor | Band | Technik')
+        ->and($r->resolveString('{{ tags | join:" | " | upper }}', listContext()))->toBe('CHOR | BAND | TECHNIK')
+        ->and($r->resolveString('Mitte {{ tags | join:\' | \' }} Ende', listContext()))->toBe('Mitte Chor | Band | Technik Ende')
+        ->and($r->resolveString('{{ csv | replace:",",";" }}', listContext()))->toBe('a; b ;c')
+        ->and($r->resolveString('{{ csv | replace:",", | trim }}', listContext()))->toBe('a b c')
+        ->and($r->resolveString('{{ rows | where:name,"Get In" | pluck:name }}', listContext()))->toBe(['Get In']);
+});
+
+it('reads arguments written without quotes exactly as before', function () {
+    $r = new TokenResolver;
+    $context = AutomationContext::make(['empty' => '', 'name' => 'Ada', 'when' => '2026-01-15 13:45:00']);
+
+    // An apostrophe inside a word is text, also twice across filters.
+    expect($r->resolveString("{{ empty | default:it's }}", $context))->toBe("it's")
+        ->and($r->resolveString("{{ empty | default:don't | replace:it's,x }}", $context))->toBe("don't")
+        // Quotes around a default were never stripped, and still are not.
+        ->and($r->resolveString('{{ empty | default:"N/A" }}', $context))->toBe('"N/A"')
+        ->and($r->resolveString('{{ when | date:D, d.m. }}', $context))->toBe('Thu, 15.01.')
+        ->and($r->resolveString('{{ name | lower | default:x }}!', $context))->toBe('ada!')
+        ->and($r->resolveString('{{ name | replace:A,E }}', $context))->toBe('Eda');
+});
+
 it('formats the start of a Notion date value', function () {
     expect((new TokenResolver)->resolveString('{{ notion_date | date:d.m. H:i,Europe/Berlin }}', listContext()))
         ->toBe('03.10. 15:00');

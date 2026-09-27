@@ -316,10 +316,74 @@ it('reads nothing and says so without a connection', function () {
 
 it('reads nothing with a connection that has no token', function () {
     Http::fake();
-    AutomationConnection::query()->update(['auth_type' => 'none']);
+    AutomationConnection::query()->first()->update(['auth_config' => ['token' => '']]);
 
     expect((string) runNotion('notion.get_pages', ['ids' => [BEVERN]])->error)->toContain('has no token');
     Http::assertNothingSent();
+
+    AutomationConnection::query()->first()->update(['auth_type' => 'none']);
+
+    expect((string) runNotion('notion.get_pages', ['ids' => [BEVERN]])->error)->toContain("uses 'none' auth");
+    Http::assertNothingSent();
+});
+
+it('refuses a connection whose auth is not bearer, so a foreign credential never goes to Notion', function (string $type, array $config) {
+    Http::fake();
+    AutomationConnection::query()->first()->update(['auth_type' => $type, 'auth_config' => $config]);
+
+    $result = runNotion('notion.get_pages', ['ids' => [BEVERN]]);
+
+    expect($result->isFailed())->toBeTrue()
+        ->and((string) $result->error)->toContain("uses '{$type}' auth")->toContain('bearer');
+    Http::assertNothingSent();
+})->with([
+    'basic' => ['basic', ['username' => 'someone@example.org', 'password' => 'hunter2hunter2']],
+    'custom header' => ['header', ['name' => 'X-Api-Key', 'value' => 'sk-live-other-service']],
+]);
+
+it('sends no default header of the connection to Notion', function () {
+    AutomationConnection::query()->first()->update(['default_headers' => ['X-Api-Key' => 'sk-live-other-service']]);
+    Http::fake(['api.notion.com/*' => Http::response(bevernSheet())]);
+
+    runNotion('notion.get_pages', ['ids' => [BEVERN]]);
+
+    Http::assertSent(fn (Request $r) => ! $r->hasHeader('X-Api-Key') && $r->header('Authorization') === ['Bearer '.NOTION_TOKEN]);
+});
+
+it('caps max_pages at 50 requests', function () {
+    Http::fake(['api.notion.com/*' => Http::response(notionList([bevernSheet()], true, 'more'))]);
+
+    $result = runNotion('notion.query_data_source', ['data_source_id' => SHEETS, 'max_pages' => 500]);
+
+    expect($result->isSuccess())->toBeTrue()
+        ->and($result->output['count'])->toBe(50)
+        ->and($result->output['has_more'])->toBeTrue();
+    Http::assertSentCount(50);
+});
+
+it('fails on a block with more than 1000 children instead of returning part of the page', function () {
+    Http::fake(['api.notion.com/*' => Http::response(notionList([
+        notionBlock('e0000000-0000-0000-0000-000000000001', 'paragraph', 'Zeile'),
+    ], true, 'more'))]);
+
+    $result = runNotion('notion.page_text', ['page_id' => BEVERN]);
+
+    expect($result->isFailed())->toBeTrue()
+        ->and((string) $result->error)->toContain('more than 1000 children');
+    Http::assertSentCount(10);
+});
+
+it('stops a page text read after 300 requests in all', function () {
+    // Every block has children, every level answers with 100 of them: depth 3
+    // would need 1 + 100 + 10000 requests.
+    $blocks = array_map(fn (int $i) => notionBlock(sprintf('f0000000-0000-0000-0000-%012d', $i), 'toggle', "T{$i}", true), range(1, 100));
+    Http::fake(['api.notion.com/*' => Http::response(notionList($blocks))]);
+
+    $result = runNotion('notion.page_text', ['page_id' => BEVERN, 'depth' => '3']);
+
+    expect($result->isFailed())->toBeTrue()
+        ->and((string) $result->error)->toContain('300 requests');
+    Http::assertSentCount(300);
 });
 
 it('uses another connection by handle and still only calls api.notion.com', function () {

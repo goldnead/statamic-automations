@@ -15,8 +15,8 @@ use Throwable;
  * ## The credential comes from a connection
  *
  * A connection set up under Automations, Connections, with bearer auth and the
- * integration token of a Notion integration. This client takes its auth
- * headers, its default headers and its timeout, and nothing else: the address
+ * integration token of a Notion integration. This client takes its bearer
+ * token and its timeout, and nothing else: the address
  * is always {@see BASE_URL}. A connection whose base URL points elsewhere
  * cannot send the token there through these nodes.
  *
@@ -42,6 +42,17 @@ class NotionClient
     /** Rows or blocks per request; Notion's maximum. */
     public const PAGE_SIZE = 100;
 
+    /** Upper bound for the requests of one data source query. */
+    public const MAX_QUERY_PAGES = 50;
+
+    /** Requests for the children of one block: 1000 blocks. */
+    public const MAX_CHILD_PAGES = 10;
+
+    /** Requests one client (one node run) may send in all. */
+    public const MAX_REQUESTS = 300;
+
+    protected int $requests = 0;
+
     public function __construct(protected AutomationConnection $connection) {}
 
     /**
@@ -56,11 +67,15 @@ class NotionClient
         return AutomationConnection::query()->where('handle', $handle)->first();
     }
 
-    public function hasCredential(): bool
+    /**
+     * Notion takes an integration token as a bearer token and nothing else.
+     * A connection with basic auth or a custom header carries a credential
+     * meant for some other service; it must not be sent here.
+     */
+    public function hasBearerToken(): bool
     {
-        $headers = $this->connection->authHeaders();
-
-        return $headers !== [] && ! in_array(trim((string) reset($headers)), ['', 'Bearer', 'Basic'], true);
+        return $this->connection->auth_type === 'bearer'
+            && trim((string) ($this->connection->auth_config['token'] ?? '')) !== '';
     }
 
     /**
@@ -75,6 +90,7 @@ class NotionClient
         $results = [];
         $cursor = null;
         $requests = 0;
+        $maxPages = max(1, min($maxPages, self::MAX_QUERY_PAGES));
 
         do {
             $answer = $this->send('POST', 'data_sources/'.rawurlencode($id).'/query', array_filter([
@@ -108,13 +124,21 @@ class NotionClient
     {
         $blocks = [];
         $cursor = null;
+        $requests = 0;
 
         do {
+            if ($requests === self::MAX_CHILD_PAGES) {
+                // Cutting the list short would hand back part of a page as
+                // if it were all of it.
+                throw new NotionException('Block '.$blockId.' has more than '.(self::MAX_CHILD_PAGES * self::PAGE_SIZE).' children; this node reads no more than that.');
+            }
+
             $answer = $this->send('GET', 'blocks/'.rawurlencode($blockId).'/children', array_filter([
                 'page_size' => self::PAGE_SIZE,
                 'start_cursor' => $cursor,
             ], fn ($value) => $value !== null));
 
+            $requests++;
             array_push($blocks, ...$this->results($answer));
             $cursor = ($answer['has_more'] ?? false) ? ($answer['next_cursor'] ?? null) : null;
         } while ($cursor !== null);
@@ -131,8 +155,13 @@ class NotionClient
      */
     protected function send(string $method, string $path, array $payload = []): array
     {
+        if (++$this->requests > self::MAX_REQUESTS) {
+            throw new NotionException('This node sent '.self::MAX_REQUESTS.' requests to Notion and stops there. Read fewer pages or fewer levels.');
+        }
+
+        // No default headers of the connection: one of them may carry a key
+        // for another service, and it has no business at Notion.
         $headers = [
-            ...$this->connection->defaultHeaders(),
             ...$this->connection->authHeaders(),
             'Notion-Version' => self::VERSION,
         ];

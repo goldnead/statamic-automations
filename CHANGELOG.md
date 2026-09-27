@@ -8,14 +8,17 @@
   `split:sep`, `replace:from,to`, `json_decode`, `where:key,value`.
 - `date:format,zone` formats in a time zone (`{{ x | date:H:i,Europe/Berlin }}`). A date
   given as a Notion date value formats its start.
-- Quoted arguments keep their spaces (`join:" / "`). The existing filters behave as before.
+- Quoted arguments keep their spaces and may contain `|` and `,` (`join:" | "`,
+  `replace:",",";"`). A quote only counts right after `:` or `,`, so unquoted arguments,
+  apostrophes included, behave as before.
 
 ### Added: Compose Text
 
 `compose_text` builds a block of plain text from the run data with Antlers: loops,
 conditions, modifiers, timezone date formatting. Output `text` and `is_empty`. Sandboxed:
 only the run context as data, no cascade, no tags except `foreach`, only data modifiers, no
-PHP and no method calls; anything else fails the node with the reason. **Tidy blank lines**
+PHP and no method calls; anything else fails the node with the reason. Data named like a tag
+(`user`, `form`) reads as data. A render stops at 64 KB of text or 50,000 steps. **Tidy blank lines**
 (on by default) collapses the blank lines conditions and loops leave behind. Pure, so a test
 run renders what a real run would.
 
@@ -39,9 +42,11 @@ lists, formula values). Dates carry the time zone applied: `start`/`end` in ISO 
 offset written in, plus `start_date`, `start_time`, `end_date`, `end_time` in a chosen zone.
 
 The credential is a connection with bearer auth (handle `notion` by default); the nodes
-always call `https://api.notion.com/v1/` with `Notion-Version: 2025-09-03`. Without a
-connection or token they read nothing and fail with that reason. All three run for real in a
-test run, since they only read.
+always call `https://api.notion.com/v1/` with `Notion-Version: 2025-09-03`, sending only the
+token (no default headers). Without a connection or token, or with a connection whose auth is
+not bearer, they read nothing and fail with that reason. Limits per run: 50 requests per
+query, 1000 children per block, 300 requests per node. All three run for real in a test run,
+since they only read.
 
 ## 2.22.2 — 2026-09-25
 

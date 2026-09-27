@@ -5,6 +5,7 @@ namespace Goldnead\StatamicAutomations\Support;
 use Statamic\View\Antlers\Language\Runtime\GlobalRuntimeState;
 use Statamic\View\Antlers\Language\Runtime\RuntimeConfiguration;
 use Statamic\View\Antlers\Language\Runtime\RuntimeParser;
+use Statamic\View\Antlers\Language\Runtime\Tracing\TraceManager;
 
 /**
  * Renders an Antlers template that an editor typed into a flow, against the
@@ -37,6 +38,16 @@ class SandboxedAntlers
     /** The only tags a template may use. */
     public const TAGS = ['foreach', 'foreach:*'];
 
+    /** Largest text a template may render. */
+    public const MAX_BYTES = 65536;
+
+    /**
+     * Most Antlers nodes a render may enter: every variable, condition and
+     * loop pass counts. A timetable of a few hundred rows needs a few
+     * thousand; nested loops over large lists run into this first.
+     */
+    public const MAX_NODES = 50000;
+
     /** Modifiers that only look at the value in front of them. */
     public const MODIFIERS = [
         // text
@@ -44,8 +55,7 @@ class SandboxedAntlers
         'count_substring', 'dashify', 'deslugify', 'ends_with', 'ensure_left', 'ensure_right', 'entities',
         'excerpt', 'explode', 'format_number', 'headline', 'insert', 'kebab', 'lcfirst', 'length', 'lower',
         'nl2br', 'remove_left', 'remove_right', 'replace', 'safe_truncate', 'sanitize',
-        'singular', 'plural', 'slugify', 'snake', 'spaceless', 'split', 'starts_with', 'str_pad',
-        'str_pad_both', 'str_pad_left', 'str_pad_right', 'strip_tags', 'studly', 'substr', 'surround',
+        'singular', 'plural', 'slugify', 'snake', 'spaceless', 'split', 'starts_with', 'strip_tags', 'studly', 'substr', 'surround',
         'swap_case', 'title', 'to_string', 'trim', 'truncate', 'ucfirst', 'upper', 'urlencode', 'urldecode',
         'rawurlencode', 'widont', 'word_count', 'wrap',
         // lists
@@ -80,6 +90,13 @@ class SandboxedAntlers
             $configuration->allowedContentTagPatterns = self::TAGS;
             $configuration->allowedContentModifiers = self::MODIFIERS;
 
+            // The budget: a tracer that counts every node the runtime enters
+            // and the size of what it has rendered, and stops the render
+            // the moment either runs over, not after it filled the memory.
+            $configuration->traceManager = new TraceManager;
+            $configuration->traceManager->registerTracer(new SandboxBudget(self::MAX_NODES, self::MAX_BYTES));
+            $configuration->isTracingEnabled = true;
+
             /** @var RuntimeParser $parser */
             $parser = app(RuntimeParser::class);
             $parser->setRuntimeConfiguration($configuration);
@@ -87,7 +104,13 @@ class SandboxedAntlers
             GlobalRuntimeState::$isCascadeEnabled = false;
             GlobalRuntimeState::$isEvaluatingUserData = true;
 
-            return (string) $parser->parse($template, $data);
+            $output = (string) $parser->parse($template, $data);
+
+            if (strlen($output) > self::MAX_BYTES) {
+                throw new SandboxLimitExceeded('The text is longer than '.(self::MAX_BYTES / 1024).' KB.');
+            }
+
+            return $output;
         } finally {
             $this->restore($captured);
         }

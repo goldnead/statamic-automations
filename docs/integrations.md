@@ -372,12 +372,19 @@ pages by ID, the text of a page. Nothing here writes to Notion.
 2. Under Automations, Connections, add a connection with the handle `notion`,
    base URL `https://api.notion.com` and **bearer** auth with the token.
 
-The nodes take the token, the default headers and the timeout from the
-connection and always call `https://api.notion.com/v1/` with
+The nodes take only the bearer token and the timeout from the connection (not
+its default headers) and always call `https://api.notion.com/v1/` with
 `Notion-Version: 2025-09-03`. A node's **Connection** field names another
-connection by handle (for a second workspace). Without a connection, or with
-one that has no token, the nodes read nothing and fail with that reason. 429
-and 5xx answers are retried twice.
+connection by handle (for a second workspace). Without a connection, with one
+that has no token, or with one whose auth is not **bearer** (basic, custom
+header, none), the nodes read nothing and fail with that reason, so a
+credential meant for another service never reaches Notion. 429 and 5xx
+answers are retried twice.
+
+Limits per node run: a query sends at most 50 requests (`max_pages` above 50
+counts as 50), the children of one block are read up to 1000 (more fails the
+node rather than returning part of the page), and one node sends at most 300
+requests in all.
 
 ### Nodes
 
