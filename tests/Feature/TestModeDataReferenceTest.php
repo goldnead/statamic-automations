@@ -169,6 +169,10 @@ function expectedTestRunFailures(): array
         // nothing. Without an API key it therefore does what it says it does
         // and refuses, which is the right answer to a node that cannot work.
         'cal_com.get_slots' => 'No cal.com API key is configured in the test app.',
+        // Same reasoning for CalDAV: both nodes read in a test run, and the
+        // sweep names no connection, so they refuse instead of reading nothing.
+        'caldav.find_events' => 'No CalDAV connection is configured in the test app.',
+        'caldav.upsert_description_block' => 'No CalDAV connection is configured in the test app.',
         'call_automation' => 'The dummy target automation handle does not exist.',
         // The class alone names no operation: the engine hands it the node
         // handle (`connection.<conn>.<op>`) and the sweep has none, so it asks

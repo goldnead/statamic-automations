@@ -89,6 +89,24 @@ class AutomationConnection extends Model
         static::$schemaReady = false;
     }
 
+    /**
+     * The connections of the current brand as select options (the option
+     * source `connections`), value = handle. Empty before migrate.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    public static function options(): array
+    {
+        if (! static::schemaReady()) {
+            return [];
+        }
+
+        return static::query()->orderBy('name')->get(['handle', 'name'])
+            ->map(fn (self $connection) => ['value' => $connection->handle, 'label' => $connection->name])
+            ->values()
+            ->all();
+    }
+
     /** @return HasMany<AutomationConnectionOperation, $this> */
     public function operations(): HasMany
     {

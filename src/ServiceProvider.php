@@ -23,6 +23,7 @@ use Goldnead\StatamicAutomations\Integrations\Affiliates\Triggers as AfT;
 use Goldnead\StatamicAutomations\Integrations\Booking\Triggers as BT;
 use Goldnead\StatamicAutomations\Integrations\CalCom\Actions as CalA;
 use Goldnead\StatamicAutomations\Integrations\CalCom\Triggers as CalT;
+use Goldnead\StatamicAutomations\Integrations\CalDav\Actions as CalDavA;
 use Goldnead\StatamicAutomations\Integrations\Courses\Triggers as CoT;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\Actions as EA;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\EntitlementsAdapter;
@@ -623,6 +624,13 @@ class ServiceProvider extends AddonServiceProvider
             'cal_com.cancel_booking' => CalA\CancelBookingAction::class,
             'cal_com.create_booking' => CalA\CreateBookingAction::class,
             'cal_com.get_slots' => CalA\GetSlotsAction::class,
+
+            // CalDAV (2.23.0). The credential is a connection from the CP
+            // (base URL = calendar collection, Basic auth), not an env key, so
+            // each brand brings its own calendar. Without one both do nothing
+            // and say so.
+            'caldav.find_events' => CalDavA\FindEventsAction::class,
+            'caldav.upsert_description_block' => CalDavA\UpsertDescriptionBlockAction::class,
         ];
 
         $automations = $this->app->make('automations');
@@ -723,6 +731,7 @@ class ServiceProvider extends AddonServiceProvider
         $webhookDestinations = fn ($request) => $this->app->make($native)->webhookDestinations($request);
         $automations->registerOptionSource('webhook_manager.destinations', $webhookDestinations);
         $automations->registerOptionSource('webhooks', $webhookDestinations);
+        $automations->registerOptionSource('connections', fn ($request) => AutomationConnection::options());
     }
 
     /**
