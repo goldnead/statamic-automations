@@ -41,7 +41,8 @@ When a file matches an existing DB automation by handle:
   description, nodes and edges come from the file; id, uuid, handle,
   enabled state and run history stay. The graph before the import is
   kept as a revision (Versions in the builder). Nodes whose `node_key`
-  survives keep their uuid.
+  survives keep their uuid. A file that matches the automation writes
+  nothing and prints `(unchanged)`, so `--watch` adds no revisions.
 - `--strategy=file_wins` — delete the DB row, recreate from the file
 
 `file_wins` is destructive: the automation is deleted and recreated

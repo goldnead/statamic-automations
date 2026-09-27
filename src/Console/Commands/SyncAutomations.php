@@ -236,7 +236,11 @@ class SyncAutomations extends Command
                     $this->warn("    ⚠ {$w}");
                 }
 
-                $verb = $result['updated'] ? 'updated' : 'created';
+                $verb = match (true) {
+                    $result['unchanged'] => 'unchanged',
+                    $result['updated'] => 'updated',
+                    default => 'created',
+                };
                 $this->line("  ✓ {$entry['handle']} → {$result['automation']->handle} ({$verb})");
 
                 continue;

@@ -226,7 +226,9 @@ Response:
 - `fail`: as `auto`, but a taken handle is a `422`.
 - `update`: the automation with the same handle gets the payload's name, description, nodes and
   edges; id, uuid, handle, enabled state and runs stay, the previous graph is kept as a revision.
-  `200` with `meta.updated: true`. Without such an automation it creates one (`201`). Needs the
+  `200` with `meta.updated: true`. When the payload matches what is stored, nothing is written
+  (no revision, no version bump): `200` with `meta.unchanged: true`. Without such an automation
+  it creates one (`201`). Needs the
   `edit automations` permission in addition to `create automations`.
 
 ### `POST /automations/{id}/sync-to-file`

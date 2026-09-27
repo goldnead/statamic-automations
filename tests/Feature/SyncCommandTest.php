@@ -93,6 +93,15 @@ class SyncCommandTest extends TestCase
         $this->assertSame('Alpha from file', $after->name);
         $this->assertTrue((bool) $after->enabled);
         $this->assertSame('from file', $after->nodes->firstWhere('node_key', 'log')->config['message']);
+
+        // A second run over the same file (every 2s with --watch) changes nothing.
+        $version = (int) $after->version;
+
+        $this->artisan('automations:sync', ['--from' => 'files', '--strategy' => 'update'])
+            ->expectsOutputToContain('alpha → alpha (unchanged)')
+            ->assertExitCode(0);
+
+        $this->assertSame($version, (int) Automation::find($existing->id)->version);
     }
 
     public function test_dry_run_changes_nothing(): void

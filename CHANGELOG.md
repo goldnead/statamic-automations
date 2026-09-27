@@ -136,7 +136,10 @@ since they only read.
   handle, enabled state and run history stay, and the graph before the import is saved as a
   revision. Nodes whose `node_key` survives keep their uuid. Without a matching automation it
   creates one. The API needs `edit automations` for it and answers `200` with
-  `meta.updated: true`. The default is unchanged: a new, disabled automation with a suffixed
+  `meta.updated: true`. A file that says what the automation already holds (order of nodes,
+  edges and config keys aside) writes nothing: no revision, no audit entry, no version bump,
+  `meta.unchanged: true`, and the sync command prints `(unchanged)`, so `--watch` does not
+  pile up revisions. The default is unchanged: a new, disabled automation with a suffixed
   handle.
 
 ### Fixed: file sync wrote to `/` with the default config

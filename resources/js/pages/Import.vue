@@ -54,6 +54,11 @@ function onSelect(event) {
     if (file) readFile(file);
 }
 
+function outcome(data) {
+    if (data?.meta?.unchanged) return __('Already up to date, nothing changed.');
+    return data?.meta?.updated ? __('Updated.') : __('Imported.');
+}
+
 async function submit() {
     if (!valid.value) return;
     submitting.value = true;
@@ -63,7 +68,7 @@ async function submit() {
             handle_strategy: updateExisting.value ? 'update' : 'auto',
         });
         result.value = data;
-        window.Statamic?.$toast?.success?.(data.meta?.updated ? __('Updated.') : __('Imported.'));
+        window.Statamic?.$toast?.success?.(outcome(data));
     } catch (e) {
         window.Statamic?.$toast?.error?.(firstMessage(e, __('Import failed.')));
     } finally {
@@ -129,7 +134,7 @@ async function submit() {
         </div>
 
         <Alert v-if="result" variant="success" class="mt-4">
-            <strong>{{ result.meta?.updated ? __('Updated.') : __('Imported.') }}</strong>
+            <strong>{{ outcome(result) }}</strong>
             <div v-if="result.meta?.warnings?.length" class="mt-2">
                 <p class="text-xs uppercase tracking-wider text-amber-700 dark:text-amber-400">{{ __('Warnings') }}</p>
                 <ul class="mt-1 ml-4 list-disc text-sm">

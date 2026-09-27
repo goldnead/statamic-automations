@@ -68,11 +68,12 @@ class ExportImportController extends Controller
             'data' => (new AutomationResource($result['automation']))->toArray($request),
             'meta' => [
                 'updated' => $result['updated'],
+                'unchanged' => $result['unchanged'],
                 'warnings' => $result['warnings'],
                 'missing_integrations' => $result['missing_integrations'],
                 'missing_node_types' => $result['missing_node_types'],
             ],
-        ], $result['updated'] ? 200 : 201);
+        ], $result['updated'] || $result['unchanged'] ? 200 : 201);
     }
 
     public function syncToFile(Automation $automationFlow, AutomationFileSync $sync): JsonResponse

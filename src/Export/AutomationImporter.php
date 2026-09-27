@@ -49,7 +49,7 @@ class AutomationImporter
     /**
      * @param  array<string, mixed>  $payload
      * @param  array<string, mixed>  $options
-     * @return array{automation: Automation, updated: bool, warnings: array<int, string>, missing_integrations: array<int, string>, missing_node_types: array<int, string>}
+     * @return array{automation: Automation, updated: bool, unchanged: bool, warnings: array<int, string>, missing_integrations: array<int, string>, missing_node_types: array<int, string>}
      */
     public function import(array $payload, array $options = []): array
     {
@@ -74,9 +74,15 @@ class AutomationImporter
                 ->first();
 
             if ($existing !== null) {
+                // Same content as stored: nothing to write, and no revision,
+                // audit entry or version bump (`automations:sync --watch`
+                // runs this every two seconds).
+                $unchanged = $this->sameContent($existing, $payload);
+
                 return [
-                    'automation' => $this->updateInPlace($existing, $payload),
-                    'updated' => true,
+                    'automation' => $unchanged ? $existing->fresh(['nodes', 'edges']) : $this->updateInPlace($existing, $payload),
+                    'updated' => ! $unchanged,
+                    'unchanged' => $unchanged,
                     'warnings' => $warnings,
                     'missing_integrations' => $missingIntegrations,
                     'missing_node_types' => $missingNodeTypes,
@@ -103,10 +109,87 @@ class AutomationImporter
         return [
             'automation' => $automation->fresh(['nodes', 'edges']),
             'updated' => false,
+            'unchanged' => false,
             'warnings' => $warnings,
             'missing_integrations' => $missingIntegrations,
             'missing_node_types' => $missingNodeTypes,
         ];
+    }
+
+    /**
+     * Whether the payload says what the automation already holds: name,
+     * description, and nodes and edges with the fields an import writes.
+     * Order does not matter; config compares by value, so a file whose keys
+     * are ordered differently still counts as the same.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    protected function sameContent(Automation $automation, array $payload): bool
+    {
+        $automation->loadMissing(['nodes', 'edges']);
+
+        if ((string) $automation->name !== (string) $payload['automation']['name']
+            || ($automation->description ?? null) !== ($payload['automation']['description'] ?? null)) {
+            return false;
+        }
+
+        $current = [
+            $this->normalizeNodes($automation->nodes->map(fn (AutomationNode $n) => $n->only(
+                ['node_key', 'type', 'label', 'position_x', 'position_y', 'config', 'disabled'],
+            ))->all()),
+            $this->normalizeEdges($automation->edges->map(fn (AutomationEdge $e) => $e->only(
+                ['from_node_key', 'from_output', 'to_node_key', 'to_input'],
+            ))->all()),
+        ];
+
+        $incoming = [
+            $this->normalizeNodes($payload['nodes'] ?? []),
+            $this->normalizeEdges($payload['edges'] ?? []),
+        ];
+
+        return $current == $incoming;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $nodes
+     * @return array<string, array<string, mixed>>
+     */
+    protected function normalizeNodes(array $nodes): array
+    {
+        $out = [];
+
+        foreach ($nodes as $node) {
+            $out[(string) $node['node_key']] = [
+                'type' => (string) $node['type'],
+                'label' => $node['label'] ?? null,
+                'position_x' => (int) ($node['position_x'] ?? 0),
+                'position_y' => (int) ($node['position_y'] ?? 0),
+                'config' => $node['config'] ?? [],
+                'disabled' => (bool) ($node['disabled'] ?? false),
+            ];
+        }
+
+        ksort($out);
+
+        return $out;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $edges
+     * @return array<int, string>
+     */
+    protected function normalizeEdges(array $edges): array
+    {
+        $out = array_map(fn (array $edge) => implode("\0", [
+            (string) $edge['from_node_key'],
+            (string) ($edge['from_output'] ?? 'default'),
+            (string) $edge['to_node_key'],
+            (string) ($edge['to_input'] ?? 'default'),
+        ]), $edges);
+
+        sort($out);
+
+        return $out;
     }
 
     /**
