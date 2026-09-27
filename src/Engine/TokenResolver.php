@@ -127,21 +127,175 @@ class TokenResolver
             'json' => json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             'default' => ($value === null || $value === '') ? $arg : $value,
             'date' => $this->formatDate($value, $arg ?: 'Y-m-d'),
+            'join' => $this->join($value, $arg),
+            'pluck' => $this->pluck($value, $arg),
+            'first' => is_array($value) ? ($value === [] ? null : reset($value)) : $value,
+            'last' => is_array($value) ? ($value === [] ? null : end($value)) : $value,
+            'split' => $this->split($value, $arg),
+            'replace' => $this->replace($value, $arg),
+            'json_decode' => $this->jsonDecode($value),
+            'where' => $this->where($value, $arg),
             default => $value,
         };
     }
 
+    /**
+     * `date:<format>` or `date:<format>,<time zone>`.
+     *
+     * The time zone is recognised as the part after the last comma when it
+     * names a real zone, so a format with a comma in it (`D, d.m.`) keeps
+     * working. A Notion date value (`{start, end, time_zone}`) formats its
+     * start.
+     */
     protected function formatDate(mixed $value, string $format): mixed
     {
-        if ($value === null || $value === '') {
+        if (is_array($value) && array_key_exists('start', $value)) {
+            $value = $value['start'];
+        }
+
+        if ($value === null || $value === '' || ! is_scalar($value)) {
+            return $value;
+        }
+
+        $zone = null;
+        $comma = strrpos($format, ',');
+
+        if ($comma !== false) {
+            $candidate = trim(substr($format, $comma + 1));
+
+            if (in_array($candidate, \DateTimeZone::listIdentifiers(), true)) {
+                $zone = $candidate;
+                $format = rtrim(substr($format, 0, $comma));
+            }
+        }
+
+        try {
+            $date = Carbon::parse((string) $value);
+
+            return ($zone !== null ? $date->setTimezone($zone) : $date)->format($format);
+        } catch (\Throwable) {
+            return $value;
+        }
+    }
+
+    /**
+     * A filter argument as written, for the filters that need exact
+     * whitespace: quotes keep what the trimming around them would take
+     * (`join:", "`), and `\n` / `\t` stand for a line break and a tab.
+     */
+    protected function literal(?string $arg, string $default): string
+    {
+        if ($arg === null || $arg === '') {
+            return $default;
+        }
+
+        if (strlen($arg) >= 2 && ($arg[0] === '"' || $arg[0] === "'") && substr($arg, -1) === $arg[0]) {
+            $arg = substr($arg, 1, -1);
+        }
+
+        return strtr($arg, ['\\n' => "\n", '\\t' => "\t"]);
+    }
+
+    /**
+     * Two arguments separated by the first comma, each a {@see literal()}.
+     *
+     * @return array{0: string, 1: string}
+     */
+    protected function pair(?string $arg): array
+    {
+        [$first, $second] = array_pad(explode(',', (string) $arg, 2), 2, '');
+
+        return [$this->literal(trim($first), ''), $this->literal(trim($second), '')];
+    }
+
+    protected function join(mixed $value, ?string $arg): mixed
+    {
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        $parts = array_map(
+            fn ($item) => is_scalar($item) || $item === null ? (string) $item : json_encode($item, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            array_values($value),
+        );
+
+        return implode($this->literal($arg, ', '), $parts);
+    }
+
+    protected function pluck(mixed $value, ?string $arg): mixed
+    {
+        if (! is_array($value) || $arg === null || $arg === '') {
+            return $value;
+        }
+
+        return array_map(fn ($item) => data_get($item, $arg), array_values($value));
+    }
+
+    protected function split(mixed $value, ?string $arg): mixed
+    {
+        if (! is_scalar($value)) {
+            return $value;
+        }
+
+        $separator = $this->literal($arg, ',');
+
+        if ((string) $value === '') {
+            return [];
+        }
+
+        return array_map('trim', explode($separator, (string) $value));
+    }
+
+    protected function replace(mixed $value, ?string $arg): mixed
+    {
+        if (! is_scalar($value)) {
+            return $value;
+        }
+
+        [$from, $to] = $this->pair($arg);
+
+        return $from === '' ? (string) $value : str_replace($from, $to, (string) $value);
+    }
+
+    protected function jsonDecode(mixed $value): mixed
+    {
+        if (! is_string($value)) {
             return $value;
         }
 
         try {
-            return Carbon::parse($value)->format($format);
-        } catch (\Throwable) {
+            return json_decode($value, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
             return $value;
         }
+    }
+
+    /**
+     * Keep the items whose `key` (dot notation) equals `value`, compared as
+     * text, so `where:status,Confirmed` and `where:done,true` both read the
+     * way they are written. The result is a list again.
+     */
+    protected function where(mixed $value, ?string $arg): mixed
+    {
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        [$key, $expected] = $this->pair($arg);
+
+        if ($key === '') {
+            return $value;
+        }
+
+        return array_values(array_filter($value, function ($item) use ($key, $expected) {
+            $actual = data_get($item, $key);
+
+            if (is_bool($actual)) {
+                $actual = $actual ? 'true' : 'false';
+            }
+
+            return is_scalar($actual) && (string) $actual === $expected;
+        }));
     }
 
     /**
