@@ -111,12 +111,28 @@ class AutomationFileSync
         ];
     }
 
+    /**
+     * The folder the JSON files live in.
+     *
+     * `automations.file_storage.path` ships as `null` (env
+     * `STATAMIC_AUTOMATIONS_FILE_PATH` unset). `config($key, $default)` only
+     * falls back when the key is missing, not when it holds null, so before
+     * 2.23 an unset path became `''` and every export went to `/{handle}.json`.
+     * An empty value now means the default folder, and a path that trims to
+     * nothing (`/`) is refused instead of written to.
+     */
     protected function basePath(): string
     {
-        return rtrim((string) config(
-            'automations.file_storage.path',
-            $this->defaultBasePath(),
-        ), '/');
+        $configured = trim((string) config('automations.file_storage.path'));
+        $base = rtrim($configured !== '' ? $configured : $this->defaultBasePath(), '/');
+
+        if ($base === '') {
+            throw new \RuntimeException(
+                'automations.file_storage.path points at the filesystem root. Set it to a folder of its own, e.g. resources/automations.'
+            );
+        }
+
+        return $base;
     }
 
     protected function defaultBasePath(): string
