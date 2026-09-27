@@ -359,6 +359,112 @@ link, and only applies to Cal Video.
 its payload looks like, and a trigger whose fields are guesses falls over on the
 first real webhook.
 
+## Notion
+
+Three read-only action nodes (group **Notion**, 2.23): rows of a data source,
+pages by ID, the text of a page. Nothing here writes to Notion.
+
+### Setting it up
+
+1. In Notion, create an integration (Settings, Connections, Develop or manage
+   integrations) and copy its token. Invite the integration to every page and
+   database it should read: Notion answers 404 for anything not shared with it.
+2. Under Automations, Connections, add a connection with the handle `notion`,
+   base URL `https://api.notion.com` and **bearer** auth with the token.
+
+The nodes take the token, the default headers and the timeout from the
+connection and always call `https://api.notion.com/v1/` with
+`Notion-Version: 2025-09-03`. A node's **Connection** field names another
+connection by handle (for a second workspace). Without a connection, or with
+one that has no token, the nodes read nothing and fail with that reason. 429
+and 5xx answers are retried twice.
+
+### Nodes
+
+| Node | Reads | Output |
+|---|---|---|
+| `notion.query_data_source` | rows of a data source, with a raw JSON `filter` and `sorts`, and **Related to any of**: a relation property plus a list of page IDs | `pages`, `count`, `has_more`, `data_source_id` |
+| `notion.get_pages` | pages by ID (a list, JSON, or text; IDs or Notion links), at most 100 | `pages`, `count`, `missing` |
+| `notion.page_text` | the text blocks of a page, 1 to 3 levels deep | `blocks`, `plain`, `page_id` |
+
+The data source ID is not the database ID: since API version 2025-09-03 a
+database can hold several data sources (database menu, Manage data sources,
+Copy data source ID).
+
+**Related to any of** with an empty ID list reads no rows and does not ask
+Notion; without the filter, the query would have returned every row.
+`max_pages` caps the requests (100 rows each, default 10), and `has_more` says
+whether the cap cut the list short.
+
+### Page values
+
+Every page comes as `{id, url, title, created_time, last_edited_time,
+properties}`, each property as a plain value under its name:
+
+| Notion type | Value |
+|---|---|
+| title, rich_text | text |
+| number, checkbox, url, email, phone_number | the value |
+| select, status | the option's name |
+| multi_select | list of names |
+| date | `{start, end, time_zone, has_time, start_date, start_time, end_date, end_time}` |
+| relation | list of page IDs (Notion includes at most 25 per page) |
+| rollup | array rollup: list of values, relation entries spread into page IDs; number or date rollup: the value |
+| formula | its value |
+| people, files, unique_id | names, URLs, `PREFIX-12` |
+
+**Dates and time zones.** Notion sends a time either with an offset in the
+string, or without one plus a `time_zone`, meaning local time in that zone.
+Read naively, the second form is off by the zone's offset (the same trap as a
+`Time` formula built in Notion). `start` and `end` therefore come out as ISO
+8601 with the offset written in, which every filter and modifier reads
+correctly; `start_date`, `start_time`, `end_date`, `end_time` are the same
+moments in the node's **Time zone for dates** (default: the site's display
+time zone). A date without a time stays `2026-12-12`.
+
+### Page text
+
+`blocks` is a tree: `{type, text, children}` for paragraphs, headings, list
+items, to-dos (`checked`), toggles, quotes, callouts and code. Columns and
+synced blocks give way to their children; images, embeds, child databases and
+dividers are skipped. A callout also has `heading` (its own text, or else a
+quote at its top) and `body` (its children without that quote). `plain` is the
+whole tree as lines, with bullets and check boxes.
+
+**Skip empty blocks** (on) drops blocks without text or children. **Skip
+empty template labels** (off) drops lines that are only a label with a colon,
+such as `Zimmer gebucht:`, left over from a page template.
+
+### A gig sheet on the canvas
+
+Manual or scheduled trigger, then:
+
+1. `notion.query_data_source` on the sheets (`sheets`).
+2. Loop over `{{ nodes.sheets.pages }}`.
+3. In the loop: `notion.query_data_source` on the timetable (`zeitplan`),
+   **Related to any of** `Konzertkalender` = `{{ item.properties.Konzertkalender }}`,
+   sorted by `Date`, time zone `Europe/Berlin`.
+4. [Compose Text](extending.md#compose-text):
+
+```antlers
+{{ item.title }}
+
+Zeitplan{{ days = nodes.zeitplan.pages | pluck('properties.Date.start_date') | unique | count }}
+{{ nodes.zeitplan.pages }}{{ if days > 1 }}{{ properties.Date.start_date | format('d.m.') }} {{ /if }}{{ properties.Date.start_time }}{{ if properties.Date.end_time }}–{{ properties.Date.end_time }}{{ /if }} {{ title }}
+{{ /nodes.zeitplan.pages }}
+
+Notion: {{ item.url }}
+```
+
+A timetable over several days puts the date in front of each line; one day
+shows only the times. Venue and hotel pages behind a rollup come from
+`notion.get_pages` with `{{ item.properties.Venue }}`; callout sections from
+`notion.page_text` with `{{ item.id }}`.
+
+### Test runs
+
+All three only read, so a test run reads for real and shows the actual rows.
+
 ## Secrets across integrations
 
 Never embed an API key or signing secret in a node config — it would be

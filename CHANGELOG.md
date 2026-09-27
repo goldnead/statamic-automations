@@ -1,5 +1,48 @@
 # Changelog
 
+## Unreleased (2.23.0)
+
+### Added: token filters
+
+- `join:sep` (default `", "`, `\n` for a line break), `pluck:key` (dot notation), `first`, `last`,
+  `split:sep`, `replace:from,to`, `json_decode`, `where:key,value`.
+- `date:format,zone` formats in a time zone (`{{ x | date:H:i,Europe/Berlin }}`). A date
+  given as a Notion date value formats its start.
+- Quoted arguments keep their spaces (`join:" / "`). The existing filters behave as before.
+
+### Added: Compose Text
+
+`compose_text` builds a block of plain text from the run data with Antlers: loops,
+conditions, modifiers, timezone date formatting. Output `text` and `is_empty`. Sandboxed:
+only the run context as data, no cascade, no tags except `foreach`, only data modifiers, no
+PHP and no method calls; anything else fails the node with the reason. **Tidy blank lines**
+(on by default) collapses the blank lines conditions and loops leave behind. Pure, so a test
+run renders what a real run would.
+
+A schema field can now declare `resolve_tokens: false`; the executor hands it over as stored.
+The Compose Text template uses it, so the variables inside a loop reach Antlers instead of
+being emptied as tokens first.
+
+### Added: Notion (read only)
+
+- `notion.query_data_source`: rows of a data source, with a raw JSON filter and sorts, a
+  **Related to any of** filter (relation property plus page IDs), pagination up to a request
+  cap with `has_more`. An empty ID list reads no rows and asks nothing.
+- `notion.get_pages`: pages by ID, from a list, JSON or text, IDs or Notion links. A page
+  that cannot be read fails the node unless **Skip pages that cannot be read** is on.
+- `notion.page_text`: the text blocks of a page as a tree and as plain text, 1 to 3 levels;
+  callouts carry `heading` (their text or a leading quote) and `body`; empty blocks and empty
+  template labels (`Zimmer gebucht:`) can be skipped.
+
+Properties come as plain values (text, numbers, option names, relation IDs, rollups as
+lists, formula values). Dates carry the time zone applied: `start`/`end` in ISO 8601 with the
+offset written in, plus `start_date`, `start_time`, `end_date`, `end_time` in a chosen zone.
+
+The credential is a connection with bearer auth (handle `notion` by default); the nodes
+always call `https://api.notion.com/v1/` with `Notion-Version: 2025-09-03`. Without a
+connection or token they read nothing and fail with that reason. All three run for real in a
+test run, since they only read.
+
 ## 2.22.2 — 2026-09-25
 
 ### Fixed

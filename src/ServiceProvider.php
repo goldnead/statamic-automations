@@ -47,6 +47,7 @@ use Goldnead\StatamicAutomations\Integrations\Marketing\Actions\UnsubscribeFromL
 use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\CampaignSentTrigger;
 use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\SubscriberConfirmedTrigger;
 use Goldnead\StatamicAutomations\Integrations\Marketing\Triggers\SubscriberUnsubscribedTrigger;
+use Goldnead\StatamicAutomations\Integrations\Notion\Actions as NoA;
 use Goldnead\StatamicAutomations\Integrations\Offers\Triggers as OfT;
 use Goldnead\StatamicAutomations\Integrations\Payments\Triggers as PT;
 use Goldnead\StatamicAutomations\Integrations\VocalFlow\Actions as VfA;
@@ -66,6 +67,7 @@ use Goldnead\StatamicAutomations\Nodes\Actions\AddUserToGroupAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\AiGenerateAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\AssignUserRoleAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\CallAutomationAction;
+use Goldnead\StatamicAutomations\Nodes\Actions\ComposeTextAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\CreateEntryAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\CreateTermAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\CreateUserAction;
@@ -597,6 +599,7 @@ class ServiceProvider extends AddonServiceProvider
             'assign_user_role' => AssignUserRoleAction::class,
             'add_user_to_group' => AddUserToGroupAction::class,
             'set_global_value' => SetGlobalValueAction::class,
+            'compose_text' => ComposeTextAction::class,
 
             // VocalFlow, die Gegenrichtung zu den Auslösern oben. Genau zwei,
             // die beiden Schritte des Onboardings; alles Weitere, was die
@@ -623,6 +626,13 @@ class ServiceProvider extends AddonServiceProvider
             'cal_com.cancel_booking' => CalA\CancelBookingAction::class,
             'cal_com.create_booking' => CalA\CreateBookingAction::class,
             'cal_com.get_slots' => CalA\GetSlotsAction::class,
+
+            // Notion, read only: rows of a data source, pages by ID, the text
+            // of a page. The credential is a connection (bearer auth), so
+            // without one the nodes read nothing and say so.
+            'notion.query_data_source' => NoA\QueryDataSourceAction::class,
+            'notion.get_pages' => NoA\GetPagesAction::class,
+            'notion.page_text' => NoA\PageTextAction::class,
         ];
 
         $automations = $this->app->make('automations');
