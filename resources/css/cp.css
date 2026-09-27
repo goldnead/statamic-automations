@@ -196,11 +196,19 @@
     .sa-icon-chip--sm { @apply size-7 rounded-md; }
 
     .sa-node__heading { @apply min-w-0 flex-1; }
-    .sa-node__title {
-        @apply text-sm font-semibold leading-tight text-gray-900 dark:text-gray-100 truncate;
+    /* The title has the card's whole width beside the icon and may take two
+     * lines; type, kind and validity sit on the line under it. */
+    /* Written against the heading, not bare: the Control Panel loads every
+     * addon's stylesheet, and a host still on an older canvas ships
+     * `.sa-node__title { truncate }` at the same specificity. */
+    .sa-node__heading > .sa-node__title {
+        @apply text-sm font-semibold leading-tight text-gray-900 dark:text-gray-100 line-clamp-2 break-words whitespace-normal;
+    }
+    .sa-node__meta {
+        @apply flex items-center gap-1.5 min-w-0 mt-1;
     }
     .sa-node__subtitle {
-        @apply text-[11px] leading-tight text-gray-500 dark:text-gray-400 font-mono truncate mt-0.5;
+        @apply text-[11px] leading-tight text-gray-500 dark:text-gray-400 font-mono truncate min-w-0;
     }
 
     .sa-node__body {
@@ -212,11 +220,14 @@
 
     /* Variable pill, e.g. {{ service_name }} */
     .sa-chip {
-        @apply inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-mono
+        @apply inline-block max-w-full truncate rounded px-1.5 py-0.5 text-[10px] font-mono
                bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300
                border border-gray-200 dark:border-gray-700;
     }
-    .sa-node__chips { @apply flex flex-wrap gap-1; }
+    .sa-node__chips { @apply flex flex-wrap gap-1 min-w-0; }
+    /* A long token ends in an ellipsis inside the card instead of running
+     * past its edge (specific for the same reason as the title above). */
+    .sa-node__chips > .sa-chip { @apply block max-w-full truncate; }
 
     /* What has run through this step, in the activity view's window. Its own
      * band between body and footer: the footer's right-hand side already

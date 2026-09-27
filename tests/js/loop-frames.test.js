@@ -10,10 +10,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+    SCOPE_FRAME,
     collapseScopes,
-    computeLayout,
     computeScopeFrames,
-    scopeLayoutInsets,
+    layoutScoped,
+    visibleScopeFrames,
     setNodeOutputSpecs,
     clearNodeOutputSpecs,
 } from '@goldnead/flow-canvas';
@@ -80,18 +81,34 @@ describe('the Loop scope this addon declares', () => {
             'every_15_minutes', 'fetch_events', 'read_sheets', 'remember_ids', 'each_event',
         ]);
 
-        // Laid out, the block hangs one row under the Loop.
-        const layout = computeLayout(view.nodes, view.edges);
+        // Laid out, the block hangs under the Loop, inside the Loop's frame.
+        const shown = visibleScopeFrames(frames, view, ['each_event']);
+        const { positions, rects } = layoutScoped(view.nodes, view.edges, shown);
         const block = view.blocks[0].id;
-        expect(layout.positions[block].y).toBeGreaterThan(layout.positions.each_event.y);
+        expect(positions[block].y).toBeGreaterThan(positions.each_event.y);
+        expect(positions[block].y).toBeLessThan(rects.each_event.y + rects.each_event.height);
+    });
+
+    it('puts a step wired to "After loop" under the whole frame', () => {
+        const { nodes, edges } = calendarSync();
+        nodes.push(node('after'));
+        edges.push(edge('each_event', 'after', 'done'));
+        const frames = computeScopeFrames(nodes, edges, SCOPES);
+        const view = collapseScopes(nodes, edges, frames, []);
+        const { positions, rects } = layoutScoped(view.nodes, view.edges, visibleScopeFrames(frames, view, []));
+        const frame = rects.each_event;
+
+        expect(positions.after.y).toBe(frame.y + frame.height + SCOPE_FRAME.BELOW);
+        expect(positions.step_13.y).toBeLessThan(frame.y + frame.height);
     });
 
     it('never writes into the graph it draws', () => {
         const { nodes, edges } = calendarSync();
         const saved = JSON.stringify({ nodes, edges });
         const frames = computeScopeFrames(nodes, edges, SCOPES);
-        collapseScopes(nodes, edges, frames, ['each_event']);
-        computeLayout(nodes, edges, { insets: scopeLayoutInsets(frames) });
+        const view = collapseScopes(nodes, edges, frames, ['each_event']);
+        layoutScoped(view.nodes, view.edges, visibleScopeFrames(frames, view, ['each_event']));
+        layoutScoped(nodes, edges, visibleScopeFrames(frames, { hidden: new Set(), blocks: [] }, []));
 
         expect(JSON.stringify({ nodes, edges })).toBe(saved);
         expect(edges.some((e) => e.to_node_key === 'each_event' && e.from_node_key.startsWith('step_'))).toBe(false);

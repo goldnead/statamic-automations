@@ -122,14 +122,15 @@ An inline **Loop** runs the nodes on its *For each item* output once per item, w
 outer loop's variables and restore them afterwards.
 
 **On the canvas** the body is everything reachable from *For each item*, up to where a path runs
-into what follows *After loop*. It is drawn inside a tinted frame titled with the Loop's name and
-its step count, with a dashed line from each end of the body back into the side of the Loop, so
-the repetition is visible without a loop-back edge. A nested loop gets its own frame inside the
-outer one. The chevron in the title bar folds the body into a single card ("Für jeden Termin ·
-13 Schritte") and back; folds are remembered per automation in the browser (localStorage), every
-body starts unfolded. None of this is part of the graph: frames, lines and folded cards are
-derived on every render, never saved, never exported, and the validator never sees them. The
-layout leaves room around a body so its frame does not reach into a neighbouring column.
+into what follows *After loop*. The Loop card and its body are drawn inside one tinted frame with
+the Loop card as its head, and a dashed line runs from each end of the body back into the side of
+the Loop, so the repetition is visible without a loop-back edge. The step on *After loop* is laid
+out below the whole frame; its edge leaves the Loop card's side and runs round the frame. A
+nested loop gets its own frame inside the outer one. The chevron in the frame's head folds the
+body into a single card ("13 Schritte") inside the frame and back; folds are remembered per
+automation in the browser (localStorage), every body starts unfolded. None of this is part of
+the graph: frames, lines and folded cards are derived on every render, never saved, never
+exported, and the validator never sees them.
 
 Inside a loop body:
 
