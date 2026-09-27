@@ -119,19 +119,20 @@ class ConnectionOperationAction implements AutomationAction
         $url = $connection->url($path, $query);
 
         // The operation's own headers over the connection's defaults, and the
-        // credential over both: an operation cannot replace the auth header
-        // with a value of its own, nor read it.
+        // credential over both, by case-insensitive name: an operation cannot
+        // replace the auth header with a value of its own, nor add to it. A
+        // raw body's Content-Type is the one field above, never a second one.
         $operationHeaders = array_map(
             fn ($value) => is_scalar($value = $this->fill($value, $inputs)) ? (string) $value : (string) json_encode($value),
             AutomationConnectionOperation::keyValue($operation->headers),
         );
-        $headers = [...$connection->defaultHeaders(), ...$operationHeaders];
+        $headers = $connection->requestHeaders($operationHeaders, $raw ? ['content-type'] : []);
 
         $preview = [
             'method' => $method,
             'url' => $url,
             // Names only: the values of the auth headers never leave the call.
-            'headers' => array_keys([...$headers, ...$connection->authHeaders()]),
+            'headers' => array_keys($headers),
             'body' => $body,
         ] + ($raw ? ['content_type' => $contentType] : []);
 
@@ -161,7 +162,7 @@ class ConnectionOperationAction implements AutomationAction
             // redirect to another host, so a custom credential header would
             // follow. A 3xx is answered like any other non-2xx status.
             $request = Http::withOptions($pinned)
-                ->withHeaders([...$headers, ...$connection->authHeaders()])
+                ->withHeaders($headers)
                 ->withoutRedirecting()
                 ->timeout(max(1, (int) $connection->timeout));
 

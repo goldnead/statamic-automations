@@ -221,6 +221,7 @@
     "Headers": "Header",
     "Sent with this operation only, e.g. Depth → 1. Placeholders work here too. The authentication of the connection always wins.": "Gehen nur mit dieser Operation mit, etwa Depth → 1. Platzhalter gehen auch hier. Die Authentifizierung der Verbindung hat immer Vorrang.",
     "Response format": "Antwortformat",
+    "The header :name is set by the request itself and cannot be configured.": "Den Header :name setzt die Anfrage selbst, er lässt sich nicht einstellen.",
     "Detect automatically": "Automatisch erkennen",
     "How the answer is read for the output fields. XML is read without namespaces, so d:href is href.": "Wie die Antwort für die Ausgabefelder gelesen wird. XML wird ohne Namensräume gelesen, aus d:href wird href.",
     "Build your first automation": "Starte mit deiner ersten Automatisierung",

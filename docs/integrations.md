@@ -434,7 +434,15 @@ back byte for byte: the folding of other lines, the DESCRIPTION of a VALARM,
 parameters like `LANGUAGE` or `ALTREP` on the description. Lines are folded at
 75 octets without cutting a UTF-8 character, TEXT values are escaped, and the
 written text always uses CRLF (the XML of a REPORT hands out LF, so it is never
-copied from there). Every VEVENT of the resource gets the block.
+copied from there).
+
+**Every VEVENT in the resource gets the block, on purpose.** A recurring
+series with a changed occurrence is one resource holding the series and, for
+each changed date, its own VEVENT with a `RECURRENCE-ID` and its own
+DESCRIPTION. A calendar app shows that occurrence's description, not the
+series', so a block written only into the series would be missing exactly on
+the dates someone moved. Text people wrote into an occurrence stays, as it
+does everywhere else.
 
 | `status` | Node | Meaning |
 | --- | --- | --- |
@@ -443,7 +451,7 @@ copied from there). Every VEVENT of the resource gets the block.
 | `skipped_empty` | success | `block_text` is empty; nothing is read or written, an existing block stays |
 | `would_write` | success | test run: read, computed, not written |
 | `conflict` | failed | 412, the event changed after it was read; a retry reads it again |
-| `error` | failed | `reason` says why: `marker_missing`, `not_found`, `no_etag`, `foreign_host`, `http_<status>`, `request_failed` |
+| `error` | failed | `reason` says why: `marker_missing`, `not_ics` (a 200 without any VEVENT, e.g. a login page), `not_found`, `no_etag`, `foreign_host`, `http_<status>`, `request_failed` |
 
 `marker_missing` means the description holds the start marker but not the end
 marker. There is then no telling where the block ends, and rather than cut off

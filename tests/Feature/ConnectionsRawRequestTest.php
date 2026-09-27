@@ -110,6 +110,74 @@ it('lets the credential win over an operation header of the same name', function
     Http::assertSent(fn (Request $r) => $r->header('Authorization') === ['Basic '.base64_encode('adrian@example.test:'.RAW_SECRET)]);
 });
 
+it('drops a lowercase authorization header instead of merging it with the credential', function () {
+    Http::fake(['*' => Http::response('', 200)]);
+    $connection = rawConnection();
+    $connection->update(['default_headers' => ['AUTHORIZATION' => 'Bearer default']]);
+    rawOperation($connection, ['headers' => ['authorization' => 'Bearer stolen']]);
+
+    runRawOperation('connection.dav.query', ['start' => 'x']);
+
+    Http::assertSent(fn (Request $r) => $r->header('Authorization') === ['Basic '.base64_encode('adrian@example.test:'.RAW_SECRET)]
+        && ! str_contains(json_encode($r->headers()), 'stolen')
+        && ! str_contains(json_encode($r->headers()), 'default'));
+});
+
+it('drops a custom auth header written in another case', function () {
+    Http::fake(['*' => Http::response('', 200)]);
+    $connection = AutomationConnection::create([
+        'handle' => 'crm', 'name' => 'CRM', 'base_url' => 'https://dav.example.test/',
+        'auth_type' => 'header', 'auth_config' => ['name' => 'x-api-key', 'value' => RAW_SECRET],
+    ]);
+    rawOperation($connection, ['headers' => ['X-API-KEY' => 'guess', 'X-Api-Key' => 'guess2']]);
+
+    runRawOperation('connection.crm.query', ['start' => 'x']);
+
+    Http::assertSent(fn (Request $r) => $r->header('x-api-key') === [RAW_SECRET]);
+});
+
+it('sends exactly one content type for a raw body and never a configured host or content-length', function () {
+    Http::fake(['*' => Http::response('', 200)]);
+    $connection = rawConnection();
+    $connection->update(['default_headers' => ['content-type' => 'text/plain']]);
+    rawOperation($connection, ['headers' => [
+        'CONTENT-TYPE' => 'application/json',
+        'Host' => 'evil.example.test',
+        'content-length' => '1',
+    ]]);
+
+    runRawOperation('connection.dav.query', ['start' => 'x']);
+
+    Http::assertSent(function (Request $r) {
+        $psr = $r->toPsrRequest();
+
+        return $psr->getHeader('Content-Type') === ['application/xml; charset=utf-8']
+            && $psr->getHeaderLine('Host') === 'dav.example.test'
+            && $psr->getHeaderLine('Content-Length') !== '1';
+    });
+});
+
+it('fails masked when a templated header value carries a line break', function () {
+    Http::fake();
+    rawOperation(rawConnection(), ['headers' => ['X-Note' => '{{ input.note }}']]);
+
+    $nodeRun = runRawOperation('connection.dav.query', ['start' => 'x', 'note' => "a\r\nX-Evil: ".RAW_SECRET]);
+
+    expect($nodeRun->status)->toBe(AutomationNodeRun::STATUS_FAILED);
+    expect($nodeRun->error_message)->not->toBeEmpty();
+    expect(json_encode([$nodeRun->error_message, $nodeRun->output]))->not->toContain(RAW_SECRET);
+    Http::assertNothingSent();
+});
+
+it('refuses host and content-length as operation headers on save', function (string $name) {
+    $this->actingAsSuperUser();
+    $connection = rawConnection();
+
+    $this->postJson(cp_route('statamic-automations.api.connections.operations.store', $connection->id), [
+        'handle' => 'op', 'name' => 'Op', 'method' => 'GET', 'path' => '/', 'headers' => [$name => 'x'],
+    ])->assertJsonValidationErrors('headers');
+})->with(['Host', 'content-length', 'CONTENT-LENGTH']);
+
 it('leaves an existing json operation exactly as it was', function () {
     Http::fake(['*' => Http::response(['id' => 7], 200, ['Content-Type' => 'application/json'])]);
     $connection = rawConnection();
@@ -192,6 +260,7 @@ it('masks the credential in response headers and drops set-cookie', function () 
 
 it('refuses xml with a doctype and xml that is not well formed', function () {
     expect(XmlToArray::parse('<!DOCTYPE a [<!ENTITY x "y">]><a>&x;</a>'))->toBeNull();
+    expect(XmlToArray::parse("<?xml version=\"1.0\"?>\n<!doctype a SYSTEM \"http://x.test/a.dtd\"><a/>"))->toBeNull();
     expect(XmlToArray::parse('<a><b></a>'))->toBeNull();
     expect(XmlToArray::parse(''))->toBeNull();
     expect(XmlToArray::parse('<a id="1"><b>x</b><b>y</b>tail</a>'))->toBe(['a' => ['@id' => '1', 'b' => ['x', 'y'], '#text' => 'tail']]);

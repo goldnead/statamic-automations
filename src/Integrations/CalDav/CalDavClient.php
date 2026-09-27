@@ -126,7 +126,7 @@ XML;
         $previous = libxml_use_internal_errors(true);
 
         try {
-            $loaded = trim($xml) !== '' && $dom->loadXML($xml, LIBXML_NONET);
+            $loaded = trim($xml) !== '' && stripos($xml, '<!DOCTYPE') === false && $dom->loadXML($xml, LIBXML_NONET);
         } finally {
             libxml_clear_errors();
             libxml_use_internal_errors($previous);
@@ -159,7 +159,7 @@ XML;
     protected function http(string $url): PendingRequest
     {
         return Http::withOptions(app(HostGuard::class)->guard($url))
-            ->withHeaders([...$this->connection->defaultHeaders(), ...$this->connection->authHeaders()])
+            ->withHeaders($this->connection->requestHeaders([], ['content-type', 'if-match', 'depth']))
             ->withoutRedirecting()
             ->timeout(max(1, (int) $this->connection->timeout));
     }

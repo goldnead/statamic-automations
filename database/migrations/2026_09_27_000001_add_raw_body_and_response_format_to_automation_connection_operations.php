@@ -11,8 +11,9 @@ use Illuminate\Support\Facades\Schema;
  * Operation liest `null` als "wie bisher" (JSON-Body aus key_value, Antwort
  * automatisch erkannt, keine eigenen Kopfzeilen). Nichts wird umgeschrieben.
  *
- * `method` wird breiter: jede Methode, die RFC 7230 als Token zulaesst, also
- * auch REPORT, PROPFIND oder MKCALENDAR (10 Zeichen, die alte Spalte hatte 8).
+ * `method` wird breiter, von 8 auf 32 Zeichen: jede Methode, die RFC 7230 als
+ * Token zulaesst, also auch REPORT, PROPFIND oder MKCALENDAR (schon das sind
+ * 10 Zeichen). Die Validierung begrenzt ebenfalls auf 32.
  */
 return new class extends Migration
 {

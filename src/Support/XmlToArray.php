@@ -32,7 +32,9 @@ final class XmlToArray
      */
     public static function parse(string $xml): ?array
     {
-        if (trim($xml) === '') {
+        // Refused before the parser sees it: a DTD is where entity expansion
+        // lives, and nothing an API answers with needs one.
+        if (trim($xml) === '' || stripos($xml, '<!DOCTYPE') !== false) {
             return null;
         }
 

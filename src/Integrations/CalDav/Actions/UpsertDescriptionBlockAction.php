@@ -39,6 +39,10 @@ use Goldnead\StatamicAutomations\Support\ActionResult;
  *   no telling where the block ends, and rather than cut off what someone
  *   typed after it, nothing is written. A person fixes the markers.
  *
+ * Every VEVENT of the resource gets the block, on purpose: a changed
+ * occurrence of a series (RECURRENCE-ID) has its own DESCRIPTION, and that is
+ * what the calendar shows on that date.
+ *
  * A test run reads the event and reports what it would do (`would_write` or
  * `unchanged`), without a PUT.
  */
@@ -189,6 +193,13 @@ class UpsertDescriptionBlockAction implements AutomationAction
 
         if ($etag === '') {
             return $failed('The calendar did not send an ETag for the event, so it cannot be written safely.', 'error', 'no_etag');
+        }
+
+        // A 200 is not yet a calendar event: a login page, an empty body or a
+        // proxy's notice would otherwise come out as a green "unchanged" for
+        // an event nobody has looked at.
+        if (Ics::events($current->body()) === []) {
+            return $failed('The calendar answered without an event (no VEVENT in the response).', 'error', 'not_ics', $etag);
         }
 
         try {

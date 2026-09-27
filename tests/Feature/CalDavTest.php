@@ -356,6 +356,23 @@ it('reports marker_missing and writes nothing when the end marker is gone', func
     Http::assertNotSent(fn (Request $r) => $r->method() === 'PUT');
 });
 
+it('fails with not_ics when the answer holds no event', function (string $body) {
+    caldavConnection();
+    $this->ics = $body;
+    fakeCalendar($this);
+
+    $result = upsert(['block_text' => 'Neu']);
+
+    expect($result->isFailed())->toBeTrue();
+    expect($result->output['status'])->toBe('error');
+    expect($result->output['reason'])->toBe('not_ics');
+    Http::assertNotSent(fn (Request $r) => $r->method() === 'PUT');
+})->with([
+    'login page' => ['<!doctype html><html><body>Please sign in</body></html>'],
+    'empty body' => [''],
+    'calendar without event' => ["BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n"],
+]);
+
 it('skips an empty block without reading or writing', function () {
     caldavConnection();
     Http::fake();

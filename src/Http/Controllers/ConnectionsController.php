@@ -109,7 +109,7 @@ class ConnectionsController extends Controller
             // Checked again here and pinned, like every operation call; no
             // redirects, so a credential header cannot follow one elsewhere.
             $response = Http::withOptions(app(HostGuard::class)->guard($url))
-                ->withHeaders([...$automationConnection->defaultHeaders(), ...$automationConnection->authHeaders()])
+                ->withHeaders($automationConnection->requestHeaders())
                 ->withoutRedirecting()
                 ->timeout(max(1, (int) $automationConnection->timeout))
                 ->get($url);
@@ -266,7 +266,7 @@ class ConnectionsController extends Controller
             // A line break would end the header and start another one.
             'content_type' => ['nullable', 'string', 'max:255', 'not_regex:/[\r\n]/'],
             'raw_body' => ['nullable', 'string', 'max:65535'],
-            'headers' => ['nullable', 'array'],
+            'headers' => ['nullable', 'array', $this->noReservedHeaders()],
             'response_format' => ['nullable', Rule::in(AutomationConnectionOperation::RESPONSE_FORMATS)],
             'inputs' => ['nullable', 'array'],
             'inputs.*.handle' => ['required', 'string', 'max:64', 'regex:/^[a-z][a-z0-9_]*$/', 'distinct'],
@@ -282,6 +282,22 @@ class ConnectionsController extends Controller
         $data['fail_on_error_status'] ??= true;
 
         return $data;
+    }
+
+    /**
+     * Refuses a header named Host or Content-Length, in any case and in
+     * either key_value shape: the transport sets those, and the call drops
+     * them anyway, so saving one would only hide that it has no effect.
+     */
+    protected function noReservedHeaders(): \Closure
+    {
+        return function (string $attribute, mixed $value, \Closure $fail) {
+            foreach (array_keys(AutomationConnectionOperation::keyValue($value)) as $name) {
+                if (in_array(strtolower(trim((string) $name)), AutomationConnection::RESERVED_HEADERS, true)) {
+                    $fail(__('The header :name is set by the request itself and cannot be configured.', ['name' => $name]));
+                }
+            }
+        };
     }
 
     /**

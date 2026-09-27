@@ -40,9 +40,19 @@
   (412, fails so a retry reads again) or `error` with a `reason`; `marker_missing` (start marker
   without end marker) never writes. A test run reads and reports `would_write` without a PUT.
 - Only DESCRIPTION, DTSTAMP and LAST-MODIFIED change; the rest of the event goes back byte for
-  byte (VALARM, other folding, `LANGUAGE`/`ALTREP` parameters), every VEVENT of a recurring
-  series gets the block, lines fold at 75 octets without cutting UTF-8, and the written text is
-  always CRLF. Ported with its tests from the anders-band.de gig calendar.
+  byte (VALARM, other folding, `LANGUAGE`/`ALTREP` parameters), lines fold at 75 octets without
+  cutting UTF-8, and the written text is always CRLF. Ported with its tests from the
+  anders-band.de gig calendar.
+- **Every VEVENT of the resource gets the block, intentionally.** A changed occurrence of a
+  recurring series (`RECURRENCE-ID`) has its own DESCRIPTION, and that is what the calendar app
+  shows on that date; written into the series only, the block would be missing exactly where
+  someone moved a date.
+- A `200` without any VEVENT (login page, empty body) fails with `reason: not_ics` instead of
+  passing as `unchanged`.
+- Header names compare case-insensitively: a default or operation header named like the auth
+  header (`authorization`, `X-API-KEY` against `x-api-key`) is dropped, never merged with the
+  credential. `Host` and `Content-Length` cannot be configured (refused on save, dropped at
+  send time), and a raw body's content type replaces any `Content-Type` header.
 - The credential is a connection (base URL = calendar collection, Basic auth), so each brand has
   its own calendar and there is no env key. Without one both actions do nothing and say so. An
   `href` on another host than the collection is refused, not sent the credential.
