@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (2.23.0)
+## 2.23.0 — 2026-09-27
 
 ### Upgrading
 
