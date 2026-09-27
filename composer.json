@@ -31,7 +31,7 @@
         "statamic/cms": "^6.0",
         "inertiajs/inertia-laravel": "^2.0 || ^3.0",
         "goldnead/statamic-brand-context": "^1.13",
-        "goldnead/statamic-flow-canvas": "^1.1"
+        "goldnead/statamic-flow-canvas": "^1.6"
     },
     "suggest": {
         "goldnead/statamic-insights": "Report runs, failures, success rate, median run time and series opt-outs on the shared Insights dashboard",

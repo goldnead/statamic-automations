@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (2.24.0)
+## 2.24.0 — 2026-09-27
 
 ### Upgrading
 
@@ -46,6 +46,7 @@ or that it comes back — the data model deliberately has no loop-back edge.
 - **"Replace trigger" did nothing.** The page listened for `replace-trigger`, but the shared canvas
   emits `replace-unique`; the trigger card's menu item now arms the replace pick again.
 
+## 2.23.0 — 2026-09-27
 
 ### Upgrading
 
