@@ -359,6 +359,99 @@ link, and only applies to Cal Video.
 its payload looks like, and a trigger whose fields are guesses falls over on the
 first real webhook.
 
+## CalDAV
+
+Two actions for a CalDAV calendar (iCloud, Nextcloud, Fastmail, mailbox.org,
+any server that speaks CalDAV): find the events in a range, and keep a block of
+text inside an event's description up to date. They were built for a shared
+band calendar whose events are made by hand in a calendar app and get their
+details (programme, schedule, hotel) filled in from Notion, but nothing in them
+knows about Notion.
+
+### Setting it up
+
+The credential is a **connection** (Automations → Connections), not an env key,
+so each brand brings its own calendar:
+
+- **Base URL:** the calendar collection itself, e.g.
+  `https://p42-caldav.icloud.com/1234567/calendars/ABCD-…/`. For iCloud, the
+  collection URL is what a CalDAV client like DAVx⁵ or Thunderbird shows after
+  discovery.
+- **Authentication:** Basic, with the account and an **app password** (iCloud:
+  appleid.apple.com → Sign-In and Security → App-Specific Passwords).
+- No operations are needed on the connection; the two actions talk to it
+  directly.
+
+Without a connection picked on the node, or with one that does not exist in the
+current brand, both actions do nothing and fail with that message. Nothing is
+read or written.
+
+Every call goes through the same fences as a connection operation: the host
+guard with the pinned address, no redirects, and an `href` that points at
+another host, scheme or port than the collection is refused rather than sent
+the credential.
+
+### `caldav.find_events`
+
+Inputs: `connection`, `range_start`, `range_end` (anything a date parser reads,
+in the site's time zone unless it says otherwise) and optionally `url_contains`
+(only events whose URL field contains the text, case-insensitive).
+
+One `REPORT` calendar-query with `Depth: 1`. The output:
+
+| Field | |
+| --- | --- |
+| `events` | list of `{href, etag, uid, summary, dtstart, url, url_id, description}` |
+| `count` | number of events |
+
+One entry per event resource. A recurring series with changed occurrences
+(several VEVENTs in one resource, the changed ones with `RECURRENCE-ID`) is one
+entry describing the series. `dtstart` is the ICS value as it stands
+(`20260911` for an all-day event, `20260911T190000Z` or a local time).
+
+`url_id` is the id at the end of the URL's path, 32 hex digits or a UUID,
+returned without dashes and lowercased; the query and fragment do not count.
+For a Notion link (`…/Sheet-Bevern-2026-3c8739f36bad809f90ebd3762307e5a1`)
+that is the page id, which is what makes it the join key between a calendar
+event and a Notion page.
+
+The raw calendar text never goes into the output, so it never reaches the run
+log. The action only reads, so a test run reads too.
+
+### `caldav.upsert_description_block`
+
+Inputs: `connection`, `href` (usually `{{ item.href }}` from `find_events`
+inside a loop), `block_text`, `marker_start`, `marker_end`.
+
+It fetches the event fresh (`GET`), sets `block_text` between the two marker
+lines in the DESCRIPTION, and writes it back with `PUT` and `If-Match` on the
+ETag of that fetch, **only if something changed**. Text people wrote before or
+after the block stays. Where there is no block yet, it is appended after a
+blank line.
+
+Only DESCRIPTION, DTSTAMP and LAST-MODIFIED change. The rest of the event goes
+back byte for byte: the folding of other lines, the DESCRIPTION of a VALARM,
+parameters like `LANGUAGE` or `ALTREP` on the description. Lines are folded at
+75 octets without cutting a UTF-8 character, TEXT values are escaped, and the
+written text always uses CRLF (the XML of a REPORT hands out LF, so it is never
+copied from there). Every VEVENT of the resource gets the block.
+
+| `status` | Node | Meaning |
+| --- | --- | --- |
+| `written` | success | changed and accepted by the server; `etag` is the new one if the server names it |
+| `unchanged` | success | the block already stands so; no PUT went out |
+| `skipped_empty` | success | `block_text` is empty; nothing is read or written, an existing block stays |
+| `would_write` | success | test run: read, computed, not written |
+| `conflict` | failed | 412, the event changed after it was read; a retry reads it again |
+| `error` | failed | `reason` says why: `marker_missing`, `not_found`, `no_etag`, `foreign_host`, `http_<status>`, `request_failed` |
+
+`marker_missing` means the description holds the start marker but not the end
+marker. There is then no telling where the block ends, and rather than cut off
+what someone typed after it, nothing is written. A person fixes the markers.
+
+Pick the markers once. A block under an old marker is not found again, and the
+next run appends a second one.
+
 ## Secrets across integrations
 
 Never embed an API key or signing secret in a node config — it would be

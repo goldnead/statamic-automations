@@ -55,7 +55,8 @@ For most Statamic projects an external automation tool is overkill, and custom c
 - 📋 **Node-by-node execution logs** with redacted sensitive payloads
 - 📊 **Activity view** — per-step numbers on the canvas, a funnel over a timeframe, a filterable log with CSV export, and who is inside the flow right now
 - 🧩 Optional **Webhook Manager** + **LeadHub** integrations (auto-detected, never required)
-- 🔌 **Connections** — set up an external API once (base URL, auth, test button); each operation becomes an action in the builder
+- 🔌 **Connections** — set up an external API once (base URL, auth, test button); each operation becomes an action in the builder. Raw bodies, any HTTP method, JSON or XML answers
+- 📅 **CalDAV** — find calendar events and keep a block in their description up to date, without touching anything else in the event
 - 📦 **Templates** that copy into user-owned automations
 - 📤 **JSON export / import** for version control, starter kits and cross-environment moves
 - 👨‍💻 Public **developer API** for custom triggers, actions and conditions
@@ -399,7 +400,11 @@ Turn it off with `automations.timeline.enabled`.
 
 - **Connection:** name, handle, base URL, timeout, default headers and a test path. Auth is `none`, `bearer`, `basic` or a custom `header`. Credentials are stored encrypted (`encrypted:array`), never sent back to the browser (a placeholder stands in; empty on save keeps the stored value), and *Test connection* answers with status and duration only, never the body.
 - **Operation:** method, path, URL parameters and a JSON body built from key/value rows, all fed by the operation's inputs as `{{ input.x }}`. Output fields map dot paths of the JSON answer (`message_id` → `ts`). A non-2xx status fails the step unless *Fail on an error status* is switched off.
-- **In the builder:** each operation is an action `connection.<connection>.<operation>`, grouped under the connection's name. Its output is `status`, the mapped fields and `body`. Test runs send nothing and show a preview with header names only.
+- **Raw requests (2.23):** the method can be any HTTP token (`REPORT`, `PROPFIND`, …). *Request content* switches from JSON rows to a raw text template with its own content type, where `{{ input.x }}` inserts text, `{{ input.x | json }}` a JSON literal and `{{ input.x | xml }}` an XML-escaped value. Operation *Headers* (templated, e.g. `Depth` → `1`) go on top of the connection's default headers; the connection's auth always wins.
+- **Response format (2.23):** `auto` (by Content-Type), `json`, `xml` or `text`. XML is read into an array without namespaces, so `multistatus.response.0.href` works as an output path; an element that repeats becomes a list. The output also carries `headers`, lowercased and masked (`{{ node.headers.etag }}`), without `set-cookie`.
+- **In the builder:** each operation is an action `connection.<connection>.<operation>`, grouped under the connection's name. Its output is `status`, the mapped fields, `headers` and `body`. Test runs send nothing and show a preview with header names only.
+
+A connection is also the credential for the built-in **CalDAV** actions (`caldav.find_events`, `caldav.upsert_description_block`): base URL = the calendar collection, Basic auth with an app password. See [docs/integrations.md](docs/integrations.md#caldav).
 
 Security: the base URL must resolve to a public address, checked on save and before every call, with the call pinned to the checked IP; `STATAMIC_AUTOMATIONS_CONNECTIONS_ALLOW_PRIVATE_HOSTS=true` lifts that for a local service. Redirects are not followed. Credentials are applied only at call time, so they never reach the run log, and a service echoing one back gets it masked as `••••`.
 

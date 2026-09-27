@@ -1,5 +1,53 @@
 # Changelog
 
+## Unreleased (2.23.0)
+
+### Upgrading
+
+- One migration adds five nullable columns to `automation_connection_operations` (`body_mode`,
+  `content_type`, `raw_body`, `headers`, `response_format`) and widens `method` to 32 characters:
+  run `php artisan migrate`. Existing operations read `null` as before (JSON body from rows,
+  answer detected automatically, no extra headers) and behave exactly as they did.
+- `composer.json` now requires `ext-dom` and `ext-libxml` (XML answers, CalDAV).
+
+### Added: raw requests on connection operations
+
+- **Any method.** An operation accepts any RFC 7230 token, uppercased on save (`REPORT`,
+  `PROPFIND`, `MKCALENDAR`). The CP lists the common ones and has *Other method* for the rest.
+- **Raw body.** *Request content* can be *Raw text*: a template with its own content type, where
+  `{{ input.x }}` inserts text, `{{ input.x | json }}` a JSON literal and `{{ input.x | xml }}` an
+  XML-escaped value. A raw body goes out on GET too.
+- **Operation headers.** Templated key/value headers per operation, over the connection's default
+  headers. The connection's auth header always wins, so an operation can neither replace nor read it.
+
+### Added: response formats
+
+- `response_format`: `auto` (by Content-Type), `json`, `xml` or `text`. XML is read into an array
+  without namespaces (`d:href` is `href`), so response map paths like
+  `multistatus.response.0.href` work; an element that repeats becomes a list.
+- Every operation's output now carries `headers`: the response headers, names lowercased, masked
+  like the rest of the output, without `set-cookie`. `{{ node.headers.etag }}` is the ETag.
+
+### Added: CalDAV
+
+- `caldav.find_events` (connection, range, optional `url_contains`): one `REPORT` calendar-query,
+  a list of `{href, etag, uid, summary, dtstart, url, url_id, description}`. `url_id` is the id at
+  the end of the URL (32 hex or a UUID), which for a Notion link is the page id. No raw calendar
+  text in the output or the run log.
+- `caldav.upsert_description_block` (connection, href, block text, two markers): fresh `GET`, the
+  block set between the markers in DESCRIPTION, `PUT` with `If-Match` only when something changed.
+  `status` is `written`, `unchanged`, `skipped_empty` (empty block, nothing touched), `conflict`
+  (412, fails so a retry reads again) or `error` with a `reason`; `marker_missing` (start marker
+  without end marker) never writes. A test run reads and reports `would_write` without a PUT.
+- Only DESCRIPTION, DTSTAMP and LAST-MODIFIED change; the rest of the event goes back byte for
+  byte (VALARM, other folding, `LANGUAGE`/`ALTREP` parameters), every VEVENT of a recurring
+  series gets the block, lines fold at 75 octets without cutting UTF-8, and the written text is
+  always CRLF. Ported with its tests from the anders-band.de gig calendar.
+- The credential is a connection (base URL = calendar collection, Basic auth), so each brand has
+  its own calendar and there is no env key. Without one both actions do nothing and say so. An
+  `href` on another host than the collection is refused, not sent the credential.
+- New option source `connections` for pickers of the current brand's connections.
+
 ## 2.22.2 — 2026-09-25
 
 ### Fixed

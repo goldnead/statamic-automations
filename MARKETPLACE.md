@@ -37,6 +37,8 @@ You shouldn't need Zapier and a glue server to email a team member when a form c
 - Test mode: dry-run a flow with sample context before enabling
 - Granular CP permissions
 - First-class integrations with LeadHub and Webhook Manager when installed
+- Connections: set up any HTTP API in the CP (JSON or raw bodies, any method, JSON/XML answers) and use its operations as actions
+- CalDAV: find calendar events (iCloud, Nextcloud, …) and keep a block in their description in sync
 - Extensible: register your own triggers, actions and logic nodes
 
 ## Who It's For
