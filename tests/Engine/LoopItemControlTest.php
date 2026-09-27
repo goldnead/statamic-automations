@@ -3,12 +3,17 @@
 namespace Goldnead\StatamicAutomations\Tests\Engine;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
+use Goldnead\StatamicAutomations\Engine\RunLogger;
+use Goldnead\StatamicAutomations\Engine\TokenResolver;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
+use Goldnead\StatamicAutomations\Jobs\ResumeDelayedRun;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationNodeRun;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
+use Goldnead\StatamicAutomations\Models\AutomationScheduledJob;
+use Goldnead\StatamicAutomations\Support\ActionResult;
 use Goldnead\StatamicAutomations\Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
@@ -171,6 +176,87 @@ class LoopItemControlTest extends TestCase
         $this->assertSame(AutomationRun::STATUS_SUCCESS, $run->status);
         $this->assertNull($run->error_message);
         $this->assertSame(['done:0'], $this->messages($run, 'done_log'));
+    }
+
+    /**
+     * Item a fails, item b reaches a Delay: the context is persisted there
+     * and the run finishes in the resume job. The failure of a must still be
+     * on the finished run.
+     */
+    public function test_a_skipped_item_is_still_reported_when_a_later_item_waits_and_the_run_resumes(): void
+    {
+        $automation = $this->buildAutomation([
+            ['key' => 't', 'type' => 'manual'],
+            ['key' => 'loop', 'type' => 'loop', 'config' => ['items' => ['a', 'b'], 'mode' => 'inline', 'on_item_error' => 'continue']],
+            ['key' => 'is_a', 'type' => 'branch', 'config' => $this->itemIs('a')],
+            ['key' => 'boom', 'type' => 'call_automation', 'config' => ['automation' => 'does-not-exist-xyz']],
+            ['key' => 'wait', 'type' => 'delay', 'config' => ['amount' => 1, 'unit' => 'days']],
+            ['key' => 'ok', 'type' => 'add_log_entry', 'config' => ['level' => 'info', 'message' => 'after wait']],
+        ], [
+            ['t', 'loop'],
+            ['loop', 'is_a', 'loop'],
+            ['is_a', 'boom', 'true'],
+            ['is_a', 'wait', 'false'],
+            ['wait', 'ok'],
+        ]);
+
+        $context = AutomationContext::make([]);
+        $runner = app(WorkflowRunner::class);
+        $run = $runner->execute($runner->createRun($automation, $context, $automation->nodes->firstWhere('node_key', 't')), $context);
+
+        $this->assertSame(AutomationRun::STATUS_WAITING, $run->status);
+
+        $job = AutomationScheduledJob::where('automation_run_id', $run->id)->firstOrFail();
+        (new ResumeDelayedRun($job->id))->handle($runner);
+
+        $run = $run->fresh();
+        $this->assertSame(AutomationRun::STATUS_SUCCESS, $run->status);
+        $this->assertSame(1, $run->nodeRuns()->where('node_key', 'ok')->count());
+        $this->assertStringContainsString("Loop 'loop': 1 of 2 items failed", (string) $run->error_message);
+        $this->assertStringContainsString('(index 0)', (string) $run->error_message);
+    }
+
+    /**
+     * `continue` ends an item for a node's failed result, not for an error
+     * of the engine itself (here: the run log cannot be written).
+     */
+    public function test_on_item_error_continue_does_not_swallow_engine_errors(): void
+    {
+        $this->app->bind(RunLogger::class, fn ($app) => new class($app->make(TokenResolver::class)) extends RunLogger
+        {
+            public function recordNodeRun(
+                AutomationRun $run,
+                string $nodeKey,
+                string $nodeType,
+                array $input,
+                ?ActionResult $result = null,
+                ?\Throwable $exception = null,
+                ?\DateTimeInterface $startedAt = null,
+            ): AutomationNodeRun {
+                if ($nodeKey === 'explode') {
+                    throw new \RuntimeException('run log unavailable');
+                }
+
+                return parent::recordNodeRun($run, $nodeKey, $nodeType, $input, $result, $exception, $startedAt);
+            }
+        });
+
+        $automation = $this->buildAutomation([
+            ['key' => 't', 'type' => 'manual'],
+            ['key' => 'loop', 'type' => 'loop', 'config' => ['items' => ['a', 'b'], 'mode' => 'inline', 'on_item_error' => 'continue']],
+            ['key' => 'explode', 'type' => 'add_log_entry', 'config' => ['level' => 'info', 'message' => '{{ item }}']],
+            ['key' => 'done_log', 'type' => 'add_log_entry', 'config' => ['level' => 'info', 'message' => 'done']],
+        ], [
+            ['t', 'loop'],
+            ['loop', 'explode', 'loop'],
+            ['loop', 'done_log', 'done'],
+        ]);
+
+        $run = $this->runFlow($automation);
+
+        $this->assertSame(AutomationRun::STATUS_FAILED, $run->status);
+        $this->assertSame('run log unavailable', $run->error_message);
+        $this->assertSame([], $this->messages($run, 'done_log'));
     }
 
     public function test_an_inner_loop_that_fails_ends_only_the_outer_item_when_the_outer_loop_continues(): void

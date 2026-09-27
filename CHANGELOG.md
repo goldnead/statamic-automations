@@ -118,7 +118,12 @@ since they only read.
   (`[{index, error}]`, readable after the loop as `{{ nodes.<loop>.failed_items }}`), and the
   run keeps its status but carries an error message naming the loop, the count and the failed
   indexes, so it shows on the run and in the lists. There is no separate partial status and no
-  failure alert for such a run.
+  failure alert for such a run. Only a node's failed result skips the item; an error of the
+  engine itself (database, run log) still fails the run. The failures are written to the run's
+  context as they happen, so they survive a Delay in a later item.
+- A Delay or Wait inside a loop body still ends the loop, as before: the run resumes as a plain
+  path, the remaining items do not run, and in the rest of the body a Filter stops the run and
+  `on_item_error` does not apply. Documented in `docs/architecture.md`.
 - `_on_error: continue` on a node is unchanged and different: without an `error` edge it
   continues on the default edge, so the next step runs without the failed node's output. The
   Loop option ends the item at the failed node instead. See `docs/architecture.md`.

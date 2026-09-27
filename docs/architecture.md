@@ -139,6 +139,13 @@ gains `failed_items` (count) and `failed` (`[{index, error}]`), readable after t
 failure on the run, the dashboard and the activity list. A failure alert is only sent for runs
 that fail.
 
+**A Delay or Wait inside a loop body ends the loop.** The run pauses there and, when it resumes,
+walks on from the Delay as a plain path, not as a loop pass: the rest of that item's body runs
+once, the items after it do not run, *After loop* is not taken, and in that rest of the body a
+Filter stops the run and `on_item_error` no longer applies (a failing node fails the run). This
+is how loops and delays behaved before 2.23 as well. Failures of items before the Delay are kept
+and still show on the finished run. Put the Delay before or after the loop, not inside it.
+
 **Not the same as `_on_error: continue` on a node.** That reserved key keeps a failed node from
 failing the run by moving on: down the node's `error` edge if it has one, otherwise down its
 **default** edge, so the next step runs without the failed node's output (and may write

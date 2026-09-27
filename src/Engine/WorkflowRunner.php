@@ -412,9 +412,7 @@ class WorkflowRunner
                     continue;
                 }
 
-                throw new \RuntimeException(
-                    "Node '{$current->node_key}' failed: ".($result->error ?? 'unknown')
-                );
+                throw new NodeFailedException($current->node_key, $result->error ?? 'unknown');
             }
 
             if ($result->isStopped()) {
@@ -516,6 +514,7 @@ class WorkflowRunner
         $itemKey = (string) ($result->output['item_key'] ?? 'item') ?: 'item';
         $continueOnError = ($result->output['on_item_error'] ?? LoopNode::ON_ITEM_ERROR_STOP) === LoopNode::ON_ITEM_ERROR_CONTINUE;
         $failed = [];
+        $failureSlot = null;
         $bodyStart = $this->nextNode($loopNode, LoopNode::OUTPUT_LOOP, $edges, $nodes);
 
         if ($bodyStart === null || empty($items)) {
@@ -554,10 +553,18 @@ class WorkflowRunner
                 if ($continueOnError) {
                     try {
                         $status = $this->runFrom($run, $automation, $bodyStart, $context, $edges, $nodes, $visited, $loopDepth + 1);
-                    } catch (\Throwable $e) {
+                    } catch (NodeFailedException $e) {
+                        // Only a node's failed result ends the item. Any
+                        // other throwable (database, engine) is not the
+                        // item's fault and still fails the run.
+                        //
                         // The failed node is already in the run log with
                         // its own error; this only ends the item's pass.
+                        // Written to the context right away, not after the
+                        // loop: a Delay in a later item persists the context
+                        // and the run finishes in another process.
                         $failed[] = ['index' => $index, 'error' => $e->getMessage()];
+                        $failureSlot = $this->noteLoopFailure($context, $failureSlot, $loopNode, $count, $failed);
 
                         continue;
                     }
@@ -599,18 +606,47 @@ class WorkflowRunner
             }
         }
 
-        if ($continueOnError) {
-            $this->recordLoopFailures($loopNode, $result, $context, $failed, $count, $loopNodeRun);
+        if ($continueOnError && $bubbled !== AutomationRun::STATUS_WAITING) {
+            $this->recordLoopFailures($loopNode, $result, $context, $failed, $loopNodeRun);
         }
 
         return $bubbled;
     }
 
     /**
-     * Put a `continue` loop's failed items where people and later steps see
-     * them: on the loop's output (`{{ nodes.<loop>.failed_items }}` for the
-     * steps after the loop, and the loop's row in the run log) and, when
-     * any failed, as a line for the run's error message.
+     * Record one more failed item of a loop pass on the context, where the
+     * run's error message is built from (see loopFailureSummary()). One
+     * entry per pass of the loop, updated with every failure, so an inner
+     * loop that runs once per outer item gets an entry per pass.
+     *
+     * @param  array<int, array{index: int, error: string}>  $failed
+     * @return string The pass's entry key, to update on the next failure.
+     */
+    protected function noteLoopFailure(
+        AutomationContext $context,
+        ?string $slot,
+        AutomationNode $loopNode,
+        int $count,
+        array $failed,
+    ): string {
+        $entries = (array) $context->get(self::LOOP_FAILURES_KEY, []);
+        $slot ??= 'pass_'.count($entries);
+
+        $entries[$slot] = [
+            'loop' => (string) ($loopNode->label ?: $loopNode->node_key),
+            'count' => $count,
+            'failed' => $failed,
+        ];
+
+        $context->set(self::LOOP_FAILURES_KEY, $entries);
+
+        return $slot;
+    }
+
+    /**
+     * Put a `continue` loop's failed items on the loop's output, for the
+     * steps after the loop (`{{ nodes.<loop>.failed_items }}`) and the
+     * loop's row in the run log.
      *
      * @param  array<int, array{index: int, error: string}>  $failed
      */
@@ -619,7 +655,6 @@ class WorkflowRunner
         ActionResult $result,
         AutomationContext $context,
         array $failed,
-        int $count,
         ?AutomationNodeRun $loopNodeRun,
     ): void {
         $summary = ['failed_items' => count($failed), 'failed' => $failed];
@@ -631,24 +666,6 @@ class WorkflowRunner
                 'output' => [...$loopNodeRun->output, ...app(TokenResolver::class)->redact($summary)],
             ])->save();
         }
-
-        if ($failed === []) {
-            return;
-        }
-
-        $name = $loopNode->label ?: $loopNode->node_key;
-        $indexes = implode(', ', array_map(fn (array $f) => (string) $f['index'], $failed));
-
-        $lines = (array) $context->get(self::LOOP_FAILURES_KEY, []);
-        $lines[] = sprintf(
-            "Loop '%s': %d of %d items failed and were skipped (index %s). First error: %s",
-            $name,
-            count($failed),
-            $count,
-            $indexes,
-            $failed[0]['error'],
-        );
-        $context->set(self::LOOP_FAILURES_KEY, $lines);
     }
 
     /**
@@ -657,7 +674,24 @@ class WorkflowRunner
      */
     protected function loopFailureSummary(AutomationContext $context): ?string
     {
-        $lines = array_filter((array) $context->get(self::LOOP_FAILURES_KEY, []), 'is_string');
+        $lines = [];
+
+        foreach ((array) $context->get(self::LOOP_FAILURES_KEY, []) as $entry) {
+            $failed = is_array($entry) ? array_values((array) ($entry['failed'] ?? [])) : [];
+
+            if ($failed === []) {
+                continue;
+            }
+
+            $lines[] = sprintf(
+                "Loop '%s': %d of %d items failed and were skipped (index %s). First error: %s",
+                (string) ($entry['loop'] ?? ''),
+                count($failed),
+                (int) ($entry['count'] ?? 0),
+                implode(', ', array_map(fn ($f) => (string) ($f['index'] ?? ''), $failed)),
+                (string) ($failed[0]['error'] ?? ''),
+            );
+        }
 
         return $lines === [] ? null : implode("\n", $lines);
     }
