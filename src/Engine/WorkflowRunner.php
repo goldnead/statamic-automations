@@ -7,8 +7,10 @@ use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
+use Goldnead\StatamicAutomations\Models\AutomationNodeRun;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Models\AutomationScheduledJob;
+use Goldnead\StatamicAutomations\Nodes\Logic\FilterNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\LoopNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\ParallelNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilNode;
@@ -26,6 +28,23 @@ use Illuminate\Support\Collection;
  */
 class WorkflowRunner
 {
+    /**
+     * Internal walk result, never a run status: a Filter inside a loop body
+     * did not match, so only the current item's pass ends. The loop that
+     * drives the body swallows it and moves on to the next item; it cannot
+     * reach the run row because {@see runFrom()} only returns it while
+     * walking a loop body.
+     */
+    protected const ITERATION_ENDED = '_iteration_ended';
+
+    /**
+     * Engine key on the context: one line per inline Loop that set
+     * `on_item_error: continue` and had items fail. Kept on the context
+     * (not on this object) so it survives a Delay/Wait after the loop,
+     * which persists the context and resumes in another process.
+     */
+    public const LOOP_FAILURES_KEY = '_loop_failures';
+
     public function __construct(
         protected NodeExecutor $executor,
         protected NodeRegistry $registry,
@@ -129,7 +148,7 @@ class WorkflowRunner
             return $run->fresh();
         }
 
-        $this->logger->finishRun($run, $finalStatus);
+        $this->logger->finishRun($run, $finalStatus, $this->loopFailureSummary($context));
 
         $this->touchLastRun($automation);
 
@@ -191,7 +210,7 @@ class WorkflowRunner
             return $run->fresh();
         }
 
-        $this->logger->finishRun($run, $finalStatus);
+        $this->logger->finishRun($run, $finalStatus, $this->loopFailureSummary($context));
 
         $this->touchLastRun($automation);
 
@@ -259,7 +278,7 @@ class WorkflowRunner
             return $run->fresh();
         }
 
-        $this->logger->finishRun($run, $finalStatus);
+        $this->logger->finishRun($run, $finalStatus, $this->loopFailureSummary($context));
 
         $this->touchLastRun($automation);
 
@@ -327,6 +346,13 @@ class WorkflowRunner
      * like it would at the top level (it bubbles straight up and ends the
      * whole run, not just the current iteration).
      *
+     * The one exception is a Filter that does not match inside a loop body
+     * ($loopDepth > 0): it ends only the current item's pass and the loop
+     * goes on with the next item. A Filter is a per-item question there
+     * ("only the entries that are published"); ending the run on the first
+     * non-match left every later item unprocessed. A Stop node still ends
+     * the whole run: that is what it is for.
+     *
      * @param  Collection  $edges
      * @param  Collection  $nodes
      * @param  array<string, bool>  $visited  Shared safety-net guard (by
@@ -334,6 +360,8 @@ class WorkflowRunner
      *                                        graphs; passed by reference so
      *                                        nested loop passes share it
      *                                        with the caller.
+     * @param  int  $loopDepth  How many inline loop bodies this walk is
+     *                          nested in; 0 at the top level.
      */
     protected function runFrom(
         AutomationRun $run,
@@ -343,6 +371,7 @@ class WorkflowRunner
         $edges,
         $nodes,
         array &$visited,
+        int $loopDepth = 0,
     ): string {
         $maxNodes = 1000; // safety net; cycles are blocked by validator
 
@@ -355,7 +384,7 @@ class WorkflowRunner
 
             $result = $this->executeWithRetries($current, $context);
 
-            $this->logger->recordNodeRun(
+            $nodeRun = $this->logger->recordNodeRun(
                 $run,
                 $current->node_key,
                 $current->type,
@@ -371,6 +400,11 @@ class WorkflowRunner
                 // failing the whole run — routing down its "error" edge if
                 // one exists, otherwise the default edge. Configure via the
                 // reserved `_on_error: continue` key on the node.
+                //
+                // Without an error edge that means the NEXT step runs with
+                // this node's output missing. Inside a loop, the Loop's own
+                // `on_item_error: continue` is usually what is meant: it
+                // ends the failed item's pass instead (driveInlineLoop()).
                 if ($this->onErrorPolicy($current) === 'continue') {
                     $current = $this->nextNode($current, 'error', $edges, $nodes)
                         ?? $this->nextNode($current, 'default', $edges, $nodes);
@@ -384,6 +418,10 @@ class WorkflowRunner
             }
 
             if ($result->isStopped()) {
+                if ($loopDepth > 0 && $current->type === FilterNode::handle()) {
+                    return self::ITERATION_ENDED;
+                }
+
                 return AutomationRun::STATUS_STOPPED;
             }
 
@@ -404,7 +442,7 @@ class WorkflowRunner
             // "loop" handle — the runner drives its body subgraph once per
             // resolved item, then continues via "done".
             if ($current->type === LoopNode::handle() && $result->outputHandle === LoopNode::OUTPUT_LOOP) {
-                $bubbled = $this->driveInlineLoop($run, $automation, $current, $result, $context, $edges, $nodes, $visited);
+                $bubbled = $this->driveInlineLoop($run, $automation, $current, $result, $context, $edges, $nodes, $visited, $loopDepth, $nodeRun);
 
                 if ($bubbled !== null) {
                     return $bubbled;
@@ -422,7 +460,7 @@ class WorkflowRunner
             // afterwards (each branch is its own path), so once fan-out
             // finishes normally the walk simply ends here.
             if ($current->type === ParallelNode::handle() && $result->outputHandle === ParallelNode::OUTPUT_FAN_OUT) {
-                $bubbled = $this->driveInlineParallel($run, $automation, $current, $result, $edges, $nodes, $context, $visited);
+                $bubbled = $this->driveInlineParallel($run, $automation, $current, $result, $edges, $nodes, $context, $visited, $loopDepth);
 
                 if ($bubbled !== null) {
                     return $bubbled;
@@ -453,6 +491,14 @@ class WorkflowRunner
      * Returns null when all items were processed normally (the caller
      * should continue via the "done" output), or a terminal run status
      * ("stopped" / "waiting") bubbled up from inside the body.
+     *
+     * A Filter that does not match inside the body ends only that item's
+     * pass (see {@see runFrom()}). A node that fails inside the body fails
+     * the whole run, unless the Loop is set to `on_item_error: continue`:
+     * then the failed item's pass ends, the next item runs, and the loop's
+     * output gains `failed_items` and `failed` (index and error per item).
+     * The run finishes with its normal status but carries a summary in its
+     * error message, so the failure shows on the run and in the lists.
      */
     protected function driveInlineLoop(
         AutomationRun $run,
@@ -463,9 +509,13 @@ class WorkflowRunner
         $edges,
         $nodes,
         array &$visited,
+        int $loopDepth = 0,
+        ?AutomationNodeRun $loopNodeRun = null,
     ): ?string {
         $items = is_array($result->output['items'] ?? null) ? array_values($result->output['items']) : [];
         $itemKey = (string) ($result->output['item_key'] ?? 'item') ?: 'item';
+        $continueOnError = ($result->output['on_item_error'] ?? LoopNode::ON_ITEM_ERROR_STOP) === LoopNode::ON_ITEM_ERROR_CONTINUE;
+        $failed = [];
         $bodyStart = $this->nextNode($loopNode, LoopNode::OUTPUT_LOOP, $edges, $nodes);
 
         if ($bodyStart === null || empty($items)) {
@@ -501,7 +551,23 @@ class WorkflowRunner
                     'last' => $index === $count - 1,
                 ]);
 
-                $status = $this->runFrom($run, $automation, $bodyStart, $context, $edges, $nodes, $visited);
+                if ($continueOnError) {
+                    try {
+                        $status = $this->runFrom($run, $automation, $bodyStart, $context, $edges, $nodes, $visited, $loopDepth + 1);
+                    } catch (\Throwable $e) {
+                        // The failed node is already in the run log with
+                        // its own error; this only ends the item's pass.
+                        $failed[] = ['index' => $index, 'error' => $e->getMessage()];
+
+                        continue;
+                    }
+                } else {
+                    $status = $this->runFrom($run, $automation, $bodyStart, $context, $edges, $nodes, $visited, $loopDepth + 1);
+                }
+
+                if ($status === self::ITERATION_ENDED) {
+                    continue;
+                }
 
                 if ($status === AutomationRun::STATUS_STOPPED || $status === AutomationRun::STATUS_WAITING) {
                     $bubbled = $status;
@@ -533,7 +599,67 @@ class WorkflowRunner
             }
         }
 
+        if ($continueOnError) {
+            $this->recordLoopFailures($loopNode, $result, $context, $failed, $count, $loopNodeRun);
+        }
+
         return $bubbled;
+    }
+
+    /**
+     * Put a `continue` loop's failed items where people and later steps see
+     * them: on the loop's output (`{{ nodes.<loop>.failed_items }}` for the
+     * steps after the loop, and the loop's row in the run log) and, when
+     * any failed, as a line for the run's error message.
+     *
+     * @param  array<int, array{index: int, error: string}>  $failed
+     */
+    protected function recordLoopFailures(
+        AutomationNode $loopNode,
+        ActionResult $result,
+        AutomationContext $context,
+        array $failed,
+        int $count,
+        ?AutomationNodeRun $loopNodeRun,
+    ): void {
+        $summary = ['failed_items' => count($failed), 'failed' => $failed];
+
+        $context->recordNodeOutput($loopNode->node_key, [...$result->output, ...$summary]);
+
+        if ($loopNodeRun !== null && is_array($loopNodeRun->output)) {
+            $loopNodeRun->forceFill([
+                'output' => [...$loopNodeRun->output, ...app(TokenResolver::class)->redact($summary)],
+            ])->save();
+        }
+
+        if ($failed === []) {
+            return;
+        }
+
+        $name = $loopNode->label ?: $loopNode->node_key;
+        $indexes = implode(', ', array_map(fn (array $f) => (string) $f['index'], $failed));
+
+        $lines = (array) $context->get(self::LOOP_FAILURES_KEY, []);
+        $lines[] = sprintf(
+            "Loop '%s': %d of %d items failed and were skipped (index %s). First error: %s",
+            $name,
+            count($failed),
+            $count,
+            $indexes,
+            $failed[0]['error'],
+        );
+        $context->set(self::LOOP_FAILURES_KEY, $lines);
+    }
+
+    /**
+     * The run's error message for loops that skipped failed items, or null.
+     * A run that fails outright gets its exception as the message instead.
+     */
+    protected function loopFailureSummary(AutomationContext $context): ?string
+    {
+        $lines = array_filter((array) $context->get(self::LOOP_FAILURES_KEY, []), 'is_string');
+
+        return $lines === [] ? null : implode("\n", $lines);
     }
 
     /**
@@ -565,6 +691,7 @@ class WorkflowRunner
         $nodes,
         AutomationContext $context,
         array &$visited,
+        int $loopDepth = 0,
     ): ?string {
         $handles = is_array($result->output['branches'] ?? null) ? array_values($result->output['branches']) : [];
 
@@ -575,9 +702,12 @@ class WorkflowRunner
                 continue;
             }
 
-            $status = $this->runFrom($run, $automation, $branchStart, $context, $edges, $nodes, $visited);
+            $status = $this->runFrom($run, $automation, $branchStart, $context, $edges, $nodes, $visited, $loopDepth);
 
-            if ($status === AutomationRun::STATUS_STOPPED || $status === AutomationRun::STATUS_WAITING) {
+            // A Filter ending the loop item inside a branch ends the whole
+            // item, other branches included, the way a Stop in a branch
+            // ends the whole run.
+            if ($status === AutomationRun::STATUS_STOPPED || $status === AutomationRun::STATUS_WAITING || $status === self::ITERATION_ENDED) {
                 return $status;
             }
         }

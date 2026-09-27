@@ -21,7 +21,7 @@ class FilterNode implements AutomationLogicNode
 
     public static function description(): ?string
     {
-        return 'Stops the flow if the configured conditions are not met.';
+        return 'Stops the flow if the configured conditions are not met. Inside a loop it skips only the current item.';
     }
 
     public static function group(): string
