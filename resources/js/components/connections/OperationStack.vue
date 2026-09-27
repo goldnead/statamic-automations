@@ -370,7 +370,7 @@ async function save() {
                     : __('Add inputs above to get placeholders for the path and the content.')"
             >
                 <Card class="space-y-6">
-                    <div class="grid sm:grid-cols-[10rem_1fr] gap-6 *:min-w-0">
+                    <div class="grid sm:grid-cols-[12rem_1fr] gap-6 *:min-w-0">
                         <Field id="operation_method" :label="__('Method')" required :error="errors.method">
                             <Select id="operation_method" v-model="methodChoice" :options="methodOptions" />
                             <Input
