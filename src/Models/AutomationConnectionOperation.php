@@ -26,13 +26,29 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property array<int, array<string, mixed>>|null $inputs
  * @property array<mixed>|null $response_map
  * @property bool $fail_on_error_status
+ * @property string|null $body_mode `form_json` (also null) or `raw`
+ * @property string|null $content_type
+ * @property string|null $raw_body
+ * @property array<mixed>|null $headers
+ * @property string|null $response_format `auto` (also null), `json`, `xml` or `text`
  * @property-read AutomationConnection $automationConnection
  */
 class AutomationConnectionOperation extends Model
 {
     public const NODE_PREFIX = 'connection.';
 
-    public const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+    /**
+     * The methods the CP offers to pick from. Any other RFC 7230 token is
+     * accepted too ({@see METHOD_PATTERN}): REPORT, PROPFIND and friends.
+     */
+    public const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', 'REPORT', 'PROPFIND'];
+
+    /** An RFC 7230 `token`, uppercased before it is checked. */
+    public const METHOD_PATTERN = '/^[!#$%&\'*+.^_`|~0-9A-Z-]+$/';
+
+    public const BODY_MODES = ['form_json', 'raw'];
+
+    public const RESPONSE_FORMATS = ['auto', 'json', 'xml', 'text'];
 
     public const INPUT_TYPES = ['text', 'textarea', 'number', 'toggle', 'select'];
 
@@ -49,6 +65,11 @@ class AutomationConnectionOperation extends Model
         'inputs',
         'response_map',
         'fail_on_error_status',
+        'body_mode',
+        'content_type',
+        'raw_body',
+        'headers',
+        'response_format',
     ];
 
     protected $attributes = [
@@ -62,8 +83,21 @@ class AutomationConnectionOperation extends Model
         'body' => 'array',
         'inputs' => 'array',
         'response_map' => 'array',
+        'headers' => 'array',
         'fail_on_error_status' => 'boolean',
     ];
+
+    /** Whether the body is the raw template rather than the key_value JSON. */
+    public function sendsRawBody(): bool
+    {
+        return $this->body_mode === 'raw';
+    }
+
+    /** `auto`, `json`, `xml` or `text`; null and anything unknown read as `auto`. */
+    public function responseFormat(): string
+    {
+        return in_array($this->response_format, self::RESPONSE_FORMATS, true) ? $this->response_format : 'auto';
+    }
 
     /**
      * Not `connection()`: Eloquent's own `$connection` property (the database
@@ -204,6 +238,7 @@ class AutomationConnectionOperation extends Model
             $outputSchema[$name] = 'mixed';
         }
 
+        $outputSchema['headers'] = 'array';
         $outputSchema['body'] = 'mixed';
 
         return [

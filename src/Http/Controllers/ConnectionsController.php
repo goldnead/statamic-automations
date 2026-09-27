@@ -246,6 +246,11 @@ class ConnectionsController extends Controller
     ): array {
         $unique = Rule::unique('automation_connection_operations', 'handle')->where('connection_id', $connection->id);
 
+        // Any RFC 7230 token, checked uppercased: `report` is REPORT.
+        if (is_string($request->input('method'))) {
+            $request->merge(['method' => strtoupper(trim($request->input('method')))]);
+        }
+
         $data = $request->validate([
             'handle' => [
                 'required', 'string', 'max:64', 'regex:/^[a-z][a-z0-9_]*$/',
@@ -253,10 +258,16 @@ class ConnectionsController extends Controller
             ],
             'name' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'method' => ['required', Rule::in(AutomationConnectionOperation::METHODS)],
+            'method' => ['required', 'string', 'max:32', 'regex:'.AutomationConnectionOperation::METHOD_PATTERN],
             'path' => ['required', 'string', 'max:2048'],
             'query' => ['nullable', 'array'],
             'body' => ['nullable', 'array'],
+            'body_mode' => ['nullable', Rule::in(AutomationConnectionOperation::BODY_MODES)],
+            // A line break would end the header and start another one.
+            'content_type' => ['nullable', 'string', 'max:255', 'not_regex:/[\r\n]/'],
+            'raw_body' => ['nullable', 'string', 'max:65535'],
+            'headers' => ['nullable', 'array'],
+            'response_format' => ['nullable', Rule::in(AutomationConnectionOperation::RESPONSE_FORMATS)],
             'inputs' => ['nullable', 'array'],
             'inputs.*.handle' => ['required', 'string', 'max:64', 'regex:/^[a-z][a-z0-9_]*$/', 'distinct'],
             'inputs.*.label' => ['nullable', 'string', 'max:255'],
@@ -354,6 +365,11 @@ class ConnectionsController extends Controller
             'inputs' => $operation->inputs ?? [],
             'response_map' => $operation->response_map ?? [],
             'fail_on_error_status' => (bool) $operation->fail_on_error_status,
+            'body_mode' => $operation->sendsRawBody() ? 'raw' : 'form_json',
+            'content_type' => $operation->content_type,
+            'raw_body' => $operation->raw_body,
+            'headers' => $operation->headers ?? [],
+            'response_format' => $operation->responseFormat(),
         ];
     }
 

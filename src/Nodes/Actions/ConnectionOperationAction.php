@@ -8,6 +8,8 @@ use Goldnead\StatamicAutomations\Models\AutomationConnectionOperation;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 use Goldnead\StatamicAutomations\Support\HostGuard;
 use Goldnead\StatamicAutomations\Support\UnsafeHostException;
+use Goldnead\StatamicAutomations\Support\XmlToArray;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -63,6 +65,7 @@ class ConnectionOperationAction implements AutomationAction
     {
         return [
             'status' => 'integer',
+            'headers' => 'array',
             'body' => 'mixed',
         ];
     }
@@ -106,11 +109,23 @@ class ConnectionOperationAction implements AutomationAction
             array_map(fn ($value) => $this->fill($value, $inputs), AutomationConnectionOperation::keyValue($operation->query)),
             fn ($value) => $value !== null && $value !== '',
         );
-        $body = array_map(fn ($value) => $this->fill($value, $inputs), AutomationConnectionOperation::keyValue($operation->body));
+        $raw = $operation->sendsRawBody();
+        $body = $raw
+            ? $this->fillRaw((string) $operation->raw_body, $inputs)
+            : array_map(fn ($value) => $this->fill($value, $inputs), AutomationConnectionOperation::keyValue($operation->body));
+        $contentType = trim((string) $operation->content_type) ?: 'text/plain; charset=utf-8';
 
         $method = strtoupper((string) $operation->method);
         $url = $connection->url($path, $query);
-        $headers = $connection->defaultHeaders();
+
+        // The operation's own headers over the connection's defaults, and the
+        // credential over both: an operation cannot replace the auth header
+        // with a value of its own, nor read it.
+        $operationHeaders = array_map(
+            fn ($value) => is_scalar($value = $this->fill($value, $inputs)) ? (string) $value : (string) json_encode($value),
+            AutomationConnectionOperation::keyValue($operation->headers),
+        );
+        $headers = [...$connection->defaultHeaders(), ...$operationHeaders];
 
         $preview = [
             'method' => $method,
@@ -118,7 +133,7 @@ class ConnectionOperationAction implements AutomationAction
             // Names only: the values of the auth headers never leave the call.
             'headers' => array_keys([...$headers, ...$connection->authHeaders()]),
             'body' => $body,
-        ];
+        ] + ($raw ? ['content_type' => $contentType] : []);
 
         // A test run starts from an empty context, so a token-fed input may
         // well be empty; that is reported, not failed on.
@@ -142,28 +157,40 @@ class ConnectionOperationAction implements AutomationAction
         }
 
         try {
-            $options = $body !== [] && $method !== 'GET' ? ['json' => $body] : [];
-
             // No redirects: Guzzle strips only Authorization and Cookie on a
             // redirect to another host, so a custom credential header would
             // follow. A 3xx is answered like any other non-2xx status.
-            $response = Http::withOptions($pinned)
+            $request = Http::withOptions($pinned)
                 ->withHeaders([...$headers, ...$connection->authHeaders()])
                 ->withoutRedirecting()
-                ->timeout(max(1, (int) $connection->timeout))
-                ->send($method, $url, $options);
+                ->timeout(max(1, (int) $connection->timeout));
+
+            $options = [];
+
+            if ($raw) {
+                // A raw body goes out even on GET: some APIs (and CalDAV's
+                // REPORT) want one, and the operator typed it on purpose.
+                if ($body !== '') {
+                    $request = $request->withBody((string) $body, $contentType);
+                }
+            } elseif ($body !== [] && $method !== 'GET') {
+                $options = ['json' => $body];
+            }
+
+            $response = $request->send($method, $url, $options);
         } catch (\Throwable $e) {
             return ActionResult::failed((string) $connection->mask($e->getMessage()), $connection->mask(['preview' => $preview]));
         }
 
-        $json = $response->json();
+        $parsed = $this->parseResponse($response, $operation->responseFormat());
         $output = ['status' => $response->status()];
 
         foreach (AutomationConnectionOperation::keyValue($operation->response_map) as $name => $dotPath) {
-            $output[$name] = data_get($json, (string) $dotPath);
+            $output[$name] = data_get($parsed, (string) $dotPath);
         }
 
-        $output['body'] = is_array($json) ? $json : $response->body();
+        $output['headers'] = $this->responseHeaders($response);
+        $output['body'] = is_array($parsed) ? $parsed : $response->body();
         $output = $connection->mask($output);
 
         if (! $response->successful() && $operation->fail_on_error_status) {
@@ -206,6 +233,90 @@ class ConnectionOperationAction implements AutomationAction
         }
 
         return null;
+    }
+
+    /**
+     * The raw body template with its inputs in. `{{ input.x }}` puts the value
+     * in as text; `{{ input.x | json }}` as a JSON literal (a string quoted
+     * and escaped, a list as an array), which is how a value goes safely into
+     * a JSON body typed by hand; `{{ input.x | xml }}` escapes it for XML
+     * text or an attribute. Nothing else is recognised as a filter here.
+     *
+     * @param  array<string, mixed>  $inputs
+     */
+    protected function fillRaw(string $template, array $inputs): string
+    {
+        return (string) preg_replace_callback(
+            '/\{\{\s*input\.([A-Za-z0-9_]+)\s*(?:\|\s*(json|xml)\s*)?\}\}/',
+            function (array $match) use ($inputs) {
+                $value = $inputs[$match[1]] ?? null;
+                $filter = $match[2] ?? '';
+
+                if ($filter === 'json') {
+                    return (string) json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                }
+
+                $text = is_scalar($value) ? (string) $value : ($value === null ? '' : (string) json_encode($value));
+
+                return $filter === 'xml' ? htmlspecialchars($text, ENT_XML1 | ENT_QUOTES, 'UTF-8') : $text;
+            },
+            $template,
+        );
+    }
+
+    /**
+     * The answer as an array where it is structured, or null.
+     *
+     * `auto` goes by the Content-Type (JSON, then XML) and, when that says
+     * nothing useful, tries JSON. `text` never parses. An answer that does not
+     * parse in the format asked for is null here and stays readable as the
+     * raw text in `body`.
+     *
+     * @return array<mixed>|null
+     */
+    protected function parseResponse(Response $response, string $format): ?array
+    {
+        $type = strtolower((string) $response->header('Content-Type'));
+
+        if ($format === 'auto') {
+            $format = match (true) {
+                str_contains($type, 'json') => 'json',
+                str_contains($type, 'xml') => 'xml',
+                default => 'json',
+            };
+        }
+
+        return match ($format) {
+            'json' => is_array($json = $response->json()) ? $json : null,
+            'xml' => XmlToArray::parse($response->body()),
+            default => null,
+        };
+    }
+
+    /**
+     * The response headers, names lowercased, several values joined with a
+     * comma the way HTTP allows. `Set-Cookie` is left out: a session a
+     * service hands out is a credential, and the run log is no place for it.
+     *
+     * @return array<string, string>
+     */
+    protected function responseHeaders(Response $response): array
+    {
+        $headers = [];
+
+        foreach ($response->headers() as $name => $values) {
+            $name = strtolower((string) $name);
+
+            if ($name === 'set-cookie') {
+                continue;
+            }
+
+            $headers[$name] = implode(', ', array_map('strval', (array) $values));
+        }
+
+        ksort($headers);
+
+        return $headers;
     }
 
     /**
