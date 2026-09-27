@@ -204,7 +204,7 @@ Returns a JSON document with `Content-Disposition: attachment`:
 Two body shapes are accepted:
 
 - JSON file upload as `file` (multipart/form-data)
-- Inline payload: `{ "payload": { ... }, "handle_strategy": "auto" | "fail" }`
+- Inline payload: `{ "payload": { ... }, "handle_strategy": "auto" | "fail" | "update" }`
 
 Response:
 
@@ -212,6 +212,7 @@ Response:
 {
   "data": { /* AutomationResource */ },
   "meta": {
+    "updated": false,
     "warnings": ["..."],
     "missing_integrations": [],
     "missing_node_types": []
@@ -219,7 +220,14 @@ Response:
 }
 ```
 
-Imports always create new automations and start disabled.
+`handle_strategy`:
+
+- `auto` (default): create a new automation, disabled; a taken handle gets a random suffix. `201`.
+- `fail`: as `auto`, but a taken handle is a `422`.
+- `update`: the automation with the same handle gets the payload's name, description, nodes and
+  edges; id, uuid, handle, enabled state and runs stay, the previous graph is kept as a revision.
+  `200` with `meta.updated: true`. Without such an automation it creates one (`201`). Needs the
+  `edit automations` permission in addition to `create automations`.
 
 ### `POST /automations/{id}/sync-to-file`
 

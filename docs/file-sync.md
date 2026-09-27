@@ -24,23 +24,29 @@ php artisan automations:sync --from=db --dry-run
 
 - The package writes a portable, schema-versioned JSON document per
   automation to the path configured in
-  `automations.file_storage.path` (default: `resources/automations/`).
+  `automations.file_storage.path`. Unset or empty (the default) means
+  `resource_path('automations')`. A path that is only `/` is refused.
+  Before 2.23 an unset path wrote the files to `/{handle}.json`.
 - The DB remains the runtime source of truth; files are a portable
   representation suited for version control.
-- Imports always create new automations and start them disabled.
-- Handle conflicts are resolved automatically by appending a short
-  random suffix unless you pass `--strategy=fail`.
+- By default an import creates a new automation and starts it disabled.
+  A handle that is taken gets a short random suffix.
 
 ## Conflict strategies
 
 When a file matches an existing DB automation by handle:
 
 - `--strategy=db_wins` (default) — keep the DB row, ignore the file
+- `--strategy=update` — update the existing automation in place: name,
+  description, nodes and edges come from the file; id, uuid, handle,
+  enabled state and run history stay. The graph before the import is
+  kept as a revision (Versions in the builder). Nodes whose `node_key`
+  survives keep their uuid.
 - `--strategy=file_wins` — delete the DB row, recreate from the file
 
-`file_wins` is destructive and bypasses the handle suffixing logic.
-Use it on a fresh deploy, never on a production environment with
-runtime changes.
+`file_wins` is destructive: the automation is deleted and recreated
+disabled, with a new id and uuid. Use it on a fresh deploy.
+For a deploy that should change live automations, use `update`.
 
 ## CI / Deploy hook
 
@@ -51,7 +57,7 @@ the sync as the last step of a deploy:
 # composer.json
 "scripts": {
     "post-deploy": [
-        "@php artisan automations:sync --from=files --strategy=file_wins"
+        "@php artisan automations:sync --from=files --strategy=update"
     ]
 }
 ```
@@ -85,4 +91,6 @@ deploys on a green sync state.
 The Builder ships an **Export** button that downloads the JSON
 representation directly. The list screen has a per-row Export action
 for the same purpose. The Import page (`/cp/automations/import`)
-accepts both file uploads and pasted JSON.
+accepts both file uploads and pasted JSON. Its **Update the automation
+with the same handle** switch does what `--strategy=update` does; off,
+the file is imported as a new, disabled automation.

@@ -8,6 +8,9 @@ import {
     CodeEditor,
     Alert,
     Badge,
+    Card,
+    Field,
+    Switch,
 } from '@statamic/cms/ui';
 import axios from 'axios';
 import { firstMessage } from '../support/serverErrors.js';
@@ -22,6 +25,9 @@ const text = ref('');
 const dragging = ref(false);
 const submitting = ref(false);
 const result = ref(null);
+// Off: a copy is imported (new handle if taken, disabled), as always.
+// On: the automation with the same handle gets the file's content in place.
+const updateExisting = ref(false);
 
 const parsed = computed(() => {
     try {
@@ -52,9 +58,12 @@ async function submit() {
     if (!valid.value) return;
     submitting.value = true;
     try {
-        const { data } = await axios.post(props.importUrl, { payload: parsed.value });
+        const { data } = await axios.post(props.importUrl, {
+            payload: parsed.value,
+            handle_strategy: updateExisting.value ? 'update' : 'auto',
+        });
         result.value = data;
-        window.Statamic?.$toast?.success?.(__('Imported.'));
+        window.Statamic?.$toast?.success?.(data.meta?.updated ? __('Updated.') : __('Imported.'));
     } catch (e) {
         window.Statamic?.$toast?.error?.(firstMessage(e, __('Import failed.')));
     } finally {
@@ -97,6 +106,18 @@ async function submit() {
             </p>
         </Panel>
 
+        <Panel :heading="__('Options')" class="mt-4">
+            <Card>
+                <Field
+                    id="import_update_existing"
+                    :label="__('Update the automation with the same handle')"
+                    :instructions="__('Replaces its name, description, nodes and edges with the file. It stays switched on or off as it is, and the previous version is kept under Versions. Off: the file is imported as a new, disabled automation.')"
+                >
+                    <Switch id="import_update_existing" v-model="updateExisting" />
+                </Field>
+            </Card>
+        </Panel>
+
         <div class="mt-4 flex items-center gap-2">
             <Button
                 :text="submitting ? __('Importing…') : __('Import')"
@@ -108,7 +129,7 @@ async function submit() {
         </div>
 
         <Alert v-if="result" variant="success" class="mt-4">
-            <strong>{{ __('Imported.') }}</strong>
+            <strong>{{ result.meta?.updated ? __('Updated.') : __('Imported.') }}</strong>
             <div v-if="result.meta?.warnings?.length" class="mt-2">
                 <p class="text-xs uppercase tracking-wider text-amber-700 dark:text-amber-400">{{ __('Warnings') }}</p>
                 <ul class="mt-1 ml-4 list-disc text-sm">

@@ -106,4 +106,33 @@ class AutomationsApiTest extends TestCase
         $response->assertJsonPath('data.name', 'Form Submission to Webhook');
         $this->assertDatabaseCount('automations', 1);
     }
+
+    public function test_import_updates_in_place_only_when_asked(): void
+    {
+        $payload = [
+            'schema_version' => 1,
+            'automation' => ['name' => 'Flow', 'handle' => 'flow'],
+            'nodes' => [['node_key' => 't', 'type' => 'manual']],
+            'edges' => [],
+        ];
+
+        $this->postJson('/cp/automations/api/automations/import', ['payload' => $payload])
+            ->assertCreated()
+            ->assertJsonPath('meta.updated', false);
+
+        // Default: a second import is a copy with a suffixed handle.
+        $copy = $this->postJson('/cp/automations/api/automations/import', ['payload' => $payload])
+            ->assertCreated();
+        $this->assertNotSame('flow', $copy->json('data.handle'));
+
+        $payload['automation']['name'] = 'Flow v2';
+
+        $this->postJson('/cp/automations/api/automations/import', ['payload' => $payload, 'handle_strategy' => 'update'])
+            ->assertOk()
+            ->assertJsonPath('meta.updated', true)
+            ->assertJsonPath('data.handle', 'flow')
+            ->assertJsonPath('data.name', 'Flow v2');
+
+        $this->assertDatabaseCount('automations', 2);
+    }
 }
