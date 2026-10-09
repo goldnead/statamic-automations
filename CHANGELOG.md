@@ -1,6 +1,15 @@
 # Changelog
 
-## Unreleased
+## 2.25.0 — 2026-10-09
+
+### Upgrading
+
+- No migration. Needs nothing new; the action only registers when the entitlements addon is detected.
+
+### Fixed
+
+- `de.json` no longer carries the key `Success`, which statamic/cms owns and translates identically
+  (`TranslationKeyOwnershipTest` failed on current statamic/cms).
 
 ### Added: Check Access (`entitlements.check_access`)
 
