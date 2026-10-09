@@ -178,6 +178,11 @@ function expectedTestRunFailures(): array
         // handle (`connection.<conn>.<op>`) and the sweep has none, so it asks
         // for an operation that does not exist — a configuration error.
         'connection' => 'The bare class is not a connection operation node.',
+        // Reads only, so a test run reads for real (a preview that always passed
+        // would hide the stop). Without the entitlements addon in the test app
+        // it refuses, which is the right answer: passing a `forbid` because the
+        // check could not be made is the failure this node exists to avoid.
+        'entitlements.check_access' => 'The entitlements addon is not installed.',
         'marketing.send_campaign' => 'The dummy campaign handle does not exist (statamic-marketing is not installed).',
         // Same reasoning as cal.com's slots: the Notion nodes only read, so a
         // test run reads for real, and without a `notion` connection in the

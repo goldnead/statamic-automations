@@ -909,6 +909,7 @@ class ServiceProvider extends AddonServiceProvider
             foreach ([
                 EA\GrantEntitlementAction::class,
                 EA\RevokeEntitlementAction::class,
+                EA\CheckAccessAction::class,
             ] as $actionClass) {
                 $automations->registerBuiltIn($actionClass::handle());
                 $automations->action($actionClass::handle(), $actionClass);

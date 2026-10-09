@@ -180,6 +180,46 @@ class FakeEntitlementManager
     }
 
     /**
+     * Mirrors `EntitlementManager::reference()` for a Statamic user: the pair
+     * `user` + the user's id. Anything already a pair is taken as it is.
+     */
+    public function reference(mixed $subject): FakeSubjectReference
+    {
+        if ($subject instanceof FakeSubjectReference) {
+            return $subject;
+        }
+
+        if (is_object($subject) && method_exists($subject, 'id')) {
+            return new FakeSubjectReference('user', (string) $subject->id());
+        }
+
+        throw new InvalidArgumentException('Cannot use '.get_debug_type($subject).' as a subject.');
+    }
+
+    /**
+     * Mirrors `EntitlementManager::decide()`: access when any one grant for the
+     * subject and product grants it (an OR), otherwise the closest grant's
+     * state so a refusal can say why.
+     */
+    public function decide(mixed $subject, string $productSlug): FakeAccessDecision
+    {
+        [$type, $id] = $this->pair($subject instanceof FakeSubjectReference ? $subject : $this->reference($subject));
+
+        $mine = array_values(array_filter(
+            $this->grants,
+            fn (FakeEntitlement $g) => $g->subject_type === $type && $g->subject_id === $id && $g->product_slug === $productSlug,
+        ));
+
+        foreach ($mine as $grant) {
+            if ($grant->state()->grantsAccess()) {
+                return new FakeAccessDecision(true, $grant->state());
+            }
+        }
+
+        return new FakeAccessDecision(false, $mine === [] ? null : end($mine)->state());
+    }
+
+    /**
      * Seed a grant in a state the write paths cannot produce directly, so a
      * test can start from "already revoked" or "expires next year".
      */
@@ -220,6 +260,12 @@ class FakeEntitlementManager
 
         return [(string) $subject->type, (string) $subject->id];
     }
+}
+
+/** Mirrors `Goldnead\Entitlements\Support\AccessDecision`. */
+final readonly class FakeAccessDecision
+{
+    public function __construct(public bool $allowed, public ?FakeState $state = null) {}
 }
 
 /** The slice of an Eloquent builder the adapter uses, and no more. */

@@ -2,6 +2,8 @@
 
 namespace Goldnead\StatamicAutomations\Integrations\Entitlements;
 
+use Statamic\Facades\User;
+
 /**
  * Thin adapter over the entitlements addon's public API.
  *
@@ -181,6 +183,77 @@ class EntitlementsAdapter
         }
 
         return ['ok' => true, 'revoked' => $revoked, 'matched' => $grants->count()];
+    }
+
+    /**
+     * Whether an address holds a product right now.
+     *
+     * The address is not a subject; people are. A grant belongs to a `(type, id)`
+     * pair, so the address is turned into every pair it can be: the Statamic user
+     * who owns it, and the address itself as a subject of type `email` (a buyer
+     * who never made a login). Access is an OR over the two, as it is over several
+     * grants inside the addon.
+     *
+     * Asks the addon's own `decide()`, so what counts as access (active, in its
+     * grace period; not revoked, expired, scheduled or pending) is the addon's
+     * definition and not a copy of it here.
+     *
+     * @return array{ok: bool, has_access?: bool, state?: string|null, error?: string}
+     */
+    public function hasAccess(string $email, string $productSlug): array
+    {
+        $manager = $this->manager();
+
+        if ($manager === null) {
+            return ['ok' => false, 'error' => 'The entitlements addon is not installed.'];
+        }
+
+        $subjects = [];
+
+        try {
+            $emailSubject = $this->subject('email', $email);
+
+            // Without the pair for the address itself, a buyer who never made a
+            // login cannot be looked up. Carrying on with the user alone would
+            // answer "no access" for somebody who may hold it, and a `forbid`
+            // would let the mail go to them: fail instead.
+            if ($emailSubject === null) {
+                return ['ok' => false, 'error' => 'Could not build a subject reference for the address, so access cannot be checked.'];
+            }
+
+            $subjects[] = $emailSubject;
+
+            $user = User::findByEmail($email);
+
+            if ($user !== null) {
+                $reference = $manager->reference($user);
+
+                if (! is_object($reference)) {
+                    return ['ok' => false, 'error' => 'The entitlements addon could not name the account that owns this address.'];
+                }
+
+                $subjects[] = $reference;
+            }
+
+            $state = null;
+
+            foreach ($subjects as $subject) {
+                $decision = $manager->decide($subject, $productSlug);
+                $decisionState = $decision->state instanceof \BackedEnum ? (string) $decision->state->value : null;
+
+                if ($decision->allowed) {
+                    return ['ok' => true, 'has_access' => true, 'state' => $decisionState];
+                }
+
+                // Nobody holds it: report the closest grant's state if there is
+                // one, so a stop can say "revoked" rather than only "no".
+                $state ??= $decisionState;
+            }
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'error' => $this->message($e)];
+        }
+
+        return ['ok' => true, 'has_access' => false, 'state' => $state];
     }
 
     /**
