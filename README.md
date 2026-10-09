@@ -228,6 +228,7 @@ last two need statamic-offers for their pickers; the matching works on the handl
 | Create / Complete Follow-up _(LeadHub)_ | LeadHub | |
 | Grant Access _(Entitlements)_ | Entitlements | Idempotent by (subject, product, source, reference). Branch on `grants_access`; **fails** when the grant it finds is revoked or expired, because re-granting does not reopen one. |
 | Revoke Access _(Entitlements)_ | Entitlements | Withdraws **every** grant the subject holds for the product; reports how many actually changed. |
+| Check Access _(Entitlements)_ | Entitlements | Looks up **now** whether an address holds a product; `require` or `forbid`. Ends the run (a stop, not a failure) when the condition does not hold, fails when the check cannot be made. |
 | Issue Invoice _(Invoices)_ | Invoices | Writes the invoice for a paid payment, or returns the one already written. Branch on `created`. |
 | Issue Credit Note _(Invoices)_ | Invoices | Reverses the **whole** invoice. Put a full-refund condition in front of it. |
 

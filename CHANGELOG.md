@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added: Check Access (`entitlements.check_access`)
+
+A gate for flows that wait: it looks up **now** whether an address holds a product and ends
+the run when the answer is not the one the flow needs. A condition on the trigger only knows
+the state at the moment the run started, which is wrong for a mail sent ten days later.
+
+- Settings: `email`, `product_slug`, `mode` (`require` or `forbid`).
+- When the condition does not hold the run **stops**; when the check cannot be made (addon
+  missing, bad address, the addon throws) the node **fails**. A `forbid` never passes because
+  the check broke.
+- An address is found as the Statamic user who owns it and as a subject of type `email`; access
+  is the entitlements addon's own `decide()` (active or in grace period, not revoked, expired,
+  scheduled or pending).
+- Only registered when the entitlements addon is detected. No migration, no new dependency.
+
 ## 2.24.0 — 2026-09-27
 
 ### Upgrading
