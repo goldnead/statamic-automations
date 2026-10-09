@@ -156,6 +156,18 @@ class CheckAccessActionTest extends TestCase
         $this->assertStringContainsString('not installed', (string) $result->error);
     }
 
+    public function test_it_fails_when_the_address_cannot_be_turned_into_a_subject(): void
+    {
+        // The subject class is configured but gone: nothing was looked up, so
+        // "no access" would be an invention and a forbid must not pass on it.
+        config()->set('automations.integrations.entitlements.subject_reference', 'Not\\There\\Subject');
+
+        $result = $this->check(['mode' => 'forbid']);
+
+        $this->assertTrue($result->isFailed());
+        $this->assertFalse($result->isSuccess());
+    }
+
     public function test_it_fails_on_missing_or_unknown_configuration(): void
     {
         $this->assertTrue($this->check(['product_slug' => ''])->isFailed());

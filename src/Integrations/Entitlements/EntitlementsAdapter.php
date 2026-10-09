@@ -213,14 +213,26 @@ class EntitlementsAdapter
         try {
             $emailSubject = $this->subject('email', $email);
 
-            if ($emailSubject !== null) {
-                $subjects[] = $emailSubject;
+            // Without the pair for the address itself, a buyer who never made a
+            // login cannot be looked up. Carrying on with the user alone would
+            // answer "no access" for somebody who may hold it, and a `forbid`
+            // would let the mail go to them: fail instead.
+            if ($emailSubject === null) {
+                return ['ok' => false, 'error' => 'Could not build a subject reference for the address, so access cannot be checked.'];
             }
+
+            $subjects[] = $emailSubject;
 
             $user = User::findByEmail($email);
 
             if ($user !== null) {
-                $subjects[] = $manager->reference($user);
+                $reference = $manager->reference($user);
+
+                if (! is_object($reference)) {
+                    return ['ok' => false, 'error' => 'The entitlements addon could not name the account that owns this address.'];
+                }
+
+                $subjects[] = $reference;
             }
 
             $state = null;
