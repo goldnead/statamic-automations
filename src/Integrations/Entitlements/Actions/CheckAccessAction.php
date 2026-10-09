@@ -131,16 +131,32 @@ class CheckAccessAction implements AutomationAction
         $productSlug = trim((string) ($config['product_slug'] ?? ''));
         $mode = trim((string) ($config['mode'] ?? self::MODE_REQUIRE)) ?: self::MODE_REQUIRE;
 
-        if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            return ActionResult::failed('A valid "email" is required.');
-        }
-
+        // Static configuration first: a node without a product or with a mode
+        // nobody defined is broken, and a test run has to say so.
         if ($productSlug === '') {
             return ActionResult::failed('Product is required.');
         }
 
         if (! in_array($mode, [self::MODE_REQUIRE, self::MODE_FORBID], true)) {
             return ActionResult::failed(sprintf('Unknown mode "%s": use "require" or "forbid".', $mode));
+        }
+
+        // The address is a data reference and is checked after this branch on
+        // purpose: a test run starts from an empty context, so the token
+        // resolves to nothing there. See ActionResult::missingDataReference().
+        if ($email === '' && $context->isTestMode()) {
+            return ActionResult::success([
+                'preview' => ['product_slug' => $productSlug, 'mode' => $mode],
+                'note' => 'Test mode — no address to look up.',
+            ]);
+        }
+
+        if ($email === '') {
+            return ActionResult::missingDataReference('email', 'Email', '{{ payment.email }}');
+        }
+
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return ActionResult::failed('A valid "email" is required.');
         }
 
         $result = $this->adapter->hasAccess($email, $productSlug);
