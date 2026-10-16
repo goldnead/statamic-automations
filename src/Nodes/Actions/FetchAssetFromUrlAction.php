@@ -19,7 +19,8 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Psr\Http\Message\ResponseInterface;
 use Statamic\Assets\AssetUploader;
-use Statamic\Contracts\Assets\AssetContainer as AssetContainerContract;
+use Statamic\Assets\Asset as AssetItem;
+use Statamic\Assets\AssetContainer as AssetContainerItem;
 use Statamic\Facades\Asset;
 use Statamic\Facades\AssetContainer;
 use Statamic\Facades\YAML;
@@ -170,6 +171,7 @@ class FetchAssetFromUrlAction implements AutomationAction
             }
         }
 
+        /** @var AssetContainerItem|null $container */
         $container = AssetContainer::find($plan['container']);
 
         if ($container === null) {
@@ -509,7 +511,7 @@ class FetchAssetFromUrlAction implements AutomationAction
      * @param  resource  $resource
      * @return array{asset_id: string, path: string, size: int, mime_type: string}
      */
-    protected function store(AssetContainerContract $container, array $plan, $resource): array
+    protected function store(AssetContainerItem $container, array $plan, $resource): array
     {
         $handle = $container->handle();
         $disk = $container->disk();
@@ -580,7 +582,7 @@ class FetchAssetFromUrlAction implements AutomationAction
                 $created[] = $meta;
             }
 
-            $asset = Asset::make()->container($handle)->path($path);
+            $asset = $this->makeAsset($handle, $path);
             $asset->writeMeta($asset->generateMeta());
 
             if ($asset->save() === false) {
@@ -708,7 +710,15 @@ class FetchAssetFromUrlAction implements AutomationAction
 
     protected function metaPath(string $handle, string $path): string
     {
-        return Asset::make()->container($handle)->path($path)->metaPath();
+        return $this->makeAsset($handle, $path)->metaPath();
+    }
+
+    protected function makeAsset(string $handle, string $path): AssetItem
+    {
+        /** @var AssetItem $asset */
+        $asset = Asset::make();
+
+        return $asset->container($handle)->path($path);
     }
 
     protected function describe(\Throwable $e): string
