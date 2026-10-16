@@ -238,6 +238,7 @@ it('fails the node on invalid JSON, a non-object, and a schema violation', funct
 })->with([
     'invalid json' => ['Hier ist deine Zusammenfassung: …', 'not valid JSON'],
     'not an object' => ['["a","b"]', 'not an object'],
+    'empty array' => ['[]', 'not an object'],
     'missing field' => ['{"zusammenfassung":"x"}', '$.aufgaben is required'],
     'wrong type' => ['{"zusammenfassung":"x","aufgaben":"eine"}', '$.aufgaben must be of type array'],
 ]);
@@ -252,6 +253,35 @@ it('fails with a clear message when the configured schema is not JSON', function
     expect($result->isFailed())->toBeTrue()->and($result->error)->toContain('schema')
         ->and($fake->timeout)->toBeNull();
 });
+
+it('accepts an empty object reply when the schema demands nothing', function (): void {
+    fakeAi('{}');
+
+    $result = aiAction()->execute(AutomationContext::make([]), ['prompt' => 'p', 'output_mode' => 'json']);
+
+    expect($result->isSuccess())->toBeTrue()->and($result->output['json'])->toBe([]);
+});
+
+it('rejects a schema that parses but cannot check anything', function (string $schema): void {
+    $fake = fakeAi('{}');
+
+    $result = aiAction()->execute(AutomationContext::make([]), [
+        'prompt' => 'p', 'output_mode' => 'json', 'json_schema' => $schema,
+    ]);
+
+    expect($result->isFailed())->toBeTrue()->and($result->error)->toContain('schema')
+        ->and($fake->timeout)->toBeNull();
+})->with([
+    'list instead of object' => ['[]'],
+    'scalar' => ['"object"'],
+    'unknown type' => ['{"type":"banana"}'],
+    'properties as list' => ['{"type":"object","properties":["a"]}'],
+    'property not an object' => ['{"type":"object","properties":{"a":"string"}}'],
+    'nested bad type' => ['{"type":"object","properties":{"a":{"type":"strnig"}}}'],
+    'required not names' => ['{"type":"object","required":"a"}'],
+    'items as list' => ['{"type":"array","items":[{"type":"string"}]}'],
+    'empty enum' => ['{"enum":[]}'],
+]);
 
 it('exposes the schema fields as output variables in JSON mode only', function (): void {
     expect(AiGenerateAction::outputSchemaFor(['output_mode' => 'json', 'json_schema' => reviewSchema()])['json'])

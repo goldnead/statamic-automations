@@ -214,8 +214,14 @@ class AiGenerateAction implements AutomationAction
         $mode = (string) ($config['output_mode'] ?? 'text');
         if (! in_array($mode, ['text', 'json'], true)) {
             $problems[] = ['code' => 'invalid_ai_output_mode', 'field' => 'output_mode', 'message' => "AI output must be 'text' or 'json'."];
-        } elseif ($mode === 'json' && self::parseSchema($config) === false) {
-            $problems[] = ['code' => 'invalid_ai_schema', 'field' => 'json_schema', 'message' => 'AI JSON schema is not valid JSON.'];
+        } elseif ($mode === 'json') {
+            $schema = self::parseSchema($config);
+
+            if ($schema === false) {
+                $problems[] = ['code' => 'invalid_ai_schema', 'field' => 'json_schema', 'message' => 'AI JSON schema must be a JSON object.'];
+            } elseif ($schema !== null && ($why = self::schemaProblem($schema))) {
+                $problems[] = ['code' => 'invalid_ai_schema', 'field' => 'json_schema', 'message' => "AI JSON schema is invalid: {$why}."];
+            }
         }
 
         return $problems;
@@ -223,7 +229,7 @@ class AiGenerateAction implements AutomationAction
 
     /**
      * @param  array<string, mixed>  $config
-     * @return array<string, mixed>|null|false null when no schema is set, false when it does not parse
+     * @return array<string, mixed>|null|false null when no schema is set, false when it is not a JSON object
      */
     protected static function parseSchema(array $config): array|null|false
     {
@@ -232,9 +238,62 @@ class AiGenerateAction implements AutomationAction
             return null;
         }
 
-        $decoded = json_decode($raw, true);
+        // `[]` and `{}` both decode to the array [], so ask for objects first.
+        if (! json_decode($raw) instanceof \stdClass) {
+            return false;
+        }
 
-        return is_array($decoded) ? $decoded : false;
+        return json_decode($raw, true);
+    }
+
+    /**
+     * Why a parsed schema cannot be trusted, or null when it is well formed.
+     * Covers the keywords JsonSchemaCheck acts on; anything else is ignored.
+     * Without this a typo such as {"type":"banana"} would silently validate
+     * nothing while the node looks schema-checked.
+     *
+     * @param  array<string, mixed>  $schema
+     */
+    protected static function schemaProblem(array $schema, string $path = '$'): ?string
+    {
+        $types = ['object', 'array', 'string', 'integer', 'number', 'boolean', 'null'];
+
+        if (array_key_exists('type', $schema) && (! is_string($schema['type']) || ! in_array($schema['type'], $types, true))) {
+            return "{$path}.type must be one of: ".implode(', ', $types);
+        }
+
+        if (array_key_exists('required', $schema)
+            && (! is_array($schema['required']) || ! array_is_list($schema['required']) || array_filter($schema['required'], fn ($f) => ! is_string($f)))) {
+            return "{$path}.required must be a list of field names";
+        }
+
+        if (array_key_exists('enum', $schema) && (! is_array($schema['enum']) || ! array_is_list($schema['enum']) || $schema['enum'] === [])) {
+            return "{$path}.enum must be a non-empty list";
+        }
+
+        if (array_key_exists('properties', $schema)) {
+            if (! is_array($schema['properties']) || ($schema['properties'] !== [] && array_is_list($schema['properties']))) {
+                return "{$path}.properties must be an object";
+            }
+            foreach ($schema['properties'] as $field => $sub) {
+                if (! is_array($sub) || ($sub !== [] && array_is_list($sub))) {
+                    return "{$path}.properties.{$field} must be an object";
+                }
+                if ($problem = self::schemaProblem($sub, "{$path}.properties.{$field}")) {
+                    return $problem;
+                }
+            }
+        }
+
+        if (array_key_exists('items', $schema)) {
+            if (! is_array($schema['items']) || ($schema['items'] !== [] && array_is_list($schema['items']))) {
+                return "{$path}.items must be an object";
+            }
+
+            return self::schemaProblem($schema['items'], "{$path}.items");
+        }
+
+        return null;
     }
 
     public function execute(AutomationContext $context, array $config): ActionResult
@@ -355,17 +414,19 @@ class AiGenerateAction implements AutomationAction
             $raw = $m[1];
         }
 
-        $decoded = json_decode($raw, true);
+        // Decode as objects first: `{}` and `[]` both become the PHP array [],
+        // so only the stdClass check tells an object from a list.
+        $probe = json_decode($raw);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
             return 'AI reply is not valid JSON: '.json_last_error_msg().'.';
         }
 
-        if (! is_array($decoded) || ($decoded !== [] && array_is_list($decoded))) {
+        if (! $probe instanceof \stdClass) {
             return 'AI reply is valid JSON but not an object.';
         }
 
-        return $decoded;
+        return json_decode($raw, true);
     }
 
     /**

@@ -83,6 +83,10 @@ it('flags an unusable AI timeout when validating', function (): void {
     expect(aiErrors(aiAutomation(null, ['timeout' => 'soon'])))->toContain('invalid_ai_timeout');
 });
 
+it('flags an invalid JSON schema when validating', function (string $schema): void {
+    expect(aiErrors(aiAutomation(null, ['json_schema' => $schema])))->toContain('invalid_ai_schema');
+})->with(['[]', '{"type":"banana"}', '{"properties":["a"]}', '{not json']);
+
 it('hands the JSON fields of the AI node to the next node', function (): void {
     $automation = aiAutomation();
     $reply = '{"zusammenfassung":"Gut gelaufen","aufgaben":["Angebot schicken","Termin planen"]}';
