@@ -50,12 +50,12 @@ class FetchAssetFromUrlAction implements AutomationAction
 
     public static function label(): string
     {
-        return 'Fetch file from URL';
+        return __('Fetch file from URL');
     }
 
     public static function description(): ?string
     {
-        return 'Downloads a file from a URL into an asset container, streamed and with a size limit.';
+        return __('Downloads a file from a URL into an asset container, streamed and with a size limit.');
     }
 
     public static function group(): string
@@ -77,19 +77,19 @@ class FetchAssetFromUrlAction implements AutomationAction
                 'type' => 'text',
                 'required' => true,
                 'tokenable' => true,
-                'help' => 'Tokens allowed, e.g. {{ nodes.recording.download_url }}.',
+                'help' => __('Tokens allowed, e.g. {{ nodes.recording.download_url }}.'),
             ],
             [
                 'handle' => 'connection',
-                'label' => 'Connection',
+                'label' => __('Connection'),
                 'type' => 'select',
                 'options_source' => 'connections',
                 'required' => false,
-                'help' => 'Optional. Sends the connection\'s headers or OAuth2 token, to the URL\'s own host only.',
+                'help' => __('Optional. Sends the headers or OAuth2 token of the connection to the host of the URL only.'),
             ],
             [
                 'handle' => 'container',
-                'label' => 'Asset container',
+                'label' => __('Asset container'),
                 'type' => 'select',
                 'options_source' => 'statamic.asset_containers',
                 'required' => true,
@@ -100,7 +100,7 @@ class FetchAssetFromUrlAction implements AutomationAction
                 'type' => 'text',
                 'required' => false,
                 'tokenable' => true,
-                'help' => 'Optional, relative to the container root.',
+                'help' => __('Optional, relative to the container root.'),
             ],
             [
                 'handle' => 'filename',
@@ -108,21 +108,21 @@ class FetchAssetFromUrlAction implements AutomationAction
                 'type' => 'text',
                 'required' => false,
                 'tokenable' => true,
-                'help' => 'Optional. Defaults to the last part of the URL path.',
+                'help' => __('Optional. Defaults to the last part of the URL path.'),
             ],
             [
                 'handle' => 'max_size_mb',
-                'label' => 'Maximum size (MB)',
+                'label' => __('Maximum size (MB)'),
                 'type' => 'number',
                 'required' => false,
-                'help' => 'Optional. Defaults to automations.assets.fetch.max_size_mb.',
+                'help' => __('Optional. Defaults to automations.assets.fetch.max_size_mb.'),
             ],
             [
                 'handle' => 'overwrite',
-                'label' => 'Overwrite an existing file',
+                'label' => __('Overwrite an existing file'),
                 'type' => 'toggle',
                 'default' => false,
-                'help' => 'Off: a taken name gets -1, -2 and so on.',
+                'help' => __('Off: a taken name gets -1, -2 and so on.'),
             ],
         ];
     }
@@ -140,6 +140,17 @@ class FetchAssetFromUrlAction implements AutomationAction
 
     public function execute(AutomationContext $context, array $config): ActionResult
     {
+        // A test run starts from an empty context, so a URL fed by a token is
+        // empty there. That is reported, not failed on; a URL that is there
+        // but wrong still fails below.
+        if ($context->isTestMode() && trim((string) ($config['url'] ?? '')) === '') {
+            return ActionResult::success([
+                'preview' => ['url' => '', 'container' => (string) ($config['container'] ?? '')],
+                'missing_inputs' => ['url'],
+                'note' => __('Test mode — nothing downloaded.'),
+            ]);
+        }
+
         try {
             $plan = $this->plan($config);
         } catch (\InvalidArgumentException $e) {
@@ -220,23 +231,23 @@ class FetchAssetFromUrlAction implements AutomationAction
         $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
 
         if ($url === '' || ! in_array($scheme, ['http', 'https'], true) || (string) parse_url($url, PHP_URL_HOST) === '') {
-            throw new \InvalidArgumentException('A valid http or https URL is required.');
+            throw new \InvalidArgumentException(__('A valid http or https URL is required.'));
         }
 
         $container = trim((string) ($config['container'] ?? ''));
 
         if ($container === '' || ! preg_match('/^[A-Za-z0-9_-]+$/', $container)) {
-            throw new \InvalidArgumentException('A valid asset container is required.');
+            throw new \InvalidArgumentException(__('A valid asset container is required.'));
         }
 
         $connection = trim((string) ($config['connection'] ?? ''));
 
         if ($connection !== '' && ! preg_match('/^[A-Za-z0-9_-]+$/', $connection)) {
-            throw new \InvalidArgumentException('The connection handle is not valid.');
+            throw new \InvalidArgumentException(__('The connection handle is not valid.'));
         }
 
-        $maxMb = $this->positive($config['max_size_mb'] ?? null, config('automations.assets.fetch.max_size_mb', 500), 'The maximum size');
-        $timeout = $this->positive(null, config('automations.assets.fetch.timeout', 300), 'The timeout');
+        $maxMb = $this->positive($config['max_size_mb'] ?? null, config('automations.assets.fetch.max_size_mb', 500), __('The maximum size must be a number greater than zero.'));
+        $timeout = $this->positive(null, config('automations.assets.fetch.timeout', 300), __('The timeout must be a number greater than zero.'));
 
         $folder = $this->folder((string) ($config['folder'] ?? ''));
 
@@ -251,13 +262,13 @@ class FetchAssetFromUrlAction implements AutomationAction
         $this->assertSafeSegments($name, 'The file name');
 
         if (preg_match('#[/\\\\]#', $name)) {
-            throw new \InvalidArgumentException('The file name may not contain a path.');
+            throw new \InvalidArgumentException(__('The file name may not contain a path.'));
         }
 
         $filename = $this->safeFilename($name);
 
         if ($filename === '' || $filename === '.' || $filename === '..') {
-            throw new \InvalidArgumentException('No file name could be derived. Set one in the node.');
+            throw new \InvalidArgumentException(__('No file name could be derived. Set one in the node.'));
         }
 
         return [
@@ -274,12 +285,12 @@ class FetchAssetFromUrlAction implements AutomationAction
     }
 
     /** A finite number above zero: the node's value, else the config default. */
-    protected function positive(mixed $value, mixed $default, string $what): float|int
+    protected function positive(mixed $value, mixed $default, string $message): float|int
     {
         $number = ($value === null || $value === '') ? $default : $value;
 
         if (! is_numeric($number) || ! is_finite((float) $number) || (float) $number <= 0) {
-            throw new \InvalidArgumentException("{$what} must be a number greater than zero.");
+            throw new \InvalidArgumentException($message);
         }
 
         return $number + 0;
@@ -294,7 +305,7 @@ class FetchAssetFromUrlAction implements AutomationAction
         }
 
         if (preg_match('#^([/\\\\]|[A-Za-z]:)#', $folder)) {
-            throw new \InvalidArgumentException('The folder must be relative to the container root.');
+            throw new \InvalidArgumentException(__('The folder must be relative to the container root.'));
         }
 
         $this->assertSafeSegments($folder, 'The folder');
@@ -350,7 +361,7 @@ class FetchAssetFromUrlAction implements AutomationAction
         // The URL may come from an earlier node, so it is checked before any
         // token is fetched or header built, not only on redirects.
         if ($connection !== null && $this->origin($plan['url']) !== $this->origin((string) $connection->base_url)) {
-            throw new \RuntimeException('The URL does not belong to the connection\'s base URL, so the connection is not used for it.');
+            throw new \RuntimeException(__('The URL does not belong to the base URL of the connection, so the connection is not used for it.'));
         }
 
         $oauth = $connection?->usesOAuth2() ? app(OAuth2TokenService::class) : null;
@@ -373,7 +384,7 @@ class FetchAssetFromUrlAction implements AutomationAction
             }
 
             if ($outcome === 401 && $renewed) {
-                throw new \RuntimeException('The server answered with HTTP 401 again after the access token was renewed.');
+                throw new \RuntimeException(__('The server answered with HTTP 401 again after the access token was renewed.'));
             }
 
             return;
@@ -427,13 +438,13 @@ class FetchAssetFromUrlAction implements AutomationAction
 
             if (in_array($status, [301, 302, 303, 307, 308], true)) {
                 if ($hop === self::MAX_REDIRECTS) {
-                    throw new \RuntimeException('Too many redirects (more than '.self::MAX_REDIRECTS.').');
+                    throw new \RuntimeException(__('Too many redirects (more than 5).'));
                 }
 
                 $current = $this->redirectTarget($current, $response->header('Location'));
 
                 if (isset($seen[$key = $this->canonical($current)])) {
-                    throw new \RuntimeException('The redirects form a loop.');
+                    throw new \RuntimeException(__('The redirects form a loop.'));
                 }
 
                 $seen[$key] = true;
@@ -467,7 +478,7 @@ class FetchAssetFromUrlAction implements AutomationAction
             return null;
         }
 
-        throw new \RuntimeException('Too many redirects (more than '.self::MAX_REDIRECTS.').');
+        throw new \RuntimeException(__('Too many redirects (more than 5).'));
     }
 
     protected function redirectTarget(string $current, string $location): string
@@ -475,13 +486,13 @@ class FetchAssetFromUrlAction implements AutomationAction
         $location = trim($location);
 
         if ($location === '') {
-            throw new \RuntimeException('The server redirected without a Location.');
+            throw new \RuntimeException(__('The server redirected without a Location.'));
         }
 
         try {
             return (string) UriResolver::resolve(new Uri($current), new Uri($location));
         } catch (\InvalidArgumentException) {
-            throw new \RuntimeException('The server sent an invalid redirect Location.');
+            throw new \RuntimeException(__('The server sent an invalid redirect Location.'));
         }
     }
 
@@ -522,7 +533,7 @@ class FetchAssetFromUrlAction implements AutomationAction
         try {
             $lock->block(60);
         } catch (LockTimeoutException) {
-            throw new \RuntimeException('Another download to the same file is still running.');
+            throw new \RuntimeException(__('Another download to the same file is still running.'));
         }
 
         $created = [];
@@ -549,7 +560,7 @@ class FetchAssetFromUrlAction implements AutomationAction
                     if (! $disk->exists($backup) || $disk->size($backup) !== $disk->size($existing)) {
                         $backups[] = $backup;
 
-                        throw new \RuntimeException('The existing file could not be backed up.');
+                        throw new \RuntimeException(__('The existing file could not be backed up.'));
                     }
 
                     $backups[] = $backup;
@@ -571,7 +582,7 @@ class FetchAssetFromUrlAction implements AutomationAction
                     $created[] = $path;
                 }
 
-                throw new \RuntimeException('The file could not be written to the container.');
+                throw new \RuntimeException(__('The file could not be written to the container.'));
             }
 
             if (! $existed) {
@@ -586,7 +597,7 @@ class FetchAssetFromUrlAction implements AutomationAction
             $asset->writeMeta($asset->generateMeta());
 
             if ($asset->save() === false) {
-                throw new \RuntimeException('The asset could not be saved.');
+                throw new \RuntimeException(__('The asset could not be saved.'));
             }
 
             $this->verifyStored($disk, $asset);
@@ -641,7 +652,7 @@ class FetchAssetFromUrlAction implements AutomationAction
         $metaFile = $disk->exists($asset->metaPath()) ? YAML::parse((string) $disk->get($asset->metaPath())) : null;
 
         if (! is_array($metaFile) || ! isset($metaFile['size'])) {
-            throw new \RuntimeException('The asset meta file was not written.');
+            throw new \RuntimeException(__('The asset meta file was not written.'));
         }
     }
 
@@ -705,7 +716,7 @@ class FetchAssetFromUrlAction implements AutomationAction
             }
         }
 
-        throw new \RuntimeException('No free file name was found.');
+        throw new \RuntimeException(__('No free file name was found.'));
     }
 
     protected function metaPath(string $handle, string $path): string

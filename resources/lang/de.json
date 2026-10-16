@@ -240,7 +240,7 @@
     "Fetch file from URL": "Datei von URL holen",
     "Downloads a file from a URL into an asset container, streamed and with a size limit.": "Lädt eine Datei von einer URL in einen Asset-Container, gestreamt und mit Größengrenze.",
     "Tokens allowed, e.g. {{ nodes.recording.download_url }}.": "Tokens erlaubt, z. B. {{ nodes.recording.download_url }}.",
-    "Optional. Sends the connection's headers or OAuth2 token, to the URL's own host only.": "Optional. Sendet Header oder OAuth2-Token der Verbindung, nur an den Host der URL selbst.",
+    "Optional. Sends the headers or OAuth2 token of the connection to the host of the URL only.": "Optional. Sendet Header oder OAuth2-Token der Verbindung, nur an den Host der URL selbst.",
     "Asset container": "Asset-Container",
     "Optional, relative to the container root.": "Optional, relativ zur Wurzel des Containers.",
     "Optional. Defaults to the last part of the URL path.": "Optional. Standard ist der letzte Teil des URL-Pfads.",
@@ -269,5 +269,5 @@
     "The asset meta file was not written.": "Die Meta-Datei des Assets wurde nicht geschrieben.",
     "Another download to the same file is still running.": "Ein anderer Download auf dieselbe Datei läuft noch.",
     "No free file name was found.": "Es wurde kein freier Dateiname gefunden.",
-    "The URL does not belong to the connection's base URL, so the connection is not used for it.": "Die URL gehört nicht zur Basis-URL der Verbindung, deshalb wird die Verbindung dafür nicht verwendet."
+    "The URL does not belong to the base URL of the connection, so the connection is not used for it.": "Die URL gehört nicht zur Basis-URL der Verbindung, deshalb wird die Verbindung dafür nicht verwendet."
 }

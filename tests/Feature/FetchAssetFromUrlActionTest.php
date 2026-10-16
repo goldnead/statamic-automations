@@ -112,6 +112,13 @@ it('previews in test mode without touching network, connections, container or di
     expect(filesIn($this->roots['media']))->toBe([]);
 });
 
+it('reports an empty URL in test mode instead of failing', function (): void {
+    $result = fetchAction()->execute(AutomationContext::make([], true), fetchConfig(['url' => '']));
+
+    expect($result->isSuccess())->toBeTrue();
+    expect($result->output['missing_inputs'])->toBe(['url']);
+});
+
 it('still validates locally in test mode', function (): void {
     $result = fetchAction()->execute(AutomationContext::make([], true), fetchConfig(['folder' => '../x']));
 
@@ -373,7 +380,7 @@ it('does not fetch an OAuth2 token for a foreign host either', function (): void
 it('is not registered when its flag is off', function (): void {
     config(['automations.builtin_nodes.fetch_asset_from_url' => false]);
 
-    $automations = new Automations;
+    $automations = app()->build(Automations::class);
     $this->app->instance('automations', $automations);
 
     $method = new ReflectionMethod(app()->getProvider(ServiceProvider::class), 'registerBuiltInNodes');
@@ -547,7 +554,7 @@ it('runs end to end through RunAutomation and the WorkflowRunner', function (): 
 
     $run->refresh();
     expect($run->status)->toBe(AutomationRun::STATUS_SUCCESS);
-    $nodeRun = AutomationNodeRun::where('run_id', $run->id)->where('node_key', 'fetch')->first();
+    $nodeRun = AutomationNodeRun::where('automation_run_id', $run->id)->where('node_key', 'fetch')->first();
     expect($nodeRun->status)->toBe('success');
     expect(file_get_contents($this->roots['media'].'/call.mp4'))->toBe('payload');
 });
@@ -561,7 +568,7 @@ it('fails the node and the run with a size message and leaves no file behind at 
     $run->refresh();
     expect($run->status)->toBe(AutomationRun::STATUS_FAILED);
     expect($run->error_message)->toContain('limit');
-    $nodeRun = AutomationNodeRun::where('run_id', $run->id)->where('node_key', 'fetch')->first();
+    $nodeRun = AutomationNodeRun::where('automation_run_id', $run->id)->where('node_key', 'fetch')->first();
     expect($nodeRun->status)->toBe('failed');
     expect($nodeRun->error_message)->toContain('limit');
     expect(filesIn($this->roots['media']))->toBe([]);
