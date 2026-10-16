@@ -18,9 +18,9 @@ use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Psr\Http\Message\ResponseInterface;
-use Statamic\Assets\AssetUploader;
 use Statamic\Assets\Asset as AssetItem;
 use Statamic\Assets\AssetContainer as AssetContainerItem;
+use Statamic\Assets\AssetUploader;
 use Statamic\Facades\Asset;
 use Statamic\Facades\AssetContainer;
 use Statamic\Facades\YAML;
@@ -736,7 +736,12 @@ class FetchAssetFromUrlAction implements AutomationAction
         /** @var AssetItem $asset */
         $asset = Asset::make();
 
-        return $asset->container($handle)->path($path);
+        // Statamic's docblock types container() as the contract, which has no
+        // path(); two statements keep the concrete Asset in hand.
+        $asset->container($handle);
+        $asset->path($path);
+
+        return $asset;
     }
 
     protected function describe(\Throwable $e): string

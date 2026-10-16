@@ -235,23 +235,25 @@ it('restores an overwritten file and its meta when the new download fails', func
 function failingAfterOverwrite(bool $restoreWorks): FetchAssetFromUrlAction
 {
     return $restoreWorks
-        ? new class extends FetchAssetFromUrlAction {
+        ? new class extends FetchAssetFromUrlAction
+        {
             protected function verifyStored($disk, $asset): void
             {
                 throw new RuntimeException('boom after overwrite');
             }
         }
-        : new class extends FetchAssetFromUrlAction {
-            protected function verifyStored($disk, $asset): void
-            {
-                throw new RuntimeException('boom after overwrite');
-            }
+    : new class extends FetchAssetFromUrlAction
+    {
+        protected function verifyStored($disk, $asset): void
+        {
+            throw new RuntimeException('boom after overwrite');
+        }
 
-            protected function restoreFile($disk, string $backup, string $path): bool
-            {
-                return false;
-            }
-        };
+        protected function restoreFile($disk, string $backup, string $path): bool
+        {
+            return false;
+        }
+    };
 }
 
 it('rolls back a failure inside store() after the overwrite', function (): void {
@@ -274,7 +276,8 @@ it('does not roll back a successful overwrite when deleting a backup throws', fu
 
     fetchAction()->execute(AutomationContext::make(), fetchConfig());
 
-    $action = new class extends FetchAssetFromUrlAction {
+    $action = new class extends FetchAssetFromUrlAction
+    {
         public int $deletes = 0;
 
         protected function deleteBackup($disk, string $backup): void
