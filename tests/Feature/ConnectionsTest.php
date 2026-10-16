@@ -639,7 +639,7 @@ it('creates the zoom connection with exactly its two operations in one go', func
     ])->assertCreated();
 
     $connection = AutomationConnection::where('handle', 'zoom')->firstOrFail();
-    expect($connection->operations()->pluck('handle')->all())->toBe(['recordings_list', 'recording_get']);
+    expect($connection->operations()->orderBy('id')->pluck('handle')->all())->toBe(['recordings_list', 'recording_get']);
 
     $list = $connection->operations()->where('handle', 'recordings_list')->first();
     expect($list->method)->toBe('GET')
