@@ -168,6 +168,43 @@ it('reserves the first free name when overwrite is off', function (): void {
     expect(file_get_contents($this->roots['media'].'/call.mp4'))->toBe('one');
 });
 
+it('never lets a run asking for another name end up on a path that was just taken', function (): void {
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::sequence()->push('one')->push('two')->push('three')]);
+
+    $paths = [
+        fetchAction()->execute(AutomationContext::make(), fetchConfig())->output['path'],
+        fetchAction()->execute(AutomationContext::make(), fetchConfig())->output['path'],
+        fetchAction()->execute(AutomationContext::make(), fetchConfig(['filename' => 'call-1.mp4']))->output['path'],
+    ];
+
+    expect($paths)->toBe(['call.mp4', 'call-1.mp4', 'call-1-1.mp4']);
+    expect(file_get_contents($this->roots['media'].'/call-1.mp4'))->toBe('two');
+});
+
+it('serialises runs that ask for different names on one container lock', function (): void {
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::response('x')]);
+    config(['cache.default' => 'array']);
+
+    $impatient = new class extends FetchAssetFromUrlAction {
+        protected int $lockWait = 0;
+    };
+
+    $lock = cache()->lock('statamic-automations:asset-fetch:media', 60);
+    expect($lock->get())->toBeTrue();
+
+    // Two different wanted names, same container: both wait on the one lock.
+    foreach (['call.mp4', 'call-1.mp4'] as $name) {
+        $result = $impatient->execute(AutomationContext::make(), fetchConfig(['filename' => $name]));
+
+        expect($result->isFailed())->toBeTrue();
+        expect($result->error)->toContain('still running');
+    }
+
+    $lock->release();
+    expect($impatient->execute(AutomationContext::make(), fetchConfig(['filename' => 'call-1.mp4']))->isSuccess())->toBeTrue();
+    expect(filesIn($this->roots['media']))->toBe(['.meta/call-1.mp4.yaml', 'call-1.mp4']);
+});
+
 it('replaces the file when overwrite is on', function (): void {
     FakeWeb::fake(['files.example.test/*' => FakeWeb::sequence()->push('old')->push('newer')]);
 

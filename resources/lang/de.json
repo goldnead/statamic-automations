@@ -267,7 +267,7 @@
     "The file could not be written to the container.": "Die Datei konnte nicht in den Container geschrieben werden.",
     "The asset could not be saved.": "Das Asset konnte nicht gespeichert werden.",
     "The asset meta file was not written.": "Die Meta-Datei des Assets wurde nicht geschrieben.",
-    "Another download to the same file is still running.": "Ein anderer Download auf dieselbe Datei läuft noch.",
+    "Another download into this container is still running.": "Ein anderer Download in diesen Container läuft noch.",
     "No free file name was found.": "Es wurde kein freier Dateiname gefunden.",
     "The URL does not belong to the base URL of the connection, so the connection is not used for it.": "Die URL gehört nicht zur Basis-URL der Verbindung, deshalb wird die Verbindung dafür nicht verwendet."
 }

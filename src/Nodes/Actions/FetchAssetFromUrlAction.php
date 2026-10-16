@@ -43,6 +43,9 @@ class FetchAssetFromUrlAction implements AutomationAction
 {
     public const MAX_REDIRECTS = 5;
 
+    /** Seconds a download waits for the container lock before it gives up. */
+    protected int $lockWait = 900;
+
     public static function handle(): string
     {
         return 'asset.fetch_from_url';
@@ -528,12 +531,16 @@ class FetchAssetFromUrlAction implements AutomationAction
         $disk = $container->disk();
         $original = ltrim(($plan['folder'] !== '' ? $plan['folder'].'/' : '').$plan['filename'], '/');
 
-        $lock = Cache::lock('statamic-automations:asset-fetch:'.$handle.':'.sha1($original), 300);
+        // One lock for the whole container, not one per wanted name: the free
+        // name picked below can differ from the one asked for (call.mp4 becomes
+        // call-1.mp4), so two runs that ask for different names can still end
+        // up on the same path. Naming and writing are serialised together.
+        $lock = Cache::lock('statamic-automations:asset-fetch:'.$handle, 3600);
 
         try {
-            $lock->block(60);
+            $lock->block($this->lockWait);
         } catch (LockTimeoutException) {
-            throw new \RuntimeException(__('Another download to the same file is still running.'));
+            throw new \RuntimeException(__('Another download into this container is still running.'));
         }
 
         $created = [];
