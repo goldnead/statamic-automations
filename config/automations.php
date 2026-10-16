@@ -623,7 +623,7 @@ return [
         'assign_user_role' => true,
         'add_user_to_group' => true,
         'set_global_value' => true,
-        'asset.fetch_from_url' => true,
+        'fetch_asset_from_url' => true,
     ],
 
     /*

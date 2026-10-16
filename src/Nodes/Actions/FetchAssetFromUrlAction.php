@@ -344,6 +344,13 @@ class FetchAssetFromUrlAction implements AutomationAction
      */
     protected function download(array $plan, ?AutomationConnection $connection, $resource): void
     {
+        // The credential is for the service the connection was set up for.
+        // The URL may come from an earlier node, so it is checked before any
+        // token is fetched or header built, not only on redirects.
+        if ($connection !== null && $this->origin($plan['url']) !== $this->origin((string) $connection->base_url)) {
+            throw new \RuntimeException('The URL does not belong to the connection\'s base URL, so the connection is not used for it.');
+        }
+
         $oauth = $connection?->usesOAuth2() ? app(OAuth2TokenService::class) : null;
         $renewed = false;
 

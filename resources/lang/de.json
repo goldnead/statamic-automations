@@ -268,5 +268,6 @@
     "The asset could not be saved.": "Das Asset konnte nicht gespeichert werden.",
     "The asset meta file was not written.": "Die Meta-Datei des Assets wurde nicht geschrieben.",
     "Another download to the same file is still running.": "Ein anderer Download auf dieselbe Datei läuft noch.",
-    "No free file name was found.": "Es wurde kein freier Dateiname gefunden."
+    "No free file name was found.": "Es wurde kein freier Dateiname gefunden.",
+    "The URL does not belong to the connection's base URL, so the connection is not used for it.": "Die URL gehört nicht zur Basis-URL der Verbindung, deshalb wird die Verbindung dafür nicht verwendet."
 }

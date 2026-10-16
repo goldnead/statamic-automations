@@ -1,5 +1,7 @@
 <?php
 
+use Goldnead\StatamicAutomations\Automations;
+use Goldnead\StatamicAutomations\ServiceProvider;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
 use Goldnead\StatamicAutomations\Models\Automation;
@@ -314,6 +316,45 @@ it('sends the connection credential and masks it everywhere on failure', functio
     Http::assertSent(fn (Request $request) => $request->header('Authorization') === ['Bearer '.FETCH_SECRET]);
     expect($result->isFailed())->toBeTrue();
     expect(json_encode($result))->not->toContain(FETCH_SECRET);
+});
+
+it('sends no credential to a public host that is not the connection\'s own', function (): void {
+    fetchConnection();
+    Http::fake(['*' => Http::response('data', 200)]);
+
+    $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['connection' => 'zoomdl', 'url' => 'https://evil.example.test/rec/call.mp4']));
+
+    expect($result->isFailed())->toBeTrue();
+    Http::assertNothingSent();
+    expect(filesIn($this->roots['media']))->toBe([]);
+});
+
+it('does not fetch an OAuth2 token for a foreign host either', function (): void {
+    fetchConnection([
+        'handle' => 'zoomoauth',
+        'auth_type' => 'oauth2_client_credentials',
+        'auth_config' => ['token_url' => 'https://auth.example.test/token', 'client_id' => 'cid', 'client_secret' => 'secret-aa11bb22'],
+    ]);
+    Http::fake(['*' => Http::response('data', 200)]);
+
+    $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['connection' => 'zoomoauth', 'url' => 'https://evil.example.test/x.bin']));
+
+    expect($result->isFailed())->toBeTrue();
+    Http::assertNothingSent();
+});
+
+it('is not registered when its flag is off', function (): void {
+    config(['automations.builtin_nodes.fetch_asset_from_url' => false]);
+
+    $automations = new Automations;
+    $this->app->instance('automations', $automations);
+
+    $method = new ReflectionMethod(app()->getProvider(ServiceProvider::class), 'registerBuiltInNodes');
+    $method->setAccessible(true);
+    $method->invoke(app()->getProvider(ServiceProvider::class));
+
+    expect($automations->isBuiltIn('asset.fetch_from_url'))->toBeFalse();
+    expect($automations->isBuiltIn('add_log_entry'))->toBeTrue();
 });
 
 it('follows relative redirects and checks every hop with the HostGuard', function (): void {

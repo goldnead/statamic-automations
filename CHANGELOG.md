@@ -14,7 +14,7 @@
   `-1`, `-2`; with it the old file and its meta are restored if anything fails.
 - Config: `assets.fetch.max_size_mb` (`STATAMIC_AUTOMATIONS_ASSET_MAX_SIZE_MB`) and `assets.fetch.timeout`
   (`STATAMIC_AUTOMATIONS_ASSET_FETCH_TIMEOUT`, the HTTP timeout of the download). Switchable under
-  `builtin_nodes`. Works with any container, including private ones from `statamic-private-media`.
+  `builtin_nodes.fetch_asset_from_url`. The connection is only used for a URL on its own base URL. Works with any container, including private ones from `statamic-private-media`.
 
 ### Added: OAuth2 connections and connection templates
 

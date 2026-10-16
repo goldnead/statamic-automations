@@ -608,7 +608,7 @@ class ServiceProvider extends AddonServiceProvider
             'add_user_to_group' => AddUserToGroupAction::class,
             'set_global_value' => SetGlobalValueAction::class,
             'compose_text' => ComposeTextAction::class,
-            'asset.fetch_from_url' => FetchAssetFromUrlAction::class,
+            'fetch_asset_from_url' => FetchAssetFromUrlAction::class,
 
             // VocalFlow, die Gegenrichtung zu den Auslösern oben. Genau zwei,
             // die beiden Schritte des Onboardings; alles Weitere, was die
