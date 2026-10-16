@@ -11,6 +11,8 @@
   only needs to be at least that.
 - An automation with a synchronous trigger that can reach an `ai_generate` node no longer validates
   (`ai_requires_queue`); set the trigger to run in the background.
+- An `ai_generate` node inside the body of an inline loop no longer validates (`ai_in_loop`): it would run once per
+  item, but the job timeout budgets it once. Put the AI call outside the loop or run a separate automation per item.
 
 ### Added: Generate with AI for long inputs (`ai_generate`)
 

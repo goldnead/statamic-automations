@@ -6,6 +6,7 @@ use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Nodes\Actions\AiGenerateAction;
+use Goldnead\StatamicAutomations\Nodes\Logic\LoopNode;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Support\DispatchMode;
 use Goldnead\StatamicAutomations\Support\NodeOutputs;
@@ -134,6 +135,30 @@ class FlowValidator
 
         if ($ai->isEmpty()) {
             return $issues;
+        }
+
+        // An inline loop runs its body once per item, so an AI node in it is
+        // called N times while the job timeout budgets it once. N is only known
+        // at run time, so the budget cannot be right: refuse it.
+        foreach ($nodes->where('type', 'loop') as $loop) {
+            if (($loop->config['mode'] ?? 'inline') === 'automation') {
+                continue;
+            }
+
+            $body = [];
+            foreach ($edges->where('from_node_key', $loop->node_key)->where('from_output', LoopNode::OUTPUT_LOOP) as $edge) {
+                $body = array_merge($body, $this->reachableFrom((string) $edge->to_node_key, $edges->all()));
+            }
+
+            foreach ($ai as $node) {
+                if (in_array($node->node_key, $body, true)) {
+                    $issues[] = $this->error(
+                        'ai_in_loop',
+                        "AI node '{$node->node_key}' is inside the body of loop '{$loop->node_key}' and would run once per item, more often than the job's time budget allows for. Run the loop over a separate automation, or put the AI call outside the loop.",
+                        $node->node_key,
+                    );
+                }
+            }
         }
 
         foreach ($triggers as $trigger) {

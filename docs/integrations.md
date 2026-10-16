@@ -620,6 +620,9 @@ plus 60 s. Run the worker with `--timeout` at least that high, and keep the
 queue connection's `retry_after` above it, otherwise the job is killed mid-call
 or picked up a second time.
 
+An AI node may not sit inside the body of a loop (`ai_in_loop`): the loop runs it once per item,
+which the job's time budget cannot account for.
+
 ### Structured output
 
 Set **Output** to *JSON object* and paste a JSON Schema into **JSON schema**

@@ -79,6 +79,33 @@ it('refuses an AI node reachable from a synchronous trigger', function (): void 
         ->and(aiErrors(aiAutomation()))->not->toContain('ai_requires_queue');
 });
 
+it('refuses an AI node inside the body of an inline loop, whose runs add up past the job budget', function (): void {
+    $automation = aiAutomation();
+    AutomationNode::create(['automation_id' => $automation->id, 'node_key' => 'each', 'type' => 'loop', 'config' => ['items' => '{{ entry.tags }}']]);
+    // t -> each -(loop)-> review -> log; the AI node now runs once per item.
+    AutomationEdge::where('automation_id', $automation->id)->where('from_node_key', 't')->update(['to_node_key' => 'each']);
+    AutomationEdge::create(['automation_id' => $automation->id, 'from_node_key' => 'each', 'from_output' => 'loop', 'to_node_key' => 'review']);
+
+    $issues = collect(app(FlowValidator::class)->validate($automation->fresh()->load(['nodes', 'edges'])));
+
+    expect($issues->where('level', 'error')->pluck('code')->all())->toContain('ai_in_loop');
+    expect($issues->firstWhere('code', 'ai_in_loop')['node_key'])->toBe('review');
+});
+
+it('allows an AI node after a loop and inside a legacy automation-mode loop', function (): void {
+    $automation = aiAutomation();
+    AutomationNode::create(['automation_id' => $automation->id, 'node_key' => 'each', 'type' => 'loop', 'config' => ['items' => '{{ entry.tags }}']]);
+    AutomationEdge::where('automation_id', $automation->id)->where('from_node_key', 't')->update(['to_node_key' => 'each']);
+    AutomationEdge::create(['automation_id' => $automation->id, 'from_node_key' => 'each', 'from_output' => 'done', 'to_node_key' => 'review']);
+
+    expect(aiErrors($automation->fresh()))->not->toContain('ai_in_loop');
+
+    AutomationNode::where('automation_id', $automation->id)->where('node_key', 'each')->update(['config' => ['items' => '{{ entry.tags }}', 'mode' => 'automation']]);
+    AutomationEdge::where('automation_id', $automation->id)->where('from_node_key', 'each')->update(['from_output' => 'loop']);
+
+    expect(aiErrors($automation->fresh()))->not->toContain('ai_in_loop');
+});
+
 it('flags an unusable AI timeout when validating', function (): void {
     expect(aiErrors(aiAutomation(null, ['timeout' => 'soon'])))->toContain('invalid_ai_timeout');
 });
