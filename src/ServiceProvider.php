@@ -120,6 +120,7 @@ use Goldnead\StatamicAutomations\Repositories\FlatFileAutomationRepository;
 use Goldnead\StatamicAutomations\Sending\BrandMailer;
 use Goldnead\StatamicAutomations\Sending\BrandSenderIdentity;
 use Goldnead\StatamicAutomations\Sequence\MailRules;
+use Goldnead\StatamicAutomations\Support\AnthropicClient;
 use Goldnead\StatamicAutomations\Support\HostGuard;
 use Goldnead\StatamicAutomations\Support\OptionSources\NativeOptionSources;
 use Goldnead\StatamicAutomations\Support\Settings;
@@ -191,7 +192,7 @@ class ServiceProvider extends AddonServiceProvider
         // addon; the shipped implementation leaves a single-brand install
         // sending exactly as before.
         $this->app->singleton(SenderIdentityResolver::class, BrandSenderIdentity::class);
-        $this->app->bind(AiClient::class, \Goldnead\StatamicAutomations\Support\AnthropicClient::class);
+        $this->app->bind(AiClient::class, AnthropicClient::class);
         $this->app->singleton(BrandMailer::class);
 
         $this->app->singleton(TriggerRegistry::class);
