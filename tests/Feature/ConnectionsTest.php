@@ -644,7 +644,7 @@ it('creates the zoom connection with exactly its two operations in one go', func
     $list = $connection->operations()->where('handle', 'recordings_list')->first();
     expect($list->method)->toBe('GET')
         ->and($list->path)->toBe('/users/{{ input.user_id }}/recordings')
-        ->and($list->query)->toBe(['from' => '{{ input.from }}', 'to' => '{{ input.to }}'])
+        ->and($list->query)->toEqual(['from' => '{{ input.from }}', 'to' => '{{ input.to }}'])
         ->and(collect($list->inputs)->firstWhere('handle', 'user_id')['default'])->toBe('me');
 
     $get = $connection->operations()->where('handle', 'recording_get')->first();
