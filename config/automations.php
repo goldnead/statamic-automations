@@ -229,6 +229,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Assets
+    |--------------------------------------------------------------------------
+    |
+    | The "Fetch file from URL" action streams a download into an asset
+    | container. `max_size_mb` is the limit when the node sets none; the
+    | download stops at the first byte over it. `timeout` is the HTTP timeout
+    | of the download in seconds, not a queue job timeout.
+    |
+    */
+
+    'assets' => [
+        'fetch' => [
+            'max_size_mb' => env('STATAMIC_AUTOMATIONS_ASSET_MAX_SIZE_MB', 500),
+            'timeout' => env('STATAMIC_AUTOMATIONS_ASSET_FETCH_TIMEOUT', 300),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Feature Flags
     |--------------------------------------------------------------------------
     */
@@ -604,6 +623,7 @@ return [
         'assign_user_role' => true,
         'add_user_to_group' => true,
         'set_global_value' => true,
+        'fetch_asset_from_url' => true,
     ],
 
     /*

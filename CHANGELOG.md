@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Added: action "Fetch file from URL" (`asset.fetch_from_url`)
+
+- Downloads a file from a URL into an asset container, streamed to a temporary file and from there to the
+  container's disk; memory stays flat. The download stops at the first byte over the limit
+  (`automations.assets.fetch.max_size_mb`, default 500, or the node's own) and leaves nothing behind.
+- Optional connection: its headers or OAuth2 token are sent to the URL's own origin only. A 401 renews the
+  token once and downloads again. Redirects are followed by hand (five hops at most), every hop passes the
+  `HostGuard`, and the credential is dropped for good after the first change of origin.
+- Output for the next node: `asset_id`, `path`, `size`, `mime_type`. Without `overwrite` a taken name gets
+  `-1`, `-2`; with it the old file and its meta are restored if anything fails.
+- Config: `assets.fetch.max_size_mb` (`STATAMIC_AUTOMATIONS_ASSET_MAX_SIZE_MB`) and `assets.fetch.timeout`
+  (`STATAMIC_AUTOMATIONS_ASSET_FETCH_TIMEOUT`, the HTTP timeout of the download). Switchable under
+  `builtin_nodes.fetch_asset_from_url`. The connection is only used for a URL on its own base URL. Works with any container, including private ones from `statamic-private-media`.
+
 ### Added: OAuth2 connections and connection templates
 
 - Connections get the auth type `oauth2_client_credentials`: token URL, client ID and secret, scope,
