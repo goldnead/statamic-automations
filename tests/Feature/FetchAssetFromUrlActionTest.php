@@ -566,13 +566,20 @@ function streamingHandler(int $megabytes): Closure
 }
 
 it('streams 50 MiB with flat memory', function (): void {
-    Http::globalOptions(['handler' => streamingHandler(50)]);
     config(['automations.assets.fetch.max_size_mb' => 100]);
 
+    // A small download first, so the one-time cost of loading Statamic's asset,
+    // meta and filesystem classes is not counted as if it were buffering.
+    Http::globalOptions(['handler' => streamingHandler(1)]);
+    expect(fetchAction()->execute(AutomationContext::make(), fetchConfig(['filename' => 'warmup.bin']))->isSuccess())->toBeTrue();
+
+    Http::globalOptions(['handler' => streamingHandler(50)]);
+
+    gc_collect_cycles();
     memory_reset_peak_usage();
-    $before = memory_get_peak_usage(true);
+    $before = memory_get_peak_usage();
     $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['filename' => 'big.bin']));
-    $delta = memory_get_peak_usage(true) - $before;
+    $delta = memory_get_peak_usage() - $before;
 
     expect($result->isSuccess())->toBeTrue();
     expect($result->output['size'])->toBe(50 * 1048576);
