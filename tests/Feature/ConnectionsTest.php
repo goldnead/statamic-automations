@@ -579,6 +579,21 @@ it('tests an OAuth2 connection from the cp through the token service', function 
     expect(apiRequests()->first()->header('Authorization'))->toBe(['Bearer tok-1']);
 });
 
+it('tests a saved OAuth2 connection with a null or absent auth_config in the request', function (array $payload) {
+    $this->actingAsSuperUser();
+    Http::fake([TOKEN_URL => tokenResponse('tok-1'), 'api.example.test/*' => Http::response('ok', 200)]);
+    $connection = makeOAuthConnection([], ['test_path' => '/users/me']);
+
+    $this->postJson(cp_route('statamic-automations.api.connections.test', $connection), $payload)
+        ->assertOk()->assertJson(['ok' => true, 'status' => 200]);
+
+    expect(tokenRequests())->toHaveCount(1);
+})->with([
+    'only test_path' => [['test_path' => '/users/me']],
+    'auth_config null' => [['auth_config' => null, 'test_path' => '/users/me']],
+    'auth_type and null auth_config' => [['auth_type' => 'oauth2_client_credentials', 'auth_config' => null]],
+]);
+
 it('reports a failing token endpoint in the cp test without leaking the secret', function () {
     $this->actingAsSuperUser();
     Http::fake([TOKEN_URL => Http::response(['error_description' => 'no '.OAUTH_SECRET], 400)]);
