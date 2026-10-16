@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Schema;
  * @property string $name
  * @property string $base_url
  * @property string $auth_type
- * @property array<string, string>|null $auth_config
+ * @property array<string, mixed>|null $auth_config
  * @property array<string, string>|null $default_headers
  * @property int $timeout
  * @property string|null $test_path
