@@ -390,6 +390,12 @@ class FetchAssetFromUrlAction implements AutomationAction
                 throw new \RuntimeException(__('The server answered with HTTP 401 again after the access token was renewed.'));
             }
 
+            // Any other 401 is final too (bearer, basic, header): the body is
+            // an error page, never the file.
+            if ($outcome === 401) {
+                throw new \RuntimeException(__('The server answered with HTTP 401, so the credential of the connection was refused.'));
+            }
+
             return;
         }
     }

@@ -529,6 +529,20 @@ it('fails after a second 401 without leaking tokens', function (): void {
     expect(FakeWeb::recorded()->filter(fn ($pair) => str_contains($pair->url(), 'call.mp4'))->count())->toBe(2);
 });
 
+it('fails on a 401 for a bearer connection and leaves the existing asset untouched', function (): void {
+    fetchConnection();
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::sequence()->push('good original')->push('{"error":"unauthorized"} Bearer '.FETCH_SECRET, 401)]);
+
+    expect(fetchAction()->execute(AutomationContext::make(), fetchConfig(['connection' => 'zoomdl']))->isSuccess())->toBeTrue();
+    $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['connection' => 'zoomdl', 'overwrite' => true]));
+
+    expect($result->isFailed())->toBeTrue();
+    expect($result->error)->toContain('401');
+    expect(json_encode($result))->not->toContain(FETCH_SECRET);
+    expect(file_get_contents($this->roots['media'].'/call.mp4'))->toBe('good original');
+    expect(filesIn($this->roots['media']))->toBe(['.meta/call.mp4.yaml', 'call.mp4']);
+});
+
 /** A fake server that writes `$megabytes` straight into the sink, 64 KiB at a time. */
 function streamingHandler(int $megabytes): Closure
 {
