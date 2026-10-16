@@ -596,8 +596,14 @@ class FetchAssetFromUrlAction implements AutomationAction
                 'mime_type' => (string) $asset->mimeType(),
             ];
 
+            // Committed: from here nothing may roll back. A backup that cannot
+            // be deleted is only leftover, never a reason to undo the new file.
             foreach ($backups as $backup) {
-                $disk->delete($backup);
+                try {
+                    $this->deleteBackup($disk, $backup);
+                } catch (\Throwable) {
+                    // Left in place; it is a dotfile next to the asset.
+                }
             }
 
             return $output;
@@ -620,6 +626,11 @@ class FetchAssetFromUrlAction implements AutomationAction
         } finally {
             $lock->release();
         }
+    }
+
+    protected function deleteBackup($disk, string $backup): void
+    {
+        $disk->delete($backup);
     }
 
     /** The saved asset must have its file and a meta file with the core data. */

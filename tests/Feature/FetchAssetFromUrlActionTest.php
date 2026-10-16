@@ -224,6 +224,33 @@ it('rolls back a failure inside store() after the overwrite', function (): void 
     expect(filesIn($this->roots['media']))->toBe(['.meta/call.mp4.yaml', 'call.mp4']);
 });
 
+it('does not roll back a successful overwrite when deleting a backup throws', function (): void {
+    Http::fake(['files.example.test/*' => Http::sequence()->push('old content')->push('new content')]);
+
+    fetchAction()->execute(AutomationContext::make(), fetchConfig());
+
+    $action = new class extends FetchAssetFromUrlAction
+    {
+        public int $deletes = 0;
+
+        protected function deleteBackup($disk, string $backup): void
+        {
+            // The first backup goes, the second one throws.
+            if (++$this->deletes === 2) {
+                throw new RuntimeException('cannot delete');
+            }
+
+            $disk->delete($backup);
+        }
+    };
+
+    $result = $action->execute(AutomationContext::make(), fetchConfig(['overwrite' => true]));
+
+    expect($result->isSuccess())->toBeTrue();
+    expect($action->deletes)->toBe(2);
+    expect(file_get_contents($this->roots['media'].'/call.mp4'))->toBe('new content');
+});
+
 it('keeps the backups and names them when the restore fails', function (): void {
     Http::fake(['files.example.test/*' => Http::sequence()->push('old content')->push('new content')]);
 
