@@ -74,6 +74,7 @@ use Goldnead\StatamicAutomations\Nodes\Actions\CreateEntryAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\CreateTermAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\CreateUserAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\DeleteEntryAction;
+use Goldnead\StatamicAutomations\Nodes\Actions\FetchAssetFromUrlAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\PublishEntryAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\SendEmailAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\SetGlobalValueAction;
@@ -112,6 +113,7 @@ use Goldnead\StatamicAutomations\Nodes\Triggers\UserSavedTrigger;
 use Goldnead\StatamicAutomations\Nodes\Triggers\WebhookDeliveryFailedTrigger;
 use Goldnead\StatamicAutomations\Nodes\Triggers\WebhookReceivedTrigger;
 use Goldnead\StatamicAutomations\Registries\ActionRegistry;
+use Goldnead\StatamicAutomations\Registries\ConnectionTemplateRegistry;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Registries\OptionSourceRegistry;
 use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
@@ -121,7 +123,9 @@ use Goldnead\StatamicAutomations\Sending\BrandMailer;
 use Goldnead\StatamicAutomations\Sending\BrandSenderIdentity;
 use Goldnead\StatamicAutomations\Sequence\MailRules;
 use Goldnead\StatamicAutomations\Support\AnthropicClient;
+use Goldnead\StatamicAutomations\Support\BuiltInConnectionTemplates;
 use Goldnead\StatamicAutomations\Support\HostGuard;
+use Goldnead\StatamicAutomations\Support\OAuth2TokenService;
 use Goldnead\StatamicAutomations\Support\OptionSources\NativeOptionSources;
 use Goldnead\StatamicAutomations\Support\Settings;
 use Goldnead\StatamicAutomations\Templates\TemplateRegistry;
@@ -200,6 +204,8 @@ class ServiceProvider extends AddonServiceProvider
         $this->app->singleton(NodeRegistry::class);
         $this->app->singleton(OptionSourceRegistry::class);
         $this->app->singleton(HostGuard::class);
+        $this->app->singleton(OAuth2TokenService::class);
+        $this->app->singleton(ConnectionTemplateRegistry::class);
         $this->app->singleton(NativeOptionSources::class);
 
         // Integration helpers (cheap singletons; the underlying sister
@@ -328,6 +334,7 @@ class ServiceProvider extends AddonServiceProvider
         $this->registerBuiltInOptionSources();
         $this->registerBuiltInNodes();
         $this->registerConnectionNodes();
+        $this->registerConnectionTemplates();
         $this->registerOptionalIntegrations();
         $this->registerEventListeners();
         $this->registerEventTriggers();
@@ -604,6 +611,7 @@ class ServiceProvider extends AddonServiceProvider
             'add_user_to_group' => AddUserToGroupAction::class,
             'set_global_value' => SetGlobalValueAction::class,
             'compose_text' => ComposeTextAction::class,
+            'fetch_asset_from_url' => FetchAssetFromUrlAction::class,
 
             // VocalFlow, die Gegenrichtung zu den Auslösern oben. Genau zwei,
             // die beiden Schritte des Onboardings; alles Weitere, was die
@@ -668,6 +676,16 @@ class ServiceProvider extends AddonServiceProvider
             if (($enabled[$key] ?? true) && class_exists($class)) {
                 $automations->registerBuiltIn($class::handle())->registerAction($class);
             }
+        }
+    }
+
+    /** The templates that ship with the addon, through the public API like any other. */
+    protected function registerConnectionTemplates(): void
+    {
+        $automations = $this->app->make('automations');
+
+        foreach (BuiltInConnectionTemplates::all() as $handle => $template) {
+            $automations->registerConnectionTemplate($handle, $template);
         }
     }
 

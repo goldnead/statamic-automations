@@ -9,6 +9,7 @@ use Goldnead\StatamicAutomations\Contracts\AutomationTrigger;
 use Goldnead\StatamicAutomations\Engine\TriggerDispatcher;
 use Goldnead\StatamicAutomations\Nodes\Triggers\EventTrigger;
 use Goldnead\StatamicAutomations\Registries\ActionRegistry;
+use Goldnead\StatamicAutomations\Registries\ConnectionTemplateRegistry;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Registries\OptionSourceRegistry;
 use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
@@ -290,6 +291,25 @@ class Automations
         app(TemplateRegistry::class)->register($template);
 
         return $this;
+    }
+
+    /**
+     * Register a connection template: a service's base URL, auth and
+     * operations the CP offers when a connection is created. See
+     * {@see ConnectionTemplateRegistry}.
+     *
+     * @param  array<string, mixed>  $template
+     */
+    public function registerConnectionTemplate(string $handle, array $template): self
+    {
+        app(ConnectionTemplateRegistry::class)->register($handle, $template);
+
+        return $this;
+    }
+
+    public function connectionTemplates(): ConnectionTemplateRegistry
+    {
+        return app(ConnectionTemplateRegistry::class);
     }
 
     public function triggers(): TriggerRegistry
