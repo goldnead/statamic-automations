@@ -75,6 +75,7 @@ use Goldnead\StatamicAutomations\Nodes\Actions\CreateUserAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\DeleteEntryAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\PublishEntryAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\SendEmailAction;
+use Goldnead\StatamicAutomations\Nodes\Actions\FetchAssetFromUrlAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\SetGlobalValueAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\SetVariableAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\SimpleWebhookAction;
@@ -607,6 +608,7 @@ class ServiceProvider extends AddonServiceProvider
             'add_user_to_group' => AddUserToGroupAction::class,
             'set_global_value' => SetGlobalValueAction::class,
             'compose_text' => ComposeTextAction::class,
+            'asset.fetch_from_url' => FetchAssetFromUrlAction::class,
 
             // VocalFlow, die Gegenrichtung zu den Auslösern oben. Genau zwei,
             // die beiden Schritte des Onboardings; alles Weitere, was die
