@@ -201,6 +201,7 @@ function reviewSchema(): string
         'properties' => [
             'zusammenfassung' => ['type' => 'string'],
             'aufgaben' => ['type' => 'array', 'items' => ['type' => 'string']],
+            'details' => ['type' => 'object', 'required' => ['titel'], 'properties' => ['titel' => ['type' => 'string']]],
         ],
     ]);
 }
@@ -239,6 +240,9 @@ it('fails the node on invalid JSON, a non-object, and a schema violation', funct
     'invalid json' => ['Hier ist deine Zusammenfassung: …', 'not valid JSON'],
     'not an object' => ['["a","b"]', 'not an object'],
     'empty array' => ['[]', 'not an object'],
+    'nested empty array where an object is required' => ['{"zusammenfassung":"x","aufgaben":[],"details":[]}', '$.details must be of type object'],
+    'nested empty object where an array is required' => ['{"zusammenfassung":"x","aufgaben":{}}', '$.aufgaben must be of type array'],
+    'required field inside a nested empty object' => ['{"zusammenfassung":"x","aufgaben":[],"details":{}}', '$.details.titel is required'],
     'missing field' => ['{"zusammenfassung":"x"}', '$.aufgaben is required'],
     'wrong type' => ['{"zusammenfassung":"x","aufgaben":"eine"}', '$.aufgaben must be of type array'],
 ]);

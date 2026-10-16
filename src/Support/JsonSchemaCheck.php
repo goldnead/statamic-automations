@@ -2,11 +2,18 @@
 
 namespace Goldnead\StatamicAutomations\Support;
 
+use stdClass;
+
 /**
  * A deliberately small JSON-Schema subset for checking model output:
  * `type`, `properties`, `required`, `items` and `enum`. Anything else in a
  * schema is ignored rather than rejected, so a schema pasted from elsewhere
  * still works for the parts this understands.
+ *
+ * The value must be decoded WITHOUT the assoc flag (`json_decode($raw)`): only
+ * then does a JSON object stay a stdClass and a JSON array a PHP list. With
+ * assoc decoding `{}` and `[]` are both the PHP array [], and a nested empty
+ * container would pass as either type.
  */
 class JsonSchemaCheck
 {
@@ -22,20 +29,22 @@ class JsonSchemaCheck
             return ["{$path} must be of type {$schema['type']}"];
         }
 
-        if (isset($schema['enum']) && is_array($schema['enum']) && ! in_array($value, $schema['enum'], true)) {
+        if (isset($schema['enum']) && is_array($schema['enum']) && ! self::inEnum($value, $schema['enum'])) {
             $errors[] = "{$path} must be one of: ".json_encode($schema['enum'], JSON_UNESCAPED_UNICODE);
         }
 
-        if (is_array($value) && ! array_is_list($value)) {
+        if ($value instanceof stdClass) {
+            $fields = get_object_vars($value);
+
             foreach ((array) ($schema['required'] ?? []) as $field) {
-                if (is_string($field) && ! array_key_exists($field, $value)) {
+                if (is_string($field) && ! array_key_exists($field, $fields)) {
                     $errors[] = "{$path}.{$field} is required";
                 }
             }
 
             foreach ((array) ($schema['properties'] ?? []) as $field => $sub) {
-                if (array_key_exists($field, $value) && is_array($sub)) {
-                    $errors = array_merge($errors, self::violations($value[$field], $sub, "{$path}.{$field}"));
+                if (array_key_exists($field, $fields) && is_array($sub)) {
+                    $errors = array_merge($errors, self::violations($fields[$field], $sub, "{$path}.{$field}"));
                 }
             }
         }
@@ -52,8 +61,8 @@ class JsonSchemaCheck
     protected static function isType(mixed $value, string $type): bool
     {
         return match ($type) {
-            'object' => is_array($value) && ($value === [] || ! array_is_list($value)),
-            'array' => is_array($value) && ($value === [] || array_is_list($value)),
+            'object' => $value instanceof stdClass,
+            'array' => is_array($value),
             'string' => is_string($value),
             'integer' => is_int($value),
             'number' => is_int($value) || is_float($value),
@@ -61,5 +70,24 @@ class JsonSchemaCheck
             'null' => $value === null,
             default => true,
         };
+    }
+
+    /**
+     * Enum members come from the (assoc-decoded) schema, the value from the
+     * object-decoded reply, so compare their JSON forms.
+     *
+     * @param  array<int, mixed>  $members
+     */
+    protected static function inEnum(mixed $value, array $members): bool
+    {
+        $needle = json_encode($value);
+
+        foreach ($members as $member) {
+            if (json_encode($member) === $needle) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

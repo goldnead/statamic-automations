@@ -376,7 +376,9 @@ class AiGenerateAction implements AutomationAction
             return ActionResult::failed($decoded.($output['stop_reason'] === 'max_tokens' ? ' The reply was cut off at max_tokens; raise it.' : ''));
         }
 
-        if (is_array($schema) && ($violations = JsonSchemaCheck::violations($decoded, $schema))) {
+        [$object, $decoded] = $decoded;
+
+        if (is_array($schema) && ($violations = JsonSchemaCheck::violations($object, $schema))) {
             return ActionResult::failed('AI reply does not match the JSON schema: '.implode('; ', array_slice($violations, 0, 5)));
         }
 
@@ -400,10 +402,11 @@ class AiGenerateAction implements AutomationAction
     }
 
     /**
-     * Decode the reply as a JSON object. Returns the array, or an error
-     * message string when it is not one.
+     * Decode the reply as a JSON object. Returns the object (stdClass, for
+     * schema checking) and the same data as an array (for the run context),
+     * or an error message when the reply is not a JSON object.
      *
-     * @return array<string, mixed>|string
+     * @return array{0: \stdClass, 1: array<string, mixed>}|string
      */
     protected function decodeObject(string $text): array|string
     {
@@ -414,19 +417,20 @@ class AiGenerateAction implements AutomationAction
             $raw = $m[1];
         }
 
-        // Decode as objects first: `{}` and `[]` both become the PHP array [],
-        // so only the stdClass check tells an object from a list.
-        $probe = json_decode($raw);
+        // Objects stay stdClass: `{}` and `[]` are both the array [] once
+        // decoded as arrays, so the distinction has to survive until the
+        // schema check has run.
+        $object = json_decode($raw);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
             return 'AI reply is not valid JSON: '.json_last_error_msg().'.';
         }
 
-        if (! $probe instanceof \stdClass) {
+        if (! $object instanceof \stdClass) {
             return 'AI reply is valid JSON but not an object.';
         }
 
-        return json_decode($raw, true);
+        return [$object, json_decode($raw, true)];
     }
 
     /**
