@@ -724,3 +724,17 @@ it('hands the create page the templates but the edit page none', function () {
     expect(collect($create->viewData('page')['props']['templates'])->pluck('handle')->all())->toContain('zoom_server_to_server', 'deepgram');
     expect($edit->viewData('page')['props']['templates'])->toBe([]);
 });
+
+it('lets an update clear a stored OAuth2 scope', function () {
+    $this->actingAsSuperUser();
+    $connection = makeOAuthConnection(['scope' => 'recording:read']);
+
+    $this->patchJson(cp_route('statamic-automations.api.connections.update', $connection), [
+        'handle' => 'zoom', 'name' => 'Zoom', 'base_url' => 'https://api.example.test/v2',
+        'auth_type' => 'oauth2_client_credentials',
+        'auth_config' => ['token_url' => TOKEN_URL, 'client_id' => 'client-id-1', 'client_secret' => '••••••••', 'scope' => ''],
+    ])->assertOk();
+
+    expect($connection->fresh()->auth_config['scope'])->toBe('')
+        ->and($connection->fresh()->auth_config['client_secret'])->toBe(OAUTH_SECRET);
+});

@@ -461,8 +461,8 @@ class ConnectionsController extends Controller
     }
 
     /**
-     * The OAuth2 setup to store. The plain fields are taken as typed (an
-     * empty one falls back to what is stored); the client secret and the
+     * The OAuth2 setup to store. The plain fields are taken as typed (one
+     * missing from the request falls back to what is stored); the client secret and the
      * secret token request fields keep the stored value when they arrive
      * empty or as the placeholder.
      *
@@ -475,8 +475,11 @@ class ConnectionsController extends Controller
         $config = [];
 
         foreach (['token_url', 'client_id', 'scope'] as $key) {
-            $value = $input[$key] ?? null;
-            $config[$key] = is_string($value) && $value !== '' ? trim($value) : (string) ($kept[$key] ?? '');
+            // An explicitly empty value is a decision (the scope can be cleared);
+            // only a key missing from the request falls back to what is stored.
+            $config[$key] = array_key_exists($key, $input)
+                ? trim((string) (is_scalar($input[$key]) ? $input[$key] : ''))
+                : (string) ($kept[$key] ?? '');
         }
 
         $secret = $input['client_secret'] ?? null;
