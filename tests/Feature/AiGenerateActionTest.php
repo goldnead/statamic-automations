@@ -289,6 +289,6 @@ it('rejects a schema that parses but cannot check anything', function (string $s
 
 it('exposes the schema fields as output variables in JSON mode only', function (): void {
     expect(AiGenerateAction::outputSchemaFor(['output_mode' => 'json', 'json_schema' => reviewSchema()])['json'])
-        ->toBe(['zusammenfassung' => 'string', 'aufgaben' => 'array'])
+        ->toBe(['zusammenfassung' => 'string', 'aufgaben' => 'array', 'details' => 'object'])
         ->and(AiGenerateAction::outputSchemaFor([]))->not->toHaveKey('json');
 });
