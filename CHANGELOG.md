@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added: OAuth2 connections and connection templates
+
+- Connections get the auth type `oauth2_client_credentials`: token URL, client ID and secret, scope,
+  `client_secret_basic` or `client_secret_post`, and free extra token request fields (`grant_type`
+  can be overridden, e.g. Zoom's `account_credentials` with `account_id`). Every
+  `connection.<x>.<op>` call gets a valid token on its own.
+- The token is cached per connection until `expires_in` minus 60 s, encrypted. A 401 drops it, fetches
+  one new token and repeats the request once; a second 401 fails the node with a clear message.
+- The token URL passes the `HostGuard` on save and before each token request; redirects are not followed.
+  Client secret, extra token field values and access tokens are masked in output, errors and the run log.
+- Connection templates (`Automations::registerConnectionTemplate()`): picking one on the create form
+  fills it in, and saving creates the connection and its operations in one transaction. Built in:
+  `zoom_server_to_server` (`recordings.list`, `recording.get`) and `deepgram` (`transcribe.url`).
+- No migration.
+
 ## 2.25.0 — 2026-10-09
 
 ### Upgrading

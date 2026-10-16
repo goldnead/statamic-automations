@@ -29,7 +29,12 @@ class AutomationConnection extends Model
 {
     use HasBrand;
 
-    public const AUTH_TYPES = ['none', 'header', 'bearer', 'basic'];
+    public const AUTH_TYPES = ['none', 'header', 'bearer', 'basic', 'oauth2_client_credentials'];
+
+    public const OAUTH2 = 'oauth2_client_credentials';
+
+    /** How the client id and secret reach the token endpoint. */
+    public const CLIENT_AUTH_METHODS = ['client_secret_basic', 'client_secret_post'];
 
     /** The keys each auth type keeps in `auth_config`. */
     public const AUTH_FIELDS = [
@@ -37,11 +42,31 @@ class AutomationConnection extends Model
         'header' => ['name', 'value'],
         'bearer' => ['token'],
         'basic' => ['username', 'password'],
+        'oauth2_client_credentials' => ['token_url', 'client_id', 'client_secret', 'scope', 'client_auth_method', 'token_request_fields'],
     ];
+
+    /** The OAuth2 fields that are secret: shown as a placeholder, kept on an empty update. */
+    public const OAUTH2_SECRET_FIELDS = ['client_secret'];
+
+    /**
+     * Token request fields whose value is not a secret ("client_credentials"
+     * is a public constant of the protocol), so the CP shows them and the
+     * mask leaves the word alone in a response.
+     */
+    public const OAUTH2_PLAIN_TOKEN_FIELDS = ['grant_type'];
 
     protected $table = 'automation_connections';
 
     protected static bool $schemaReady = false;
+
+    /**
+     * Access tokens fetched for this instance, newest last. Held in memory
+     * only: they feed the Authorization header and the mask, and are never
+     * saved ({@see useAccessToken()}).
+     *
+     * @var array<int, string>
+     */
+    protected array $accessTokens = [];
 
     protected $fillable = [
         'handle',
@@ -126,8 +151,25 @@ class AutomationConnection extends Model
             'bearer' => ['Authorization' => 'Bearer '.($auth['token'] ?? '')],
             'basic' => ['Authorization' => 'Basic '.base64_encode(($auth['username'] ?? '').':'.($auth['password'] ?? ''))],
             'header' => filled($auth['name'] ?? null) ? [(string) $auth['name'] => (string) ($auth['value'] ?? '')] : [],
+            self::OAUTH2 => $this->accessTokens === [] ? [] : ['Authorization' => 'Bearer '.end($this->accessTokens)],
             default => [],
         };
+    }
+
+    public function usesOAuth2(): bool
+    {
+        return $this->auth_type === self::OAUTH2;
+    }
+
+    /**
+     * The access token the next request carries. Several may be given over
+     * one call (a 401 renews it); all of them stay masked.
+     */
+    public function useAccessToken(string $token): static
+    {
+        $this->accessTokens[] = $token;
+
+        return $this;
     }
 
     /**
@@ -148,6 +190,24 @@ class AutomationConnection extends Model
 
         if (strlen((string) ($stored['username'] ?? '')) < 8) {
             unset($stored['username']);
+        }
+
+        if ($this->usesOAuth2()) {
+            // Only the secret parts of the OAuth2 setup: not the token URL,
+            // client id, scope or method, which are what the CP shows.
+            $extra = array_diff_key(
+                is_array($stored['token_request_fields'] ?? null) ? $stored['token_request_fields'] : [],
+                array_flip(self::OAUTH2_PLAIN_TOKEN_FIELDS),
+            );
+            $clientId = (string) ($stored['client_id'] ?? '');
+            $clientSecret = (string) ($stored['client_secret'] ?? '');
+            $stored = [
+                'client_secret' => $clientSecret,
+                ...array_values($extra),
+                // The Basic header is base64 of id:secret, which a service may echo.
+                'basic' => base64_encode($clientId.':'.$clientSecret),
+                ...$this->accessTokens,
+            ];
         }
 
         $values = [...array_values($stored), ...array_values($this->authHeaders())];
@@ -219,7 +279,9 @@ class AutomationConnection extends Model
     public function requestHeaders(array $extra = [], array $drop = []): array
     {
         $auth = $this->authHeaders();
-        $blocked = array_map('strtolower', [...array_keys($auth), ...self::RESERVED_HEADERS, ...$drop]);
+        // The OAuth2 token may not be fetched yet, but the name is still taken.
+        $authNames = $this->usesOAuth2() ? ['Authorization'] : array_keys($auth);
+        $blocked = array_map('strtolower', [...$authNames, ...self::RESERVED_HEADERS, ...$drop]);
         $headers = [];
 
         foreach ([$this->defaultHeaders(), $extra] as $layer) {
