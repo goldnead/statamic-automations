@@ -5,6 +5,7 @@ namespace Goldnead\StatamicAutomations\Jobs;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
+use Goldnead\StatamicAutomations\Nodes\Actions\AiGenerateAction;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -22,6 +23,13 @@ class RunAutomation implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
+    /**
+     * Seconds the worker lets this job run. Left null (the worker default)
+     * unless the automation contains `ai_generate` nodes, whose per-node
+     * timeouts can add up to far more than a worker's default 60 s.
+     */
+    public ?int $timeout = null;
+
     public function __construct(
         public int $runId,
         /** @var array<string, mixed> */
@@ -33,6 +41,30 @@ class RunAutomation implements ShouldQueue
         if ($connection = config('automations.queue_connection')) {
             $this->onConnection($connection);
         }
+
+        $this->timeout = $this->aiTimeoutBudget();
+    }
+
+    /**
+     * Sum of every AI node's timeout plus a minute of slack, so the job is
+     * never killed while a node is still legitimately waiting for the model.
+     * The queue connection's `retry_after` must exceed this as well.
+     */
+    protected function aiTimeoutBudget(): ?int
+    {
+        $automation = AutomationRun::find($this->runId)?->resolveAutomation();
+        if ($automation === null) {
+            return null;
+        }
+
+        $total = 0;
+        foreach ($automation->nodes as $node) {
+            if ($node->type === AiGenerateAction::handle()) {
+                $total += AiGenerateAction::timeoutFor($node->config ?? []) ?? 0;
+            }
+        }
+
+        return $total > 0 ? $total + 60 : null;
     }
 
     public function handle(WorkflowRunner $runner): void

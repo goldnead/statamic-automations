@@ -604,3 +604,34 @@ Summarise this inquiry in one sentence: {{ form.message }}
 
 The generated text is stored as the node's `text` output and, optionally, under
 `{{ vars.* }}`. See the **AI Triage of Inquiries** template.
+
+### Long inputs (transcripts)
+
+`model`, `max_tokens` and `timeout` (seconds) can be set per node; an empty
+field uses `automations.ai.*`. `automations.ai.max_timeout` (default 900) caps
+what a node may ask for.
+
+The node runs inside the queued `RunAutomation` job. An automation whose
+trigger is set to run *immediately, inside the request* and that can reach an
+AI node is refused by validation (`ai_requires_queue`).
+
+Operations: the job sets its own `$timeout` to the sum of its AI node timeouts
+plus 60 s. Run the worker with `--timeout` at least that high, and keep the
+queue connection's `retry_after` above it, otherwise the job is killed mid-call
+or picked up a second time.
+
+### Structured output
+
+Set **Output** to *JSON object* and paste a JSON Schema into **JSON schema**
+(supported: `type`, `properties`, `required`, `items`, `enum`):
+
+```json
+{"type":"object","required":["zusammenfassung"],
+ "properties":{"zusammenfassung":{"type":"string"},"aufgaben":{"type":"array","items":{"type":"string"}}}}
+```
+
+Following nodes read the fields as `{{ nodes.<node>.json.zusammenfassung }}` and
+`{{ nodes.<node>.json.aufgaben }}`. A reply that is not valid JSON, not an
+object, or violates the schema fails the node. The prompt and system
+instruction stay node fields: keep a coaching template in the automation (or a
+host-managed file), not in addon code.

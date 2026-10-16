@@ -7,6 +7,7 @@ use Goldnead\StatamicAutomations\Console\Commands\PruneRuns;
 use Goldnead\StatamicAutomations\Console\Commands\RunDueScheduledJobs;
 use Goldnead\StatamicAutomations\Console\Commands\RunScheduledAutomations;
 use Goldnead\StatamicAutomations\Console\Commands\SyncAutomations;
+use Goldnead\StatamicAutomations\Contracts\AiClient;
 use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Contracts\SenderIdentityResolver;
 use Goldnead\StatamicAutomations\Engine\ConditionEvaluator;
@@ -190,6 +191,7 @@ class ServiceProvider extends AddonServiceProvider
         // addon; the shipped implementation leaves a single-brand install
         // sending exactly as before.
         $this->app->singleton(SenderIdentityResolver::class, BrandSenderIdentity::class);
+        $this->app->bind(AiClient::class, \Goldnead\StatamicAutomations\Support\AnthropicClient::class);
         $this->app->singleton(BrandMailer::class);
 
         $this->app->singleton(TriggerRegistry::class);

@@ -225,6 +225,10 @@ return [
         'version' => '2023-06-01',
         'max_tokens' => 1024,
         'timeout' => 30,
+        // Ceiling for a per-node timeout (seconds). The queue worker's --timeout
+        // and the connection's retry_after must stay above the longest node
+        // timeout actually in use; see docs/integrations.md.
+        'max_timeout' => 900,
     ],
 
     /*
