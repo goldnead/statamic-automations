@@ -14,11 +14,14 @@ use Goldnead\StatamicAutomations\Nodes\Actions\FetchAssetFromUrlAction;
 use Goldnead\StatamicAutomations\Support\HostGuard;
 use GuzzleHttp\Promise\FulfilledPromise;
 use GuzzleHttp\Psr7\Response as PsrResponse;
-use Illuminate\Http\Client\Request;
+use Goldnead\StatamicAutomations\Tests\Support\FakeRequest;
+use Goldnead\StatamicAutomations\Tests\Support\FakeWeb;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Statamic\Facades\Asset;
 use Statamic\Facades\AssetContainer;
+
+require_once __DIR__.'/../Support/FakeWeb.php';
 
 const FETCH_SECRET = 'fetch-token-7f3a91c2';
 
@@ -98,13 +101,13 @@ it('declares the schema and a flat output schema', function (): void {
 });
 
 it('previews in test mode without touching network, connections, container or disk', function (): void {
-    Http::fake();
+    FakeWeb::fake();
 
     $result = fetchAction()->execute(AutomationContext::make([], true), fetchConfig(['connection' => 'nowhere', 'container' => 'does-not-exist']));
 
     expect($result->isSuccess())->toBeTrue();
     expect($result->output['preview']['filename'])->toBe('call.mp4');
-    Http::assertNothingSent();
+    FakeWeb::assertNothingSent();
     expect($this->hostsSeen)->toBe([]);
     expect(filesIn($this->roots['media']))->toBe([]);
 });
@@ -116,7 +119,7 @@ it('still validates locally in test mode', function (): void {
 });
 
 it('downloads into the container and returns the four outputs', function (): void {
-    Http::fake(['files.example.test/*' => Http::response('hello recording', 200, ['Content-Type' => 'video/mp4'])]);
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::response('hello recording', 200, ['Content-Type' => 'video/mp4'])]);
 
     $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['folder' => 'zoom/2026']));
 
@@ -129,7 +132,7 @@ it('downloads into the container and returns the four outputs', function (): voi
 });
 
 it('works the same on a second container that is not the default', function (): void {
-    Http::fake(['files.example.test/*' => Http::response('vault data', 200)]);
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::response('vault data', 200)]);
 
     $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['container' => 'vault', 'filename' => 'secret.bin']));
 
@@ -139,9 +142,9 @@ it('works the same on a second container that is not the default', function (): 
 });
 
 it('uses the basename of the original URL, not of the redirect target', function (): void {
-    Http::fake([
-        'files.example.test/start/original.txt' => Http::response('', 302, ['Location' => 'https://files.example.test/final/other.bin']),
-        'files.example.test/final/other.bin' => Http::response('x', 200),
+    FakeWeb::fake([
+        'files.example.test/start/original.txt' => FakeWeb::response('', 302, ['Location' => 'https://files.example.test/final/other.bin']),
+        'files.example.test/final/other.bin' => FakeWeb::response('x', 200),
     ]);
 
     $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['url' => 'https://files.example.test/start/original.txt']));
@@ -150,7 +153,7 @@ it('uses the basename of the original URL, not of the redirect target', function
 });
 
 it('reserves the first free name when overwrite is off', function (): void {
-    Http::fake(['files.example.test/*' => Http::sequence()->push('one')->push('two')->push('three')]);
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::sequence()->push('one')->push('two')->push('three')]);
 
     $paths = collect(range(1, 3))->map(fn () => fetchAction()->execute(AutomationContext::make(), fetchConfig())->output['path'])->all();
 
@@ -159,7 +162,7 @@ it('reserves the first free name when overwrite is off', function (): void {
 });
 
 it('replaces the file when overwrite is on', function (): void {
-    Http::fake(['files.example.test/*' => Http::sequence()->push('old')->push('newer')]);
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::sequence()->push('old')->push('newer')]);
 
     fetchAction()->execute(AutomationContext::make(), fetchConfig());
     $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['overwrite' => true]));
@@ -170,7 +173,7 @@ it('replaces the file when overwrite is on', function (): void {
 });
 
 it('restores an overwritten file and its meta when the new download fails', function (): void {
-    Http::fake(['files.example.test/*' => Http::sequence()->push('old content')->push('too big for the limit', 200)]);
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::sequence()->push('old content')->push('too big for the limit', 200)]);
 
     fetchAction()->execute(AutomationContext::make(), fetchConfig());
     $meta = file_get_contents($this->roots['media'].'/.meta/call.mp4.yaml');
@@ -210,7 +213,7 @@ function failingAfterOverwrite(bool $restoreWorks): FetchAssetFromUrlAction
 }
 
 it('rolls back a failure inside store() after the overwrite', function (): void {
-    Http::fake(['files.example.test/*' => Http::sequence()->push('old content')->push('new content')]);
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::sequence()->push('old content')->push('new content')]);
 
     fetchAction()->execute(AutomationContext::make(), fetchConfig());
     $meta = file_get_contents($this->roots['media'].'/.meta/call.mp4.yaml');
@@ -225,7 +228,7 @@ it('rolls back a failure inside store() after the overwrite', function (): void 
 });
 
 it('does not roll back a successful overwrite when deleting a backup throws', function (): void {
-    Http::fake(['files.example.test/*' => Http::sequence()->push('old content')->push('new content')]);
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::sequence()->push('old content')->push('new content')]);
 
     fetchAction()->execute(AutomationContext::make(), fetchConfig());
 
@@ -252,7 +255,7 @@ it('does not roll back a successful overwrite when deleting a backup throws', fu
 });
 
 it('keeps the backups and names them when the restore fails', function (): void {
-    Http::fake(['files.example.test/*' => Http::sequence()->push('old content')->push('new content')]);
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::sequence()->push('old content')->push('new content')]);
 
     fetchAction()->execute(AutomationContext::make(), fetchConfig());
 
@@ -273,7 +276,7 @@ it('keeps the backups and names them when the restore fails', function (): void 
 });
 
 it('leaves no temporary file when the file cannot be opened', function (): void {
-    Http::fake(['files.example.test/*' => Http::response('x', 404)]);
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::response('x', 404)]);
     $before = glob(sys_get_temp_dir().'/autofetch_*');
 
     fetchAction()->execute(AutomationContext::make(), fetchConfig());
@@ -282,13 +285,13 @@ it('leaves no temporary file when the file cannot be opened', function (): void 
 });
 
 it('rejects unsafe folders, names and limits before anything happens', function (array $override, string $needle): void {
-    Http::fake();
+    FakeWeb::fake();
 
     $result = fetchAction()->execute(AutomationContext::make(), fetchConfig($override));
 
     expect($result->isFailed())->toBeTrue();
     expect($result->error)->toContain($needle);
-    Http::assertNothingSent();
+    FakeWeb::assertNothingSent();
     expect(filesIn($this->roots['media']))->toBe([]);
 })->with([
     'parent folder' => [['folder' => 'a/../b'], "'..'"],
@@ -317,7 +320,7 @@ it('fails clearly for a missing container or connection', function (): void {
 });
 
 it('fails on non-2xx answers and leaves nothing', function (): void {
-    Http::fake(['files.example.test/*' => Http::response('nope', 404)]);
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::response('nope', 404)]);
 
     $result = fetchAction()->execute(AutomationContext::make(), fetchConfig());
 
@@ -326,7 +329,7 @@ it('fails on non-2xx answers and leaves nothing', function (): void {
 });
 
 it('refuses a Content-Length over the limit before storing', function (): void {
-    Http::fake(['files.example.test/*' => Http::response('x', 200, ['Content-Length' => (string) (5 * 1048576)])]);
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::response('x', 200, ['Content-Length' => (string) (5 * 1048576)])]);
 
     $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['max_size_mb' => 1]));
 
@@ -336,23 +339,23 @@ it('refuses a Content-Length over the limit before storing', function (): void {
 
 it('sends the connection credential and masks it everywhere on failure', function (): void {
     fetchConnection();
-    Http::fake(['files.example.test/*' => Http::response('Bearer '.FETCH_SECRET.' denied', 403)]);
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::response('Bearer '.FETCH_SECRET.' denied', 403)]);
 
     $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['connection' => 'zoomdl']));
 
-    Http::assertSent(fn (Request $request) => $request->header('Authorization') === ['Bearer '.FETCH_SECRET]);
+    expect(FakeWeb::recorded()->map(fn (FakeRequest $request) => $request->header('Authorization'))->all())->toBe([['Bearer '.FETCH_SECRET]]);
     expect($result->isFailed())->toBeTrue();
     expect(json_encode($result))->not->toContain(FETCH_SECRET);
 });
 
 it('sends no credential to a public host that is not the connection\'s own', function (): void {
     fetchConnection();
-    Http::fake(['*' => Http::response('data', 200)]);
+    FakeWeb::fake(['*' => FakeWeb::response('data')]);
 
     $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['connection' => 'zoomdl', 'url' => 'https://evil.example.test/rec/call.mp4']));
 
     expect($result->isFailed())->toBeTrue();
-    Http::assertNothingSent();
+    FakeWeb::assertNothingSent();
     expect(filesIn($this->roots['media']))->toBe([]);
 });
 
@@ -362,12 +365,12 @@ it('does not fetch an OAuth2 token for a foreign host either', function (): void
         'auth_type' => 'oauth2_client_credentials',
         'auth_config' => ['token_url' => 'https://auth.example.test/token', 'client_id' => 'cid', 'client_secret' => 'secret-aa11bb22'],
     ]);
-    Http::fake(['*' => Http::response('data', 200)]);
+    FakeWeb::fake(['*' => FakeWeb::response('data')]);
 
     $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['connection' => 'zoomoauth', 'url' => 'https://evil.example.test/x.bin']));
 
     expect($result->isFailed())->toBeTrue();
-    Http::assertNothingSent();
+    FakeWeb::assertNothingSent();
 });
 
 it('is not registered when its flag is off', function (): void {
@@ -385,10 +388,10 @@ it('is not registered when its flag is off', function (): void {
 });
 
 it('follows relative redirects and checks every hop with the HostGuard', function (): void {
-    Http::fake([
-        'files.example.test/a/start' => Http::response('', 302, ['Location' => '../b/next']),
-        'files.example.test/b/next' => Http::response('', 301, ['Location' => 'https://cdn.example.test/blob?x=1']),
-        'cdn.example.test/*' => Http::response('final', 200),
+    FakeWeb::fake([
+        'files.example.test/a/start' => FakeWeb::response('', 302, ['Location' => '../b/next']),
+        'files.example.test/b/next' => FakeWeb::response('', 301, ['Location' => 'https://cdn.example.test/blob?x=1']),
+        'cdn.example.test/*' => FakeWeb::response('final', 200),
     ]);
 
     $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['url' => 'https://files.example.test/a/start', 'filename' => 'out.bin']));
@@ -399,44 +402,44 @@ it('follows relative redirects and checks every hop with the HostGuard', functio
 });
 
 it('refuses a redirect into a private address', function (): void {
-    Http::fake([
-        'files.example.test/*' => Http::response('', 302, ['Location' => 'https://private.example.test/secret']),
-        'private.example.test/*' => Http::response('leak', 200),
+    FakeWeb::fake([
+        'files.example.test/*' => FakeWeb::response('', 302, ['Location' => 'https://private.example.test/secret']),
+        'private.example.test/*' => FakeWeb::response('leak', 200),
     ]);
 
     $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['filename' => 'out.bin']));
 
     expect($result->isFailed())->toBeTrue();
-    Http::assertNotSent(fn (Request $request) => str_contains($request->url(), 'private.example.test'));
+    expect(FakeWeb::recorded()->contains(fn (FakeRequest $request) => str_contains($request->url(), 'private.example.test')))->toBeFalse();
     expect(filesIn($this->roots['media']))->toBe([]);
 });
 
 it('refuses redirect loops, missing locations and a sixth hop', function (): void {
-    Http::fake(['files.example.test/loop' => Http::response('', 302, ['Location' => '/loop#frag'])]);
+    FakeWeb::fake(['files.example.test/loop' => FakeWeb::response('', 302, ['Location' => '/loop#frag'])]);
     expect(fetchAction()->execute(AutomationContext::make(), fetchConfig(['url' => 'https://files.example.test/loop', 'filename' => 'a']))->error)->toContain('loop');
 
-    Http::fake(['files.example.test/nolocation' => Http::response('', 302)]);
+    FakeWeb::fake(['files.example.test/nolocation' => FakeWeb::response('', 302)]);
     expect(fetchAction()->execute(AutomationContext::make(), fetchConfig(['url' => 'https://files.example.test/nolocation', 'filename' => 'a']))->error)->toContain('Location');
 
-    Http::fake(['files.example.test/h/*' => fn (Request $request) => Http::response('', 302, ['Location' => '/h/'.(((int) basename($request->url())) + 1)])]);
+    FakeWeb::fake(['files.example.test/h/*' => fn (FakeRequest $request) => FakeWeb::response('', 302, ['Location' => '/h/'.(((int) basename($request->url())) + 1)])]);
     $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['url' => 'https://files.example.test/h/0', 'filename' => 'a']));
     expect($result->error)->toContain('Too many redirects');
-    Http::assertSentCount(6 + 1 + 1);
+    FakeWeb::assertSentCount(6);
 });
 
 it('drops the connection headers for good after the first change of origin', function (): void {
     fetchConnection();
-    Http::fake([
-        'files.example.test/start' => Http::response('', 302, ['Location' => 'https://cdn.example.test/hop']),
-        'cdn.example.test/hop' => Http::response('', 302, ['Location' => 'https://files.example.test/back']),
-        'files.example.test/back' => Http::response('done', 200),
+    FakeWeb::fake([
+        'files.example.test/start' => FakeWeb::response('', 302, ['Location' => 'https://cdn.example.test/hop']),
+        'cdn.example.test/hop' => FakeWeb::response('', 302, ['Location' => 'https://files.example.test/back']),
+        'files.example.test/back' => FakeWeb::response('done', 200),
     ]);
 
     $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['connection' => 'zoomdl', 'url' => 'https://files.example.test/start', 'filename' => 'out.bin']));
 
     expect($result->isSuccess())->toBeTrue();
 
-    $auth = Http::recorded()->map(fn ($pair) => [$pair[0]->url() => $pair[0]->header('Authorization')])->collapse();
+    $auth = FakeWeb::recorded()->map(fn ($pair) => [$pair->url() => $pair->header('Authorization')])->collapse();
 
     expect($auth['https://files.example.test/start'])->toBe(['Bearer '.FETCH_SECRET]);
     expect($auth['https://cdn.example.test/hop'])->toBe([]);
@@ -449,18 +452,18 @@ it('renews an OAuth2 token once on 401 and downloads again', function (): void {
         'auth_type' => 'oauth2_client_credentials',
         'auth_config' => ['token_url' => 'https://auth.example.test/token', 'client_id' => 'cid', 'client_secret' => 'secret-aa11bb22'],
     ]);
-    Http::fake([
-        'auth.example.test/token' => Http::sequence()->push(['access_token' => 'tok-one-1111', 'expires_in' => 3600])->push(['access_token' => 'tok-two-2222', 'expires_in' => 3600]),
-        'files.example.test/*' => Http::sequence()->push('tok-one-1111 rejected', 401)->push('data', 200),
+    FakeWeb::fake([
+        'auth.example.test/token' => FakeWeb::sequence()->push(['access_token' => 'tok-one-1111', 'expires_in' => 3600])->push(['access_token' => 'tok-two-2222', 'expires_in' => 3600]),
+        'files.example.test/*' => FakeWeb::sequence()->push('tok-one-1111 rejected', 401)->push('data', 200),
     ]);
 
     $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['connection' => 'zoomoauth']));
 
     expect($result->isSuccess())->toBeTrue();
-    $downloads = Http::recorded()->filter(fn ($pair) => $pair[0]->url() === 'https://files.example.test/rec/call.mp4')->values();
+    $downloads = FakeWeb::recorded()->filter(fn ($pair) => $pair->url() === 'https://files.example.test/rec/call.mp4')->values();
     expect($downloads)->toHaveCount(2);
-    expect($downloads[0][0]->header('Authorization'))->toBe(['Bearer tok-one-1111']);
-    expect($downloads[1][0]->header('Authorization'))->toBe(['Bearer tok-two-2222']);
+    expect($downloads[0]->header('Authorization'))->toBe(['Bearer tok-one-1111']);
+    expect($downloads[1]->header('Authorization'))->toBe(['Bearer tok-two-2222']);
 });
 
 it('fails after a second 401 without leaking tokens', function (): void {
@@ -469,16 +472,16 @@ it('fails after a second 401 without leaking tokens', function (): void {
         'auth_type' => 'oauth2_client_credentials',
         'auth_config' => ['token_url' => 'https://auth.example.test/token', 'client_id' => 'cid', 'client_secret' => 'secret-aa11bb22'],
     ]);
-    Http::fake([
-        'auth.example.test/token' => Http::sequence()->push(['access_token' => 'tok-one-1111', 'expires_in' => 3600])->push(['access_token' => 'tok-two-2222', 'expires_in' => 3600]),
-        'files.example.test/*' => Http::response('no', 401),
+    FakeWeb::fake([
+        'auth.example.test/token' => FakeWeb::sequence()->push(['access_token' => 'tok-one-1111', 'expires_in' => 3600])->push(['access_token' => 'tok-two-2222', 'expires_in' => 3600]),
+        'files.example.test/*' => FakeWeb::response('no', 401),
     ]);
 
     $result = fetchAction()->execute(AutomationContext::make(), fetchConfig(['connection' => 'zoomoauth']));
 
     expect($result->isFailed())->toBeTrue();
     expect(json_encode($result))->not->toContain('tok-one-1111')->not->toContain('tok-two-2222')->not->toContain('secret-aa11bb22');
-    expect(Http::recorded()->filter(fn ($pair) => str_contains($pair[0]->url(), 'call.mp4'))->count())->toBe(2);
+    expect(FakeWeb::recorded()->filter(fn ($pair) => str_contains($pair->url(), 'call.mp4'))->count())->toBe(2);
 });
 
 /** A fake server that writes `$megabytes` straight into the sink, 64 KiB at a time. */
@@ -540,7 +543,7 @@ function fetchAutomationRun(array $nodeConfig): AutomationRun
 }
 
 it('runs end to end through RunAutomation and the WorkflowRunner', function (): void {
-    Http::fake(['files.example.test/*' => Http::response('payload', 200)]);
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::response('payload', 200)]);
     $run = fetchAutomationRun(fetchConfig());
 
     app()->call([new RunAutomation($run->id, []), 'handle']);
