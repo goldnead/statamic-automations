@@ -182,6 +182,76 @@ it('restores an overwritten file and its meta when the new download fails', func
     expect(filesIn($this->roots['media']))->toBe(['.meta/call.mp4.yaml', 'call.mp4']);
 });
 
+/** Fails only inside store(), after the old file has been overwritten. */
+function failingAfterOverwrite(bool $restoreWorks): FetchAssetFromUrlAction
+{
+    return $restoreWorks
+        ? new class extends FetchAssetFromUrlAction
+        {
+            protected function verifyStored($disk, $asset): void
+            {
+                throw new RuntimeException('boom after overwrite');
+            }
+        }
+        : new class extends FetchAssetFromUrlAction
+        {
+            protected function verifyStored($disk, $asset): void
+            {
+                throw new RuntimeException('boom after overwrite');
+            }
+
+            protected function restoreFile($disk, string $backup, string $path): bool
+            {
+                return false;
+            }
+        };
+}
+
+it('rolls back a failure inside store() after the overwrite', function (): void {
+    Http::fake(['files.example.test/*' => Http::sequence()->push('old content')->push('new content')]);
+
+    fetchAction()->execute(AutomationContext::make(), fetchConfig());
+    $meta = file_get_contents($this->roots['media'].'/.meta/call.mp4.yaml');
+
+    $result = failingAfterOverwrite(true)->execute(AutomationContext::make(), fetchConfig(['overwrite' => true]));
+
+    expect($result->isFailed())->toBeTrue();
+    expect($result->error)->toContain('boom after overwrite');
+    expect(file_get_contents($this->roots['media'].'/call.mp4'))->toBe('old content');
+    expect(file_get_contents($this->roots['media'].'/.meta/call.mp4.yaml'))->toBe($meta);
+    expect(filesIn($this->roots['media']))->toBe(['.meta/call.mp4.yaml', 'call.mp4']);
+});
+
+it('keeps the backups and names them when the restore fails', function (): void {
+    Http::fake(['files.example.test/*' => Http::sequence()->push('old content')->push('new content')]);
+
+    fetchAction()->execute(AutomationContext::make(), fetchConfig());
+
+    $result = failingAfterOverwrite(false)->execute(AutomationContext::make(), fetchConfig(['overwrite' => true]));
+
+    $backups = array_values(array_filter(filesIn($this->roots['media']), fn ($file) => str_contains($file, '.fetch-backup-')));
+
+    expect($result->isFailed())->toBeTrue();
+    expect($backups)->toHaveCount(2);
+    expect($result->error)->toContain('backup is kept');
+
+    foreach ($backups as $backup) {
+        expect($result->error)->toContain(basename($backup));
+    }
+
+    $contents = collect($backups)->map(fn ($file) => file_get_contents($this->roots['media'].'/'.$file))->all();
+    expect($contents)->toContain('old content');
+});
+
+it('leaves no temporary file when the file cannot be opened', function (): void {
+    Http::fake(['files.example.test/*' => Http::response('x', 404)]);
+    $before = glob(sys_get_temp_dir().'/autofetch_*');
+
+    fetchAction()->execute(AutomationContext::make(), fetchConfig());
+
+    expect(glob(sys_get_temp_dir().'/autofetch_*'))->toBe($before);
+});
+
 it('rejects unsafe folders, names and limits before anything happens', function (array $override, string $needle): void {
     Http::fake();
 

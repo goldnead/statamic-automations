@@ -176,14 +176,17 @@ class FetchAssetFromUrlAction implements AutomationAction
             return ActionResult::failed("The asset container '{$plan['container']}' does not exist.");
         }
 
-        $temp = tempnam(sys_get_temp_dir(), 'autofetch_');
-        $resource = $temp === false ? false : fopen($temp, 'w+b');
-
-        if ($resource === false) {
-            return ActionResult::failed('A temporary file could not be created.');
-        }
+        $temp = null;
+        $resource = null;
 
         try {
+            $temp = tempnam(sys_get_temp_dir(), 'autofetch_');
+            $resource = $temp === false ? false : fopen($temp, 'w+b');
+
+            if ($resource === false) {
+                return ActionResult::failed(__('A temporary file could not be created.'));
+            }
+
             $this->download($plan, $connection, $resource);
 
             return ActionResult::success($this->store($container, $plan, $resource));
@@ -577,11 +580,7 @@ class FetchAssetFromUrlAction implements AutomationAction
                 throw new \RuntimeException('The asset could not be saved.');
             }
 
-            $metaFile = $disk->exists($asset->metaPath()) ? YAML::parse((string) $disk->get($asset->metaPath())) : null;
-
-            if (! is_array($metaFile) || ! isset($metaFile['size'])) {
-                throw new \RuntimeException('The asset meta file was not written.');
-            }
+            $this->verifyStored($disk, $asset);
 
             $output = [
                 'asset_id' => (string) $asset->id(),
@@ -596,10 +595,18 @@ class FetchAssetFromUrlAction implements AutomationAction
 
             return $output;
         } catch (\Throwable $e) {
-            $this->rollBack($disk, $created, $restore);
+            $kept = $this->rollBack($disk, $created, $restore);
 
+            // A backup goes only once its file is confirmed back in place;
+            // one that could not be restored is the only copy left.
             foreach ($backups as $backup) {
-                $disk->delete($backup);
+                if (! in_array($backup, $kept, true)) {
+                    $disk->delete($backup);
+                }
+            }
+
+            if ($kept !== []) {
+                throw new \RuntimeException($e->getMessage().' The original could not be fully restored; its backup is kept at: '.implode(', ', $kept).'.', 0, $e);
             }
 
             throw $e;
@@ -608,11 +615,24 @@ class FetchAssetFromUrlAction implements AutomationAction
         }
     }
 
+    /** The saved asset must have its file and a meta file with the core data. */
+    protected function verifyStored($disk, $asset): void
+    {
+        $metaFile = $disk->exists($asset->metaPath()) ? YAML::parse((string) $disk->get($asset->metaPath())) : null;
+
+        if (! is_array($metaFile) || ! isset($metaFile['size'])) {
+            throw new \RuntimeException('The asset meta file was not written.');
+        }
+    }
+
     /**
+     * Removes what this run created and puts the old files back.
+     *
      * @param  array<int, string>  $created
      * @param  array<string, string>  $restore  existing path => its backup
+     * @return array<int, string> the backups whose restore failed or could not be confirmed
      */
-    protected function rollBack($disk, array $created, array $restore): void
+    protected function rollBack($disk, array $created, array $restore): array
     {
         foreach ($created as $path) {
             try {
@@ -622,13 +642,31 @@ class FetchAssetFromUrlAction implements AutomationAction
             }
         }
 
+        $kept = [];
+
         foreach ($restore as $path => $backup) {
             try {
-                $disk->copy($backup, $path);
+                $restored = $this->restoreFile($disk, $backup, $path);
             } catch (\Throwable) {
-                // The backup is kept (and named in the log) if it cannot go back.
+                $restored = false;
+            }
+
+            if (! $restored) {
+                $kept[] = $backup;
             }
         }
+
+        return $kept;
+    }
+
+    /** Copies a backup back over its file and confirms it arrived. */
+    protected function restoreFile($disk, string $backup, string $path): bool
+    {
+        if ($disk->copy($backup, $path) === false) {
+            return false;
+        }
+
+        return $disk->exists($path) && $disk->size($path) === $disk->size($backup);
     }
 
     /** The first of `name`, `name-1`, `name-2` … that is free on the disk. */
