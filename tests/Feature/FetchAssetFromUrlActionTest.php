@@ -185,7 +185,8 @@ it('serialises runs that ask for different names on one container lock', functio
     FakeWeb::fake(['files.example.test/*' => FakeWeb::response('x')]);
     config(['cache.default' => 'array']);
 
-    $impatient = new class extends FetchAssetFromUrlAction {
+    $impatient = new class extends FetchAssetFromUrlAction
+    {
         protected int $lockWait = 0;
     };
 
