@@ -58,7 +58,11 @@ const props = defineProps({
     methods: { type: Array, required: true },
     inputTypes: { type: Array, required: true },
     placeholder: { type: String, default: '••••••••' },
+    clientAuthMethods: { type: Object, default: () => ({}) },
+    templates: { type: Array, default: () => [] },
 });
+
+const OAUTH2 = 'oauth2_client_credentials';
 
 // The stored connection as the API last described it. Replaced after a save,
 // so the placeholders and the operation list follow what is really stored.
@@ -78,7 +82,23 @@ function fromConnection(connection) {
         timeout: connection.timeout ?? 15,
         default_headers: connection.default_headers ?? {},
         auth_type: connection.auth_type ?? 'none',
-        auth_config: {},
+        auth_config: oauthValues(connection),
+        template_handle: '',
+    };
+}
+
+// The OAuth2 fields that are not secret come back from the API as they are
+// and are edited in place; the secret ones come back as placeholders, which
+// the API reads as "keep the stored value". Other auth types start empty.
+function oauthValues(connection) {
+    if (connection.auth_type !== OAUTH2) return {};
+    const c = connection.auth_config ?? {};
+    return {
+        token_url: c.token_url ?? '',
+        client_id: c.client_id ?? '',
+        scope: c.scope ?? '',
+        client_auth_method: c.client_auth_method ?? 'client_secret_basic',
+        token_request_fields: { ...(c.token_request_fields ?? {}) },
     };
 }
 
@@ -86,7 +106,17 @@ const authTypeOptions = computed(() =>
     Object.entries(props.authTypes).map(([value, label]) => ({ value, label })),
 );
 
+const clientAuthMethodOptions = computed(() =>
+    Object.entries(props.clientAuthMethods).map(([value, label]) => ({ value, label })),
+);
+
 const fieldLabels = {
+    token_url: __('Token URL'),
+    client_id: __('Client ID'),
+    client_secret: __('Client secret'),
+    scope: __('Scope'),
+    client_auth_method: __('Send client credentials as'),
+    token_request_fields: __('Extra token request fields'),
     name: __('Header name'),
     value: __('Header value'),
     token: __('Token'),
@@ -95,7 +125,7 @@ const fieldLabels = {
 };
 
 // Which of the auth fields hold a secret — those get a password input.
-const secretFields = ['value', 'token', 'password'];
+const secretFields = ['value', 'token', 'password', 'client_secret'];
 
 const currentAuthFields = computed(() => props.authFields[form.value.auth_type] ?? []);
 
@@ -113,11 +143,58 @@ const fieldInstructions = {
     value: __('The API key from the service, usually under Settings, API or Developer.'),
     username: __('The user the service gave you for API access.'),
     password: __('The password or app password for that user.'),
+    token_url: __('The address of the service\'s token endpoint. Private and local addresses are refused.'),
+    client_id: __('The client or app ID the service gave you.'),
+    client_secret: __('The client or app secret. Write-only.'),
+    scope: __('Optional. Space-separated scopes, if the service wants them.'),
+    client_auth_method: __('Most services take the client ID and secret as a Basic header; some want them in the request body.'),
+    token_request_fields: __('Sent with the token request. grant_type is client_credentials unless you set it here, e.g. Zoom: grant_type → account_credentials, account_id → your account ID. Empty values are left out; values other than grant_type are stored write-only.'),
 };
 
 function authInstructions(key) {
     const base = fieldInstructions[key] ?? '';
     return isStored(key) ? `${base} ${__('Stored. Leave empty to keep it; type to replace it.')}`.trim() : base || null;
+}
+
+// Switching to OAuth2 starts from sensible defaults rather than blanks.
+watch(
+    () => form.value.auth_type,
+    (type) => {
+        if (type !== OAUTH2) return;
+        const c = form.value.auth_config;
+        c.client_auth_method ??= 'client_secret_basic';
+        c.token_request_fields ??= {};
+    },
+);
+
+// ── Template (new connections only) ─────────────────────────────────────
+
+const templateOptions = computed(() => [
+    { value: '', label: __('No template') },
+    ...props.templates.map((t) => ({ value: t.handle, label: t.name })),
+]);
+
+const selectedTemplate = computed(() => props.templates.find((t) => t.handle === form.value.template_handle) ?? null);
+
+// A template only fills the form. The operations are created on save, and
+// afterwards the connection is an ordinary one.
+function applyTemplate(handle) {
+    const template = props.templates.find((t) => t.handle === handle);
+    if (!template) return;
+    const c = template.connection ?? {};
+    const auth = JSON.parse(JSON.stringify(c.auth_config ?? {}));
+    form.value = {
+        ...form.value,
+        name: c.name ?? form.value.name,
+        handle: c.handle ?? form.value.handle,
+        base_url: c.base_url ?? '',
+        test_path: c.test_path ?? '',
+        timeout: c.timeout ?? form.value.timeout,
+        auth_type: c.auth_type ?? 'none',
+        auth_config: auth,
+        template_handle: handle,
+    };
+    handleTouched.value = true;
 }
 
 watch(
@@ -159,6 +236,8 @@ const tabFields = {
     connection: ['name', 'handle', 'base_url', 'test_path', 'timeout', 'default_headers'],
     access: ['auth_type', 'auth_config'],
 };
+// Only the picker on the connection tab reports an unknown template.
+tabFields.connection.push('template_handle');
 
 const tabsWithErrors = computed(() => {
     const tabs = new Set();
@@ -175,9 +254,12 @@ const tabsWithErrors = computed(() => {
 function payload() {
     const f = form.value;
     const authConfig = {};
-    for (const key of currentAuthFields.value) authConfig[key] = f.auth_config[key] ?? '';
+    for (const key of currentAuthFields.value) {
+        authConfig[key] = f.auth_config[key] ?? (key === 'token_request_fields' ? {} : '');
+    }
 
     return {
+        ...(props.isNew && f.template_handle ? { template_handle: f.template_handle } : {}),
         name: f.name,
         handle: f.handle,
         base_url: f.base_url,
@@ -211,7 +293,7 @@ async function save() {
 
         const { data } = await axios.patch(stored.value.show_url, payload());
         stored.value = data.data;
-        form.value.auth_config = {};
+        form.value.auth_config = oauthValues(data.data);
         errors.value = {};
         markClean();
         globalThis.Statamic?.$toast?.success?.(__('Saved'));
@@ -408,6 +490,23 @@ function deleteFailed(e) {
             <TabContent name="connection">
                 <Panel class="mt-4">
                     <Card class="space-y-6">
+                        <Field
+                            v-if="isNew && templates.length"
+                            id="template_handle"
+                            :label="__('Template')"
+                            :error="errors.template_handle"
+                            :instructions="selectedTemplate
+                                ? `${selectedTemplate.description} ${__('Creates the operations:')} ${selectedTemplate.operations.join(', ')}.`.trim()
+                                : __('Optional. Fills in the form and adds the operations of a known service when you save. Afterwards everything can be edited.')"
+                        >
+                            <Select
+                                id="template_handle"
+                                :model-value="form.template_handle"
+                                :options="templateOptions"
+                                data-connection-template
+                                @update:model-value="(value) => { value ? applyTemplate(value) : (form.template_handle = '') }"
+                            />
+                        </Field>
                         <div class="grid sm:grid-cols-2 gap-6 *:min-w-0">
                             <Field id="name" :label="__('Name')" required :error="errors.name">
                                 <Input id="name" v-model="form.name" :focus="isNew" />
@@ -473,10 +572,27 @@ function deleteFailed(e) {
                             :text="__('On save, the stored credentials are discarded.')"
                         />
 
+                        <template v-for="key in currentAuthFields" :key="key">
                         <Field
-                            v-for="key in currentAuthFields"
+                            v-if="key === 'client_auth_method'"
                             :id="`auth_${key}`"
-                            :key="key"
+                            :label="fieldLabels[key]"
+                            :error="errors[`auth_config.${key}`]"
+                            :instructions="authInstructions(key)"
+                        >
+                            <Select :id="`auth_${key}`" v-model="form.auth_config[key]" :options="clientAuthMethodOptions" />
+                        </Field>
+                        <Field
+                            v-else-if="key === 'token_request_fields'"
+                            :label="fieldLabels[key]"
+                            :error="errors[`auth_config.${key}`]"
+                            :instructions="authInstructions(key)"
+                        >
+                            <KeyValueField v-model="form.auth_config[key]" :key-label="__('Field')" />
+                        </Field>
+                        <Field
+                            v-else
+                            :id="`auth_${key}`"
                             :label="fieldLabels[key] ?? key"
                             :error="errors[`auth_config.${key}`]"
                             :instructions="authInstructions(key)"
@@ -491,6 +607,7 @@ function deleteFailed(e) {
                                 :data-auth-field="key"
                             />
                         </Field>
+                        </template>
 
                         <Description
                             v-if="currentAuthFields.length === 0"
