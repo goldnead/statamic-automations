@@ -6,15 +6,22 @@
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
+use Goldnead\StatamicAutomations\Facades\Automations;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationConnection;
+use Goldnead\StatamicAutomations\Models\AutomationConnectionOperation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationNodeRun;
+use Goldnead\StatamicAutomations\Registries\ConnectionTemplateRegistry;
 use Goldnead\StatamicAutomations\Support\HostGuard;
 use Illuminate\Http\Client\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Testing\TestResponse;
 use Statamic\Facades\User;
 
 const SECRET = 'sk-live-7f3a9c1e5b';
@@ -311,22 +318,22 @@ function tokenResponse(string $token, int $expiresIn = 3600)
     return Http::response(['access_token' => $token, 'token_type' => 'bearer', 'expires_in' => $expiresIn], 200);
 }
 
-function tokenRequests(): \Illuminate\Support\Collection
+function tokenRequests(): Collection
 {
     return Http::recorded()->filter(fn ($pair) => $pair[0]->url() === TOKEN_URL)->map(fn ($pair) => $pair[0])->values();
 }
 
-function apiRequests(): \Illuminate\Support\Collection
+function apiRequests(): Collection
 {
     return Http::recorded()->filter(fn ($pair) => str_starts_with($pair[0]->url(), 'https://api.example.test'))->map(fn ($pair) => $pair[0])->values();
 }
 
 afterEach(function () {
-    \Illuminate\Support\Carbon::setTestNow();
+    Carbon::setTestNow();
 });
 
 beforeEach(function () {
-    \Illuminate\Support\Facades\Cache::flush();
+    Cache::flush();
 });
 
 it('fetches a token on the first call and serves the second from the cache', function () {
@@ -353,7 +360,7 @@ it('keeps the cached token encrypted', function () {
 
     runOperation('connection.zoom.ping', []);
 
-    $keys = \Illuminate\Support\Facades\Cache::get('statamic-automations:oauth2:'.$connection->id.':'.hash('sha256', json_encode($connection->fresh()->auth_config)));
+    $keys = Cache::get('statamic-automations:oauth2:'.$connection->id.':'.hash('sha256', json_encode($connection->fresh()->auth_config)));
     expect($keys)->toBeString()->not->toContain('tok-cached-123');
 });
 
@@ -366,7 +373,7 @@ it('renews a token that has expired', function () {
 
     runOperation('connection.zoom.ping', []);
     // Past expires_in minus the safety margin.
-    \Illuminate\Support\Carbon::setTestNow(now()->addSeconds(3600 - 59));
+    Carbon::setTestNow(now()->addSeconds(3600 - 59));
     runOperation('connection.zoom.ping', []);
 
     expect(tokenRequests())->toHaveCount(2);
@@ -586,9 +593,9 @@ it('reports a failing token endpoint in the cp test without leaking the secret',
 
 // ─── Connection templates ───────────────────────────────────────────────────
 
-function storeFromTemplate(string $handle, array $auth): \Illuminate\Testing\TestResponse
+function storeFromTemplate(string $handle, array $auth): TestResponse
 {
-    $template = app(\Goldnead\StatamicAutomations\Registries\ConnectionTemplateRegistry::class)->get($handle)['connection'];
+    $template = app(ConnectionTemplateRegistry::class)->get($handle)['connection'];
 
     return test()->postJson(cp_route('statamic-automations.api.connections.store'), [
         'handle' => $template['handle'],
@@ -601,7 +608,7 @@ function storeFromTemplate(string $handle, array $auth): \Illuminate\Testing\Tes
 }
 
 it('registers the built-in connection templates', function () {
-    $registry = \Goldnead\StatamicAutomations\Facades\Automations::connectionTemplates();
+    $registry = Automations::connectionTemplates();
 
     expect(array_keys($registry->all()))->toContain('zoom_server_to_server', 'deepgram');
 
@@ -677,7 +684,7 @@ it('leaves operations editable and unbound after the template', function () {
 
 it('rolls the whole connection back when a template operation cannot be created', function () {
     $this->actingAsSuperUser();
-    app(\Goldnead\StatamicAutomations\Registries\ConnectionTemplateRegistry::class)->register('broken', [
+    app(ConnectionTemplateRegistry::class)->register('broken', [
         'name' => 'Broken',
         'connection' => ['handle' => 'broken', 'name' => 'Broken', 'base_url' => 'https://api.example.test', 'auth_type' => 'none'],
         'operations' => [
@@ -693,7 +700,7 @@ it('rolls the whole connection back when a template operation cannot be created'
     ])->assertStatus(422);
 
     expect(AutomationConnection::count())->toBe(0)
-        ->and(\Goldnead\StatamicAutomations\Models\AutomationConnectionOperation::count())->toBe(0);
+        ->and(AutomationConnectionOperation::count())->toBe(0);
 });
 
 it('refuses an unknown template instead of saving a bare connection', function () {
