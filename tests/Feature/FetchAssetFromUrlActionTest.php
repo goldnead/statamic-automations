@@ -1,7 +1,6 @@
 <?php
 
 use Goldnead\StatamicAutomations\Automations;
-use Goldnead\StatamicAutomations\ServiceProvider;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
 use Goldnead\StatamicAutomations\Models\Automation;
@@ -11,11 +10,12 @@ use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationNodeRun;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Nodes\Actions\FetchAssetFromUrlAction;
+use Goldnead\StatamicAutomations\ServiceProvider;
 use Goldnead\StatamicAutomations\Support\HostGuard;
-use GuzzleHttp\Promise\FulfilledPromise;
-use GuzzleHttp\Psr7\Response as PsrResponse;
 use Goldnead\StatamicAutomations\Tests\Support\FakeRequest;
 use Goldnead\StatamicAutomations\Tests\Support\FakeWeb;
+use GuzzleHttp\Promise\FulfilledPromise;
+use GuzzleHttp\Psr7\Response as PsrResponse;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
 use Statamic\Facades\Asset;
@@ -191,15 +191,13 @@ it('restores an overwritten file and its meta when the new download fails', func
 function failingAfterOverwrite(bool $restoreWorks): FetchAssetFromUrlAction
 {
     return $restoreWorks
-        ? new class extends FetchAssetFromUrlAction
-        {
+        ? new class extends FetchAssetFromUrlAction {
             protected function verifyStored($disk, $asset): void
             {
                 throw new RuntimeException('boom after overwrite');
             }
         }
-        : new class extends FetchAssetFromUrlAction
-        {
+        : new class extends FetchAssetFromUrlAction {
             protected function verifyStored($disk, $asset): void
             {
                 throw new RuntimeException('boom after overwrite');
@@ -232,8 +230,7 @@ it('does not roll back a successful overwrite when deleting a backup throws', fu
 
     fetchAction()->execute(AutomationContext::make(), fetchConfig());
 
-    $action = new class extends FetchAssetFromUrlAction
-    {
+    $action = new class extends FetchAssetFromUrlAction {
         public int $deletes = 0;
 
         protected function deleteBackup($disk, string $backup): void
