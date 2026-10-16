@@ -132,3 +132,42 @@ test('useNodeVariables leaves sample null when no run context', () => {
     const vars = useNodeVariables('s', automation, library).value;
     assert.ok(vars.every((v) => v.sample === null));
 });
+
+// --- ai_generate JSON output ----------------------------------------------
+
+test('offers the schema fields of an ai_generate node in JSON mode', () => {
+    const lib = {
+        ...library,
+        actions: [
+            ...library.actions,
+            { handle: 'ai_generate', label: 'Generate with AI', output_schema: { text: 'string', model: 'string' } },
+        ],
+    };
+    const graph = {
+        nodes: [
+            { node_key: 't', type: 'entry_saved' },
+            {
+                node_key: 'review',
+                type: 'ai_generate',
+                config: {
+                    output_mode: 'json',
+                    json_schema: '{"type":"object","properties":{"zusammenfassung":{"type":"string"},"aufgaben":{"type":"array"}}}',
+                },
+            },
+            { node_key: 's', type: 'send_email' },
+        ],
+        edges: [
+            { from_node_key: 't', to_node_key: 'review' },
+            { from_node_key: 'review', to_node_key: 's' },
+        ],
+    };
+
+    const tokens = useNodeVariables('s', graph, lib).value.map((v) => v.token);
+    assert.ok(tokens.includes('{{ nodes.review.json.zusammenfassung }}'));
+    assert.ok(tokens.includes('{{ nodes.review.json.aufgaben }}'));
+    assert.ok(tokens.includes('{{ nodes.review.text }}'));
+
+    graph.nodes[1].config.output_mode = 'text';
+    const textTokens = useNodeVariables('s', graph, lib).value.map((v) => v.token);
+    assert.ok(!textTokens.some((t) => t.includes('.json.')));
+});

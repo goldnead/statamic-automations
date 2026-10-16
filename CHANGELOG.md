@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Upgrading
+
+- No migration. Publishing the config is optional: `automations.ai.max_timeout` (default 900) is new.
+- **Queue worker:** a long AI call only works if the worker lets it. Run workers with `--timeout` above the longest
+  AI node timeout and set the connection's `retry_after` above that too, or the job is killed or run twice.
+  `RunAutomation` now sets its own `$timeout` (sum of the automation's AI node timeouts + 60 s) so `--timeout`
+  only needs to be at least that.
+- An automation with a synchronous trigger that can reach an `ai_generate` node no longer validates
+  (`ai_requires_queue`); set the trigger to run in the background.
+- An `ai_generate` node inside the body of an inline loop no longer validates (`ai_in_loop`): it would run once per
+  item, but the job timeout budgets it once. Put the AI call outside the loop or run a separate automation per item.
+
+### Added: Generate with AI for long inputs (`ai_generate`)
+
+- Per node: `timeout` (seconds, empty = `ai.timeout`), next to the existing `model` and `max_tokens`.
+- Output `JSON object` with an optional JSON Schema (`type`, `properties`, `required`, `items`, `enum`). The reply is decoded,
+  checked, and every field is readable as `{{ nodes.<node>.json.<field> }}`; invalid JSON or a schema violation
+  fails the node with a readable message. The token picker offers the schema's top-level fields.
+- The model call sits behind the `AiClient` contract (Anthropic by default) so tests can fake it.
+
 ### Added: action "Fetch file from URL" (`asset.fetch_from_url`)
 
 - Downloads a file from a URL into an asset container, streamed to a temporary file and from there to the

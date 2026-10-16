@@ -89,11 +89,12 @@ export function useNodeVariables(nodeId, automation, library, run = null) {
             const meta = findNodeMeta(node.type, lib);
             const outputSchema = meta?.output_schema;
             if (!outputSchema || typeof outputSchema !== 'object') continue;
+            const configPaths = configDrivenPaths(node);
 
             const isTrigger = (lib.triggers ?? []).some((t) => t.handle === node.type);
             const sourceLabel = node.label || meta?.label || node.type;
 
-            for (const path of flattenSchema(outputSchema)) {
+            for (const path of [...flattenSchema(outputSchema), ...configPaths]) {
                 const token = isTrigger ? `{{ ${path} }}` : `{{ nodes.${nodeKey}.${path} }}`;
 
                 if (seenTokens.has(token)) continue;
@@ -199,6 +200,29 @@ function flattenValues(obj, prefix = '') {
         }
     }
     return out;
+}
+
+/**
+ * Output paths a node only has because of how it is configured, which the
+ * static `output_schema` cannot know. Today that is `ai_generate` in JSON mode:
+ * every top-level `properties` key of its schema is readable as `json.<key>`
+ * (mirrors `AiGenerateAction::outputSchemaFor()`).
+ *
+ * @param {{type?: string, config?: Object}} node
+ * @returns {Array<string>}
+ */
+function configDrivenPaths(node) {
+    const config = node?.config;
+    if (node?.type !== 'ai_generate' || config?.output_mode !== 'json') return [];
+
+    try {
+        const schema = JSON.parse(String(config.json_schema ?? ''));
+        const properties = schema && typeof schema === 'object' ? schema.properties : null;
+        if (!properties || typeof properties !== 'object' || Array.isArray(properties)) return [];
+        return Object.keys(properties).map((key) => `json.${key}`);
+    } catch {
+        return [];
+    }
 }
 
 function resolve(value) {
