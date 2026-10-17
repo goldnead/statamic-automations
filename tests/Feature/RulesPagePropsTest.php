@@ -1,6 +1,8 @@
 <?php
 
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Models\Automation;
+use Illuminate\Support\Facades\File;
 
 /**
  * What the rules page hands the view, and — the harder half — what it leaves out.
@@ -90,4 +92,36 @@ it('tells the page whether this user may write', function () use ($mail): void {
     ($this->build)('contact-reply', [['t', 'manual', []], ['m', 'send_email', $mail('Thanks')]], [['t', 'm']]);
 
     expect(($this->props)()['canEdit'])->toBeTrue();
+});
+
+/**
+ * Under `flat_file` the definitions are YAML and the `automations` table is
+ * empty. The rules page used to read Eloquent directly, so it said "no rules"
+ * next to a listing page that showed them.
+ */
+it('shows a rule from a flat-file install', function () use ($mail): void {
+    $dir = sys_get_temp_dir().'/automations-rules-flat-'.uniqid();
+    config()->set('automations.storage.driver', 'flat_file');
+    config()->set('automations.storage.flat_file.path', $dir);
+    app()->forgetInstance(AutomationRepository::class);
+
+    try {
+        app(AutomationRepository::class)->save(
+            new Automation(['name' => 'Flat rule', 'handle' => 'flat-rule', 'enabled' => true]),
+            [
+                ['node_key' => 't', 'type' => 'manual'],
+                ['node_key' => 'm', 'type' => 'send_email', 'config' => $mail('Thanks')],
+            ],
+            [['from_node_key' => 't', 'to_node_key' => 'm', 'from_output' => 'default']],
+        );
+
+        expect(Automation::query()->count())->toBe(0);
+
+        $rules = ($this->props)()['rules'];
+
+        expect($rules)->toHaveCount(1)
+            ->and($rules[0]['handle'])->toBe('flat-rule');
+    } finally {
+        File::deleteDirectory($dir);
+    }
 });

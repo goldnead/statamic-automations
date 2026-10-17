@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.25.1 — 2026-10-18
+
+### Fixed
+
+- The Mail rules screen read automations through Eloquent while its three sibling screens go through
+  the repository. On a `flat_file` install the list showed the rules while Mail rules said "no rules".
+  It now uses `AutomationRepository`, and its setup guard leaves the definition tables out under
+  `flat_file`.
+
 ## 2.25.0 — 2026-10-09
 
 ### Upgrading
