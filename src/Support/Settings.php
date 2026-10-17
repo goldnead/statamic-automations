@@ -67,6 +67,18 @@ class Settings implements ProvidesSettings
     }
 
     /**
+     * Unter welchem Eintrag der eigenen CP-Navigation der Unterpunkt "Settings"
+     * hängt: [Sektion, Name], exakt wie in Nav::extend. Optional, gelesen von
+     * der Einstellungs-Schicht in statamic-brand-context (ab 1.16).
+     *
+     * @return array{0: string, 1: string}
+     */
+    public static function settingsNavParent(): array
+    {
+        return ['Tools', __('Automations')];
+    }
+
+    /**
      * The editable settings, in the order and grouping the screen shows them.
      *
      * `key` is the path under `automations.`. `type` drives both the control on
