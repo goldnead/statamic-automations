@@ -2,6 +2,7 @@
 
 namespace Goldnead\StatamicAutomations\Http\Controllers\Pages;
 
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Http\Controllers\Controller;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
@@ -33,15 +34,14 @@ class RulesPageController extends Controller
     {
         $this->authorizeAction('view automations');
 
-        // The four tables this screen reads: the flows and their graph through
-        // Eloquent rather than the repository — so `automations` is named
-        // outright — plus the runs, which `RuleProjection` counts per rule.
+        // The flows and their graph come through the repository, like the
+        // sibling screens: under `flat_file` they live in YAML and the three
+        // definition tables are never read. The runs stay in the database;
+        // `RuleProjection` counts them per rule.
         if ($setup = Setup::guard(
             __('Mail rules'),
-            'automations',
-            'automation_nodes',
-            'automation_edges',
-            'automation_runs',
+            ...Setup::definitionTables('automations', 'automation_nodes', 'automation_edges'),
+            ...['automation_runs'],
         )) {
             return $setup;
         }
@@ -51,10 +51,9 @@ class RulesPageController extends Controller
         // twenty rules on one node type would be twenty identical queries.
         $templateOptions = [];
 
-        $rules = Automation::query()
-            ->with(['nodes', 'edges'])
-            ->orderBy('name')
-            ->get()
+        $rules = app(AutomationRepository::class)->all()
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
             ->map(function (Automation $automation) use ($projection, $mails, $fields, &$templateOptions) {
                 $mailNodes = $automation->nodes->filter(fn (AutomationNode $node) => $mails->isMail($node));
 

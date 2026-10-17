@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed: Mail rules on a `flat_file` install
+
+The Mail rules screen read automations through Eloquent while its three sibling screens go through
+the repository, so under `flat_file` the list showed the rules while Mail rules said "no rules".
+It now uses `AutomationRepository`, and its setup guard leaves the definition tables out under
+`flat_file`.
+
 ### Upgrading
 
 - No migration. Publishing the config is optional: `automations.ai.max_timeout` (default 900) is new.
