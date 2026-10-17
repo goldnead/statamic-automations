@@ -7,12 +7,17 @@ use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationConnection;
 use Goldnead\StatamicAutomations\Models\AutomationConnectionOperation;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
+use Goldnead\StatamicAutomations\Registries\ConnectionTemplateRegistry;
 use Goldnead\StatamicAutomations\Support\HostGuard;
+use Goldnead\StatamicAutomations\Support\OAuth2TokenService;
 use Goldnead\StatamicAutomations\Support\UnsafeHostException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /**
  * JSON API for connections and their operations.
@@ -57,8 +62,21 @@ class ConnectionsController extends Controller
 
         $data = $this->validateConnection($request);
         $data['auth_config'] = $this->authConfig($data['auth_type'], $request->input('auth_config'));
+        $this->requireOAuthSecret($data['auth_type'], $data['auth_config']);
 
-        $connection = AutomationConnection::create($data);
+        $template = $this->template($request);
+
+        // The connection and the operations of a template go in together:
+        // a bad operation leaves no half-made connection behind.
+        $connection = DB::transaction(function () use ($data, $template) {
+            $connection = AutomationConnection::create($data);
+
+            foreach ($template['operations'] ?? [] as $operation) {
+                $connection->operations()->create($this->validateTemplateOperation($operation, $connection));
+            }
+
+            return $connection;
+        });
 
         return response()->json(['data' => $this->present($connection, detailed: true)], 201);
     }
@@ -69,6 +87,7 @@ class ConnectionsController extends Controller
 
         $data = $this->validateConnection($request, $automationConnection);
         $data['auth_config'] = $this->authConfig($data['auth_type'], $request->input('auth_config'), $automationConnection);
+        $this->requireOAuthSecret($data['auth_type'], $data['auth_config']);
 
         $automationConnection->update($data);
 
@@ -104,15 +123,29 @@ class ConnectionsController extends Controller
 
         $started = microtime(true);
         $url = $automationConnection->url((string) ($automationConnection->test_path ?: '/'));
+        $oauth = $automationConnection->usesOAuth2() ? app(OAuth2TokenService::class) : null;
+
+        $send = fn () => Http::withOptions(app(HostGuard::class)->guard($url))
+            ->withHeaders($automationConnection->requestHeaders())
+            ->withoutRedirecting()
+            ->timeout(max(1, (int) $automationConnection->timeout))
+            ->get($url);
 
         try {
             // Checked again here and pinned, like every operation call; no
             // redirects, so a credential header cannot follow one elsewhere.
-            $response = Http::withOptions(app(HostGuard::class)->guard($url))
-                ->withHeaders($automationConnection->requestHeaders())
-                ->withoutRedirecting()
-                ->timeout(max(1, (int) $automationConnection->timeout))
-                ->get($url);
+            // An OAuth2 connection gets its token from the same service as
+            // an operation call, with the same single retry on a 401.
+            if ($oauth) {
+                $automationConnection->useAccessToken($oauth->token($automationConnection));
+            }
+
+            $response = $send();
+
+            if ($oauth && $response->status() === 401) {
+                $automationConnection->useAccessToken($oauth->token($automationConnection, fresh: true));
+                $response = $send();
+            }
         } catch (\Throwable $e) {
             return response()->json([
                 'ok' => false,
@@ -179,6 +212,7 @@ class ConnectionsController extends Controller
             'base_url' => ['sometimes', 'required', 'url', 'max:2048'],
             'auth_type' => ['sometimes', 'required', Rule::in(AutomationConnection::AUTH_TYPES)],
             'auth_config' => ['nullable', 'array'],
+            ...$this->oauthRules($request->input('auth_type', $stored->auth_type) === AutomationConnection::OAUTH2, required: false),
             'default_headers' => ['nullable', 'array'],
             'timeout' => ['nullable', 'integer', 'min:1', 'max:120'],
             'test_path' => ['nullable', 'string', 'max:1024'],
@@ -196,8 +230,14 @@ class ConnectionsController extends Controller
             $draft->test_path = $data['test_path'] ?? null;
         }
 
-        $sameHost = strtolower((string) parse_url((string) $draft->base_url, PHP_URL_HOST))
-            === strtolower((string) parse_url((string) $stored->base_url, PHP_URL_HOST));
+        $host = fn (mixed $url) => strtolower((string) parse_url((string) $url, PHP_URL_HOST));
+        $sameHost = $host($draft->base_url) === $host($stored->base_url);
+
+        // The client secret goes to the token URL too: the same rule applies.
+        if ($sameHost && $draft->auth_type === AutomationConnection::OAUTH2
+            && is_array($request->input('auth_config')) && filled($request->input('auth_config.token_url'))) {
+            $sameHost = $host($request->input('auth_config.token_url')) === $host(($stored->auth_config ?? [])['token_url'] ?? null);
+        }
 
         $draft->auth_config = $this->authConfig(
             (string) $draft->auth_type,
@@ -228,11 +268,14 @@ class ConnectionsController extends Controller
             }],
             'auth_type' => ['required', Rule::in(AutomationConnection::AUTH_TYPES)],
             'auth_config' => ['nullable', 'array'],
+            ...$this->oauthRules($request->input('auth_type') === AutomationConnection::OAUTH2),
             'default_headers' => ['nullable', 'array'],
             'timeout' => ['nullable', 'integer', 'min:1', 'max:120'],
             'test_path' => ['nullable', 'string', 'max:1024'],
+            'template_handle' => ['nullable', 'string', 'max:64'],
         ]);
 
+        unset($data['template_handle']);
         $data['timeout'] ??= 15;
 
         return $data;
@@ -244,14 +287,42 @@ class ConnectionsController extends Controller
         AutomationConnection $connection,
         ?AutomationConnectionOperation $operation = null,
     ): array {
-        $unique = Rule::unique('automation_connection_operations', 'handle')->where('connection_id', $connection->id);
-
         // Any RFC 7230 token, checked uppercased: `report` is REPORT.
         if (is_string($request->input('method'))) {
             $request->merge(['method' => strtoupper(trim($request->input('method')))]);
         }
 
-        $data = $request->validate([
+        $data = $request->validate($this->operationRules($connection, $operation));
+
+        $data['fail_on_error_status'] ??= true;
+
+        return $data;
+    }
+
+    /**
+     * One operation of a template, checked by the rules of the operation form.
+     *
+     * @param  array<string, mixed>  $operation
+     * @return array<string, mixed>
+     *
+     * @throws ValidationException
+     */
+    protected function validateTemplateOperation(array $operation, AutomationConnection $connection): array
+    {
+        $operation['method'] = strtoupper(trim((string) ($operation['method'] ?? '')));
+
+        $data = Validator::make($operation, $this->operationRules($connection))->validate();
+        $data['fail_on_error_status'] ??= true;
+
+        return $data;
+    }
+
+    /** @return array<string, mixed> */
+    protected function operationRules(AutomationConnection $connection, ?AutomationConnectionOperation $operation = null): array
+    {
+        $unique = Rule::unique('automation_connection_operations', 'handle')->where('connection_id', $connection->id);
+
+        return [
             'handle' => [
                 'required', 'string', 'max:64', 'regex:/^[a-z][a-z0-9_]*$/',
                 $operation ? $unique->ignore($operation->id) : $unique,
@@ -277,11 +348,72 @@ class ConnectionsController extends Controller
             'inputs.*.options' => ['nullable', 'array'],
             'response_map' => ['nullable', 'array'],
             'fail_on_error_status' => ['nullable', 'boolean'],
-        ]);
+        ];
+    }
 
-        $data['fail_on_error_status'] ??= true;
+    /**
+     * The template named by `template_handle`, or null for none. An unknown
+     * handle is an error, not "no template": the form would otherwise save a
+     * connection without the operations the operator picked it for.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function template(Request $request): ?array
+    {
+        $handle = $request->input('template_handle');
 
-        return $data;
+        if (! is_string($handle) || $handle === '') {
+            return null;
+        }
+
+        $template = app(ConnectionTemplateRegistry::class)->get($handle);
+
+        if ($template === null) {
+            throw ValidationException::withMessages(['template_handle' => __('Unknown connection template.')]);
+        }
+
+        return $template;
+    }
+
+    /**
+     * Rules for the OAuth2 fields of `auth_config`. The token URL passes the
+     * host guard on save, as the base URL does, and again before every
+     * request.
+     *
+     * @return array<string, mixed>
+     */
+    protected function oauthRules(bool $active, bool $required = true): array
+    {
+        $required = $active && $required;
+
+        return [
+            'auth_config.token_url' => [$required ? 'required' : 'nullable', 'url', 'max:2048', function (string $attribute, mixed $value, \Closure $fail) {
+                try {
+                    app(HostGuard::class)->guard((string) $value);
+                } catch (UnsafeHostException $e) {
+                    $fail($e->getMessage());
+                }
+            }],
+            'auth_config.client_id' => [$required ? 'required' : 'nullable', 'string', 'max:1024'],
+            'auth_config.client_secret' => ['nullable', 'string', 'max:4096'],
+            'auth_config.scope' => ['nullable', 'string', 'max:1024'],
+            'auth_config.client_auth_method' => ['nullable', Rule::in(AutomationConnection::CLIENT_AUTH_METHODS)],
+            'auth_config.token_request_fields' => ['nullable', 'array', function (string $attribute, mixed $value, \Closure $fail) {
+                foreach (AutomationConnectionOperation::keyValue($value) as $name => $field) {
+                    if (trim((string) $name) === '' || ! is_scalar($field) && $field !== null) {
+                        $fail(__('The token request fields must be name and value pairs.'));
+                    }
+                }
+            }],
+        ];
+    }
+
+    /** A client credentials connection without a client secret can never get a token. */
+    protected function requireOAuthSecret(string $type, ?array $config): void
+    {
+        if ($type === AutomationConnection::OAUTH2 && ! filled($config['client_secret'] ?? null)) {
+            throw ValidationException::withMessages(['auth_config.client_secret' => __('The client secret is required.')]);
+        }
     }
 
     /**
@@ -313,6 +445,10 @@ class ConnectionsController extends Controller
         $kept = $existing && $existing->auth_type === $type ? ($existing->auth_config ?? []) : [];
         $config = [];
 
+        if ($type === AutomationConnection::OAUTH2) {
+            return $this->oauthConfig($input, $kept);
+        }
+
         foreach (AutomationConnection::AUTH_FIELDS[$type] ?? [] as $key) {
             $value = $input[$key] ?? null;
 
@@ -322,6 +458,55 @@ class ConnectionsController extends Controller
         }
 
         return $config === [] ? null : $config;
+    }
+
+    /**
+     * The OAuth2 setup to store. The plain fields are taken as typed (one
+     * missing from the request falls back to what is stored); the client secret and the
+     * secret token request fields keep the stored value when they arrive
+     * empty or as the placeholder.
+     *
+     * @param  array<string, mixed>  $input
+     * @param  array<string, mixed>  $kept
+     * @return array<string, mixed>
+     */
+    protected function oauthConfig(array $input, array $kept): array
+    {
+        $config = [];
+
+        foreach (['token_url', 'client_id', 'scope'] as $key) {
+            // An explicitly empty value is a decision (the scope can be cleared);
+            // only a key missing from the request falls back to what is stored.
+            $config[$key] = array_key_exists($key, $input)
+                ? trim((string) (is_scalar($input[$key]) ? $input[$key] : ''))
+                : (string) ($kept[$key] ?? '');
+        }
+
+        $secret = $input['client_secret'] ?? null;
+        $config['client_secret'] = is_string($secret) && $secret !== '' && $secret !== self::PLACEHOLDER
+            ? $secret
+            : (string) ($kept['client_secret'] ?? '');
+
+        $method = $input['client_auth_method'] ?? $kept['client_auth_method'] ?? null;
+        $config['client_auth_method'] = in_array($method, AutomationConnection::CLIENT_AUTH_METHODS, true) ? $method : 'client_secret_basic';
+
+        $keptFields = is_array($kept['token_request_fields'] ?? null) ? $kept['token_request_fields'] : [];
+        $fields = [];
+
+        foreach (AutomationConnectionOperation::keyValue($input['token_request_fields'] ?? []) as $name => $value) {
+            $name = trim((string) $name);
+            $value = is_scalar($value) ? (string) $value : '';
+
+            if ($name === '') {
+                continue;
+            }
+
+            $fields[$name] = $value === self::PLACEHOLDER ? (string) ($keptFields[$name] ?? '') : $value;
+        }
+
+        $config['token_request_fields'] = $fields;
+
+        return $config;
     }
 
     /**
@@ -339,11 +524,10 @@ class ConnectionsController extends Controller
             'base_url' => $connection->base_url,
             'auth_type' => $connection->auth_type,
             // Which fields are set, never what is in them.
-            'auth_config' => array_map(
-                fn ($value) => filled($value) ? self::PLACEHOLDER : '',
-                $connection->auth_config ?? [],
-            ),
-            'auth_configured' => array_filter($connection->auth_config ?? []) !== [],
+            'auth_config' => $this->presentAuthConfig($connection),
+            'auth_configured' => filled($connection->usesOAuth2()
+                ? ($connection->auth_config['client_secret'] ?? null)
+                : array_filter($connection->auth_config ?? [])),
             'default_headers' => $connection->default_headers ?? [],
             'timeout' => $connection->timeout,
             'test_path' => $connection->test_path,
@@ -361,6 +545,38 @@ class ConnectionsController extends Controller
         }
 
         return $data;
+    }
+
+    /**
+     * Which credential fields are set, never what is in them. For OAuth2 the
+     * fields that are not secret (token URL, client id, scope, method, the
+     * grant type) are shown as they are, because the form has to edit them.
+     *
+     * @return array<string, mixed>
+     */
+    protected function presentAuthConfig(AutomationConnection $connection): array
+    {
+        $config = $connection->auth_config ?? [];
+        $hide = fn ($value) => filled($value) ? self::PLACEHOLDER : '';
+
+        if (! $connection->usesOAuth2()) {
+            return array_map($hide, $config);
+        }
+
+        $fields = [];
+
+        foreach (is_array($config['token_request_fields'] ?? null) ? $config['token_request_fields'] : [] as $name => $value) {
+            $fields[$name] = in_array($name, AutomationConnection::OAUTH2_PLAIN_TOKEN_FIELDS, true) ? $value : $hide($value);
+        }
+
+        return [
+            'token_url' => $config['token_url'] ?? '',
+            'client_id' => $config['client_id'] ?? '',
+            'client_secret' => $hide($config['client_secret'] ?? ''),
+            'scope' => $config['scope'] ?? '',
+            'client_auth_method' => $config['client_auth_method'] ?? 'client_secret_basic',
+            'token_request_fields' => $fields,
+        ];
     }
 
     /** @return array<string, mixed> */

@@ -3,6 +3,7 @@
 namespace Goldnead\StatamicAutomations\Facades;
 
 use Goldnead\StatamicAutomations\Registries\ActionRegistry;
+use Goldnead\StatamicAutomations\Registries\ConnectionTemplateRegistry;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Registries\OptionSourceRegistry;
 use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
@@ -17,6 +18,8 @@ use Illuminate\Support\Facades\Facade;
  * @method static \Goldnead\StatamicAutomations\Automations registerLogicNode(string $handleOrClass, ?string $class = null)
  * @method static \Goldnead\StatamicAutomations\Automations registerOptionSource(string $handle, callable|string $resolver)
  * @method static \Goldnead\StatamicAutomations\Automations registerEventTrigger(string $eventClass, array $definition)
+ * @method static \Goldnead\StatamicAutomations\Automations registerConnectionTemplate(string $handle, array $template)
+ * @method static ConnectionTemplateRegistry connectionTemplates()
  * @method static \Goldnead\StatamicAutomations\Automations registerBuiltIn(string $handle)
  * @method static array describe(string $class, ?string $expectedKind = null)
  * @method static \Goldnead\StatamicAutomations\Automations bootEventTriggersFromConfig()

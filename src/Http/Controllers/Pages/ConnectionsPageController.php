@@ -6,6 +6,7 @@ use Goldnead\StatamicAutomations\Http\Controllers\ConnectionsController;
 use Goldnead\StatamicAutomations\Http\Controllers\Controller;
 use Goldnead\StatamicAutomations\Models\AutomationConnection;
 use Goldnead\StatamicAutomations\Models\AutomationConnectionOperation;
+use Goldnead\StatamicAutomations\Registries\ConnectionTemplateRegistry;
 use Goldnead\StatamicAutomations\Support\Setup;
 use Inertia\Inertia;
 use Statamic\CP\Column;
@@ -97,10 +98,38 @@ class ConnectionsPageController extends Controller
                 : null,
             'authTypes' => $this->authTypeLabels(),
             'authFields' => AutomationConnection::AUTH_FIELDS,
+            'clientAuthMethods' => [
+                'client_secret_basic' => __('Basic header'),
+                'client_secret_post' => __('Request body'),
+            ],
+            // Only offered when creating: a template fills the form, nothing
+            // stays bound to it afterwards.
+            'templates' => $connection['id'] ? [] : $this->templates(),
             'methods' => AutomationConnectionOperation::METHODS,
             'inputTypes' => AutomationConnectionOperation::INPUT_TYPES,
             'placeholder' => ConnectionsController::PLACEHOLDER,
         ]);
+    }
+
+    /**
+     * What the create form needs of each template: its name and the values to
+     * prefill. The operations stay on the server and are created on save.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    protected function templates(): array
+    {
+        return collect(app(ConnectionTemplateRegistry::class)->all())
+            ->map(fn (array $template, string $handle) => [
+                'handle' => $handle,
+                'name' => (string) $template['name'],
+                'description' => (string) ($template['description'] ?? ''),
+                'connection' => $template['connection'],
+                'operations' => collect($template['operations'])->pluck('name')->filter()->values()->all(),
+            ])
+            ->sortBy('name')
+            ->values()
+            ->all();
     }
 
     /** @return array<string, string> */
@@ -111,6 +140,7 @@ class ConnectionsPageController extends Controller
             'header' => __('Header'),
             'bearer' => __('Bearer token'),
             'basic' => __('Basic auth'),
+            AutomationConnection::OAUTH2 => __('OAuth2 (client credentials)'),
         ];
 
         return collect(AutomationConnection::AUTH_TYPES)

@@ -5,7 +5,10 @@ namespace Goldnead\StatamicAutomations\Engine;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
+use Goldnead\StatamicAutomations\Nodes\Actions\AiGenerateAction;
+use Goldnead\StatamicAutomations\Nodes\Logic\LoopNode;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
+use Goldnead\StatamicAutomations\Support\DispatchMode;
 use Goldnead\StatamicAutomations\Support\NodeOutputs;
 use Illuminate\Support\Collection;
 
@@ -94,12 +97,116 @@ class FlowValidator
             );
         }
 
-        // 6) No cycles.
+        // 6) AI nodes: valid settings, and never inside a synchronous run.
+        $issues = array_merge($issues, $this->validateAiNodes($nodes, $edges, $triggers));
+
+        // 7) No cycles.
         if ($this->hasCycle($nodes->pluck('node_key')->all(), $edges->all())) {
             $issues[] = $this->error('cycle_detected', 'Automation contains a cycle.');
         }
 
         return $issues;
+    }
+
+    /**
+     * `ai_generate` waits on a model for as long as its timeout, and a long
+     * input needs minutes. A sync trigger runs the whole flow inside the
+     * request that fired it, so an AI node reachable from one would hold that
+     * page load for the model's full latency. That is refused here rather than
+     * left to time out in production.
+     *
+     * @param  Collection<int, AutomationNode>  $nodes
+     * @param  Collection<int, AutomationEdge>  $edges
+     * @param  Collection<int, AutomationNode>  $triggers
+     * @return array<int, array{level: string, code: string, message: string, node_key?: string}>
+     */
+    protected function validateAiNodes($nodes, $edges, $triggers): array
+    {
+        $issues = [];
+        $ai = $nodes->filter(fn ($n) => $n->type === AiGenerateAction::handle());
+
+        foreach ($ai as $node) {
+            foreach (AiGenerateAction::configProblems($node->config ?? []) as $problem) {
+                $issue = $this->error($problem['code'], $problem['message'], $node->node_key);
+                $issue['field'] = $problem['field'];
+                $issues[] = $issue;
+            }
+        }
+
+        if ($ai->isEmpty()) {
+            return $issues;
+        }
+
+        // An inline loop runs its body once per item, so an AI node in it is
+        // called N times while the job timeout budgets it once. N is only known
+        // at run time, so the budget cannot be right: refuse it.
+        foreach ($nodes->where('type', 'loop') as $loop) {
+            if (($loop->config['mode'] ?? 'inline') === 'automation') {
+                continue;
+            }
+
+            $body = [];
+            foreach ($edges->where('from_node_key', $loop->node_key)->where('from_output', LoopNode::OUTPUT_LOOP) as $edge) {
+                $body = array_merge($body, $this->reachableFrom((string) $edge->to_node_key, $edges->all()));
+            }
+
+            foreach ($ai as $node) {
+                if (in_array($node->node_key, $body, true)) {
+                    $issues[] = $this->error(
+                        'ai_in_loop',
+                        "AI node '{$node->node_key}' is inside the body of loop '{$loop->node_key}' and would run once per item, more often than the job's time budget allows for. Run the loop over a separate automation, or put the AI call outside the loop.",
+                        $node->node_key,
+                    );
+                }
+            }
+        }
+
+        foreach ($triggers as $trigger) {
+            $config = $trigger->config ?? [];
+            $mode = DispatchMode::fromValue(
+                is_string($config[DispatchMode::CONFIG_KEY] ?? null) ? $config[DispatchMode::CONFIG_KEY] : null
+            );
+
+            if ($mode !== DispatchMode::Sync) {
+                continue;
+            }
+
+            $reachable = $this->reachableFrom($trigger->node_key, $edges->all());
+
+            foreach ($ai as $node) {
+                if (in_array($node->node_key, $reachable, true)) {
+                    $issues[] = $this->error(
+                        'ai_requires_queue',
+                        "AI node '{$node->node_key}' is reachable from the synchronous trigger '{$trigger->node_key}'. Set the trigger to run in the background: a model call can take minutes and must not run inside the request.",
+                        $node->node_key,
+                    );
+                }
+            }
+        }
+
+        return $issues;
+    }
+
+    /**
+     * @param  array<int, AutomationEdge>  $edges
+     * @return array<int, string>
+     */
+    protected function reachableFrom(string $start, array $edges): array
+    {
+        $seen = [$start => true];
+        $queue = [$start];
+
+        while ($queue) {
+            $current = array_shift($queue);
+            foreach ($edges as $edge) {
+                if ($edge->from_node_key === $current && ! isset($seen[$edge->to_node_key])) {
+                    $seen[$edge->to_node_key] = true;
+                    $queue[] = $edge->to_node_key;
+                }
+            }
+        }
+
+        return array_map('strval', array_keys($seen));
     }
 
     /**

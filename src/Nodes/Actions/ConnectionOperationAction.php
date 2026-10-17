@@ -7,6 +7,8 @@ use Goldnead\StatamicAutomations\Contracts\AutomationAction;
 use Goldnead\StatamicAutomations\Models\AutomationConnectionOperation;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 use Goldnead\StatamicAutomations\Support\HostGuard;
+use Goldnead\StatamicAutomations\Support\OAuth2TokenException;
+use Goldnead\StatamicAutomations\Support\OAuth2TokenService;
 use Goldnead\StatamicAutomations\Support\UnsafeHostException;
 use Goldnead\StatamicAutomations\Support\XmlToArray;
 use Illuminate\Http\Client\Response;
@@ -132,7 +134,10 @@ class ConnectionOperationAction implements AutomationAction
             'method' => $method,
             'url' => $url,
             // Names only: the values of the auth headers never leave the call.
-            'headers' => array_keys($headers),
+            'headers' => array_values(array_unique([
+                ...array_keys($headers),
+                ...($connection->usesOAuth2() ? ['Authorization'] : []),
+            ])),
             'body' => $body,
         ] + ($raw ? ['content_type' => $contentType] : []);
 
@@ -157,7 +162,19 @@ class ConnectionOperationAction implements AutomationAction
             return ActionResult::failed($e->getMessage(), ['preview' => $connection->mask($preview)]);
         }
 
+        $oauth = $connection->usesOAuth2() ? app(OAuth2TokenService::class) : null;
+
         try {
+            if ($oauth) {
+                $connection->useAccessToken($oauth->token($connection));
+                $headers = $connection->requestHeaders($operationHeaders, $raw ? ['content-type'] : []);
+            }
+        } catch (OAuth2TokenException $e) {
+            // Already masked; no request goes out without its credential.
+            return ActionResult::failed($e->getMessage(), $connection->mask(['preview' => $preview]));
+        }
+
+        $send = function (array $headers) use ($pinned, $connection, $raw, $body, $contentType, $method, $url) {
             // No redirects: Guzzle strips only Authorization and Cookie on a
             // redirect to another host, so a custom credential header would
             // follow. A 3xx is answered like any other non-2xx status.
@@ -178,7 +195,28 @@ class ConnectionOperationAction implements AutomationAction
                 $options = ['json' => $body];
             }
 
-            $response = $request->send($method, $url, $options);
+            return $request->send($method, $url, $options);
+        };
+
+        try {
+            $response = $send($headers);
+
+            // A 401 on an OAuth2 connection means the token is no longer good
+            // (revoked, or expired early): drop it, fetch one new token and
+            // send the same request once more. A second 401 is final.
+            if ($oauth && $response->status() === 401) {
+                $connection->useAccessToken($oauth->token($connection, fresh: true));
+                $response = $send($connection->requestHeaders($operationHeaders, $raw ? ['content-type'] : []));
+
+                if ($response->status() === 401) {
+                    return ActionResult::failed(
+                        "{$type} answered with HTTP 401 again after the access token was renewed. Check the OAuth2 client, its scopes and account.",
+                        $connection->mask(['preview' => $preview, 'status' => 401]),
+                    );
+                }
+            }
+        } catch (OAuth2TokenException $e) {
+            return ActionResult::failed('Renewing the access token failed: '.$e->getMessage(), $connection->mask(['preview' => $preview]));
         } catch (\Throwable $e) {
             return ActionResult::failed((string) $connection->mask($e->getMessage()), $connection->mask(['preview' => $preview]));
         }

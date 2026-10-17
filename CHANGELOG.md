@@ -1,13 +1,62 @@
 # Changelog
 
-## 2.25.1 — 2026-10-18
+## Unreleased
 
-### Fixed
+### Fixed: Mail rules on a `flat_file` install
 
-- The Mail rules screen read automations through Eloquent while its three sibling screens go through
-  the repository. On a `flat_file` install the list showed the rules while Mail rules said "no rules".
-  It now uses `AutomationRepository`, and its setup guard leaves the definition tables out under
-  `flat_file`.
+The Mail rules screen read automations through Eloquent while its three sibling screens go through
+the repository, so under `flat_file` the list showed the rules while Mail rules said "no rules".
+It now uses `AutomationRepository`, and its setup guard leaves the definition tables out under
+`flat_file`.
+
+### Upgrading
+
+- No migration. Publishing the config is optional: `automations.ai.max_timeout` (default 900) is new.
+- **Queue worker:** a long AI call only works if the worker lets it. Run workers with `--timeout` above the longest
+  AI node timeout and set the connection's `retry_after` above that too, or the job is killed or run twice.
+  `RunAutomation` now sets its own `$timeout` (sum of the automation's AI node timeouts + 60 s) so `--timeout`
+  only needs to be at least that.
+- An automation with a synchronous trigger that can reach an `ai_generate` node no longer validates
+  (`ai_requires_queue`); set the trigger to run in the background.
+- An `ai_generate` node inside the body of an inline loop no longer validates (`ai_in_loop`): it would run once per
+  item, but the job timeout budgets it once. Put the AI call outside the loop or run a separate automation per item.
+
+### Added: Generate with AI for long inputs (`ai_generate`)
+
+- Per node: `timeout` (seconds, empty = `ai.timeout`), next to the existing `model` and `max_tokens`.
+- Output `JSON object` with an optional JSON Schema (`type`, `properties`, `required`, `items`, `enum`). The reply is decoded,
+  checked, and every field is readable as `{{ nodes.<node>.json.<field> }}`; invalid JSON or a schema violation
+  fails the node with a readable message. The token picker offers the schema's top-level fields.
+- The model call sits behind the `AiClient` contract (Anthropic by default) so tests can fake it.
+
+### Added: action "Fetch file from URL" (`asset.fetch_from_url`)
+
+- Downloads a file from a URL into an asset container, streamed to a temporary file and from there to the
+  container's disk; memory stays flat. The download stops at the first byte over the limit
+  (`automations.assets.fetch.max_size_mb`, default 500, or the node's own) and leaves nothing behind.
+- Optional connection: its headers or OAuth2 token are sent to the URL's own origin only. A 401 renews the
+  token once and downloads again. Redirects are followed by hand (five hops at most), every hop passes the
+  `HostGuard`, and the credential is dropped for good after the first change of origin.
+- Output for the next node: `asset_id`, `path`, `size`, `mime_type`. Without `overwrite` a taken name gets
+  `-1`, `-2`; with it the old file and its meta are restored if anything fails.
+- Config: `assets.fetch.max_size_mb` (`STATAMIC_AUTOMATIONS_ASSET_MAX_SIZE_MB`) and `assets.fetch.timeout`
+  (`STATAMIC_AUTOMATIONS_ASSET_FETCH_TIMEOUT`, the HTTP timeout of the download). Switchable under
+  `builtin_nodes.fetch_asset_from_url`. The connection is only used for a URL on its own base URL. Works with any container, including private ones from `statamic-private-media`.
+
+### Added: OAuth2 connections and connection templates
+
+- Connections get the auth type `oauth2_client_credentials`: token URL, client ID and secret, scope,
+  `client_secret_basic` or `client_secret_post`, and free extra token request fields (`grant_type`
+  can be overridden, e.g. Zoom's `account_credentials` with `account_id`). Every
+  `connection.<x>.<op>` call gets a valid token on its own.
+- The token is cached per connection until `expires_in` minus 60 s, encrypted. A 401 drops it, fetches
+  one new token and repeats the request once; a second 401 fails the node with a clear message.
+- The token URL passes the `HostGuard` on save and before each token request; redirects are not followed.
+  Client secret, extra token field values and access tokens are masked in output, errors and the run log.
+- Connection templates (`Automations::registerConnectionTemplate()`): picking one on the create form
+  fills it in, and saving creates the connection and its operations in one transaction. Built in:
+  `zoom_server_to_server` (`recordings.list`, `recording.get`) and `deepgram` (`transcribe.url`).
+- No migration.
 
 ## 2.25.0 — 2026-10-09
 
