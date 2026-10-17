@@ -324,6 +324,15 @@ class WorkflowRunner
         ]);
         $context->set('_subject_key', (string) ($run->subject_key ?? ''));
 
+        // The run itself, for a node that has to count from its start or to
+        // leave itself out of a look at "the other runs" (wait_for_automation).
+        // `started_at` is kept across resumes, so a node re-run days later still
+        // counts from the original start.
+        $context->set('_run', [
+            'uuid' => (string) $run->uuid,
+            'started_at' => ($run->started_at ?? $run->created_at)?->toIso8601String(),
+        ]);
+
         $edges = $automation->edges;
         $nodes = $automation->nodes->keyBy('node_key');
 

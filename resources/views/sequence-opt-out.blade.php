@@ -12,7 +12,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex, nofollow">
-    <title>{{ __('statamic-automations::sequence.title') }}</title>
+    <title>{{ $page->text('title', __('statamic-automations::sequence.title')) }}</title>
     <style>
         body { font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif; line-height: 1.55;
                color: #1c1917; background: #fafaf9; margin: 0; padding: 48px 20px; }
@@ -24,6 +24,8 @@
         .btn { display: inline-block; border: 0; border-radius: 8px; padding: 12px 20px;
                font-size: 15px; font-weight: 600; cursor: pointer; background: #1c1917; color: #fff; }
         .btn.secondary { background: #fff; color: #1c1917; border: 1px solid #d6d3d1; }
+        .back { margin-top: 20px; }
+        .back a { color: #1c1917; }
         .ok { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534;
               padding: 12px 16px; border-radius: 8px; margin: 0 0 20px; }
     </style>
@@ -31,22 +33,22 @@
 <body>
 <div class="box">
     @if (session('automations.sequence.status') === 'opted_out')
-        <p class="ok">{{ __('statamic-automations::sequence.done_out') }}</p>
+        <p class="ok">{{ $page->text('done', __('statamic-automations::sequence.done_out')) }}</p>
     @elseif (session('automations.sequence.status') === 'opted_in')
         <p class="ok">{{ __('statamic-automations::sequence.done_in') }}</p>
     @endif
 
-    <h1>{{ $automation->name }}</h1>
+    <h1>{{ $page->text('title', $automation->name) }}</h1>
 
     @if ($optedOut)
-        <p>{{ __('statamic-automations::sequence.already_out', ['email' => $email]) }}</p>
+        <p>{{ $page->text('already_out', __('statamic-automations::sequence.already_out', ['email' => $email])) }}</p>
 
         <form method="POST" action="{{ route('automations.sequence.opt-in.post', ['token' => $token, 'sequence' => $automation->uuid]) }}">
             @csrf
             <button type="submit" class="btn secondary">{{ __('statamic-automations::sequence.opt_in_button') }}</button>
         </form>
     @else
-        <p>{{ __('statamic-automations::sequence.body', ['email' => $email]) }}</p>
+        <p>{{ $page->text('body', __('statamic-automations::sequence.body', ['email' => $email])) }}</p>
 
         {{--
             Knopf statt Link: alles, was den Link ohne Menschen dahinter
@@ -56,11 +58,20 @@
         --}}
         <form method="POST" action="{{ route('automations.sequence.opt-out.post', ['token' => $token, 'sequence' => $automation->uuid]) }}">
             @csrf
-            <button type="submit" class="btn">{{ __('statamic-automations::sequence.opt_out_button') }}</button>
+            <button type="submit" class="btn">{{ $page->text('button', __('statamic-automations::sequence.opt_out_button')) }}</button>
         </form>
     @endif
 
-    <p class="quiet" style="margin-top:20px;">{{ __('statamic-automations::sequence.scope_note') }}</p>
+    {{--
+        Ein Link aus der Config, nur Pfad oder https (SequenceOptOutPage::link).
+        Er steht immer da, auch nach dem Ausstieg: dort braucht man ihn am
+        meisten, weil die Seite sonst eine Sackgasse ist.
+    --}}
+    @if ($link = $page->link(__('statamic-automations::sequence.back_link')))
+        <p class="back"><a href="{{ $link['url'] }}">{{ $link['label'] }}</a></p>
+    @endif
+
+    <p class="quiet" style="margin-top:20px;">{{ $page->text('scope_note', __('statamic-automations::sequence.scope_note')) }}</p>
 </div>
 </body>
 </html>

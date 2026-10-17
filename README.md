@@ -203,6 +203,7 @@ last two need statamic-offers for their pickers; the matching works on the handl
 | Branch | Split into `true` / `false` paths |
 | Stop | End the flow with status `stopped` |
 | Delay | Wait for minutes / hours / days, then continue |
+| Wait for Automation | Hold the run while the same person is still inside **another** automation, then report how that one ended (`state`: `none`, `ran_to_end`, `opted_out`, `ended_early`; `ran_to_end` as a bool). Optional: wait for a run that starts a moment later, and wait until the next calendar day so two series never mail on the same day. See [Sequences](docs/sequences.md#wait-for-automation-two-series-one-person) |
 
 ### Actions
 
@@ -229,6 +230,7 @@ last two need statamic-offers for their pickers; the matching works on the handl
 | Grant Access _(Entitlements)_ | Entitlements | Idempotent by (subject, product, source, reference). Branch on `grants_access`; **fails** when the grant it finds is revoked or expired, because re-granting does not reopen one. |
 | Revoke Access _(Entitlements)_ | Entitlements | Withdraws **every** grant the subject holds for the product; reports how many actually changed. |
 | Check Access _(Entitlements)_ | Entitlements | Looks up **now** whether an address holds a product; `require` or `forbid`. Ends the run (a stop, not a failure) when the condition does not hold, fails when the check cannot be made. |
+| Recent Grant _(Entitlements)_ | Entitlements | Asks "has this person just unlocked something?": the newest active grant of an address inside `within_minutes` (default 60), optionally limited to `sources`. Output `found`, `product_slug`, `product_title`, `source`, `granted_at`. Nothing found is a success with `found` false. See [Integrations](docs/integrations.md#recent-grant) |
 | Issue Invoice _(Invoices)_ | Invoices | Writes the invoice for a paid payment, or returns the one already written. Branch on `created`. |
 | Issue Credit Note _(Invoices)_ | Invoices | Reverses the **whole** invoice. Put a full-refund condition in front of it. |
 

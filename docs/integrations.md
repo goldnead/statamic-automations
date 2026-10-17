@@ -573,6 +573,83 @@ shows only the times. Venue and hotel pages behind a rollup come from
 
 All three only read, so a test run reads for real and shows the actual rows.
 
+## Entitlements
+
+With `goldnead/statamic-entitlements` installed the Grant, Revoke, Check Access and
+Recent Grant actions appear (group **Entitlements**), plus the five grant triggers.
+The first three are described in the README table; this section covers Recent
+Grant.
+
+### Recent Grant
+
+`entitlements.recent_grant` asks "has this person just unlocked something?". A
+flow that is about to mail somebody uses it to learn that another mail already
+told her about a fresh unlock.
+
+| Field | | |
+| --- | --- | --- |
+| `email` | required, tokenable | The address. Found as the Statamic user who owns it and as a subject of type `email`, any case. |
+| `within_minutes` | default 60 | How far back the activation may lie. At least 1. |
+| `sources` | optional | Comma separated grant sources, for example `lead_magnet, thrivecart`. Empty means every source. |
+
+Output, always all five keys:
+
+| Key | Type | |
+| --- | --- | --- |
+| `found` | bool | A matching grant exists. |
+| `product_slug` | string | Empty when not found. |
+| `product_title` | string | A readable name, or empty. **Never the slug.** |
+| `source` | string | The grant's source, for example `lead_magnet`. |
+| `granted_at` | string | ISO 8601, the moment access began. |
+
+What counts: the newest grant of the address that gives access **now** (active or
+in its grace period, by the addon's own `state()`) and whose `starts_at` (the
+moment the manager stamps when a grant is written active or a pending one is
+confirmed; `created_at` for a row written by hand) lies at most `within_minutes`
+back. A revoked, expired, scheduled or pending grant is not an unlock, and a newer
+dead grant does not hide an older live one.
+
+Not found is a **success** with `found` false: no stop, no failure, the branch
+behind the node decides. A failure means the check could not be made (addon
+missing, no or invalid address, a database error). In test mode the node answers
+`found` false without looking.
+
+Reading the answer in a later node:
+
+```
+{{ nodes.recent.found }}          renders 1 or nothing
+{{ nodes.recent.product_title }}  e.g. in a mail or log text
+```
+
+In a `branch` use `nodes.recent.found` **equals** `true` and wire the `false`
+edge for "nothing found". Do not write `equals false`: PHP compares the bool with
+the string "false" as true, so the test comes out inverted. (`does not equal true`
+is the safe mirror image.)
+
+#### Where the title comes from
+
+First hit wins, so `product_title` is a name a person can read or empty:
+
+1. the entitlements addon's product catalogue (`Entitlements::registerProducts()`),
+   when anything registered one;
+2. `automations.entitlements.title_sources`, for names that live in Statamic entries:
+
+   ```php
+   'entitlements' => [
+       'title_sources' => [
+           ['collection' => 'resources', 'match' => 'resource_slug', 'field' => 'title'],
+       ],
+   ],
+   ```
+
+   The entry of `collection` whose `match` field equals the product slug, and its
+   `field`. Several sources are tried in order. A misnamed collection costs that
+   source, not the run.
+3. with `goldnead/statamic-lead-magnets` installed and a grant that belongs to a
+   resource, the title of that resource.
+
+No hit leaves the title empty. Nothing in the addon knows a site's collection names.
+
 ## Secrets across integrations
 
 Never embed an API key or signing secret in a node config — it would be

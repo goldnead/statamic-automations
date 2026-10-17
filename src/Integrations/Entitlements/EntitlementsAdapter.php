@@ -2,6 +2,7 @@
 
 namespace Goldnead\StatamicAutomations\Integrations\Entitlements;
 
+use Illuminate\Support\Carbon;
 use Statamic\Facades\User;
 
 /**
@@ -254,6 +255,113 @@ class EntitlementsAdapter
         }
 
         return ['ok' => true, 'has_access' => false, 'state' => $state];
+    }
+
+    /**
+     * The newest active grant of an address that was activated inside a window.
+     *
+     * "Activated" is `starts_at`: the manager stamps it when a grant is written
+     * active and again when a pending grant is claimed (double opt-in), so it is
+     * the moment access began. A row without it (written by hand) falls back to
+     * `created_at`.
+     *
+     * Only grants that give access NOW count, by the addon's own `state()`: a
+     * refund a minute after the unlock must not be reported as an unlock. The
+     * address is every pair it can be, the Statamic user who owns it and the
+     * address itself as a subject of type `email`, as in {@see hasAccess()}.
+     *
+     * Filtering happens here, in PHP, over the subject's own grants. A person
+     * holds a handful, and it keeps this method on the three calls the addon
+     * documents (`reference`, `forSubject`, `get`) instead of on its columns.
+     *
+     * @param  list<string>  $sources  empty = every source
+     * @return array{ok: bool, grant?: array{id: mixed, product_slug: string, source: string, granted_at: \DateTimeInterface}|null, error?: string}
+     */
+    public function recentGrant(string $email, int $withinMinutes, array $sources = []): array
+    {
+        $manager = $this->manager();
+
+        if ($manager === null) {
+            return ['ok' => false, 'error' => 'The entitlements addon is not installed.'];
+        }
+
+        try {
+            $emailSubject = $this->subject('email', $email);
+
+            if ($emailSubject === null) {
+                return ['ok' => false, 'error' => 'Could not build a subject reference for the address, so its grants cannot be read.'];
+            }
+
+            $subjects = [$emailSubject];
+            $user = User::findByEmail($email);
+
+            if ($user !== null) {
+                $reference = $manager->reference($user);
+
+                if (! is_object($reference)) {
+                    return ['ok' => false, 'error' => 'The entitlements addon could not name the account that owns this address.'];
+                }
+
+                $subjects[] = $reference;
+            }
+
+            $since = now()->subMinutes($withinMinutes);
+            $best = null;
+
+            foreach ($subjects as $subject) {
+                foreach ($manager->forSubject($subject)->get() as $grant) {
+                    if ($sources !== [] && ! in_array((string) ($grant->source ?? ''), $sources, true)) {
+                        continue;
+                    }
+
+                    if (! $this->stateOf($grant)['grants_access']) {
+                        continue;
+                    }
+
+                    $at = $grant->starts_at ?? $grant->created_at ?? null;
+
+                    if (! $at instanceof \DateTimeInterface || Carbon::instance($at)->lt($since)) {
+                        continue;
+                    }
+
+                    if ($best === null || $at > $best['granted_at']) {
+                        $best = [
+                            'id' => $grant->id ?? null,
+                            'product_slug' => (string) ($grant->product_slug ?? ''),
+                            'source' => (string) ($grant->source ?? ''),
+                            'granted_at' => $at,
+                        ];
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'error' => $this->message($e)];
+        }
+
+        return ['ok' => true, 'grant' => $best];
+    }
+
+    /**
+     * The name the addon's product catalogue gives a slug, or null.
+     *
+     * The catalogue answers with the slug itself for a product nobody
+     * registered; that is not a name, so it counts as unknown.
+     */
+    public function productLabel(string $productSlug): ?string
+    {
+        $manager = $this->manager();
+
+        if ($manager === null || ! method_exists($manager, 'grantableProducts')) {
+            return null;
+        }
+
+        try {
+            $label = trim((string) ($manager->grantableProducts()[$productSlug]['label'] ?? ''));
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return ($label === '' || $label === $productSlug) ? null : $label;
     }
 
     /**

@@ -271,6 +271,78 @@ webhook with no address in it — falls back to `always` and logs it, because
 treating every subjectless run as the same subject would make one nightly sweep
 block every later one for ever.
 
+## Wait for Automation: two series, one person
+
+Two series that mail the same person collide: the person halfway through the
+welcome series should not also get the first mail of the next one the same day.
+The **Wait for Automation** node (`wait_for_automation`, group Logic) sits at the
+start of the second series, holds the run while the person is still inside the
+first, and tells the graph how that one ended.
+
+| Field | | |
+| --- | --- | --- |
+| `email` | required, tokenable | The person; matched against `subject_key`, the lower-cased address. |
+| `automation` | required | Handle (or uuid) of the other automation. |
+| `poll_hours` | default 6 | While the other run is queued, running or waiting, ask again this often. |
+| `wait_if_missing_minutes` | default 0 | No run of this person in the other automation yet: wait until this many minutes have passed since the start of **this** run, so a run that starts seconds later is not missed. |
+| `settle` | `none` (default) or `next_day` | After the other run ran to the end: continue at once, or wait until the next calendar day after it finished. |
+
+Output:
+
+| Key | |
+| --- | --- |
+| `state` | `none` (never had a run), `ran_to_end` (newest run is `success`), `opted_out` (series opt-out for that automation and person), `ended_early` (newest run `stopped`, `failed` or `cancelled`) |
+| `ran_to_end` | bool, true only for `ran_to_end`: success and no opt-out |
+
+An opt-out is checked first and counts as ended at once, even when the other run
+still waits on its next send step. Test runs and the node's own run are not counted.
+Calendar days are counted in `automations.timezone` (default `Europe/Berlin`), not
+in UTC. Like Wait Until the node is evaluated again when a parked check fires. In
+test mode it passes straight through with `none`.
+
+Typical use: the second series starts with the node, then a `branch` on
+`nodes.wait.state` (or a `switch` on `{{ nodes.wait.state }}`) decides whether the
+first mail goes out. For the bool use `nodes.wait.ran_to_end` **equals** `true`;
+the `false` edge is the other case (see the note on bools in
+[Integrations](integrations.md#recent-grant)).
+
+```
+trigger → wait_for_automation(email, automation=welcome,
+                              wait_if_missing_minutes=10, settle=next_day)
+        → branch(nodes.wait.state equals opted_out) → …
+```
+
+## The opt-out page, worded per series
+
+The page behind "Stop this series" shows the automation's name and the texts of the
+language file. A site words it per series in `config/automations.php`, by the
+automation's handle:
+
+```php
+'sequence_opt_out' => [
+    'pages' => [
+        'welcome' => [
+            'title' => 'Your welcome series',
+            'body' => 'This series goes to :email. You can stop it here.',
+            'button' => 'Stop sending',
+            'done' => 'Done, no more mails from this series.',
+            'already_out' => 'You already left this series (:email).',
+            'scope_note' => 'Only this series. Everything else stays.',
+            'link_label' => 'Back to the website',
+            'link_url' => '/',
+        ],
+    ],
+],
+```
+
+All keys are optional; a missing or empty one keeps the language-file text, and
+without any config the page is unchanged. `title` is the page title and headline,
+`button` the "stop" button, `done` the line after the opt-out. `:email` in `body`
+and `already_out` becomes the address. The texts come from config only; nothing a
+visitor typed flows into them. `link_url` is a path on this site (`/start`) or an
+`https://` URL, nothing else, and shows as a link on the page and after the opt-out;
+`link_label` defaults to "Back to the website".
+
 ## Enrollment and completion (`Support\RunStats`)
 
 ```php

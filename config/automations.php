@@ -368,6 +368,12 @@ return [
             'subject_reference' => 'Goldnead\\Entitlements\\Support\\SubjectReference',
         ],
 
+        // The lead-magnets addon, read by "Recent Grant" for the title of the
+        // resource behind a grant. Reached by class name, never type-hinted.
+        'lead_magnets' => [
+            'grant_model' => 'Goldnead\\LeadMagnets\\Models\\Grant',
+        ],
+
         'booking' => [
             'detect' => [
                 'Goldnead\\StatamicBooking\\Models\\Booking',
@@ -680,6 +686,75 @@ return [
 
     'sequence' => [
         'mail_nodes' => [
+            //
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Time zone for calendar days
+    |--------------------------------------------------------------------------
+    |
+    | Nodes that think in calendar days ("Wait for Automation" with settle
+    | "next day") count them in this zone, not in UTC. A day that ends at
+    | midnight UTC would end at 01:00 or 02:00 for your readers.
+    |
+    */
+
+    'timezone' => env('STATAMIC_AUTOMATIONS_TIMEZONE', 'Europe/Berlin'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Titles for "Recent Grant"
+    |--------------------------------------------------------------------------
+    |
+    | The node reports a readable `product_title` next to the product slug. The
+    | entitlements addon's own product catalogue is asked first. Where the names
+    | live in Statamic entries instead, list where to find them: the entry of
+    | `collection` whose `match` field equals the product slug, and its `field`
+    | as the title. First hit wins; no hit leaves the title empty (never the slug).
+    |
+    |   'title_sources' => [
+    |       ['collection' => 'resources', 'match' => 'resource_slug', 'field' => 'title'],
+    |   ],
+    |
+    */
+
+    'entitlements' => [
+        'title_sources' => [
+            //
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Series opt-out page
+    |--------------------------------------------------------------------------
+    |
+    | The page behind "Stop this series" can be worded per automation, by its
+    | handle. Every key is optional; a missing one keeps the text of the
+    | language file. Config only, no visitor input flows into these texts;
+    | `:email` in `body` and `already_out` becomes the address. `link_url` is a
+    | path on this site (`/start`) or an https URL, shown as a link on the page
+    | and after the opt-out, labelled `link_label`.
+    |
+    |   'pages' => [
+    |       'welcome' => [
+    |           'title' => 'Your welcome series',
+    |           'body' => 'This series goes to :email. You can stop it here.',
+    |           'button' => 'Stop sending',
+    |           'done' => 'Done, no more mails from this series.',
+    |           'already_out' => 'You already left this series.',
+    |           'scope_note' => 'Only this series. Everything else stays.',
+    |           'link_label' => 'Back to the website',
+    |           'link_url' => '/',
+    |       ],
+    |   ],
+    |
+    */
+
+    'sequence_opt_out' => [
+        'pages' => [
             //
         ],
     ],
