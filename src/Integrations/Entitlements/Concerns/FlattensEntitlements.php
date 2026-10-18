@@ -69,7 +69,7 @@ trait FlattensEntitlements
 
             if ($user !== null) {
                 $email = (string) $user->email();
-                $name = (string) ($user->get('name') ?? '');
+                $name = method_exists($user, 'name') ? (string) $user->name() : '';
             }
         }
 
