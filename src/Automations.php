@@ -7,6 +7,9 @@ use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
 use Goldnead\StatamicAutomations\Contracts\AutomationNode;
 use Goldnead\StatamicAutomations\Contracts\AutomationTrigger;
 use Goldnead\StatamicAutomations\Engine\TriggerDispatcher;
+use Goldnead\StatamicAutomations\Models\Automation;
+use Goldnead\StatamicAutomations\Models\AutomationRun;
+use Goldnead\StatamicAutomations\Models\AutomationScheduledJob;
 use Goldnead\StatamicAutomations\Nodes\Triggers\EventTrigger;
 use Goldnead\StatamicAutomations\Registries\ActionRegistry;
 use Goldnead\StatamicAutomations\Registries\ConnectionTemplateRegistry;
@@ -419,5 +422,58 @@ class Automations
         $definition['event'] = $eventClass;
 
         return $definition;
+    }
+
+    /**
+     * Close the passes that a graph edit has stranded.
+     *
+     * A run that is asleep waits on a scheduled job, and that job names the
+     * node it will resume on. Once the graph no longer contains that node, the
+     * wake-up call and the run go together: a cancelled run with a live call
+     * wakes up next to nothing, and a live call with a closed run wakes up into
+     * nothing. Runs that have already finished keep their outcome.
+     *
+     * This decides nothing about people or re-entry; that is
+     * {@see Engine\EnrollmentGate}. A caller that wants a call moved onto a
+     * surviving node instead of closed does that before calling this.
+     *
+     * @param  list<string>  $survivingNodeKeys  node keys that still exist after the change
+     * @param  string  $reason  written into the run's error message
+     * @return int wake-up calls cancelled
+     */
+    public function cancelRunsOnMissingNodes(Automation $automation, array $survivingNodeKeys, string $reason): int
+    {
+        $jobs = AutomationScheduledJob::query()
+            ->where('automation_id', $automation->id)
+            ->whereIn('status', [AutomationScheduledJob::STATUS_PENDING, AutomationScheduledJob::STATUS_QUEUED])
+            ->whereNotIn('node_key', $survivingNodeKeys)
+            ->get(['id', 'automation_run_id']);
+
+        if ($jobs->isEmpty()) {
+            return 0;
+        }
+
+        AutomationScheduledJob::query()
+            ->whereIn('id', $jobs->pluck('id')->all())
+            ->update(['status' => AutomationScheduledJob::STATUS_CANCELLED]);
+
+        $runIds = $jobs->pluck('automation_run_id')->filter()->unique()->values()->all();
+
+        if ($runIds !== []) {
+            AutomationRun::query()
+                ->whereIn('id', $runIds)
+                ->whereIn('status', [
+                    AutomationRun::STATUS_WAITING,
+                    AutomationRun::STATUS_QUEUED,
+                    AutomationRun::STATUS_RUNNING,
+                ])
+                ->update([
+                    'status' => AutomationRun::STATUS_CANCELLED,
+                    'error_message' => 'Cancelled: '.$reason,
+                    'finished_at' => now(),
+                ]);
+        }
+
+        return $jobs->count();
     }
 }

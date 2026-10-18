@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Added: `Automations::cancelRunsOnMissingNodes()`
+
+A public way to close the passes that a graph edit has stranded. A run asleep in a delay waits on a
+scheduled job that names the node it resumes on; once that node is gone, the call and the run are
+cancelled together, with the given reason in the run's error message.
+
+```php
+Automations::cancelRunsOnMissingNodes(Automation $automation, array $survivingNodeKeys, string $reason): int
+```
+
+- Only wake-up calls that are still `pending` or `queued` are considered, and only runs that are
+  `waiting`, `queued` or `running` are closed. Finished runs keep their outcome.
+- Returns the number of wake-up calls cancelled.
+- It decides nothing about subjects or re-entry policies; that stays with the enrollment gate.
+- No migration, no change to the saved graph or the export format.
+
+Until now a sibling addon had to write into `automation_scheduled_jobs` and `automation_runs` directly
+to do this.
+
 ## 2.27.0
 
 ### Added: Check Access can just report
