@@ -121,6 +121,20 @@ it('skips a mail that has neither text nor template', function (): void {
     expect(app(MailThumbnails::class)->render($this->automation->fresh(['nodes'])))->toBe(0);
 });
 
+it('hands the builder page the tile URL on the mail node', function (): void {
+    ($this->mail)('mail_1', 'S', '<p>x</p>');
+    app(MailThumbnails::class)->render($this->automation->fresh(['nodes']));
+    $this->actingAsSuperUser();
+
+    $response = $this->withHeaders(['X-Inertia' => 'true'])
+        ->get(cp_route('statamic-automations.automations.edit', $this->automation))
+        ->assertOk();
+
+    $nodes = collect($response->json('props.automation.nodes'))->keyBy('node_key');
+
+    expect($nodes['mail_1']['thumbnail'])->toBeString()->toContain('/automations/thumbs/');
+});
+
 it('queues the render after a graph save, and only when a renderer exists', function (): void {
     Queue::fake();
     $this->actingAsSuperUser();
