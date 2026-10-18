@@ -11,12 +11,14 @@ use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Http\Requests\StoreAutomationRequest;
 use Goldnead\StatamicAutomations\Http\Requests\UpdateAutomationRequest;
 use Goldnead\StatamicAutomations\Http\Resources\AutomationResource;
+use Goldnead\StatamicAutomations\Jobs\RenderMailThumbnails;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Support\AuditLogger;
+use Goldnead\StatamicAutomations\Thumbnails\MailThumbnails;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -98,6 +100,10 @@ class AutomationsController extends Controller
         $automation = app(AutomationRepository::class)
             ->save($automation, $data['nodes'] ?? [], $data['edges'] ?? []);
 
+        if (($data['nodes'] ?? []) !== [] && MailThumbnails::enabled() && MailThumbnails::available()) {
+            RenderMailThumbnails::dispatch($automation->id);
+        }
+
         app(VersionManager::class)
             ->snapshot($automation, 'Initial version');
         app(AuditLogger::class)
@@ -129,6 +135,11 @@ class AutomationsController extends Controller
             $hasGraph ? ($data['nodes'] ?? []) : null,
             $hasGraph ? ($data['edges'] ?? []) : null,
         );
+
+        if ($hasGraph && MailThumbnails::enabled() && MailThumbnails::available()) {
+            // Queued: a browser takes a second per mail, so the save must not wait for it.
+            RenderMailThumbnails::dispatch($automationFlow->id);
+        }
 
         app(AuditLogger::class)
             ->record('updated', $automationFlow, ['version' => $automationFlow->version]);

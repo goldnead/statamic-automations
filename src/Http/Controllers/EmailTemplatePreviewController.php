@@ -272,6 +272,41 @@ class EmailTemplatePreviewController extends Controller
     }
 
     /**
+     * The mail of a `send_email` config as sample-rendered HTML, without a
+     * request or a login: for the canvas tile, which is made by a queued job.
+     * Same resolution as {@see node()} (template wins, else the inline body,
+     * plain text becomes `nl2br`), minus the HTTP envelope. Null when there is
+     * nothing to show or the template is gone.
+     *
+     * @param  array<string, mixed>  $config
+     */
+    public function htmlForConfig(array $config): ?string
+    {
+        $slug = (string) ($config['template'] ?? '');
+        $body = (string) ($config['body'] ?? '');
+        $source = 'inline';
+
+        if ($slug !== '' && $this->addonInstalled()) {
+            $resolved = EmailTemplates::resolve($slug);
+
+            if ($resolved === null || (string) ($resolved->body ?? '') === '') {
+                return null;
+            }
+
+            $body = (string) $resolved->body;
+            $source = 'template';
+        }
+
+        if ($body === '') {
+            return null;
+        }
+
+        $html = $this->renderWithSample($body, $this->sampleData());
+
+        return $source === 'inline' && ! str_contains($html, '<') ? nl2br(e($html)) : $html;
+    }
+
+    /**
      * Die ungespeicherte Konfiguration aus dem Rumpf — oder null, wenn keine
      * mitgeschickt wurde (dann gilt der Knoten aus der Datenbank).
      *

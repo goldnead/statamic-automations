@@ -14,6 +14,7 @@ use Goldnead\StatamicAutomations\Support\ActivityWindow;
 use Goldnead\StatamicAutomations\Support\RunStats;
 use Goldnead\StatamicAutomations\Support\Setup;
 use Goldnead\StatamicAutomations\Templates\TemplateRegistry;
+use Goldnead\StatamicAutomations\Thumbnails\MailThumbnails;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Statamic\CP\Column;
@@ -237,6 +238,9 @@ class AutomationsPageController extends Controller
                 'position_y' => (int) $n->position_y,
                 'config' => $n->config ?? [],
                 'disabled' => (bool) $n->disabled,
+                // The canvas draws this as a tile above the title; null unless
+                // a mail node has a current picture.
+                'thumbnail' => MailThumbnails::url($automation, (string) $n->type, (string) $n->node_key, is_array($n->config) ? $n->config : []),
             ])->values()->all(),
             'edges' => $automation->edges->map(fn ($e) => [
                 'from_node_key' => $e->from_node_key,

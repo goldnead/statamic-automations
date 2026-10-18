@@ -10,6 +10,7 @@ use Goldnead\StatamicAutomations\Console\Commands\RunScheduledAutomations;
 use Goldnead\StatamicAutomations\Console\Commands\SyncAutomations;
 use Goldnead\StatamicAutomations\Contracts\AiClient;
 use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
+use Goldnead\StatamicAutomations\Contracts\MailThumbnailRenderer;
 use Goldnead\StatamicAutomations\Contracts\SenderIdentityResolver;
 use Goldnead\StatamicAutomations\Engine\ConditionEvaluator;
 use Goldnead\StatamicAutomations\Engine\FlowValidator;
@@ -132,6 +133,7 @@ use Goldnead\StatamicAutomations\Support\OAuth2TokenService;
 use Goldnead\StatamicAutomations\Support\OptionSources\NativeOptionSources;
 use Goldnead\StatamicAutomations\Support\Settings;
 use Goldnead\StatamicAutomations\Templates\TemplateRegistry;
+use Goldnead\StatamicAutomations\Thumbnails\MailThumbnails;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Foundation\CachesRoutes;
 use Illuminate\Support\Facades\Event;
@@ -191,6 +193,9 @@ class ServiceProvider extends AddonServiceProvider
     {
         // Merge default config so it is available even if not published.
         $this->mergeConfigFrom(__DIR__.'/../config/automations.php', 'automations');
+
+        // Mail tile on the canvas: a browser when there is one, else nothing.
+        $this->app->singleton(MailThumbnailRenderer::class, fn () => MailThumbnails::detectRenderer());
 
         // Singleton registries — they hold runtime registration state.
         // Who a `send_email` node sends as, and over which transport. Bound to
