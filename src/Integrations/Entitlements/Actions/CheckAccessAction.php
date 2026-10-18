@@ -27,7 +27,8 @@ use Goldnead\StatamicAutomations\Support\ActionResult;
  *  - `report`: never stop; output `has_access` and let a `branch` node split
  *    on it ("one mail for owners of X, another for the rest").
  *
- * When the condition does not hold the run is **stopped**, not failed. The two
+ * In `require` and `forbid`, when the condition does not hold the run is
+ * **stopped**, not failed. The two
  * are different on purpose: a stop says "the condition did not hold" and is an
  * ordinary outcome; a failure says "the check could not be made" and is
  * something to look at. A flow log that cannot tell them apart leaves a missing

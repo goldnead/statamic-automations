@@ -184,6 +184,7 @@ class CheckAccessActionTest extends TestCase
         $this->assertTrue($with->isSuccess());
         $this->assertTrue($with->output['has_access']);
         $this->assertSame('report', $with->output['mode']);
+        $this->assertSame('active', $with->output['state']);
     }
 
     public function test_it_fails_on_missing_or_unknown_configuration(): void
