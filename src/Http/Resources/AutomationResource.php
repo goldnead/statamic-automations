@@ -2,6 +2,7 @@
 
 namespace Goldnead\StatamicAutomations\Http\Resources;
 
+use Goldnead\StatamicAutomations\Thumbnails\MailThumbnails;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class AutomationResource extends JsonResource
@@ -38,6 +39,9 @@ class AutomationResource extends JsonResource
                     'position_y' => $node->position_y,
                     'config' => $node->config ?? [],
                     'disabled' => (bool) $node->disabled,
+                    // The canvas draws this as a tile above the title. Null for
+                    // anything but a mail with a current picture.
+                    'thumbnail' => MailThumbnails::url($this->resource, (string) $node->type, (string) $node->node_key, is_array($node->config) ? $node->config : []),
                 ])->values()->all();
             }),
 

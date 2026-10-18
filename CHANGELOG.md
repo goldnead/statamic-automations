@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Added: a picture of the mail on the `send_email` node
+
+After a save, a queued job photographs each `send_email` node's mail (sample data, never a real contact)
+and the canvas draws it as a tile above the node's title, through the `thumbnail` field that
+`statamic-flow-canvas` already knows. Needs `spatie/browsershot` (a `suggest`) and a Chromium
+(`automations.thumbnails.chrome_path` or one on `PATH`); without them nothing is drawn and nothing fails.
+Pictures live on the `public` disk under `automations/thumbs/{uuid}/`, named with an HMAC and a fingerprint of the
+mail (template, subject, body), so an edited mail has no tile until it is rendered again. New contract
+`MailThumbnailRenderer`; config `automations.thumbnails.{enabled,disk,width,height,chrome_path}`.
+Known gap: editing the content of an email template does not refresh the tile until the node changes.
+No migration.
+
 ### Added: `Automations::cancelRunsOnMissingNodes()`
 
 A public way to close the passes that a graph edit has stranded. A run asleep in a delay waits on a

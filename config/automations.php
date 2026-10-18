@@ -156,6 +156,26 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | Mail thumbnails
+    |--------------------------------------------------------------------------
+    |
+    | A small picture of each `send_email` node's mail, drawn as a tile on the
+    | canvas. Needs `spatie/browsershot` and a Chromium (`chrome_path`, or one on
+    | PATH); without them the nodes simply have no tile. Rendered from sample
+    | data in a queued job after a save, never from a real contact.
+    |
+    */
+
+    'thumbnails' => [
+        'enabled' => true,
+        'disk' => 'public',
+        'width' => 640,
+        'height' => 400,
+        'chrome_path' => env('STATAMIC_AUTOMATIONS_CHROME_PATH'),
+    ],
+
     'send_email' => [
         'refuse_marketing_recipients' => env('STATAMIC_AUTOMATIONS_REFUSE_MARKETING_RECIPIENTS', true),
     ],
