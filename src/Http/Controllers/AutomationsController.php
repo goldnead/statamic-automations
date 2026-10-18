@@ -100,6 +100,10 @@ class AutomationsController extends Controller
         $automation = app(AutomationRepository::class)
             ->save($automation, $data['nodes'] ?? [], $data['edges'] ?? []);
 
+        if (($data['nodes'] ?? []) !== [] && MailThumbnails::enabled() && MailThumbnails::available()) {
+            RenderMailThumbnails::dispatch($automation->id);
+        }
+
         app(VersionManager::class)
             ->snapshot($automation, 'Initial version');
         app(AuditLogger::class)

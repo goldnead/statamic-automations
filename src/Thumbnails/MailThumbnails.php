@@ -116,6 +116,7 @@ class MailThumbnails
         $automation->loadMissing('nodes');
         $renderer = app(MailThumbnailRenderer::class);
         $written = 0;
+        $current = [];
 
         foreach ($automation->nodes as $node) {
             if ($node->type !== self::TYPE) {
@@ -124,6 +125,7 @@ class MailThumbnails
 
             $config = is_array($node->config) ? $node->config : [];
             $path = self::path($automation, $node->node_key, $config);
+            $current[] = $path;
 
             if (self::disk()->exists($path)) {
                 continue;
@@ -150,11 +152,13 @@ class MailThumbnails
             self::disk()->put($path, $png);
             $written++;
 
-            // Older pictures of the same node are for mails that no longer exist.
-            foreach (self::disk()->files(self::directory($automation)) as $file) {
-                if ($file !== $path && str_starts_with(basename($file), $node->node_key.'-')) {
-                    self::disk()->delete($file);
-                }
+        }
+
+        // Pictures of mails that changed or nodes that are gone: not served any
+        // more (the name carries the hash), and not kept on a public disk either.
+        foreach (self::disk()->files(self::directory($automation)) as $file) {
+            if (! in_array($file, $current, true)) {
+                self::disk()->delete($file);
             }
         }
 

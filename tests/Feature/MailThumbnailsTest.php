@@ -93,6 +93,31 @@ it('does not render again while the mail is unchanged, and again once it changed
         ->and(Storage::disk('public')->allFiles('automations/thumbs'))->not->toBe($first);
 });
 
+it('removes the picture of a node that is gone', function (): void {
+    $node = ($this->mail)('mail_1', 'S', '<p>x</p>');
+    $service = app(MailThumbnails::class);
+    $service->render($this->automation->fresh(['nodes']));
+    expect(Storage::disk('public')->allFiles('automations/thumbs'))->toHaveCount(1);
+
+    $node->delete();
+    $service->render($this->automation->fresh(['nodes']));
+
+    expect(Storage::disk('public')->allFiles('automations/thumbs'))->toBe([]);
+});
+
+it('queues the render for a newly created automation with mail nodes', function (): void {
+    Queue::fake();
+    $this->actingAsSuperUser();
+
+    $this->postJson(cp_route('statamic-automations.api.automations.store'), [
+        'name' => 'Neu',
+        'nodes' => [['node_key' => 'mail_1', 'type' => 'send_email', 'config' => ['subject' => 'S', 'body' => 'x']]],
+        'edges' => [],
+    ])->assertCreated();
+
+    Queue::assertPushed(RenderMailThumbnails::class);
+});
+
 it('does nothing and does not fail without a renderer', function (): void {
     $this->app->instance(MailThumbnailRenderer::class, new NullMailRenderer);
     ($this->mail)('mail_1', 'S', '<p>x</p>');

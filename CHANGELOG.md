@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.28.0 — 2026-10-18
 
 ### Added: a picture of the mail on the `send_email` node
 
@@ -11,8 +11,10 @@ and the canvas draws it as a tile above the node's title, through the `thumbnail
 Pictures live on the `public` disk under `automations/thumbs/{uuid}/`, named with an HMAC and a fingerprint of the
 mail (template, subject, body), so an edited mail has no tile until it is rendered again. New contract
 `MailThumbnailRenderer`; config `automations.thumbnails.{enabled,disk,width,height,chrome_path}`.
-Known gap: editing the content of an email template does not refresh the tile until the node changes.
-No migration.
+Known gaps: editing the content of an email template does not refresh the tile until the node changes;
+pictures of a deleted automation stay under `automations/thumbs/{uuid}/`; the browser runs without its
+sandbox and loads whatever the mail's HTML references, so use it on mails your editors write, and use a real
+queue driver (on `sync` the save waits for the browser). No migration.
 
 ### Added: `Automations::cancelRunsOnMissingNodes()`
 
