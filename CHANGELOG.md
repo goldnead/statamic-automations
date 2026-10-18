@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.26.0
 
 ### Fixed: Mail rules on a `flat_file` install
 
