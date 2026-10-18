@@ -393,9 +393,11 @@ return [
         ],
 
         // The lead-magnets addon, read by "Recent Grant" for the title of the
-        // resource behind a grant. Reached by class name, never type-hinted.
+        // resource behind a grant and for the grants it writes on an address as a
+        // contact (`subject`). Reached by class name, never type-hinted.
         'lead_magnets' => [
             'grant_model' => 'Goldnead\\LeadMagnets\\Models\\Grant',
+            'subject' => 'Goldnead\\LeadMagnets\\Support\\LeadMagnetSubject',
         ],
 
         'booking' => [

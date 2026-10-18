@@ -305,6 +305,13 @@ class EntitlementsAdapter
                 $subjects[] = $reference;
             }
 
+            // A lead magnet's own grant belongs to the address as a contact, with no account
+            // and no `email` subject (statamic-lead-magnets). Asking after "just unlocked
+            // something" has to see it, or the flow never learns that a freebie came first.
+            if (($contact = $this->leadMagnetContact($email)) !== null) {
+                $subjects[] = $contact;
+            }
+
             $since = now()->subMinutes($withinMinutes);
             $best = null;
 
@@ -339,6 +346,33 @@ class EntitlementsAdapter
         }
 
         return ['ok' => true, 'grant' => $best];
+    }
+
+    /**
+     * The address as the lead-magnets addon addresses it, or null without that addon.
+     *
+     * Asked of the addon itself (`LeadMagnetSubject::for()`): how the subject id is derived is
+     * its business, and a second copy of the rule here would drift. The class is configurable
+     * for the same reason the grant model is.
+     */
+    protected function leadMagnetContact(string $email): ?object
+    {
+        $class = (string) config(
+            'automations.integrations.lead_magnets.subject',
+            'Goldnead\\LeadMagnets\\Support\\LeadMagnetSubject',
+        );
+
+        if ($class === '' || ! class_exists($class) || ! method_exists($class, 'for')) {
+            return null;
+        }
+
+        try {
+            $reference = $class::for($email);
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return is_object($reference) ? $reference : null;
     }
 
     /**

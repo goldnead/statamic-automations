@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.30.0 — 2026-10-18
+
+### Changed: "Recent Grant" sees a lead magnet's grant on a reader without an account
+
+statamic-lead-magnets writes the grant of a download freebie on the address as a *contact* (subject type `lead-magnet-contact`, id a hash of the address), not as an `email` subject and not on an account. "Recent Grant" asked after those two only, so for a reader who had just confirmed a freebie it answered `found: false`, and a flow that branches on it (a welcome series that wants to bridge from the freebie) never learned that one had come first.
+
+It now asks the lead-magnets addon for the address's contact (`LeadMagnetSubject::for()`) and reads that subject's grants as well. Without the addon nothing changes. `automations.integrations.lead_magnets.subject` names the class (default `Goldnead\LeadMagnets\Support\LeadMagnetSubject`). Only "Recent Grant" is affected; "Check Access" is unchanged.
+
+No migration, no new required config key.
+
 ## 2.29.1 — 2026-10-18
 
 ### Fixed: the mail tile's browser is sealed off
