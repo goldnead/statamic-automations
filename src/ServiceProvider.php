@@ -91,6 +91,7 @@ use Goldnead\StatamicAutomations\Nodes\Logic\ParallelNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\StopNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\SwitchNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\ThrottleNode;
+use Goldnead\StatamicAutomations\Nodes\Logic\WaitForAutomationNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilNode;
 use Goldnead\StatamicAutomations\Nodes\Triggers\AssetDeletedTrigger;
 use Goldnead\StatamicAutomations\Nodes\Triggers\AssetSavedTrigger;
@@ -585,6 +586,7 @@ class ServiceProvider extends AddonServiceProvider
             'stop' => StopNode::class,
             'delay' => DelayNode::class,
             'wait_until' => WaitUntilNode::class,
+            'wait_for_automation' => WaitForAutomationNode::class,
             'loop' => LoopNode::class,
             'parallel' => ParallelNode::class,
             'throttle' => ThrottleNode::class,
@@ -931,6 +933,7 @@ class ServiceProvider extends AddonServiceProvider
                 EA\GrantEntitlementAction::class,
                 EA\RevokeEntitlementAction::class,
                 EA\CheckAccessAction::class,
+                EA\RecentGrantAction::class,
             ] as $actionClass) {
                 $automations->registerBuiltIn($actionClass::handle());
                 $automations->action($actionClass::handle(), $actionClass);

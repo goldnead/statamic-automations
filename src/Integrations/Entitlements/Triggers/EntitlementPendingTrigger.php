@@ -59,6 +59,7 @@ class EntitlementPendingTrigger implements AutomationTrigger
     {
         return [
             'entitlement' => self::entitlementOutputSchema(),
+            'subscriber' => ['email' => 'string', 'first_name' => 'string'],
             'previous_state' => 'string',
             'actor' => self::actorOutputSchema(),
         ];
@@ -71,8 +72,11 @@ class EntitlementPendingTrigger implements AutomationTrigger
 
     public function buildContext(object|array $event, array $config): AutomationContext
     {
+        $entitlement = $this->entitlementOf($event);
+
         return AutomationContext::make([
-            'entitlement' => $this->entitlementOf($event),
+            'entitlement' => $entitlement,
+            'subscriber' => $this->subscriberOf($entitlement),
             'previous_state' => $this->previousStateOf($event),
             'actor' => $this->actorOf($event),
         ]);

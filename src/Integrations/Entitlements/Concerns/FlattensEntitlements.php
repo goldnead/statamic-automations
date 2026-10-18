@@ -2,6 +2,8 @@
 
 namespace Goldnead\StatamicAutomations\Integrations\Entitlements\Concerns;
 
+use Statamic\Facades\User;
+
 /**
  * Turns the objects an entitlement event carries into plain arrays.
  *
@@ -28,6 +30,58 @@ trait FlattensEntitlements
      *
      * @return array<string, mixed>
      */
+    /**
+     * Who the grant is for, as `subscriber.email` and `subscriber.first_name`.
+     *
+     * The grant names its subject by type and id, which no mail node can use.
+     * Under the key `subscriber` the run gets the same shape every other
+     * trigger gives, so `marketing.send_email` finds its recipient without a
+     * `to` and the re-entry policy finds its subject key (`subscriber.email`).
+     *
+     * A subject of type `email` is the address itself. Any other type is looked
+     * up as a Statamic user by id. When neither yields an address both values
+     * are null: the keys stay (the output schema promises them), and a null
+     * address is no recipient and no subject key.
+     *
+     * @param  array<string, mixed>  $entitlement  the flattened grant
+     * @return array{email: ?string, first_name: ?string}
+     */
+    protected function subscriberOf(array $entitlement): array
+    {
+        $type = (string) ($entitlement['subject_type'] ?? '');
+        $id = (string) ($entitlement['subject_id'] ?? '');
+
+        if ($id === '') {
+            return ['email' => null, 'first_name' => null];
+        }
+
+        $email = null;
+        $name = '';
+
+        if ($type === 'email') {
+            $email = $id;
+        } else {
+            try {
+                $user = User::find($id);
+            } catch (\Throwable) {
+                $user = null;
+            }
+
+            if ($user !== null) {
+                $email = (string) $user->email();
+                $name = method_exists($user, 'name') ? (string) $user->name() : '';
+            }
+        }
+
+        if (! is_string($email) || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return ['email' => null, 'first_name' => null];
+        }
+
+        $first = preg_split('/\s+/u', trim($name))[0] ?? '';
+
+        return ['email' => $email, 'first_name' => $first];
+    }
+
     protected function entitlementOf(object|array $event, string $key = 'entitlement'): array
     {
         $entitlement = $this->propertyOf($event, $key);

@@ -9,5 +9,6 @@ return [
     'done_out' => 'Done. You will not receive this series any more.',
     'done_in' => 'Done. You will receive the series again.',
     'scope_note' => 'This affects this series only. You keep receiving every other email.',
+    'back_link' => 'Back to the website',
     'mail_link' => 'Unsubscribe from this series',
 ];

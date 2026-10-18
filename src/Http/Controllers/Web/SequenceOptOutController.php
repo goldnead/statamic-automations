@@ -6,6 +6,7 @@ use Goldnead\StatamicAutomations\Integrations\Marketing\MarketingAdapter;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationOptOut;
 use Goldnead\StatamicAutomations\Services\SequenceOptOut;
+use Goldnead\StatamicAutomations\Support\SequenceOptOutPage;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -39,6 +40,8 @@ class SequenceOptOutController
             'email' => $email,
             'optedOut' => $this->optOuts->has($flow->uuid, $email),
             'done' => false,
+            // Per-automation wording from config; see SequenceOptOutPage.
+            'page' => new SequenceOptOutPage($flow->handle, $email),
         ]);
     }
 

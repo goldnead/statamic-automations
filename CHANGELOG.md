@@ -9,8 +9,72 @@ the repository, so under `flat_file` the list showed the rules while Mail rules 
 It now uses `AutomationRepository`, and its setup guard leaves the definition tables out under
 `flat_file`.
 
+### Fixed: a run could resume on the wrong automation on MySQL
+
+`AutomationRepository::find()` and `findByRef()` compared the numeric `id` column with whatever they were
+given. On MySQL `id = '3f2a…'` is `id = 3`: the engine reads the leading digits of a UUID as a number, so a
+UUID starting with another automation's id returned that automation instead, ahead of the one it names. A run
+resolves its automation by UUID, so it could resume on another graph. SQLite compares strings and never showed it.
+The id is now only compared with a number.
+
+### Added: `subscriber.email` and `subscriber.first_name` on the grant triggers
+
+`entitlements.granted` and `entitlements.pending` now put the grantee into the run as `subscriber`, the same
+shape every other trigger gives. A subject of type `email` is the address itself; any other subject is looked up
+as a Statamic user by id. Without a resolvable address both values are null. This is what lets `marketing.send_email`
+find its recipient without a `to`, and what the re-entry policy (`_restart_policy`) uses as the subject key. Additive:
+existing graphs read the same keys as before.
+
+### Added: node "Wait for Automation" (`wait_for_automation`)
+
+- Holds the run while the same person is still inside **another** automation, then reports how that one ended.
+  Group Logic, evaluated again on every resume like Wait Until.
+- Config: `email` (tokenable, required), `automation` (handle or uuid, required), `poll_hours` (default 6, how often to ask
+  again while the other run is queued, running or waiting), `wait_if_missing_minutes` (default 0: with no run of the
+  person in the other automation yet, wait until that many minutes have passed since the start of this run, so a run
+  that starts seconds later is not missed), `settle` (`none`, or `next_day`: after the other run ran to the end, wait
+  until the next calendar day after it finished).
+- Output `state` (`none`, `ran_to_end`, `opted_out`, `ended_early`) and `ran_to_end` (bool, only for success without an
+  opt-out). An opt-out of that automation counts as ended at once, even while its run waits on its next send step.
+  Runs are matched by `subject_key` (the lower-cased address); test runs and the node's own run are left out.
+- The runner now puts `_run` (`uuid`, `started_at`) into the context next to `_automation`, so a node can count from the
+  start of its own run.
+- Example, a second series that must never mail on the same day as the welcome series:
+
+  ```
+  trigger → wait_for_automation(email={{ contact.email }}, automation=welcome,
+                                wait_if_missing_minutes=10, settle=next_day)
+          → branch(nodes.wait.state equals opted_out) → …
+  ```
+
+### Added: action "Recent Grant" (`entitlements.recent_grant`)
+
+- Only with `goldnead/statamic-entitlements` installed. Asks whether a person has just unlocked something: the newest
+  grant of the address that gives access now and whose activation (`starts_at`, `created_at` as fallback) lies at most
+  `within_minutes` (default 60) back. Config: `email` (tokenable, required), `within_minutes`, `sources` (comma
+  separated, empty = all).
+- Output `found` (bool), `product_slug`, `product_title`, `source`, `granted_at` (ISO 8601); always all five.
+  Not found is a success with `found` false; test mode answers `found` false. In a branch use `nodes.<key>.found`
+  **equals** `true` and the `false` edge; `equals false` is inverted (PHP compares the bool with the string "false").
+- `product_title` comes from the entitlements addon's product catalogue, then from the new config
+  `automations.entitlements.title_sources` (`['collection' => 'resources', 'match' => 'resource_slug', 'field' => 'title']`,
+  Statamic entries), then from the resource of a `goldnead/statamic-lead-magnets` grant. No hit leaves it empty, never
+  the slug. Nothing in the addon knows a site's collections.
+
+### Added: the series opt-out page can be worded per automation
+
+- `automations.sequence_opt_out.pages.<automation-handle>` takes `title`, `body`, `button`, `done`, `already_out`,
+  `scope_note`, `link_label`, `link_url`, all optional; a missing one keeps the language-file text, so a page without
+  config is unchanged. `:email` in `body` and `already_out` becomes the address. `link_url` is a path on the site or an
+  `https://` URL from config (anything else shows no link) and appears on the page, also after the opt-out.
+- New language key `sequence.back_link` (default link label).
+
 ### Upgrading
 
+- New config keys, all optional with working defaults, so publishing is not needed: `automations.timezone`
+  (`STATAMIC_AUTOMATIONS_TIMEZONE`, default `Europe/Berlin`; the calendar day of `settle: next_day`),
+  `automations.entitlements.title_sources` (default empty), `automations.integrations.lead_magnets.grant_model`,
+  `automations.sequence_opt_out.pages` (default empty).
 - No migration. Publishing the config is optional: `automations.ai.max_timeout` (default 900) is new.
 - **Queue worker:** a long AI call only works if the worker lets it. Run workers with `--timeout` above the longest
   AI node timeout and set the connection's `retry_after` above that too, or the job is killed or run twice.

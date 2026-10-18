@@ -15,6 +15,9 @@ return [
      */
     'scope_note' => 'Das betrifft nur diese Serie. Alle anderen E-Mails bekommst du weiterhin.',
 
+    /* Vorgabe-Beschriftung des Links, den `sequence_opt_out.pages.<handle>.link_url` einblendet. */
+    'back_link' => 'Zurück zur Website',
+
     /* Der Link im Fuss der Mail. */
     'mail_link' => 'Diese Serie abbestellen',
 ];

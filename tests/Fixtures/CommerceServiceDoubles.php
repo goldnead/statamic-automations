@@ -78,6 +78,8 @@ class FakeEntitlement
         public string $source_ref,
         public FakeState $status,
         public ?\DateTimeInterface $expires_at = null,
+        public ?\DateTimeInterface $starts_at = null,
+        public ?\DateTimeInterface $created_at = null,
     ) {}
 
     public function state(): FakeState
@@ -98,6 +100,20 @@ class FakeEntitlementManager
 {
     /** @var array<int, FakeEntitlement> */
     public array $grants = [];
+
+    /**
+     * What `grantableProducts()` announces, as the product catalogue of the
+     * original does: slug => ['slug' =>, 'label' =>, 'group' =>].
+     *
+     * @var array<string, array{slug: string, label: string, group: string|null}>
+     */
+    public array $products = [];
+
+    /** @return array<string, array{slug: string, label: string, group: string|null}> */
+    public function grantableProducts(): array
+    {
+        return $this->products;
+    }
 
     private int $nextId = 1;
 
