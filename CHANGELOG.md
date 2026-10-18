@@ -9,6 +9,14 @@ the repository, so under `flat_file` the list showed the rules while Mail rules 
 It now uses `AutomationRepository`, and its setup guard leaves the definition tables out under
 `flat_file`.
 
+### Added: `subscriber.email` and `subscriber.first_name` on the grant triggers
+
+`entitlements.granted` and `entitlements.pending` now put the grantee into the run as `subscriber`, the same
+shape every other trigger gives. A subject of type `email` is the address itself; any other subject is looked up
+as a Statamic user by id. Without a resolvable address both values are null. This is what lets `marketing.send_email`
+find its recipient without a `to`, and what the re-entry policy (`_restart_policy`) uses as the subject key. Additive:
+existing graphs read the same keys as before.
+
 ### Added: node "Wait for Automation" (`wait_for_automation`)
 
 - Holds the run while the same person is still inside **another** automation, then reports how that one ended.
