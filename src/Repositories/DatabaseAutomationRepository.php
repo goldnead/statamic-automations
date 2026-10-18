@@ -36,18 +36,42 @@ class DatabaseAutomationRepository implements AutomationRepository
     public function find(int|string $id): ?Automation
     {
         return Automation::query()
-            ->where('id', $id)
-            ->orWhere('uuid', $id)
+            ->where(fn ($query) => $this->matchingIdOrUuid($query, $id))
             ->with(['nodes', 'edges'])
             ->first();
+    }
+
+    /**
+     * Compare the numeric key only with a number.
+     *
+     * `where id = '3f2a…'` is not false on MySQL, it is `id = 3`: the engine reads the
+     * leading digits of a UUID as the number and returns the automation with that id,
+     * ahead of the one the UUID names. SQLite compares the strings and never shows it, so
+     * a run could resume on the wrong graph on production and nowhere else.
+     */
+    protected function matchingIdOrUuid($query, int|string $value): void
+    {
+        if (is_int($value) || ctype_digit($value)) {
+            $query->where('id', $value)->orWhere('uuid', (string) $value);
+
+            return;
+        }
+
+        $query->where('uuid', $value);
     }
 
     public function findByRef(string $ref): ?Automation
     {
         return Automation::query()
-            ->where('handle', $ref)
-            ->orWhere('id', $ref)
-            ->orWhere('uuid', $ref)
+            ->where(function ($query) use ($ref) {
+                $query->where('handle', $ref);
+
+                if (ctype_digit($ref)) {
+                    $query->orWhere('id', $ref);
+                }
+
+                $query->orWhere('uuid', $ref);
+            })
             ->with(['nodes', 'edges'])
             ->first();
     }

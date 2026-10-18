@@ -9,6 +9,14 @@ the repository, so under `flat_file` the list showed the rules while Mail rules 
 It now uses `AutomationRepository`, and its setup guard leaves the definition tables out under
 `flat_file`.
 
+### Fixed: a run could resume on the wrong automation on MySQL
+
+`AutomationRepository::find()` and `findByRef()` compared the numeric `id` column with whatever they were
+given. On MySQL `id = '3f2a…'` is `id = 3`: the engine reads the leading digits of a UUID as a number, so a
+UUID starting with another automation's id returned that automation instead, ahead of the one it names. A run
+resolves its automation by UUID, so it could resume on another graph. SQLite compares strings and never showed it.
+The id is now only compared with a number.
+
 ### Added: `subscriber.email` and `subscriber.first_name` on the grant triggers
 
 `entitlements.granted` and `entitlements.pending` now put the grantee into the run as `subscriber`, the same
