@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.28.0 — 2026-10-18
+
+### Added: automations on the funnels map
+
+statamic-funnels can now point its map at an automation. The card shows the automation's name, whether it is on (`enabled`), a link to its editor and the number of runs started over the period, counted the same way as the Runs insight: test runs and runs in the future are left out. The map stores only the handle; everything else is read here. Works with both the `database` and the `flat_file` driver. Needs `goldnead/statamic-brand-context` 1.17 or newer.
+
+### Upgrading
+
+No migration, no config. Run `composer update goldnead/statamic-brand-context` if the map is in use.
+
 ## 2.27.0
 
 ### Added: Check Access can just report

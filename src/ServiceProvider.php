@@ -2,6 +2,7 @@
 
 namespace Goldnead\StatamicAutomations;
 
+use Goldnead\BrandContext\Map\MapObjectRegistry;
 use Goldnead\BrandContext\Settings\SettingsRegistry;
 use Goldnead\StatamicAutomations\Console\Commands\PruneRuns;
 use Goldnead\StatamicAutomations\Console\Commands\RunDueScheduledJobs;
@@ -43,6 +44,7 @@ use Goldnead\StatamicAutomations\Integrations\LeadHub\Actions as LH;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubEventTriggers;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\Triggers as LHT;
+use Goldnead\StatamicAutomations\Integrations\Map\AutomationMapObjects;
 use Goldnead\StatamicAutomations\Integrations\Marketing\Actions\SendCampaignAction;
 use Goldnead\StatamicAutomations\Integrations\Marketing\Actions\SubscribeToListAction;
 use Goldnead\StatamicAutomations\Integrations\Marketing\Actions\UnsubscribeFromListAction;
@@ -274,6 +276,11 @@ class ServiceProvider extends AddonServiceProvider
         // overrides in an `app->booted()` callback, and a registration made
         // after that point would never reach `config()` in this process.
         $this->app->make(SettingsRegistry::class)->register(Settings::class);
+
+        // The automations as objects a funnels map can point at. Here in
+        // bootAddon() for the same reason as the settings above.
+        $this->app->make(MapObjectRegistry::class)
+            ->register(AutomationMapObjects::class);
 
         // Resolve the {automationFlow} route parameter through the active
         // storage driver so flat-file definitions (which have no DB row) bind

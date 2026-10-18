@@ -6,6 +6,9 @@ return [
         'node_removed_suffix' => '(nicht mehr im Ablauf)',
     ],
 
+    // The kind's name on the funnels map picker and card.
+    'map_type_label' => 'Automatisierung',
+
     'nav' => [
         'automations' => 'Automatisierungen',
         'dashboard' => 'Übersicht',

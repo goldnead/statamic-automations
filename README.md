@@ -354,6 +354,8 @@ event with no brand while none is current starts nothing and logs a warning.
 | Offers | `Goldnead\StatamicOffers\Models\Offer` | 8 offer triggers, and the offer and pricing option pickers on the payment triggers |
 | Courses | `Goldnead\Courses\ServiceProvider` | 12 course triggers |
 | Affiliates | `Goldnead\Affiliates\ServiceProvider` | 4 partner triggers |
+
+**Funnels map.** statamic-funnels can point its map at an automation. A card shows the automation's name, whether it is on, a link to its editor and the runs started over the period (test runs left out). The map stores only the automation's handle; everything else is read here each time the map is shown.
 | Entitlements | `Goldnead\Entitlements\EntitlementManager` | 5 entitlement triggers + 2 actions |
 | Booking | `Goldnead\StatamicBooking\Models\Booking` | 3 booking triggers |
 | Invoices | `Goldnead\Invoices\InvoiceWriter` | 3 invoice triggers + 2 actions |
