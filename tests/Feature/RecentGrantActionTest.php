@@ -20,6 +20,15 @@ use Statamic\Facades\User;
 require_once __DIR__.'/../Fixtures/CommerceServiceDoubles.php';
 require_once __DIR__.'/../Fixtures/LeadMagnetGrantDouble.php';
 
+/** Stands for `Goldnead\LeadMagnets\Support\LeadMagnetSubject`: the address as a contact, id a hash. */
+class FakeLeadMagnetSubject
+{
+    public static function for(string $email): FakeSubjectReference
+    {
+        return new FakeSubjectReference('lead-magnet-contact', hash('sha256', mb_strtolower(trim($email))));
+    }
+}
+
 /**
  * The "Recent Grant" node: has this person just unlocked something?
  *
@@ -43,6 +52,7 @@ class RecentGrantActionTest extends TestCase
         config()->set('automations.integrations.entitlements.manager', FakeEntitlementManager::class);
         config()->set('automations.integrations.entitlements.subject_reference', FakeSubjectReference::class);
         config()->set('automations.integrations.lead_magnets.grant_model', 'Not\\There\\Grant');
+        config()->set('automations.integrations.lead_magnets.subject', 'Not\\There\\Subject');
 
         FakeLeadMagnetGrant::$titles = [];
     }
@@ -318,6 +328,39 @@ class RecentGrantActionTest extends TestCase
             'title' => $title,
             'resource_slug' => $slug,
         ])->save();
+    }
+
+    public function test_it_finds_the_grant_a_lead_magnet_writes_on_the_address_as_a_contact(): void
+    {
+        // statamic-lead-magnets addresses a reader with no account as a contact whose id is a
+        // hash of the address, not as an `email` subject: asking after the address must still see it.
+        config()->set('automations.integrations.lead_magnets.subject', FakeLeadMagnetSubject::class);
+        $this->seedGrant('lead-magnet-contact', hash('sha256', 'anna@example.test'), 'vowel-guide', startedMinutesAgo: 1, source: 'lead_magnet');
+
+        $result = $this->recent();
+
+        $this->assertTrue($result->output['found']);
+        $this->assertSame('vowel-guide', $result->output['product_slug']);
+        $this->assertSame('lead_magnet', $result->output['source']);
+    }
+
+    public function test_a_contact_grant_of_another_address_is_not_found(): void
+    {
+        config()->set('automations.integrations.lead_magnets.subject', FakeLeadMagnetSubject::class);
+        $this->seedGrant('lead-magnet-contact', hash('sha256', 'someone-else@example.test'), 'vowel-guide', startedMinutesAgo: 1, source: 'lead_magnet');
+
+        $this->assertFalse($this->recent()->output['found']);
+    }
+
+    public function test_without_the_lead_magnets_addon_the_contact_lookup_is_skipped(): void
+    {
+        $this->seedGrant('lead-magnet-contact', hash('sha256', 'anna@example.test'), 'vowel-guide', startedMinutesAgo: 1, source: 'lead_magnet');
+
+        // `subject` points at a class that does not exist (setUp): nothing is read, nothing fails.
+        $result = $this->recent();
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertFalse($result->output['found']);
     }
 
     private function seedGrant(
