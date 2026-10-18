@@ -6,7 +6,7 @@
 
 The browser that photographs a `send_email` mail for the canvas (2.28.0) ran without its sandbox and loaded whatever the mail's HTML referenced. Now:
 
-- The HTML is reduced before the browser sees it: scripts, frames, plugins, stylesheets, `<base>` and meta refresh are removed, and every loadable URL (`src`, `srcset`, `background`, `poster`, CSS `url()`, `@import`) survives only as `data:`, `cid:` or on the app's own host. Anything else, relative paths and `file://` included, becomes a transparent pixel.
+- The HTML is reduced before the browser sees it: scripts, frames, plugins, SVG, stylesheets, `<base>`, meta refresh, `image-set()` and any style block or attribute with a CSS escape are removed, and every loadable URL (`src`, `srcset`, `background`, `poster`, CSS `url()`, `@import`) survives only as `data:`, `cid:` or on the app's own host. Anything else, relative paths and `file://` included, becomes a transparent pixel.
 - Chromium is started with JavaScript off and a dead proxy that catches every request, loopback included, except the app's own host.
 - The sandbox stays on. It is switched off only when running as root (where Chromium refuses to start with it, the usual container case) or when `automations.thumbnails.no_sandbox` / `STATAMIC_AUTOMATIONS_NO_SANDBOX` says so.
 - `automations.thumbnails.timeout` (default 20 seconds per mail) replaces the fixed 30.

@@ -32,10 +32,21 @@ class MailHtmlSanitizer
     public static function clean(string $html, ?string $allowedHost): string
     {
         // Containers first, with their content: a script's body is not markup.
-        $html = (string) preg_replace('#<(script|iframe|object|applet|frameset|frame|noscript)\b[^>]*>.*?</\1\s*>#is', '', $html);
+        $html = (string) preg_replace('#<(script|iframe|object|applet|frameset|frame|noscript|svg|math)\b[^>]*>.*?</\1\s*>#is', '', $html);
         // Whatever is left of them (unclosed, self-closing), and tags that load or redirect.
-        $html = (string) preg_replace('#<(script|iframe|object|applet|embed|frame|frameset|link|base|param|source|track)\b[^>]*>#is', '', $html);
+        $html = (string) preg_replace('#<(script|iframe|object|applet|embed|frame|frameset|link|base|param|source|track|svg|math|image|use)\b[^>]*>#is', '', $html);
         $html = (string) preg_replace('#<meta\b[^>]*http-equiv\s*=\s*["\']?\s*refresh[^>]*>#is', '', $html);
+
+        // CSS escapes (`u\72l(`) would hide a url() from the checks below. Real
+        // mail CSS has none, so a style block or attribute that contains one is
+        // dropped whole. image-set() takes a bare string instead of url(), so
+        // it goes too.
+        $html = (string) preg_replace_callback(
+            '#<style\b[^>]*>.*?</style\s*>|\bstyle\s*=\s*("[^"]*"|\'[^\']*\')#is',
+            fn (array $m): string => str_contains($m[0], '\\') ? '' : $m[0],
+            $html,
+        );
+        $html = (string) preg_replace('#(?:-webkit-)?image-set\s*\([^)]*\)#i', 'none', $html);
 
         // CSS: imports go, every url() is checked, wherever it sits (style block or attribute).
         $html = (string) preg_replace('#@import\b[^;{}]*;?#i', '', $html);

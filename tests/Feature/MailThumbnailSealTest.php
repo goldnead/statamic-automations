@@ -30,6 +30,11 @@ it('removes active content and external loaders', function (string $html, string
     'stylesheet link' => ['<link rel="stylesheet" href="http://evil.test/a.css">', 'evil.test'],
     'base' => ['<base href="http://evil.test/"><p>x</p>', 'base'],
     'meta refresh' => ['<meta http-equiv="refresh" content="0;url=http://evil.test">', 'refresh'],
+    'svg image' => ['<svg><image href="https://evil.test/t.png" width="1" height="1"/></svg>', 'evil.test'],
+    'svg use' => ['<svg><use xlink:href="file:///etc/passwd#x"/></svg>', 'passwd'],
+    'image-set string' => ['<div style="background-image:image-set(\'https://evil.test/t.png\' 1x)">x</div>', 'evil.test'],
+    'css escaped url' => ['<div style="background:u\\72l(https://evil.test/t.png)">x</div>', 'evil.test'],
+    'import without semicolon' => ['<style>@import "https://evil.test/t.css"</style>', 'evil.test'],
     'css import' => ['<style>@import url("http://evil.test/a.css"); p{color:red}</style>', 'evil.test'],
 ]);
 
