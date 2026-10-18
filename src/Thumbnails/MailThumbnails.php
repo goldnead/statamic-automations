@@ -81,6 +81,28 @@ class MailThumbnails
         return self::directory($automation).'/'.$nodeKey.'-'.$mac.'.png';
     }
 
+    /** The host the mail's own images may come from: the app's. */
+    public static function appHost(): ?string
+    {
+        $host = parse_url((string) config('app.url'), PHP_URL_HOST);
+
+        return is_string($host) && $host !== '' ? $host : null;
+    }
+
+    /** Delete every picture of an automation, for when the automation itself goes. */
+    public static function forget(Automation $automation): void
+    {
+        if ((string) $automation->uuid === '') {
+            return;
+        }
+
+        try {
+            self::disk()->deleteDirectory(self::directory($automation));
+        } catch (\Throwable $e) {
+            Log::warning('statamic-automations: could not delete mail thumbnails of '.$automation->handle.': '.$e->getMessage());
+        }
+    }
+
     public static function directory(Automation $automation): string
     {
         return 'automations/thumbs/'.$automation->uuid;
@@ -137,6 +159,8 @@ class MailThumbnails
                 if ($html === null) {
                     continue;
                 }
+
+                $html = MailHtmlSanitizer::clean($html, self::appHost());
 
                 $png = $renderer->renderHtml($html, self::width(), self::height());
             } catch (\Throwable $e) {

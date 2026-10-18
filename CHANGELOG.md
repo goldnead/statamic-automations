@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.29.1 — 2026-10-18
+
+### Fixed: the mail tile's browser is sealed off
+
+The browser that photographs a `send_email` mail for the canvas (2.28.0) ran without its sandbox and loaded whatever the mail's HTML referenced. Now:
+
+- The HTML is reduced before the browser sees it: scripts, frames, plugins, stylesheets, `<base>` and meta refresh are removed, and every loadable URL (`src`, `srcset`, `background`, `poster`, CSS `url()`, `@import`) survives only as `data:`, `cid:` or on the app's own host. Anything else, relative paths and `file://` included, becomes a transparent pixel.
+- Chromium is started with JavaScript off and a dead proxy that catches every request, loopback included, except the app's own host.
+- The sandbox stays on. It is switched off only when running as root (where Chromium refuses to start with it, the usual container case) or when `automations.thumbnails.no_sandbox` / `STATAMIC_AUTOMATIONS_NO_SANDBOX` says so.
+- `automations.thumbnails.timeout` (default 20 seconds per mail) replaces the fixed 30.
+- Deleting an automation now deletes its pictures (`automations/thumbs/{uuid}/`), on both the database and the flat-file driver.
+
+Not covered: a mail that references an image on the app's own host is drawn with that image (that is the point of the allow-list); a sandbox-less host (root, container) still runs Chromium unsandboxed, now on sanitized HTML with no network.
+
+### Changed: requires `goldnead/statamic-flow-canvas` ^1.6.1
+
+1.6.1 moves the canvas components from Tailwind utilities to plain CSS, so an installation that only has this addon draws them correctly.
+
+### Upgrading
+
+No migration. Set `STATAMIC_AUTOMATIONS_NO_SANDBOX=true` only if Chromium fails to start with the sandbox on a non-root user.
+
 ## 2.29.0 — 2026-10-18
 
 ### Added: automations on the funnels map

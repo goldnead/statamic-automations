@@ -6,6 +6,7 @@ use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
+use Goldnead\StatamicAutomations\Thumbnails\MailThumbnails;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
@@ -107,6 +108,8 @@ class FlatFileAutomationRepository implements AutomationRepository
 
     public function delete(Automation $automation): void
     {
+        MailThumbnails::forget($automation);
+
         $path = $this->pathFor($automation->handle);
         if (File::exists($path)) {
             File::delete($path);

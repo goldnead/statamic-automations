@@ -6,6 +6,7 @@ use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
+use Goldnead\StatamicAutomations\Thumbnails\MailThumbnails;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -115,6 +116,8 @@ class DatabaseAutomationRepository implements AutomationRepository
 
     public function delete(Automation $automation): void
     {
+        MailThumbnails::forget($automation);
+
         $automation->delete();
     }
 

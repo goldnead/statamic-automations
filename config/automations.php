@@ -174,6 +174,10 @@ return [
         'width' => 640,
         'height' => 400,
         'chrome_path' => env('STATAMIC_AUTOMATIONS_CHROME_PATH'),
+        // null: sandbox on, except as root (Chromium refuses it there). true/false forces it.
+        'no_sandbox' => env('STATAMIC_AUTOMATIONS_NO_SANDBOX'),
+        // Seconds the browser may take for one mail.
+        'timeout' => 20,
     ],
 
     'send_email' => [

@@ -31,7 +31,7 @@
         "statamic/cms": "^6.0",
         "inertiajs/inertia-laravel": "^2.0 || ^3.0",
         "goldnead/statamic-brand-context": "^1.17",
-        "goldnead/statamic-flow-canvas": "^1.6"
+        "goldnead/statamic-flow-canvas": "^1.6.1"
     },
     "suggest": {
         "spatie/browsershot": "Draw a small picture of each send_email node's mail on the canvas (needs a Chromium and node with puppeteer; see automations.thumbnails)",
