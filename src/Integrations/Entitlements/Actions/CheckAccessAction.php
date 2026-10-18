@@ -20,10 +20,12 @@ use Goldnead\StatamicAutomations\Support\ActionResult;
  * plan yet" needs the state ten days later. This node asks the addon at the
  * moment it runs.
  *
- * ## Two modes
+ * ## Three modes
  *
  *  - `require`: continue only if the person holds the product.
  *  - `forbid`: continue only if the person does not.
+ *  - `report`: never stop; output `has_access` and let a `branch` node split
+ *    on it ("one mail for owners of X, another for the rest").
  *
  * When the condition does not hold the run is **stopped**, not failed. The two
  * are different on purpose: a stop says "the condition did not hold" and is an
@@ -54,6 +56,9 @@ class CheckAccessAction implements AutomationAction
     public const MODE_REQUIRE = 'require';
 
     public const MODE_FORBID = 'forbid';
+
+    /** Never stops: only reports `has_access`, for a branch node to split on. */
+    public const MODE_REPORT = 'report';
 
     public function __construct(protected EntitlementsAdapter $adapter) {}
 
@@ -109,8 +114,9 @@ class CheckAccessAction implements AutomationAction
                 'options' => [
                     self::MODE_REQUIRE => 'has the access',
                     self::MODE_FORBID => 'does not have the access',
+                    self::MODE_REPORT => 'any (just report, never stop)',
                 ],
-                'help' => 'When the condition does not hold, the run ends here. That is a stop, not a failure.',
+                'help' => 'When the condition does not hold, the run ends here. That is a stop, not a failure. "Just report" never stops: the node outputs has_access and a branch node splits on it.',
             ],
         ];
     }
@@ -137,8 +143,8 @@ class CheckAccessAction implements AutomationAction
             return ActionResult::failed('Product is required.');
         }
 
-        if (! in_array($mode, [self::MODE_REQUIRE, self::MODE_FORBID], true)) {
-            return ActionResult::failed(sprintf('Unknown mode "%s": use "require" or "forbid".', $mode));
+        if (! in_array($mode, [self::MODE_REQUIRE, self::MODE_FORBID, self::MODE_REPORT], true)) {
+            return ActionResult::failed(sprintf('Unknown mode "%s": use "require", "forbid" or "report".', $mode));
         }
 
         // The address is a data reference and is checked after this branch on

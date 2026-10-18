@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.27.0
+
+### Added: Check Access can just report
+
+The `entitlements.check_access` node has a third mode, `report` ("any, just report"). It never stops the run: it outputs `has_access` (and `state`) and a `branch` node splits on `nodes.<key>.has_access`. Until now the node could only continue or end the run, so "one mail for owners of X, another for everybody else" needed a workaround. `require` and `forbid` behave as before.
+
+### Upgrading
+
+No migration, no config.
+
 ## 2.26.0
 
 ### Fixed: Mail rules on a `flat_file` install

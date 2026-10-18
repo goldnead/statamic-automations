@@ -168,6 +168,24 @@ class CheckAccessActionTest extends TestCase
         $this->assertFalse($result->isSuccess());
     }
 
+    public function test_report_never_stops_and_only_says_whether_the_person_holds_the_product(): void
+    {
+        $user = $this->makeUser('anna@example.test');
+
+        $without = $this->check(['mode' => 'report']);
+
+        $this->assertTrue($without->isSuccess());
+        $this->assertFalse($without->output['has_access']);
+
+        $this->seedGrant('user', (string) $user->id(), 'vier-wochen-plan', FakeState::Active);
+
+        $with = $this->check(['mode' => 'report']);
+
+        $this->assertTrue($with->isSuccess());
+        $this->assertTrue($with->output['has_access']);
+        $this->assertSame('report', $with->output['mode']);
+    }
+
     public function test_it_fails_on_missing_or_unknown_configuration(): void
     {
         $this->assertTrue($this->check(['product_slug' => ''])->isFailed());
