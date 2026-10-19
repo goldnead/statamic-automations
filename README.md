@@ -452,6 +452,19 @@ Custom **actions** implement `AutomationAction`, **triggers** `AutomationTrigger
 
 Full documentation — interface definitions, the schema-field vocabulary, option-source reference and worked copy-paste examples for every extension point — lives at <https://docs.adriangoldner.dev/automations/extending>.
 
+### Asking who is inside a sequence
+
+Every trigger has a **Pauses the newsletter** toggle (off by default; node config key `_pauses_newsletter`). A sender that broadcasts to a list can ask which of its recipients are currently inside a flagged automation, and leave them out:
+
+```php
+use Goldnead\StatamicAutomations\Facades\Automations;
+
+Automations::subjectInPausingRun('jane@example.com');                       // bool
+Automations::subjectsInPausingRuns(['jane@example.com', 'john@example.com']); // list<string>, lower-cased
+```
+
+"Inside" means a run in `queued`, `running` or `waiting` (a run parked on a delay or a course lesson counts for as long as it waits); finished, stopped, failed, cancelled and test runs do not. The subject is the run's `subject_key`, normally the lower-cased address. Automations only answers; what the sender does with it is up to the sender (statamic-marketing skips them, with a per-campaign override).
+
 ## Export & Import
 
 Every automation can be exported to a portable JSON file (schema-versioned), and re-imported in any environment:

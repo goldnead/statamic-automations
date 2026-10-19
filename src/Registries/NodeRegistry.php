@@ -6,6 +6,7 @@ use Goldnead\StatamicAutomations\Contracts\AutomationNode;
 use Goldnead\StatamicAutomations\Nodes\Triggers\EventTrigger;
 use Goldnead\StatamicAutomations\Support\DispatchMode;
 use Goldnead\StatamicAutomations\Support\NodeOutputs;
+use Goldnead\StatamicAutomations\Support\PausesNewsletter;
 use Goldnead\StatamicAutomations\Support\RestartPolicy;
 use InvalidArgumentException;
 use ReflectionMethod;
@@ -310,7 +311,7 @@ class NodeRegistry
             $schema,
         ));
 
-        foreach ([...RestartPolicy::triggerSchema(), ...DispatchMode::triggerSchema()] as $field) {
+        foreach ([...RestartPolicy::triggerSchema(), ...DispatchMode::triggerSchema(), ...PausesNewsletter::triggerSchema()] as $field) {
             if (! in_array($field['handle'], $declared, true)) {
                 $schema[] = $field;
             }

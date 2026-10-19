@@ -1,12 +1,28 @@
 # Changelog
 
-## 2.31.0 — 2026-10-19
+## 2.32.0 — 2026-10-19
 
 ### Added: automation edges and broken references on the map
 
 The funnels map now draws the connections an automation's own steps imply: a wait for another automation (dashed), a call to one, an "entitlement granted" trigger and a grant step for a lead magnet or product that the map knows. A wait or call to an automation that does not exist still draws its edge, and the automation carries a problem saying which step points where.
 
 ### Upgrading: no migration
+
+## 2.31.0 — 2026-10-19
+
+### Added: an automation can say "while somebody is inside me, hold the newsletter back"
+
+Every trigger node gets a **Pauses the newsletter** toggle (config key `_pauses_newsletter`, off by default, so nothing changes until somebody switches it on). A sender that broadcasts to a list asks two new public methods on `Automations` which of its recipients are inside such an automation:
+
+- `subjectsInPausingRuns(iterable $subjects): array` answers for many addresses at once (chunked, and no query at all when no automation carries the flag);
+- `subjectInPausingRun(string $subject): bool` is the single-address form;
+- `pausingAutomationUuids(): array` lists the flagged automations (flat-file and database alike).
+
+"Inside" is a run in `queued`, `running` or `waiting`. A run waiting for days on a delay or a course lesson counts for as long as it waits; `success`, `stopped`, `failed`, `cancelled` and test runs do not. Subjects are compared trimmed and lower-cased, like `subject_key` itself. statamic-marketing 2.34 uses this to leave those people out of a campaign; this addon only answers and does not send or skip anything itself.
+
+No migration, no new required config key. A seeder or an imported YAML sets the flag on the trigger node: `config: { _pauses_newsletter: true }`.
+
+## 2.30.0 — 2026-10-18
 
 ### Changed: "Recent Grant" sees a lead magnet's grant on a reader without an account
 
