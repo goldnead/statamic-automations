@@ -9,6 +9,12 @@ return [
     // The kind's name on the funnels map picker and card.
     'map_type_label' => 'Automation',
 
+    // The wording on a funnels map edge, one per relation an automation implies.
+    'map_edge_waits_for' => 'awaited by',
+    'map_edge_starts' => 'starts',
+    'map_edge_triggers' => 'triggers',
+    'map_edge_grants' => 'grants access',
+
     'nav' => [
         'automations' => 'Automations',
         'dashboard' => 'Dashboard',

@@ -1,6 +1,12 @@
 # Changelog
 
-## 2.30.0 — 2026-10-18
+## 2.31.0 — 2026-10-19
+
+### Added: automation edges and broken references on the map
+
+The funnels map now draws the connections an automation's own steps imply: a wait for another automation (dashed), a call to one, an "entitlement granted" trigger and a grant step for a lead magnet or product that the map knows. A wait or call to an automation that does not exist still draws its edge, and the automation carries a problem saying which step points where.
+
+### Upgrading: no migration
 
 ### Changed: "Recent Grant" sees a lead magnet's grant on a reader without an account
 

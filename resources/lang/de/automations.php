@@ -9,6 +9,12 @@ return [
     // The kind's name on the funnels map picker and card.
     'map_type_label' => 'Automatisierung',
 
+    // Die Beschriftung einer Kante auf der Funnel-Landkarte, je Beziehung, die eine Automatisierung ergibt.
+    'map_edge_waits_for' => 'abgewartet von',
+    'map_edge_starts' => 'startet',
+    'map_edge_triggers' => 'löst aus',
+    'map_edge_grants' => 'gewährt Zugang',
+
     'nav' => [
         'automations' => 'Automatisierungen',
         'dashboard' => 'Übersicht',
