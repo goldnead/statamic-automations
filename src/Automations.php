@@ -5,6 +5,7 @@ namespace Goldnead\StatamicAutomations;
 use Goldnead\StatamicAutomations\Contracts\AutomationAction;
 use Goldnead\StatamicAutomations\Contracts\AutomationLogicNode;
 use Goldnead\StatamicAutomations\Contracts\AutomationNode;
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Contracts\AutomationTrigger;
 use Goldnead\StatamicAutomations\Engine\TriggerDispatcher;
 use Goldnead\StatamicAutomations\Models\Automation;
@@ -16,6 +17,7 @@ use Goldnead\StatamicAutomations\Registries\ConnectionTemplateRegistry;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Registries\OptionSourceRegistry;
 use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
+use Goldnead\StatamicAutomations\Support\PausesNewsletter;
 use Goldnead\StatamicAutomations\Templates\TemplateRegistry;
 use Illuminate\Support\Facades\Event;
 use InvalidArgumentException;
@@ -475,5 +477,98 @@ class Automations
         }
 
         return $jobs->count();
+    }
+
+    /**
+     * Is this person inside an open pass of an automation that pauses the
+     * newsletter?
+     *
+     * The single-address form of {@see subjectsInPausingRuns()}, for a caller
+     * that has one address and no list.
+     */
+    public function subjectInPausingRun(string $subject): bool
+    {
+        return $this->subjectsInPausingRuns([$subject]) !== [];
+    }
+
+    /**
+     * Which of these people are inside an open pass of an automation that
+     * pauses the newsletter?
+     *
+     * "Inside" is a run in `queued`, `running` or `waiting`. A run parked on a
+     * two-day delay or a course lesson is waiting, not finished, and counts for
+     * as long as it waits. `success`, `stopped`, `failed` and `cancelled` do
+     * not: the person left, finished or was dropped. Test runs never count.
+     * "Pauses the newsletter" is the trigger-node flag
+     * {@see PausesNewsletter::CONFIG_KEY}, off unless somebody set it.
+     *
+     * Subjects are compared the way the run stores them: trimmed and
+     * lower-cased. The answer is in that form too, each address once, so a
+     * caller matches it against its own normalised address.
+     *
+     * Asks the database in chunks, so a list of tens of thousands is a handful
+     * of queries, and asks it nothing at all when no automation carries the
+     * flag (the case in every install that has not opted in).
+     *
+     * @param  iterable<int, string|null>  $subjects
+     * @return list<string> the subjects that are inside a pausing run
+     */
+    public function subjectsInPausingRuns(iterable $subjects): array
+    {
+        $wanted = [];
+
+        foreach ($subjects as $subject) {
+            $key = mb_strtolower(trim((string) $subject));
+
+            if ($key !== '') {
+                $wanted[$key] = true;
+            }
+        }
+
+        $uuids = $wanted === [] ? [] : $this->pausingAutomationUuids();
+
+        if ($uuids === []) {
+            return [];
+        }
+
+        $inside = [];
+
+        foreach (array_chunk(array_keys($wanted), 500) as $chunk) {
+            $found = AutomationRun::query()
+                ->whereIn('automation_uuid', $uuids)
+                ->whereIn('subject_key', $chunk)
+                ->where('is_test', false)
+                ->whereIn('status', [
+                    AutomationRun::STATUS_QUEUED,
+                    AutomationRun::STATUS_RUNNING,
+                    AutomationRun::STATUS_WAITING,
+                ])
+                ->distinct()
+                ->pluck('subject_key');
+
+            foreach ($found as $key) {
+                $inside[mb_strtolower((string) $key)] = true;
+            }
+        }
+
+        return array_keys($inside);
+    }
+
+    /**
+     * The uuids of the automations that carry the "pauses the newsletter" flag.
+     *
+     * Read through the repository so a flat-file install answers the same as a
+     * database one. A disabled automation still counts: switching one off does
+     * not end the passes people are already in.
+     *
+     * @return list<string>
+     */
+    public function pausingAutomationUuids(): array
+    {
+        return app(AutomationRepository::class)->all()
+            ->filter(fn (Automation $automation) => PausesNewsletter::isOn($automation->nodes))
+            ->map(fn (Automation $automation) => (string) $automation->uuid)
+            ->values()
+            ->all();
     }
 }
