@@ -372,14 +372,12 @@ it('lists the edges of every addon in the map registry', function () {
         ->and($edges['automation:welcome-daily>starts>automation:nachfass'])->toBeInstanceOf(MapEdge::class);
 });
 
-it('reports a send step whose template does not exist, and stays silent when the template addon cannot say', function () {
+it('reports a send step whose template does not exist and not a plain-text step', function () {
     $mail = mapAutomation('uuid-mail', 'Bonus', 'vokale-bonus');
     mapNode($mail, 'send_email', ['template' => 'tag-3'], 'Tag 3');
     mapNode($mail, 'send_email', ['template' => ''], 'Klartext');
 
-    // Without the template addon nothing is known, so nothing is claimed.
-    expect($this->map->find('vokale-bonus')->problems)->toBe([]);
-
+    // The real check asks the template addon (present in CI, absent locally), so the question is pinned through a seam.
     $asker = new class(app(AutomationRepository::class)) extends AutomationMapObjects
     {
         protected function templateIsGone(string $slug): bool
