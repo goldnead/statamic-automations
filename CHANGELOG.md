@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.32.1 — 2026-10-19
+
+### Fixed
+
+- The map's problem messages for a dead wait, call or mail-template reference are translated (German added); they were English only.
+
 ## 2.32.0 — 2026-10-19
 
 ### Added: automation edges and broken references on the map

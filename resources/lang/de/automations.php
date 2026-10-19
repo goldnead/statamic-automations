@@ -15,6 +15,10 @@ return [
     'map_edge_triggers' => 'löst aus',
     'map_edge_grants' => 'gewährt Zugang',
 
+    // Ein kaputter Verweis dieser Automatisierung, wie ihn die Landkarte zeigt.
+    'map_problem_template' => 'Schritt „:step“ sendet die Vorlage „:template“, die es nicht gibt',
+    'map_problem_automation' => 'Schritt „:step“ verweist auf die Automatisierung „:automation“, die es nicht gibt',
+
     'nav' => [
         'automations' => 'Automatisierungen',
         'dashboard' => 'Übersicht',
