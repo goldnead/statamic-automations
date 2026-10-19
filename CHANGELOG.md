@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.32.2 — 2026-10-19
+
+### Fixed
+
+- The node library's tabs and kind labels (Triggers, Logic) and "Replace trigger" are translated in German ("Auslöser", "Logik"); they showed English on a German Control Panel. "Actions" already comes from Statamic.
+
 ## 2.32.1 — 2026-10-19
 
 ### Fixed
