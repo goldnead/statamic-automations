@@ -15,6 +15,10 @@ return [
     'map_edge_triggers' => 'triggers',
     'map_edge_grants' => 'grants access',
 
+    // A broken reference this automation carries, as the map shows it.
+    'map_problem_template' => 'step ":step" sends template ":template", which does not exist',
+    'map_problem_automation' => 'step ":step" points at automation ":automation", which does not exist',
+
     'nav' => [
         'automations' => 'Automations',
         'dashboard' => 'Dashboard',

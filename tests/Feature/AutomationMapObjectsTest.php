@@ -274,6 +274,16 @@ it('draws a starts edge from the calling automation to the one it calls', functi
         ->and($this->map->find('welcome-daily')->problems)->toBe([]);
 });
 
+it('words the problems in German when the app speaks German', function () {
+    app()->setLocale('de');
+
+    $nachfass = mapAutomation('uuid-nachfass', 'Nachfassen', 'nachfass');
+    mapNode($nachfass, 'wait_for_automation', ['automation' => 'gone'], 'Warten');
+
+    expect($this->map->find('nachfass')->problems)
+        ->toBe(['Schritt „Warten“ verweist auf die Automatisierung „gone“, die es nicht gibt']);
+});
+
 it('keeps a dead wait and a dead call as edges with the written text, and reports both as problems', function () {
     $nachfass = mapAutomation('uuid-nachfass', 'Nachfassen', 'nachfass');
     mapNode($nachfass, 'wait_for_automation', ['automation' => 'gone'], 'Warten');
