@@ -10,6 +10,7 @@ use Goldnead\BrandContext\Map\MapMetric;
 use Goldnead\BrandContext\Map\MapObject;
 use Goldnead\BrandContext\Map\MapObjectRegistry;
 use Goldnead\BrandContext\Map\MapPeriod;
+use Goldnead\EmailTemplates\Facades\EmailTemplates;
 use Goldnead\StatamicAutomations\Casts\MillisecondDateTime;
 use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\Actions\GrantEntitlementAction;
@@ -20,6 +21,7 @@ use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Nodes\Actions\CallAutomationAction;
+use Goldnead\StatamicAutomations\Nodes\Actions\SendEmailAction;
 use Goldnead\StatamicAutomations\Nodes\Logic\WaitForAutomationNode;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
@@ -264,6 +266,16 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
         $problems = [];
 
         foreach ($automation->nodes as $node) {
+            if ($node->type === SendEmailAction::handle()) {
+                $template = $this->writtenTemplate($node);
+
+                if ($template !== null && $this->templateIsGone($template)) {
+                    $problems[] = sprintf('step "%s" sends template "%s", which does not exist', $this->stepName($node), $template);
+                }
+
+                continue;
+            }
+
             if (! in_array($node->type, [WaitForAutomationNode::handle(), CallAutomationAction::handle()], true)) {
                 continue;
             }
@@ -282,6 +294,37 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
         }
 
         return $problems;
+    }
+
+    /** The mail template slug a send-email step writes, trimmed, or null when it sends plain text. */
+    protected function writtenTemplate(AutomationNode $node): ?string
+    {
+        $value = $node->getConfigValue('template');
+
+        if (! is_scalar($value) || trim((string) $value) === '') {
+            return null;
+        }
+
+        return trim((string) $value);
+    }
+
+    /**
+     * Whether a template slug points at nothing. The sender falls back to plain
+     * text without a word when it cannot find the template, so the map has to
+     * ask the template addon itself. Without that addon nothing is known and
+     * nothing is claimed.
+     */
+    protected function templateIsGone(string $slug): bool
+    {
+        if (! class_exists(EmailTemplates::class)) {
+            return false;
+        }
+
+        try {
+            return EmailTemplates::resolve($slug) === null;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /** The automation handle or uuid a wait or call step writes, trimmed, or null when empty. */

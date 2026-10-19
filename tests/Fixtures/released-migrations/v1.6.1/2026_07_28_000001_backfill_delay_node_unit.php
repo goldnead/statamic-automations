@@ -94,7 +94,7 @@ return new class extends Migration
     }
 
     /**
-     * @return array<string, mixed>|null  null when the stored JSON is unusable
+     * @return array<string, mixed>|null null when the stored JSON is unusable
      */
     private function decodeConfig(?string $raw): ?array
     {

@@ -7,6 +7,7 @@ use Goldnead\BrandContext\Map\MapMetric;
 use Goldnead\BrandContext\Map\MapObject;
 use Goldnead\BrandContext\Map\MapObjectRegistry;
 use Goldnead\BrandContext\Map\MapPeriod;
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Integrations\Map\AutomationMapObjects;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
@@ -369,4 +370,23 @@ it('lists the edges of every addon in the map registry', function () {
         'automation:welcome-daily>starts>automation:nachfass',
     ])
         ->and($edges['automation:welcome-daily>starts>automation:nachfass'])->toBeInstanceOf(MapEdge::class);
+});
+
+it('reports a send step whose template does not exist, and stays silent when the template addon cannot say', function () {
+    $mail = mapAutomation('uuid-mail', 'Bonus', 'vokale-bonus');
+    mapNode($mail, 'send_email', ['template' => 'tag-3'], 'Tag 3');
+    mapNode($mail, 'send_email', ['template' => ''], 'Klartext');
+
+    // Without the template addon nothing is known, so nothing is claimed.
+    expect($this->map->find('vokale-bonus')->problems)->toBe([]);
+
+    $asker = new class(app(AutomationRepository::class)) extends AutomationMapObjects
+    {
+        protected function templateIsGone(string $slug): bool
+        {
+            return $slug === 'tag-3';
+        }
+    };
+
+    expect($asker->find('vokale-bonus')->problems)->toBe(['step "Tag 3" sends template "tag-3", which does not exist']);
 });
