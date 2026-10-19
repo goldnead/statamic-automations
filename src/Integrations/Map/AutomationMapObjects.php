@@ -270,7 +270,7 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
                 $template = $this->writtenTemplate($node);
 
                 if ($template !== null && $this->templateIsGone($template)) {
-                    $problems[] = sprintf('step "%s" sends template "%s", which does not exist', $this->stepName($node), $template);
+                    $problems[] = __('statamic-automations::automations.map_problem_template', ['step' => $this->stepName($node), 'template' => $template]);
                 }
 
                 continue;
@@ -286,11 +286,10 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
                 continue;
             }
 
-            $problems[] = sprintf(
-                'step "%s" points at automation "%s", which does not exist',
-                $this->stepName($node),
-                $written,
-            );
+            $problems[] = __('statamic-automations::automations.map_problem_automation', [
+                'step' => $this->stepName($node),
+                'automation' => $written,
+            ]);
         }
 
         return $problems;
