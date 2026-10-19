@@ -1,12 +1,79 @@
 <?php
 
+use Goldnead\BrandContext\Contracts\ProvidesMapObjects;
+use Goldnead\BrandContext\Map\MapEdge;
 use Goldnead\BrandContext\Map\MapLookup;
+use Goldnead\BrandContext\Map\MapMetric;
+use Goldnead\BrandContext\Map\MapObject;
 use Goldnead\BrandContext\Map\MapObjectRegistry;
 use Goldnead\BrandContext\Map\MapPeriod;
+use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Integrations\Map\AutomationMapObjects;
 use Goldnead\StatamicAutomations\Models\Automation;
+use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Illuminate\Support\Carbon;
+
+/*
+ * Fake addons for the entitlement edges: a lead magnet and a product provider,
+ * each answering for one slug. Registered in a test to say "this addon is
+ * installed"; without registration the type is unavailable and no edge is drawn.
+ */
+class MapTestLeadMagnets implements ProvidesMapObjects
+{
+    public function type(): string
+    {
+        return 'lead_magnet';
+    }
+
+    public function typeLabel(): string
+    {
+        return 'Lead magnet';
+    }
+
+    public function objects(?string $query = null, int $limit = 50): array
+    {
+        return [];
+    }
+
+    public function find(string $id): ?MapObject
+    {
+        return $id === 'freebie' ? new MapObject('lead_magnet', 'freebie', 'Freebie') : null;
+    }
+
+    public function metric(string $id, MapPeriod $period): ?MapMetric
+    {
+        return null;
+    }
+}
+
+class MapTestProducts implements ProvidesMapObjects
+{
+    public function type(): string
+    {
+        return 'product';
+    }
+
+    public function typeLabel(): string
+    {
+        return 'Product';
+    }
+
+    public function objects(?string $query = null, int $limit = 50): array
+    {
+        return [];
+    }
+
+    public function find(string $id): ?MapObject
+    {
+        return $id === 'choir-course' ? new MapObject('product', 'choir-course', 'Choir course') : null;
+    }
+
+    public function metric(string $id, MapPeriod $period): ?MapMetric
+    {
+        return null;
+    }
+}
 
 /*
  * The automations as map objects for statamic-funnels.
@@ -143,4 +210,181 @@ it('is registered in the map registry after boot', function () {
 
     expect($registry->lookup('automation', 'nachfass')->status)->toBe(MapLookup::FOUND)
         ->and($registry->lookup('automation', 'gibt-es-nicht')->status)->toBe(MapLookup::MISSING);
+});
+
+/*
+ * Edges: what an automation's own steps say about the map. Each step type is
+ * read from its configuration and nothing else.
+ */
+
+function mapNode(Automation $automation, string $type, array $config = [], ?string $label = null): AutomationNode
+{
+    return AutomationNode::query()->create([
+        'automation_id' => $automation->id,
+        'node_key' => 'node-'.bin2hex(random_bytes(4)),
+        'type' => $type,
+        'label' => $label,
+        'config' => $config,
+    ]);
+}
+
+function mapEdgeByKey(array $edges, string $key): ?MapEdge
+{
+    return collect($edges)->first(fn (MapEdge $edge) => $edge->key() === $key);
+}
+
+it('draws a waits-for edge from the awaited automation to the waiting one', function () {
+    mapAutomation('uuid-willkommen', 'Willkommensserie', 'welcome-daily');
+    $nachfass = mapAutomation('uuid-nachfass', 'Nachfassen', 'nachfass');
+    mapNode($nachfass, 'wait_for_automation', ['automation' => 'welcome-daily'], 'Warten');
+
+    $edge = mapEdgeByKey($this->map->edges(), 'automation:welcome-daily>waits_for>automation:nachfass');
+
+    expect($edge)->not->toBeNull()
+        ->and($edge->fromType)->toBe('automation')
+        ->and($edge->fromId)->toBe('welcome-daily')
+        ->and($edge->toId)->toBe('nachfass')
+        ->and($edge->kind)->toBe('waits_for')
+        ->and($edge->label)->toBe('awaited by')
+        ->and($edge->dashed)->toBeTrue()
+        ->and($edge->derivedFrom)->toBe('wait_for_automation step of nachfass')
+        ->and($edge->toLabel)->toBeNull();
+});
+
+it('resolves a waited-for automation written as uuid to its handle', function () {
+    mapAutomation('uuid-willkommen', 'Willkommensserie', 'welcome-daily');
+    $nachfass = mapAutomation('uuid-nachfass', 'Nachfassen', 'nachfass');
+    mapNode($nachfass, 'wait_for_automation', ['automation' => 'uuid-willkommen']);
+
+    expect(mapEdgeByKey($this->map->edges(), 'automation:welcome-daily>waits_for>automation:nachfass'))->not->toBeNull();
+});
+
+it('draws a starts edge from the calling automation to the one it calls', function () {
+    $welcome = mapAutomation('uuid-willkommen', 'Willkommensserie', 'welcome-daily');
+    mapAutomation('uuid-nachfass', 'Nachfassen', 'nachfass');
+    mapNode($welcome, 'call_automation', ['automation' => 'nachfass'], 'Aufruf');
+
+    $edge = mapEdgeByKey($this->map->edges(), 'automation:welcome-daily>starts>automation:nachfass');
+
+    expect($edge)->not->toBeNull()
+        ->and($edge->label)->toBe('starts')
+        ->and($edge->dashed)->toBeFalse()
+        ->and($edge->derivedFrom)->toBe('call_automation step of welcome-daily')
+        ->and($edge->toLabel)->toBe('nachfass')
+        ->and($this->map->find('welcome-daily')->problems)->toBe([]);
+});
+
+it('keeps a dead wait and a dead call as edges with the written text, and reports both as problems', function () {
+    $nachfass = mapAutomation('uuid-nachfass', 'Nachfassen', 'nachfass');
+    mapNode($nachfass, 'wait_for_automation', ['automation' => 'gone'], 'Warten');
+    mapNode($nachfass, 'call_automation', ['automation' => 'weg'], 'Aufruf');
+
+    $edges = $this->map->edges();
+
+    $wait = mapEdgeByKey($edges, 'automation:gone>waits_for>automation:nachfass');
+    $call = mapEdgeByKey($edges, 'automation:nachfass>starts>automation:weg');
+
+    expect($wait)->not->toBeNull()
+        ->and($wait->fromId)->toBe('gone')
+        ->and($wait->toLabel)->toBeNull()
+        ->and($call)->not->toBeNull()
+        ->and($call->toId)->toBe('weg')
+        ->and($call->toLabel)->toBe('weg')
+        ->and($this->map->find('nachfass')->problems)
+        ->toHaveCount(2)
+        ->toContain('step "Warten" points at automation "gone", which does not exist')
+        ->toContain('step "Aufruf" points at automation "weg", which does not exist');
+});
+
+it('draws no problem for a step without a written automation', function () {
+    $nachfass = mapAutomation('uuid-nachfass', 'Nachfassen', 'nachfass');
+    mapNode($nachfass, 'call_automation', ['automation' => '  '], 'Aufruf');
+
+    expect($this->map->edges())->toBe([])
+        ->and($this->map->find('nachfass')->problems)->toBe([]);
+});
+
+it('draws no entitlement edge without a lead magnet or product provider, and no guess', function () {
+    $welcome = mapAutomation('uuid-willkommen', 'Willkommensserie', 'welcome-daily');
+    mapNode($welcome, 'entitlements.granted', ['product_slug' => 'freebie']);
+    mapNode($welcome, 'entitlements.grant', ['product_slug' => 'choir-course']);
+
+    $kinds = array_map(fn (MapEdge $edge) => $edge->kind, $this->map->edges());
+
+    expect($kinds)->toBe([]);
+});
+
+it('draws a triggers edge from a lead magnet with the slug, and nothing for an unknown slug', function () {
+    app(MapObjectRegistry::class)->register(MapTestLeadMagnets::class);
+    $welcome = mapAutomation('uuid-willkommen', 'Willkommensserie', 'welcome-daily');
+    mapNode($welcome, 'entitlements.granted', ['product_slug' => 'freebie']);
+
+    $edge = mapEdgeByKey($this->map->edges(), 'lead_magnet:freebie>triggers>automation:welcome-daily');
+
+    expect($edge)->not->toBeNull()
+        ->and($edge->fromType)->toBe('lead_magnet')
+        ->and($edge->label)->toBe('triggers')
+        ->and($edge->derivedFrom)->toBe('entitlement-granted trigger of welcome-daily, product_slug freebie');
+
+    $other = mapAutomation('uuid-anderes', 'Anderes', 'anderes');
+    mapNode($other, 'entitlements.granted', ['product_slug' => 'nichts']);
+
+    expect(array_filter($this->map->edges(), fn (MapEdge $e) => $e->toId === 'anderes'))->toBe([]);
+});
+
+it('draws a grants edge to the product when no lead magnet has the slug', function () {
+    app(MapObjectRegistry::class)->register(MapTestLeadMagnets::class);
+    app(MapObjectRegistry::class)->register(MapTestProducts::class);
+    $welcome = mapAutomation('uuid-willkommen', 'Willkommensserie', 'welcome-daily');
+    mapNode($welcome, 'entitlements.grant', ['product_slug' => 'choir-course']);
+
+    $edge = mapEdgeByKey($this->map->edges(), 'automation:welcome-daily>grants>product:choir-course');
+
+    expect($edge)->not->toBeNull()
+        ->and($edge->toType)->toBe('product')
+        ->and($edge->label)->toBe('grants access')
+        ->and($edge->derivedFrom)->toBe('grant_entitlement step of welcome-daily, product_slug choir-course');
+});
+
+it('yields one edge when two steps express the same relation', function () {
+    app(MapObjectRegistry::class)->register(MapTestLeadMagnets::class);
+    $welcome = mapAutomation('uuid-willkommen', 'Willkommensserie', 'welcome-daily');
+    mapNode($welcome, 'entitlements.granted', ['product_slug' => 'freebie']);
+    mapNode($welcome, 'entitlements.granted', ['product_slug' => 'freebie']);
+
+    $triggers = array_filter($this->map->edges(), fn (MapEdge $e) => $e->kind === 'triggers');
+
+    expect($triggers)->toHaveCount(1);
+});
+
+it('lists the edges of every addon in the map registry', function () {
+    $welcome = mapAutomation('uuid-willkommen', 'Willkommensserie', 'welcome-daily');
+    $nachfass = mapAutomation('uuid-nachfass', 'Nachfassen', 'nachfass');
+    mapNode($nachfass, 'wait_for_automation', ['automation' => 'welcome-daily']);
+    mapNode($welcome, 'call_automation', ['automation' => 'nachfass']);
+
+    $edges = app(MapObjectRegistry::class)->edges();
+
+    expect($edges)->toHaveKeys([
+        'automation:welcome-daily>waits_for>automation:nachfass',
+        'automation:welcome-daily>starts>automation:nachfass',
+    ])
+        ->and($edges['automation:welcome-daily>starts>automation:nachfass'])->toBeInstanceOf(MapEdge::class);
+});
+
+it('reports a send step whose template does not exist and not a plain-text step', function () {
+    $mail = mapAutomation('uuid-mail', 'Bonus', 'vokale-bonus');
+    mapNode($mail, 'send_email', ['template' => 'tag-3'], 'Tag 3');
+    mapNode($mail, 'send_email', ['template' => ''], 'Klartext');
+
+    // The real check asks the template addon (present in CI, absent locally), so the question is pinned through a seam.
+    $asker = new class(app(AutomationRepository::class)) extends AutomationMapObjects
+    {
+        protected function templateIsGone(string $slug): bool
+        {
+            return $slug === 'tag-3';
+        }
+    };
+
+    expect($asker->find('vokale-bonus')->problems)->toBe(['step "Tag 3" sends template "tag-3", which does not exist']);
 });
