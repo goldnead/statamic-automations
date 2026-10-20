@@ -13,6 +13,7 @@ return [
     'map_edge_waits_for' => 'abgewartet von',
     'map_edge_starts' => 'startet',
     'map_edge_triggers' => 'löst aus',
+    'map_edge_triggers_by_grant' => 'Produkt gewährt Zugang, löst aus',
     'map_edge_grants' => 'gewährt Zugang',
 
     // Ein kaputter Verweis dieser Automatisierung, wie ihn die Landkarte zeigt.

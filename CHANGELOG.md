@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added: map edge from a product that grants the slug an automation listens to
+
+An "entitlement granted" trigger that names a grant slug (say `kurs-vokale-aussprache`) now gets an edge from every product whose purchase grants that slug, not only from a product with that handle. The edge is labelled "Produkt gewährt Zugang, löst aus" and says in its derivation which product it came from. Needs statamic-products with `productsGranting()`; without it nothing changes. Nothing is stored.
+
 ## 2.32.2 — 2026-10-19
 
 ### Fixed

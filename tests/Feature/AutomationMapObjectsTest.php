@@ -75,6 +75,14 @@ class MapTestProducts implements ProvidesMapObjects
     }
 }
 
+class MapTestGrantingProducts extends MapTestProducts
+{
+    public function find(string $id): ?MapObject
+    {
+        return in_array($id, ['masterclass-vokale-aussprache', 'bundle'], true) ? new MapObject('product', $id, $id) : null;
+    }
+}
+
 /*
  * The automations as map objects for statamic-funnels.
  *
@@ -354,6 +362,68 @@ it('draws a grants edge to the product when no lead magnet has the slug', functi
         ->and($edge->toType)->toBe('product')
         ->and($edge->label)->toBe('grants access')
         ->and($edge->derivedFrom)->toBe('grant_entitlement step of welcome-daily, product_slug choir-course');
+});
+
+/*
+ * An automation that listens to the grant slug, not to the product handle:
+ * the product `masterclass-vokale-aussprache` grants `kurs-vokale-aussprache`.
+ * The real answer comes from the products addon (absent here), so it is pinned
+ * through the seam, as the template check is.
+ */
+function mapGrantAsker(array $grantsBySlug): AutomationMapObjects
+{
+    return new class(app(AutomationRepository::class), $grantsBySlug) extends AutomationMapObjects
+    {
+        public function __construct(AutomationRepository $automations, protected array $grantsBySlug)
+        {
+            parent::__construct($automations);
+        }
+
+        protected function productsGranting(string $slug): array
+        {
+            return $this->grantsBySlug[$slug] ?? [];
+        }
+    };
+}
+
+it('draws a triggers edge from the product that grants the slug the trigger listens to', function () {
+    app(MapObjectRegistry::class)->register(MapTestGrantingProducts::class);
+    $vokale = mapAutomation('uuid-vokale', 'Vokale Bonus', 'vokale-bonus');
+    mapNode($vokale, 'entitlements.granted', ['product_slug' => 'kurs-vokale-aussprache']);
+
+    $edges = mapGrantAsker(['kurs-vokale-aussprache' => ['masterclass-vokale-aussprache', 'bundle']])->edges();
+    $edge = mapEdgeByKey($edges, 'product:masterclass-vokale-aussprache>triggers>automation:vokale-bonus');
+
+    expect($edge)->not->toBeNull()
+        ->and($edge->kind)->toBe('triggers')
+        ->and($edge->label)->toBe('product grants it, triggers')
+        ->and($edge->derivedFrom)->toBe('entitlement-granted trigger of vokale-bonus, product_slug kurs-vokale-aussprache, granted by product masterclass-vokale-aussprache')
+        ->and(mapEdgeByKey($edges, 'product:bundle>triggers>automation:vokale-bonus'))->not->toBeNull()
+        ->and($edges)->toHaveCount(2);
+});
+
+it('draws no grant edge for a granting product the map does not know, and none without a provider', function () {
+    $vokale = mapAutomation('uuid-vokale', 'Vokale Bonus', 'vokale-bonus');
+    mapNode($vokale, 'entitlements.granted', ['product_slug' => 'kurs-vokale-aussprache']);
+    $asker = mapGrantAsker(['kurs-vokale-aussprache' => ['masterclass-vokale-aussprache']]);
+
+    expect($asker->edges())->toBe([]);
+
+    app(MapObjectRegistry::class)->register(MapTestGrantingProducts::class);
+
+    expect(mapGrantAsker([])->edges())->toBe([]);
+});
+
+it('draws one line when the product handle and its grant are the same slug', function () {
+    app(MapObjectRegistry::class)->register(MapTestGrantingProducts::class);
+    $vokale = mapAutomation('uuid-vokale', 'Vokale Bonus', 'vokale-bonus');
+    mapNode($vokale, 'entitlements.granted', ['product_slug' => 'bundle']);
+
+    $edges = mapGrantAsker(['bundle' => ['bundle']])->edges();
+
+    expect($edges)->toHaveCount(1)
+        ->and($edges[0]->key())->toBe('product:bundle>triggers>automation:vokale-bonus')
+        ->and($edges[0]->label)->toBe('triggers');
 });
 
 it('yields one edge when two steps express the same relation', function () {

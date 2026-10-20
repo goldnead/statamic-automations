@@ -128,7 +128,7 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
 
         foreach ($this->automations->all() as $automation) {
             foreach ($this->edgesOf($automation) as $edge) {
-                $edges[$edge->key()] = $edge;
+                $edges[$edge->key()] ??= $edge;
             }
         }
 
@@ -152,9 +152,83 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
             if ($edge !== null) {
                 $edges[] = $edge;
             }
+
+            if ($node->type === EntitlementGrantedTrigger::handle()) {
+                array_push($edges, ...$this->grantedByEdges($automation, $node));
+            }
         }
 
         return $edges;
+    }
+
+    /**
+     * The second way to an "entitlement granted" trigger: the trigger listens to
+     * a grant slug, and a product whose purchase grants that slug starts the
+     * automation. The site's case is the product `masterclass-vokale-aussprache`
+     * granting `kurs-vokale-aussprache` while the automation listens to the
+     * latter. The products addon names the granting handles; each one must still
+     * be a product the map knows. A handle that is also the slug yields the same
+     * edge key as the direct way, so it stays one line.
+     *
+     * @return list<MapEdge>
+     */
+    protected function grantedByEdges(Automation $automation, AutomationNode $node): array
+    {
+        $slug = $this->productSlugOf($node);
+
+        if ($slug === null) {
+            return [];
+        }
+
+        $registry = app(MapObjectRegistry::class);
+        $handle = $this->idOf($automation);
+        $edges = [];
+
+        foreach ($this->productsGranting($slug) as $product) {
+            if ($registry->lookup('product', $product)->status !== MapLookup::FOUND) {
+                continue;
+            }
+
+            $edges[] = new MapEdge(
+                fromType: 'product',
+                fromId: $product,
+                toType: self::TYPE,
+                toId: $handle,
+                kind: 'triggers',
+                label: __('statamic-automations::automations.map_edge_triggers_by_grant'),
+                derivedFrom: "entitlement-granted trigger of {$handle}, product_slug {$slug}, granted by product {$product}",
+            );
+        }
+
+        return $edges;
+    }
+
+    /**
+     * The handles of the products whose purchase grants a slug. Asked of the
+     * products addon without depending on it: when it is absent or too old to
+     * know the question, nothing is known and nothing is claimed.
+     *
+     * @return list<string>
+     */
+    protected function productsGranting(string $slug): array
+    {
+        $provider = 'Goldnead\\StatamicProducts\\Integrations\\Map\\ProductMapObjects';
+
+        if (! class_exists($provider) || ! method_exists($provider, 'productsGranting')
+            || ! app(MapObjectRegistry::class)->has('product')) {
+            return [];
+        }
+
+        try {
+            return array_values(array_filter(
+                app($provider)->productsGranting($slug),
+                'is_string',
+            ));
+        } catch (\Throwable $e) {
+            report($e);
+
+            return [];
+        }
     }
 
     /** A waited-for automation runs first: the edge points from it to the waiting one. */
