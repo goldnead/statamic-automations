@@ -696,7 +696,7 @@ it('describes the disconnect consequence in words', function () {
     mapConnectable(['product_slug' => 'choir-course']);
 
     expect($this->map->connectionPreview(mapConnection(), 'disconnect')['consequence'])
-        ->toBe('From now on "Willkommensserie" no longer starts for "Choir course".');
+        ->toContain('"Willkommensserie" is switched off and no longer waits for "Choir course"');
 });
 
 it('writes the grant slug of the product, not its handle, and draws the line it wrote', function () {
@@ -768,10 +768,37 @@ it('says that a running automation changes at once, in both languages', function
     app()->setLocale('de');
 
     expect($this->map->connectionPreview(mapConnection(), 'connect')['consequence'])->toEndWith('Die Automatisierung ist aktiv, die Änderung gilt sofort.');
+});
+
+it('refuses to release a running automation, because an empty trigger means every grant', function () {
+    mapConnectable(['product_slug' => 'choir-course'], enabled: true);
+
+    $message = 'This automation is switched on. Without a product it would start on every access that is granted. Switch it off first.';
+
+    expect(fn () => $this->map->connectionPreview(mapConnection(), 'disconnect'))->toThrow(DomainException::class, $message)
+        ->and(fn () => $this->map->disconnect(mapConnection()))->toThrow(DomainException::class, $message)
+        ->and(mapTriggerOf('welcome-daily')->config)->toBe(['product_slug' => 'choir-course']);
+
+    app()->setLocale('de');
+
+    expect(fn () => $this->map->disconnect(mapConnection()))
+        ->toThrow(DomainException::class, 'Diese Automatisierung ist eingeschaltet. Ohne Produkt würde sie bei jeder Freischaltung starten. Schalte sie erst aus.');
+});
+
+it('refuses the undo of a connect on a running automation too', function () {
+    mapConnectable(enabled: true);
 
     $this->map->connect(mapConnection());
 
-    expect($this->map->connectionPreview(mapConnection(), 'disconnect')['consequence'])->toEndWith('Die Automatisierung ist aktiv, die Änderung gilt sofort.');
+    expect(fn () => $this->map->disconnect(mapConnection()))->toThrow(DomainException::class, 'switched on')
+        ->and(mapTriggerOf('welcome-daily')->config)->toBe(['product_slug' => 'choir-course']);
+});
+
+it('says truthfully what an empty trigger means when it releases a switched-off automation', function () {
+    mapConnectable(['product_slug' => 'choir-course']);
+
+    expect($this->map->connectionPreview(mapConnection(), 'disconnect')['consequence'])
+        ->toBe('"Willkommensserie" is switched off and no longer waits for "Choir course". An empty trigger means every access, so switch it on only after you chose a new one.');
 });
 
 it('keeps a version the editor can roll back to when it writes', function () {

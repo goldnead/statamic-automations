@@ -191,8 +191,13 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
             throw new \DomainException(__('statamic-automations::automations.map_disconnect_not_connected', ['automation' => $name, 'object' => $object]));
         }
 
+        // An empty slug on "access granted" means every grant (FlattensEntitlements), so a running automation must not be emptied.
+        if ($automation->enabled) {
+            throw new \DomainException(__('statamic-automations::automations.map_disconnect_running'));
+        }
+
         return [
-            'consequence' => __('statamic-automations::automations.map_disconnect', ['automation' => $name, 'object' => $object]).$live,
+            'consequence' => __('statamic-automations::automations.map_disconnect', ['automation' => $name, 'object' => $object]),
             'before' => $current,
             'after' => '',
         ];
