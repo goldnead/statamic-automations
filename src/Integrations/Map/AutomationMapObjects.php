@@ -316,8 +316,10 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
         try {
             $subjects = [];
 
-            foreach (Entry::query()->where('collection', 'et_templates')->whereIn('slug', $slugs)->get() as $entry) {
-                $subjects[(string) $entry->slug()] = (string) ($entry->value('subject') ?? '');
+            foreach (Entry::whereCollection('et_templates') as $entry) {
+                if (in_array((string) $entry->slug(), $slugs, true)) {
+                    $subjects[(string) $entry->slug()] = (string) ($entry->value('subject') ?? '');
+                }
             }
 
             return $subjects;
