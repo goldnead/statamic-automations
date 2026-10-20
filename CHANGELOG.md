@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2.34.1 — 2026-10-20
+
+### Fixed: releasing a connection on a switched-on automation is refused
+
+On the funnels map, releasing a `triggers` connection (the disconnect, and with it the undo of a connect) empties the slug of the automation's "Access Granted" trigger. An empty slug there means "every access that is granted" (`FlattensEntitlements`), and a running automation takes the change at once, so the release would have started it for every grant, while the dialog said it "no longer starts" for the product. `connectionPreview()` and `disconnect()` now refuse it while the automation is switched on: "This automation is switched on. Without a product it would start on every access that is granted. Switch it off first." (German too). On a switched-off automation the release is still allowed, and the dialog now says what an empty trigger means. Connecting is unchanged.
+
 ## 2.34.0 — 2026-10-20
 
 ### Added: draw a product or lead magnet onto an automation on the funnels map
