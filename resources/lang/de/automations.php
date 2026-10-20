@@ -17,7 +17,13 @@ return [
     'map_edge_grants' => 'gewährt Zugang',
 
     // Eine Verbindung auf der Funnel-Landkarte ziehen: die Folge in Klartext und der Grund einer Absage.
-    'map_connect_product' => 'Ab jetzt startet „:automation“ für alle, die „:object“ kaufen.',
+    'map_connect_product' => 'Ab jetzt startet „:automation“, sobald der Zugang „:slug“ gewährt wird, etwa wenn jemand „:object“ kauft.',
+    'map_connect_shared' => 'Andere Produkte gewähren ihn auch und starten sie ebenfalls: :products.',
+    'map_live_note' => 'Die Automatisierung ist aktiv, die Änderung gilt sofort.',
+    'map_connect_changed' => '„:automation“ wurde zwischenzeitlich geändert. Es wurde nichts geschrieben, bitte neu ansehen.',
+    'map_connect_grants_nothing' => '„:object“ gewährt keinen Zugang und kann „:automation“ deshalb nicht starten.',
+    'map_connect_grants_many' => '„:object“ gewährt mehrere Zugänge (:slugs). Wähle einen im Automatisierungs-Editor.',
+    'map_connect_grants_unknown' => 'Hier lässt sich nicht feststellen, welchen Zugang „:object“ gewährt. Wähle ihn im Automatisierungs-Editor.',
     'map_connect_lead_magnet' => 'Ab jetzt startet „:automation“ für alle, die „:object“ bekommen.',
     'map_disconnect' => 'Ab jetzt startet „:automation“ nicht mehr für „:object“.',
     'map_connect_unsupported' => 'Dieses Paar lässt sich hier nicht verbinden.',

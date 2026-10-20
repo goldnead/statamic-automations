@@ -124,46 +124,76 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
         );
     }
 
-    /** Whoever may edit automations in the Control Panel may draw this line. */
+    /**
+     * Both ends need their own right: the one that guards the source in the
+     * Control Panel (a product: `access products utility`, statamic-products
+     * ServiceProvider; a lead magnet: `manage lead magnets`) and the right to
+     * edit the automation that is written. Having one never stands in for the other.
+     */
     public function connectionAuthorized(array $c, $user): bool
     {
-        return $user !== null && method_exists($user, 'can') && (bool) $user->can('edit automations');
+        if ($user === null || ! method_exists($user, 'can')) {
+            return false;
+        }
+
+        $source = self::SOURCE_PERMISSION[(string) ($c['from_type'] ?? '')] ?? null;
+
+        return $source !== null && (bool) $user->can($source) && (bool) $user->can('edit automations');
     }
 
+    /** The right that guards each kind of source on its own Control Panel. */
+    private const SOURCE_PERMISSION = [
+        'product' => 'access products utility',
+        'lead_magnet' => 'manage lead magnets',
+    ];
+
     /**
+     * What the write would do. `before` and `after` are the trigger's slug, the
+     * field the write changes, which for a product is the access it grants and
+     * not its handle.
+     *
      * @return array{consequence: string, before: string, after: string}
      *
      * @throws \DomainException
      */
     public function connectionPreview(array $c, string $action): array
     {
-        [, , $source, $slug] = $this->connectionParts($c);
-        $automation = $this->resolve((string) ($c['to_id'] ?? ''));
+        [$automation, , $source, $current] = $this->connectionParts($c);
         $name = $automation->name !== '' ? (string) $automation->name : $this->idOf($automation);
         $object = $source->label;
         $from = (string) $c['from_type'];
 
-        if ($action === 'connect') {
-            $this->assertFree($name, $object, $slug, (string) $c['from_id']);
+        // A running automation takes the change at once: there is no draft stage, only the version that is kept.
+        $live = $automation->enabled ? ' '.__('statamic-automations::automations.map_live_note') : '';
 
-            return [
-                'consequence' => __('statamic-automations::automations.map_connect_'.$from, ['automation' => $name, 'object' => $object]),
-                'before' => '',
-                'after' => (string) $c['from_id'],
-            ];
+        if ($action === 'connect') {
+            $this->assertFree($c, $name, $object, $current);
+            $slug = $this->slugToWrite($c, $name, $object);
+
+            $consequence = __('statamic-automations::automations.map_connect_'.$from, ['automation' => $name, 'object' => $object, 'slug' => $slug]);
+
+            if ($from === 'product') {
+                $others = array_values(array_diff($this->productsGranting($slug), [(string) $c['from_id']]));
+
+                if ($others !== []) {
+                    $consequence .= ' '.__('statamic-automations::automations.map_connect_shared', ['products' => implode(', ', $others)]);
+                }
+            }
+
+            return ['consequence' => $consequence.$live, 'before' => '', 'after' => $slug];
         }
 
         if ($action !== 'disconnect') {
             throw new \DomainException(__('statamic-automations::automations.map_connect_unsupported'));
         }
 
-        if ($slug !== (string) $c['from_id']) {
+        if ($current === '' || ! $this->isConnectedVia($c, $current)) {
             throw new \DomainException(__('statamic-automations::automations.map_disconnect_not_connected', ['automation' => $name, 'object' => $object]));
         }
 
         return [
-            'consequence' => __('statamic-automations::automations.map_disconnect', ['automation' => $name, 'object' => $object]),
-            'before' => (string) $c['from_id'],
+            'consequence' => __('statamic-automations::automations.map_disconnect', ['automation' => $name, 'object' => $object]).$live,
+            'before' => $current,
             'after' => '',
         ];
     }
@@ -173,7 +203,7 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
     {
         $preview = $this->connectionPreview($c, 'connect');
 
-        $this->writeSlug($c, $preview['after'], 'connected');
+        $this->writeSlug($c, $preview['before'], $preview['after'], 'connected');
 
         return ['before' => $preview['before'], 'after' => $preview['after']];
     }
@@ -188,12 +218,12 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
     {
         $preview = $this->connectionPreview($c, 'disconnect');
 
-        $this->writeSlug($c, null, 'disconnected');
+        $this->writeSlug($c, $preview['before'], null, 'disconnected');
 
         return ['before' => $preview['before'], 'after' => $preview['after']];
     }
 
-    /** Sources a trigger slug can name. The slug of a product or lead magnet is its map id. */
+    /** Sources a trigger slug can name. A lead magnet's slug is its handle; a product's is the access it grants. */
     private const CONNECTABLE_FROM = ['product', 'lead_magnet'];
 
     /**
@@ -246,15 +276,91 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
     }
 
     /** @throws \DomainException when the trigger already listens to something. */
-    private function assertFree(string $name, string $object, string $slug, string $fromId): void
+    private function assertFree(array $c, string $name, string $object, string $current): void
     {
-        if ($slug === '') {
+        if ($current === '') {
             return;
         }
 
-        throw new \DomainException($slug === $fromId
+        throw new \DomainException($this->isConnectedVia($c, $current)
             ? __('statamic-automations::automations.map_connect_already', ['automation' => $name, 'object' => $object])
-            : __('statamic-automations::automations.map_connect_other_slug', ['automation' => $name, 'slug' => $slug]));
+            : __('statamic-automations::automations.map_connect_other_slug', ['automation' => $name, 'slug' => $current]));
+    }
+
+    /**
+     * Whether the slug a trigger holds is one this source starts it with: a lead
+     * magnet's handle, or for a product an access it grants (its own handle too,
+     * the older way a trigger was written by hand).
+     */
+    private function isConnectedVia(array $c, string $slug): bool
+    {
+        $fromId = (string) $c['from_id'];
+
+        if ($slug === $fromId) {
+            return true;
+        }
+
+        return $c['from_type'] === 'product' && in_array($slug, $this->grantSlugsOf($fromId) ?? [], true);
+    }
+
+    /**
+     * The slug a connect writes: for a lead magnet its handle (the entitlement
+     * it grants carries `$resource->handle`, lead-magnets GrantService.php:428);
+     * for a product the one access it grants. A product that grants nothing or
+     * several is refused with the reason, because a guess would write a slug no
+     * purchase of it ever produces, or the wrong one.
+     *
+     * @throws \DomainException
+     */
+    private function slugToWrite(array $c, string $name, string $object): string
+    {
+        if ($c['from_type'] !== 'product') {
+            return (string) $c['from_id'];
+        }
+
+        $grants = $this->grantSlugsOf((string) $c['from_id']);
+
+        if ($grants === null) {
+            throw new \DomainException(__('statamic-automations::automations.map_connect_grants_unknown', ['object' => $object]));
+        }
+
+        if ($grants === []) {
+            throw new \DomainException(__('statamic-automations::automations.map_connect_grants_nothing', ['object' => $object, 'automation' => $name]));
+        }
+
+        if (count($grants) > 1) {
+            throw new \DomainException(__('statamic-automations::automations.map_connect_grants_many', ['object' => $object, 'slugs' => implode(', ', $grants)]));
+        }
+
+        return $grants[0];
+    }
+
+    /**
+     * The access slugs a product grants, or null when that cannot be told. The
+     * products addon only offers the other direction (`productsGranting()`, a
+     * slug to handles), so this reads the catalogue row's own list,
+     * `Product::grantSlugs()`, the same list its checkout hands to the
+     * entitlements bridge. Without that addon or with one too old, nothing is known.
+     *
+     * @return list<string>|null
+     */
+    protected function grantSlugsOf(string $handle): ?array
+    {
+        $model = 'Goldnead\\StatamicProducts\\Models\\Product';
+
+        if (! class_exists($model) || ! method_exists($model, 'grantSlugs')) {
+            return null;
+        }
+
+        try {
+            $product = $model::query()->forBrand()->where('handle', $handle)->first();
+
+            return $product === null ? null : array_values(array_filter($product->grantSlugs(), 'is_string'));
+        } catch (\Throwable $e) {
+            report($e);
+
+            return null;
+        }
     }
 
     /**
@@ -262,11 +368,26 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
      * change can be rolled back, then the graph through the repository (both storage
      * drivers), the version counted up, and a line in the audit log.
      *
+     * Compare and set: the automation and its trigger are read again right here,
+     * and the write only happens while the slug is still the one the preview
+     * showed. Another tab or user in between means nothing is written. There is
+     * no lock, so a write landing inside the few lines between this read and the
+     * save can still win; the version is counted up from this fresh read.
+     *
+     * @param  string  $expected  the slug the preview showed.
      * @param  string|null  $slug  null empties the slug.
+     *
+     * @throws \DomainException when the slug is no longer the expected one.
      */
-    private function writeSlug(array $c, ?string $slug, string $what): void
+    private function writeSlug(array $c, string $expected, ?string $slug, string $what): void
     {
-        [$automation, $trigger] = $this->connectionParts($c);
+        [$automation, $trigger, , $current] = $this->connectionParts($c);
+
+        if ($current !== $expected) {
+            $name = $automation->name !== '' ? (string) $automation->name : $this->idOf($automation);
+
+            throw new \DomainException(__('statamic-automations::automations.map_connect_changed', ['automation' => $name]));
+        }
 
         app(VersionManager::class)->snapshot($automation, 'Map: '.$what.' '.$c['from_type'].' '.$c['from_id']);
 
@@ -307,6 +428,7 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
             'via' => 'map',
             'connection' => $what,
             'from' => $c['from_type'].':'.$c['from_id'],
+            'slug' => $slug ?? $expected,
         ]);
     }
 

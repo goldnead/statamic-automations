@@ -17,7 +17,13 @@ return [
     'map_edge_grants' => 'grants access',
 
     // Drawing a connection on the funnels map: the consequence in words, and why a line is refused.
-    'map_connect_product' => 'From now on ":automation" starts for everyone who buys ":object".',
+    'map_connect_product' => 'From now on ":automation" starts whenever access ":slug" is granted, which happens when someone buys ":object".',
+    'map_connect_shared' => 'Other products grant it too and start it as well: :products.',
+    'map_live_note' => 'The automation is active, so this applies immediately.',
+    'map_connect_changed' => '":automation" was changed in the meantime. Nothing was written, please look again.',
+    'map_connect_grants_nothing' => '":object" grants no access, so it cannot start ":automation".',
+    'map_connect_grants_many' => '":object" grants several accesses (:slugs). Choose one in the automation editor.',
+    'map_connect_grants_unknown' => 'We cannot tell which access ":object" grants here. Choose it in the automation editor.',
     'map_connect_lead_magnet' => 'From now on ":automation" starts for everyone who gets ":object".',
     'map_disconnect' => 'From now on ":automation" no longer starts for ":object".',
     'map_connect_unsupported' => 'This pair cannot be connected here.',
