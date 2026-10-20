@@ -16,6 +16,20 @@ return [
     'map_edge_triggers_by_grant' => 'product grants it, triggers',
     'map_edge_grants' => 'grants access',
 
+    // Drawing a connection on the funnels map: the consequence in words, and why a line is refused.
+    'map_connect_product' => 'From now on ":automation" starts for everyone who buys ":object".',
+    'map_connect_lead_magnet' => 'From now on ":automation" starts for everyone who gets ":object".',
+    'map_disconnect' => 'From now on ":automation" no longer starts for ":object".',
+    'map_connect_unsupported' => 'This pair cannot be connected here.',
+    'map_connect_no_automation' => 'The automation ":id" does not exist.',
+    'map_connect_no_source' => '":id" does not exist.',
+    'map_connect_no_trigger' => '":automation" has no trigger step.',
+    'map_connect_many_triggers' => '":automation" has more than one trigger step.',
+    'map_connect_other_trigger' => '":automation" has a different trigger.',
+    'map_connect_other_slug' => '":automation" already starts for ":slug". Release that first.',
+    'map_connect_already' => '":automation" is already connected to ":object".',
+    'map_disconnect_not_connected' => '":automation" does not start for ":object".',
+
     // A broken reference this automation carries, as the map shows it.
     'map_problem_template' => 'step ":step" sends template ":template", which does not exist',
     'map_problem_automation' => 'step ":step" points at automation ":automation", which does not exist',

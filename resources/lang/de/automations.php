@@ -16,6 +16,20 @@ return [
     'map_edge_triggers_by_grant' => 'Produkt gewährt Zugang, löst aus',
     'map_edge_grants' => 'gewährt Zugang',
 
+    // Eine Verbindung auf der Funnel-Landkarte ziehen: die Folge in Klartext und der Grund einer Absage.
+    'map_connect_product' => 'Ab jetzt startet „:automation“ für alle, die „:object“ kaufen.',
+    'map_connect_lead_magnet' => 'Ab jetzt startet „:automation“ für alle, die „:object“ bekommen.',
+    'map_disconnect' => 'Ab jetzt startet „:automation“ nicht mehr für „:object“.',
+    'map_connect_unsupported' => 'Dieses Paar lässt sich hier nicht verbinden.',
+    'map_connect_no_automation' => 'Die Automatisierung „:id“ gibt es nicht.',
+    'map_connect_no_source' => '„:id“ gibt es nicht.',
+    'map_connect_no_trigger' => '„:automation“ hat keinen Auslöser-Schritt.',
+    'map_connect_many_triggers' => '„:automation“ hat mehr als einen Auslöser-Schritt.',
+    'map_connect_other_trigger' => '„:automation“ hat einen anderen Auslöser.',
+    'map_connect_other_slug' => '„:automation“ startet schon für „:slug“. Erst lösen.',
+    'map_connect_already' => '„:automation“ ist schon mit „:object“ verbunden.',
+    'map_disconnect_not_connected' => '„:automation“ startet nicht für „:object“.',
+
     // Ein kaputter Verweis dieser Automatisierung, wie ihn die Landkarte zeigt.
     'map_problem_template' => 'Schritt „:step“ sendet die Vorlage „:template“, die es nicht gibt',
     'map_problem_automation' => 'Schritt „:step“ verweist auf die Automatisierung „:automation“, die es nicht gibt',

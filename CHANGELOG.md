@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added: draw a product or lead magnet onto an automation on the funnels map
+
+The map provider now offers the pairs `product -> automation` and `lead_magnet -> automation` (kind `triggers`) through `connectionRules()`, `connectionAuthorized()`, `connectionPreview()`, `connect()` and `disconnect()`. Connecting writes the product or lead magnet slug into the `product_slug` of the automation's "Access Granted" trigger, the same way the editor saves it (version snapshot, version counted up, audit log line, both storage drivers). It is only written when that trigger exists exactly once and its slug is empty; a trigger that already listens to another slug, an automation with another or no trigger, or more than one trigger is refused with the reason, nothing is overwritten. Disconnecting empties the slug again, the exact reverse. Permission: `edit automations`. English and German texts.
+
 ### Added: map edge from a product that grants the slug an automation listens to
 
 An "entitlement granted" trigger that names a grant slug (say `kurs-vokale-aussprache`) now gets an edge from every product whose purchase grants that slug, not only from a product with that handle. The edge is labelled "Produkt gewährt Zugang, löst aus" and says in its derivation which product it came from. Needs statamic-products with `productsGranting()` (a release after 1.14.0, now listed under `suggest`); without it nothing changes. Nothing is stored. The products addon is asked once per grant slug and map run. Where two lines would share a key (a product whose handle is also the slug it grants), the direct "triggers" line stays and the grant line is dropped; the rule for equal keys across all other edges is unchanged (the last one wins).

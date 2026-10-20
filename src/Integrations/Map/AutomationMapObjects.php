@@ -13,6 +13,7 @@ use Goldnead\BrandContext\Map\MapPeriod;
 use Goldnead\EmailTemplates\Facades\EmailTemplates;
 use Goldnead\StatamicAutomations\Casts\MillisecondDateTime;
 use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
+use Goldnead\StatamicAutomations\Engine\VersionManager;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\Actions\GrantEntitlementAction;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\Triggers\EntitlementGrantedTrigger;
 use Goldnead\StatamicAutomations\Integrations\Insights\RunMetric;
@@ -23,6 +24,7 @@ use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Nodes\Actions\CallAutomationAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\SendEmailAction;
 use Goldnead\StatamicAutomations\Nodes\Logic\WaitForAutomationNode;
+use Goldnead\StatamicAutomations\Support\AuditLogger;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -104,6 +106,208 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
             ->count();
 
         return new MapMetric((int) $count, __('statamic-automations::insights.runs'), $period);
+    }
+
+    /**
+     * The pairs this addon can write: a product or a lead magnet starts an
+     * automation by being the slug of its "access granted" trigger.
+     *
+     * @return list<array{from_type: string, to_type: string, kind: string, label: string}>
+     */
+    public function connectionRules(): array
+    {
+        $label = __('statamic-automations::automations.map_edge_starts');
+
+        return array_map(
+            fn (string $from) => ['from_type' => $from, 'to_type' => self::TYPE, 'kind' => 'triggers', 'label' => $label],
+            self::CONNECTABLE_FROM,
+        );
+    }
+
+    /** Whoever may edit automations in the Control Panel may draw this line. */
+    public function connectionAuthorized(array $c, $user): bool
+    {
+        return $user !== null && method_exists($user, 'can') && (bool) $user->can('edit automations');
+    }
+
+    /**
+     * @return array{consequence: string, before: string, after: string}
+     *
+     * @throws \DomainException
+     */
+    public function connectionPreview(array $c, string $action): array
+    {
+        [, , $source, $slug] = $this->connectionParts($c);
+        $automation = $this->resolve((string) ($c['to_id'] ?? ''));
+        $name = $automation->name !== '' ? (string) $automation->name : $this->idOf($automation);
+        $object = $source->label;
+        $from = (string) $c['from_type'];
+
+        if ($action === 'connect') {
+            $this->assertFree($name, $object, $slug, (string) $c['from_id']);
+
+            return [
+                'consequence' => __('statamic-automations::automations.map_connect_'.$from, ['automation' => $name, 'object' => $object]),
+                'before' => '',
+                'after' => (string) $c['from_id'],
+            ];
+        }
+
+        if ($action !== 'disconnect') {
+            throw new \DomainException(__('statamic-automations::automations.map_connect_unsupported'));
+        }
+
+        if ($slug !== (string) $c['from_id']) {
+            throw new \DomainException(__('statamic-automations::automations.map_disconnect_not_connected', ['automation' => $name, 'object' => $object]));
+        }
+
+        return [
+            'consequence' => __('statamic-automations::automations.map_disconnect', ['automation' => $name, 'object' => $object]),
+            'before' => (string) $c['from_id'],
+            'after' => '',
+        ];
+    }
+
+    /** @return array{before: string, after: string} */
+    public function connect(array $c): array
+    {
+        $preview = $this->connectionPreview($c, 'connect');
+
+        $this->writeSlug($c, $preview['after'], 'connected');
+
+        return ['before' => $preview['before'], 'after' => $preview['after']];
+    }
+
+    /**
+     * The reverse of connect(): the slug it wrote goes away again. A trigger is only
+     * ever written while its slug was empty, so empty is exactly what it was before.
+     *
+     * @return array{before: string, after: string}
+     */
+    public function disconnect(array $c): array
+    {
+        $preview = $this->connectionPreview($c, 'disconnect');
+
+        $this->writeSlug($c, null, 'disconnected');
+
+        return ['before' => $preview['before'], 'after' => $preview['after']];
+    }
+
+    /** Sources a trigger slug can name. The slug of a product or lead magnet is its map id. */
+    private const CONNECTABLE_FROM = ['product', 'lead_magnet'];
+
+    /**
+     * Everything a connection needs, or a reason it cannot be had.
+     *
+     * @return array{0: Automation, 1: AutomationNode, 2: MapObject, 3: string}
+     *
+     * @throws \DomainException
+     */
+    protected function connectionParts(array $c): array
+    {
+        $from = (string) ($c['from_type'] ?? '');
+        $fromId = (string) ($c['from_id'] ?? '');
+
+        if (($c['to_type'] ?? null) !== self::TYPE || ! in_array($from, self::CONNECTABLE_FROM, true)
+            || ! in_array($c['kind'] ?? 'triggers', ['triggers'], true)) {
+            throw new \DomainException(__('statamic-automations::automations.map_connect_unsupported'));
+        }
+
+        $automation = $this->resolve((string) ($c['to_id'] ?? ''));
+
+        if (! $automation) {
+            throw new \DomainException(__('statamic-automations::automations.map_connect_no_automation', ['id' => (string) ($c['to_id'] ?? '')]));
+        }
+
+        $name = $automation->name !== '' ? (string) $automation->name : $this->idOf($automation);
+        $lookup = app(MapObjectRegistry::class)->lookup($from, $fromId);
+
+        if ($lookup->status !== MapLookup::FOUND) {
+            throw new \DomainException(__('statamic-automations::automations.map_connect_no_source', ['id' => $fromId]));
+        }
+
+        $triggers = $automation->nodes->filter(fn (AutomationNode $node) => $node->type === EntitlementGrantedTrigger::handle() || $node->isTrigger())->values();
+
+        if ($triggers->isEmpty()) {
+            throw new \DomainException(__('statamic-automations::automations.map_connect_no_trigger', ['automation' => $name]));
+        }
+
+        if ($triggers->count() > 1) {
+            throw new \DomainException(__('statamic-automations::automations.map_connect_many_triggers', ['automation' => $name]));
+        }
+
+        $trigger = $triggers->first();
+
+        if ($trigger->type !== EntitlementGrantedTrigger::handle()) {
+            throw new \DomainException(__('statamic-automations::automations.map_connect_other_trigger', ['automation' => $name]));
+        }
+
+        return [$automation, $trigger, $lookup->object, (string) $this->productSlugOf($trigger)];
+    }
+
+    /** @throws \DomainException when the trigger already listens to something. */
+    private function assertFree(string $name, string $object, string $slug, string $fromId): void
+    {
+        if ($slug === '') {
+            return;
+        }
+
+        throw new \DomainException($slug === $fromId
+            ? __('statamic-automations::automations.map_connect_already', ['automation' => $name, 'object' => $object])
+            : __('statamic-automations::automations.map_connect_other_slug', ['automation' => $name, 'slug' => $slug]));
+    }
+
+    /**
+     * Writes the trigger's slug the way the editor saves: a version first so the
+     * change can be rolled back, then the graph through the repository (both storage
+     * drivers), the version counted up, and a line in the audit log.
+     *
+     * @param  string|null  $slug  null empties the slug.
+     */
+    private function writeSlug(array $c, ?string $slug, string $what): void
+    {
+        [$automation, $trigger] = $this->connectionParts($c);
+
+        app(VersionManager::class)->snapshot($automation, 'Map: '.$what.' '.$c['from_type'].' '.$c['from_id']);
+
+        $nodes = $automation->nodes->map(function (AutomationNode $node) use ($trigger, $slug) {
+            $config = $node->config ?? [];
+
+            if ($node->node_key === $trigger->node_key) {
+                if ($slug === null) {
+                    unset($config['product_slug']);
+                } else {
+                    $config['product_slug'] = $slug;
+                }
+            }
+
+            return [
+                'node_key' => $node->node_key,
+                'type' => $node->type,
+                'label' => $node->label,
+                'position_x' => $node->position_x,
+                'position_y' => $node->position_y,
+                'config' => $config,
+                'disabled' => $node->disabled,
+            ];
+        })->all();
+
+        $edges = $automation->edges->map(fn ($edge) => [
+            'from_node_key' => $edge->from_node_key,
+            'from_output' => $edge->from_output,
+            'to_node_key' => $edge->to_node_key,
+            'to_input' => $edge->to_input,
+        ])->all();
+
+        $automation->version = (int) $automation->version + 1;
+        $automation = $this->automations->save($automation, $nodes, $edges);
+
+        app(AuditLogger::class)->record('updated', $automation, [
+            'version' => $automation->version,
+            'via' => 'map',
+            'connection' => $what,
+            'from' => $c['from_type'].':'.$c['from_id'],
+        ]);
     }
 
     /**
