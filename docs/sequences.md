@@ -312,6 +312,41 @@ trigger → wait_for_automation(email, automation=welcome,
         → branch(nodes.wait.state equals opted_out) → …
 ```
 
+## Wait Until Time: a fixed point from the run
+
+The **Wait Until Time** node (`wait_until_time`, group Logic) waits for a point in
+time that comes from the run's data, shifted by an offset, and then continues with
+the next node. Unlike Wait for Automation, the run does not come back to the node.
+
+| Field | Meaning |
+|---|---|
+| `at` | Any text Carbon can parse, usually a token such as `{{ booking.scheduled_at }}`. Required. |
+| `offset_amount` | Number, default `0`. Negative values move the point earlier. |
+| `offset_unit` | `minutes`, `hours` or `days`. Default `hours`. |
+
+Example: a reminder one day before an appointment.
+
+```
+trigger → wait_until_time(at={{ booking.scheduled_at }}, offset_amount=-24, offset_unit=days)
+        → send reminder
+```
+
+If the point has already passed, the run continues at once and the output `late` is
+`true`. An unreadable time fails the run, it never passes silently. In a test run
+the node never pauses and reports `would_wait_until`.
+
+## Call Automation and the enrollment gate
+
+The **Call Automation** node (`call_automation`) enters the sub-automation the way a
+trigger does. The gate of the target's trigger node decides first: the re-entry
+policy, and the series opt-out. A sub-run that is not allowed is not started, and the
+node succeeds with `enrolled` = `false` and the `reason`. Otherwise the sub-run gets
+the person's key (the target trigger's `_subject_key`, or the usual paths such as
+`subscriber.email`), so Wait for Automation and the re-entry rules see it too.
+
+Output: `enrolled` (always set), `child_run_id`, `child_status` (when waiting) or
+`queued` (when not waiting).
+
 ## The opt-out page, worded per series
 
 The page behind "Stop this series" shows the automation's name and the texts of the

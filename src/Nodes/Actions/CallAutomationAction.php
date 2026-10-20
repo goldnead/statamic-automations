@@ -5,6 +5,7 @@ namespace Goldnead\StatamicAutomations\Nodes\Actions;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationAction;
 use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
+use Goldnead\StatamicAutomations\Engine\EnrollmentGate;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
 use Goldnead\StatamicAutomations\Models\Automation;
@@ -100,17 +101,33 @@ class CallAutomationAction implements AutomationAction
         $trigger = $target->nodes->first(fn ($n) => $n->type !== null && str_contains($n->type, 'manual'))
             ?? $target->nodes->first();
 
-        $run = $this->runner->createRun($target, $childContext, $trigger);
+        // The sub-run enters like a trigger does: the same enrollment gate decides
+        // whether the person may start it, and the run carries the person's key,
+        // so the series-exit, re-entry and wait_for_automation rules apply to it.
+        $subjectKey = null;
+
+        if ($trigger !== null) {
+            $verdict = app(EnrollmentGate::class)->evaluate($target, $trigger, $childContext);
+
+            if (! $verdict['allowed']) {
+                return ActionResult::success(['enrolled' => false, 'reason' => $verdict['reason'], 'queued' => false]);
+            }
+
+            $subjectKey = $verdict['subject_key'];
+        }
+
+        $run = $this->runner->createRun($target, $childContext, $trigger, $subjectKey);
 
         if (! (bool) ($config['wait'] ?? true)) {
             RunAutomation::dispatch($run->id, $childContext->all(), $context->isTestMode());
 
-            return ActionResult::success(['child_run_id' => $run->id, 'queued' => true]);
+            return ActionResult::success(['enrolled' => true, 'child_run_id' => $run->id, 'queued' => true]);
         }
 
         $finished = $this->runner->execute($run, $childContext);
 
         return ActionResult::success([
+            'enrolled' => true,
             'child_run_id' => $finished->id,
             'child_status' => $finished->status,
         ]);

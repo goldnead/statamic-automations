@@ -96,6 +96,7 @@ use Goldnead\StatamicAutomations\Nodes\Logic\SwitchNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\ThrottleNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\WaitForAutomationNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilNode;
+use Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilTimeNode;
 use Goldnead\StatamicAutomations\Nodes\Triggers\AssetDeletedTrigger;
 use Goldnead\StatamicAutomations\Nodes\Triggers\AssetSavedTrigger;
 use Goldnead\StatamicAutomations\Nodes\Triggers\AssetUploadedTrigger;
@@ -599,6 +600,7 @@ class ServiceProvider extends AddonServiceProvider
             'delay' => DelayNode::class,
             'wait_until' => WaitUntilNode::class,
             'wait_for_automation' => WaitForAutomationNode::class,
+            'wait_until_time' => WaitUntilTimeNode::class,
             'loop' => LoopNode::class,
             'parallel' => ParallelNode::class,
             'throttle' => ThrottleNode::class,
