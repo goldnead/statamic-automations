@@ -426,6 +426,99 @@ it('draws one line when the product handle and its grant are the same slug', fun
         ->and($edges[0]->label)->toBe('triggers');
 });
 
+it('asks the products source once per slug and run, however many triggers listen to it', function () {
+    app(MapObjectRegistry::class)->register(MapTestGrantingProducts::class);
+    foreach (['eins', 'zwei', 'drei'] as $handle) {
+        $automation = mapAutomation("uuid-{$handle}", ucfirst($handle), $handle);
+        mapNode($automation, 'entitlements.granted', ['product_slug' => 'kurs-vokale-aussprache']);
+    }
+
+    $asker = new class(app(AutomationRepository::class)) extends AutomationMapObjects
+    {
+        public int $asked = 0;
+
+        protected function productsGranting(string $slug): array
+        {
+            $this->asked++;
+
+            return ['masterclass-vokale-aussprache'];
+        }
+    };
+
+    expect($asker->edges())->toHaveCount(3)
+        ->and($asker->asked)->toBe(1);
+
+    $asker->edges();
+
+    expect($asker->asked)->toBe(2);
+});
+
+it('lets the direct edge win over a grant edge with the same key, whatever the step order', function () {
+    app(MapObjectRegistry::class)->register(MapTestGrantingProducts::class);
+    $vokale = mapAutomation('uuid-vokale', 'Vokale Bonus', 'vokale-bonus');
+    mapNode($vokale, 'entitlements.granted', ['product_slug' => 'kurs-vokale-aussprache']);
+    mapNode($vokale, 'entitlements.granted', ['product_slug' => 'bundle']);
+
+    $edges = mapGrantAsker(['kurs-vokale-aussprache' => ['bundle']])->edges();
+    $edge = mapEdgeByKey($edges, 'product:bundle>triggers>automation:vokale-bonus');
+
+    expect($edges)->toHaveCount(1)
+        ->and($edge->label)->toBe('triggers')
+        ->and($edge->derivedFrom)->toBe('entitlement-granted trigger of vokale-bonus, product_slug bundle');
+});
+
+/*
+ * The real seam: class_exists, the registry check, method_exists and the catch.
+ * The products addon is not a dependency here, so the true two-addon run needs
+ * it installed; this stand-in carries its class name and its one method and
+ * drives the wiring. It is only declared when the real class is absent.
+ */
+if (! class_exists('Goldnead\\StatamicProducts\\Integrations\\Map\\ProductMapObjects')) {
+    eval('namespace Goldnead\\StatamicProducts\\Integrations\\Map;
+    class ProductMapObjects
+    {
+        public static bool $throws = false;
+        public function productsGranting(string $slug): array
+        {
+            if (self::$throws) { throw new \\RuntimeException("products down"); }
+            return $slug === "kurs-vokale-aussprache" ? ["masterclass-vokale-aussprache", 7, "bundle"] : [];
+        }
+    }');
+}
+
+it('asks the real products source through the seam and draws the edge', function () {
+    $class = 'Goldnead\\StatamicProducts\\Integrations\\Map\\ProductMapObjects';
+    $class::$throws = false;
+    app(MapObjectRegistry::class)->register(MapTestGrantingProducts::class);
+    $vokale = mapAutomation('uuid-vokale', 'Vokale Bonus', 'vokale-bonus');
+    mapNode($vokale, 'entitlements.granted', ['product_slug' => 'kurs-vokale-aussprache']);
+
+    $edges = $this->map->edges();
+
+    expect(mapEdgeByKey($edges, 'product:masterclass-vokale-aussprache>triggers>automation:vokale-bonus'))->not->toBeNull()
+        ->and(mapEdgeByKey($edges, 'product:bundle>triggers>automation:vokale-bonus'))->not->toBeNull()
+        ->and($edges)->toHaveCount(2);
+});
+
+it('claims nothing when the products source throws', function () {
+    $class = 'Goldnead\\StatamicProducts\\Integrations\\Map\\ProductMapObjects';
+
+    if (! property_exists($class, 'throws')) {
+        $this->markTestSkipped('only the stand-in can be told to throw');
+    }
+
+    $class::$throws = true;
+    app(MapObjectRegistry::class)->register(MapTestGrantingProducts::class);
+    $vokale = mapAutomation('uuid-vokale', 'Vokale Bonus', 'vokale-bonus');
+    mapNode($vokale, 'entitlements.granted', ['product_slug' => 'kurs-vokale-aussprache']);
+
+    try {
+        expect($this->map->edges())->toBe([]);
+    } finally {
+        $class::$throws = false;
+    }
+});
+
 it('yields one edge when two steps express the same relation', function () {
     app(MapObjectRegistry::class)->register(MapTestLeadMagnets::class);
     $welcome = mapAutomation('uuid-willkommen', 'Willkommensserie', 'welcome-daily');

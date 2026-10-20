@@ -124,21 +124,41 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
      */
     public function edges(): iterable
     {
+        $this->grantingBySlug = [];
+        $this->productKnown = [];
         $edges = [];
 
         foreach ($this->automations->all() as $automation) {
             foreach ($this->edgesOf($automation) as $edge) {
-                $edges[$edge->key()] ??= $edge;
+                $edges[$edge->key()] = $edge;
             }
         }
 
         return array_values($edges);
     }
 
-    /** @return list<MapEdge> */
+    /**
+     * The grant slugs asked of the products addon during one edges() run, and
+     * whether a product handle is a known map object. Both are reset per run.
+     *
+     * @var array<string, list<string>>
+     */
+    private array $grantingBySlug = [];
+
+    /** @var array<string, bool> */
+    private array $productKnown = [];
+
+    /**
+     * A direct edge wins over a grant edge with the same key (a product whose
+     * handle is also the slug it grants): the grant edges are appended last and
+     * dropped when the direct way already drew that line.
+     *
+     * @return list<MapEdge>
+     */
     protected function edgesOf(Automation $automation): array
     {
         $edges = [];
+        $granted = [];
 
         foreach ($automation->nodes as $node) {
             $edge = match ($node->type) {
@@ -154,7 +174,16 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
             }
 
             if ($node->type === EntitlementGrantedTrigger::handle()) {
-                array_push($edges, ...$this->grantedByEdges($automation, $node));
+                array_push($granted, ...$this->grantedByEdges($automation, $node));
+            }
+        }
+
+        $taken = array_map(fn (MapEdge $edge) => $edge->key(), $edges);
+
+        foreach ($granted as $edge) {
+            if (! in_array($edge->key(), $taken, true)) {
+                $edges[] = $edge;
+                $taken[] = $edge->key();
             }
         }
 
@@ -184,8 +213,12 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
         $handle = $this->idOf($automation);
         $edges = [];
 
-        foreach ($this->productsGranting($slug) as $product) {
-            if ($registry->lookup('product', $product)->status !== MapLookup::FOUND) {
+        $this->grantingBySlug[$slug] ??= $this->productsGranting($slug);
+
+        foreach ($this->grantingBySlug[$slug] as $product) {
+            $this->productKnown[$product] ??= $registry->lookup('product', $product)->status === MapLookup::FOUND;
+
+            if (! $this->productKnown[$product]) {
                 continue;
             }
 

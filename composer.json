@@ -36,6 +36,7 @@
     "suggest": {
         "spatie/browsershot": "Draw a small picture of each send_email node's mail on the canvas (needs a Chromium and node with puppeteer; see automations.thumbnails)",
         "goldnead/statamic-insights": "Report runs, failures, success rate, median run time and series opt-outs on the shared Insights dashboard",
+        "goldnead/statamic-products": "Draw a product to the automation that listens to the grant it gives on the funnels map (needs a release after 1.14.0 that has ProductMapObjects::productsGranting())",
         "goldnead/statamic-leadhub": "Trigger automations from LeadHub CRM events (contacts, follow-ups, opportunities)",
         "goldnead/statamic-webhook-manager": "Delegate webhook delivery (retries, auth, logging) to Webhook Manager"
     },

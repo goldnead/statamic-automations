@@ -4,7 +4,7 @@
 
 ### Added: map edge from a product that grants the slug an automation listens to
 
-An "entitlement granted" trigger that names a grant slug (say `kurs-vokale-aussprache`) now gets an edge from every product whose purchase grants that slug, not only from a product with that handle. The edge is labelled "Produkt gewährt Zugang, löst aus" and says in its derivation which product it came from. Needs statamic-products with `productsGranting()`; without it nothing changes. Nothing is stored.
+An "entitlement granted" trigger that names a grant slug (say `kurs-vokale-aussprache`) now gets an edge from every product whose purchase grants that slug, not only from a product with that handle. The edge is labelled "Produkt gewährt Zugang, löst aus" and says in its derivation which product it came from. Needs statamic-products with `productsGranting()` (a release after 1.14.0, now listed under `suggest`); without it nothing changes. Nothing is stored. The products addon is asked once per grant slug and map run. Where two lines would share a key (a product whose handle is also the slug it grants), the direct "triggers" line stays and the grant line is dropped; the rule for equal keys across all other edges is unchanged (the last one wins).
 
 ## 2.32.2 — 2026-10-19
 
