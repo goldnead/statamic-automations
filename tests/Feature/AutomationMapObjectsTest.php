@@ -18,6 +18,8 @@ use Goldnead\StatamicAutomations\Thumbnails\MailThumbnails;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
+use Statamic\Facades\Collection;
+use Statamic\Facades\Entry;
 use Statamic\Facades\Permission;
 use Statamic\Facades\Role;
 use Statamic\Facades\User;
@@ -1115,7 +1117,7 @@ it('adds up the waits between two mails', function () {
     expect(array_column($items, 'meta'))->toBe(['right away', 'after 2 days', 'after 90 minutes']);
 });
 
-it('shows a thumbnail only when one already exists and never renders one', function () {
+it('never touches the thumbnail storage when the panel opens', function () {
     Storage::fake('public');
     config()->set('automations.thumbnails.enabled', true);
     config()->set('automations.thumbnails.disk', 'public');
@@ -1125,12 +1127,13 @@ it('shows a thumbnail only when one already exists and never renders one', funct
     mapDetailChain($automation, ['m1', 'm2']);
     Storage::disk('public')->put(MailThumbnails::path($automation, 'm1', $first->config), 'PNG');
 
+    // From here on any disk access fails the test: a lookup per mail would be one per row.
+    Storage::shouldReceive('disk')->never();
+
     $items = $this->map->details('serie', MapPeriod::lastDays(30))[0]['items'];
 
-    expect($items[0]['image'])->toBe(MailThumbnails::url($automation, 'send_email', 'm1', $first->config))
-        ->and($items[0]['image'])->not->toBeNull()
-        ->and($items[1]['image'])->toBeNull()
-        ->and(Storage::disk('public')->allFiles())->toHaveCount(1);
+    expect(array_column($items, 'title'))->toBe(['Eins', 'Zwei'])
+        ->and(array_column($items, 'image'))->toBe([null, null]);
 });
 
 it('falls back to a clear title when a mail has neither subject nor a known template', function () {
@@ -1179,7 +1182,7 @@ it('lists the marketing mail node too, in template and campaign mode', function 
 
     $items = $this->map->details('serie', MapPeriod::lastDays(30))[0]['items'];
 
-    expect(array_column($items, 'title'))->toBe(['Danke, {{ contact.first_name }}', 'Campaign "nachfass"', 'Plain'])
+    expect(array_column($items, 'title'))->toBe(['Danke, {First name}', 'Campaign "nachfass"', 'Plain'])
         ->and(array_column($items, 'meta'))->toBe(['right away', 'after 3 days', 'right away']);
 });
 
@@ -1203,4 +1206,81 @@ it('has no details for an unknown automation or one without mails', function () 
 
     expect($this->map->details('gibt-es-nicht', MapPeriod::lastDays(30)))->toBeNull()
         ->and($this->map->details('leer', MapPeriod::lastDays(30)))->toBeNull();
+});
+
+it('opens the details only to a user who may view automations, and fails closed', function () {
+    $super = User::make()->email('s@example.com')->makeSuper();
+    $super->save();
+
+    expect($this->map->detailsAuthorized('serie', mapUserWith('viewer', ['view automations'])))->toBeTrue()
+        ->and($this->map->detailsAuthorized('serie', $super))->toBeTrue()
+        ->and($this->map->detailsAuthorized('serie', mapUserWith('editor', ['edit automations'])))->toBeFalse()
+        ->and($this->map->detailsAuthorized('serie', mapUserWith('nobody', [])))->toBeFalse()
+        ->and($this->map->detailsAuthorized('serie', null))->toBeFalse()
+        ->and($this->map->detailsAuthorized('serie', new stdClass))->toBeFalse();
+});
+
+it('words a placeholder in a subject instead of showing it raw', function () {
+    $words = fn (string $s) => (new class(app(AutomationRepository::class)) extends AutomationMapObjects
+    {
+        public function say(string $s): string
+        {
+            return $this->readableSubject($s);
+        }
+    })->say($s);
+
+    expect($words('Hallo {{ contact.first_name }}'))->toBe('Hallo {First name}')
+        ->and($words('Hi {{contact.last_name}}!'))->toBe('Hi {Last name}!')
+        ->and($words("{{ contact.first_name | default:'du' }}, los"))->toBe('{First name}, los')
+        ->and($words('{{ contact.name }} / {{ contact.full_name }}'))->toBe('{Name} / {Name}')
+        ->and($words('Mail an {{ contact.email }}'))->toBe('Mail an {Email}')
+        ->and($words('Summe {{ order.total }}'))->toBe('Summe {total}')
+        ->and($words('{{ order.shipping_cost|number }}'))->toBe('{shipping cost}')
+        ->and($words('{{ title }}'))->toBe('{title}')
+        ->and($words('Kein Platzhalter'))->toBe('Kein Platzhalter');
+
+    app()->setLocale('de');
+
+    expect($words('Hallo {{ contact.first_name }}'))->toBe('Hallo {Vorname}')
+        ->and($words('{{ contact.last_name }}'))->toBe('{Nachname}')
+        ->and($words('{{ contact.email }}'))->toBe('{E-Mail}');
+});
+
+it('words the placeholders of a written subject and of a template subject alike', function () {
+    $asker = new class(app(AutomationRepository::class)) extends AutomationMapObjects
+    {
+        protected function templateSubjects(array $slugs): array
+        {
+            return ['a' => 'Willkommen {{ contact.first_name | default:"du" }}'];
+        }
+    };
+    $automation = mapAutomation('uuid-serie', 'Serie', 'serie');
+    mapDetailNode($automation, 'm1', 'send_email', ['template' => 'a']);
+    mapDetailNode($automation, 'm2', 'send_email', ['subject' => 'Danke {{contact.last_name}}']);
+    mapDetailChain($automation, ['m1', 'm2']);
+
+    $items = $asker->details('serie', MapPeriod::lastDays(30))[0]['items'];
+
+    expect(array_column($items, 'title'))->toBe(['Willkommen {First name}', 'Danke {Last name}']);
+});
+
+it('reads only the wanted templates from the collection', function () {
+    require_once __DIR__.'/../Fixtures/EmailTemplatesStub.php';
+
+    Collection::make('et_templates')->title('Email Templates')->save();
+
+    foreach (['a' => 'Eins', 'b' => 'Zwei', 'c' => 'Drei'] as $slug => $subject) {
+        Entry::make()->collection('et_templates')->locale('default')->slug($slug)->data(['title' => $slug, 'subject' => $subject])->save();
+    }
+
+    $reader = new class(app(AutomationRepository::class)) extends AutomationMapObjects
+    {
+        public function read(array $slugs): array
+        {
+            return $this->templateSubjects($slugs);
+        }
+    };
+
+    expect($reader->read(['a', 'c', 'fehlt']))->toBe(['a' => 'Eins', 'c' => 'Drei'])
+        ->and($reader->read(['b']))->toBe(['b' => 'Zwei']);
 });

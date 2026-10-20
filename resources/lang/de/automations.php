@@ -46,6 +46,10 @@ return [
     'map_detail_mail_fallback' => 'Mail ohne Betreff',
     'map_detail_mail_campaign' => 'Kampagne „:campaign“',
     'map_detail_mail_template' => 'Mail ohne Betreff (Vorlage „:template“)',
+    'map_var_first_name' => 'Vorname',
+    'map_var_last_name' => 'Nachname',
+    'map_var_name' => 'Name',
+    'map_var_email' => 'E-Mail',
     'map_problem_template' => 'Schritt „:step“ sendet die Vorlage „:template“, die es nicht gibt',
     'map_problem_automation' => 'Schritt „:step“ verweist auf die Automatisierung „:automation“, die es nicht gibt',
 

@@ -26,10 +26,10 @@ use Goldnead\StatamicAutomations\Nodes\Actions\SendEmailAction;
 use Goldnead\StatamicAutomations\Nodes\Logic\DelayNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\WaitForAutomationNode;
 use Goldnead\StatamicAutomations\Support\AuditLogger;
-use Goldnead\StatamicAutomations\Thumbnails\MailThumbnails;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Statamic\Facades\Entry;
+use Statamic\Query\Builder;
 
 /**
  * The automations as objects a funnels map can point at.
@@ -120,10 +120,10 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
     /**
      * The panel's extra blocks (optional method of the map contract, found with
      * method_exists): one "list" block with the automation's mails in step
-     * order. Each title is the subject, the meta the wait since the step before
-     * (waits between two mails add up), the image a thumbnail that already
-     * exists. Read only: nothing is rendered here, and the template subjects
-     * come in one lookup.
+     * order. Each title is the subject (placeholders in words), the meta the
+     * wait since the step before (waits between two mails add up). Read only:
+     * nothing is rendered, the thumbnail storage is not touched, and the
+     * template subjects come in one lookup.
      *
      * @return list<array<string, mixed>>|null
      */
@@ -176,7 +176,8 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
             $items[] = [
                 'title' => Str::limit($this->mailTitle($node, $subjects), 120),
                 'meta' => $this->waitWords($mail['wait']),
-                'image' => $this->thumbnailOf($automation, $node),
+                // No picture here: whether one exists is a lookup on the thumbnail disk per mail.
+                'image' => null,
             ];
         }
 
@@ -280,13 +281,13 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
         $subject = $this->writtenSubject($node);
 
         if ($subject !== null) {
-            return $subject;
+            return $this->readableSubject($subject);
         }
 
         $template = $this->writtenTemplate($node);
 
         if ($template !== null && trim((string) ($subjects[$template] ?? '')) !== '') {
-            return trim((string) $subjects[$template]);
+            return $this->readableSubject(trim((string) $subjects[$template]));
         }
 
         $campaign = $node->getConfigValue('campaign');
@@ -316,10 +317,16 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
         try {
             $subjects = [];
 
-            foreach (Entry::whereCollection('et_templates') as $entry) {
-                if (in_array((string) $entry->slug(), $slugs, true)) {
-                    $subjects[(string) $entry->slug()] = (string) ($entry->value('subject') ?? '');
-                }
+            // The facade only promises the contract, which has no methods: a store
+            // that is not a Statamic query builder cannot be asked by slug.
+            $query = Entry::query();
+
+            if (! $query instanceof Builder) {
+                return [];
+            }
+
+            foreach ($query->where('collection', 'et_templates')->whereIn('slug', $slugs)->get() as $entry) {
+                $subjects[(string) $entry->slug()] = (string) ($entry->value('subject') ?? '');
             }
 
             return $subjects;
@@ -328,14 +335,36 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
         }
     }
 
-    /** The picture a mail already has, or null. Looks only; never renders. */
-    protected function thumbnailOf(Automation $automation, AutomationNode $node): ?string
+    /** The variables a subject names most often, as the words of the editor's own fields. */
+    private const SUBJECT_VARIABLES = [
+        'contact.first_name' => 'map_var_first_name',
+        'contact.last_name' => 'map_var_last_name',
+        'contact.name' => 'map_var_name',
+        'contact.full_name' => 'map_var_name',
+        'contact.email' => 'map_var_email',
+    ];
+
+    /**
+     * `{{ contact.first_name }}` as `{First name}`: every `{{ ... }}` in a subject
+     * becomes the variable's name in single braces. Filters (`| default:'du'`)
+     * are dropped; a variable without a word of its own gives its last segment,
+     * underscores as spaces (`order.total` becomes `{total}`).
+     */
+    protected function readableSubject(string $subject): string
     {
-        try {
-            return MailThumbnails::url($automation, (string) $node->type, (string) $node->node_key, is_array($node->config) ? $node->config : []);
-        } catch (\Throwable) {
-            return null;
-        }
+        return (string) preg_replace_callback('/\{\{\s*(.*?)\s*\}\}/s', function (array $m): string {
+            $variable = trim(explode('|', $m[1], 2)[0]);
+            $key = self::SUBJECT_VARIABLES[$variable] ?? null;
+
+            if ($key !== null) {
+                return '{'.__('statamic-automations::automations.'.$key).'}';
+            }
+
+            $segments = explode('.', $variable);
+            $name = str_replace('_', ' ', trim((string) end($segments)));
+
+            return '{'.$name.'}';
+        }, $subject);
     }
 
     /**
@@ -369,6 +398,21 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
         $source = self::SOURCE_PERMISSION[(string) ($c['from_type'] ?? '')] ?? null;
 
         return $source !== null && (bool) $user->can($source) && (bool) $user->can('edit automations');
+    }
+
+    /**
+     * Who may open the panel's details: the right that shows automations (and
+     * with them their mails and steps) in the Control Panel, not the one that
+     * edits them. Asked by the map registry before details() is called; a
+     * missing user or one that cannot answer is refused.
+     */
+    public function detailsAuthorized(string $id, $user): bool
+    {
+        if ($user === null || ! method_exists($user, 'can')) {
+            return false;
+        }
+
+        return (bool) $user->can('view automations');
     }
 
     /** The right that guards each kind of source on its own Control Panel. */
