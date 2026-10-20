@@ -348,7 +348,9 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
     {
         $model = 'Goldnead\\StatamicProducts\\Models\\Product';
 
-        if (! class_exists($model) || ! method_exists($model, 'grantSlugs')) {
+        // get_class_methods(), not method_exists(): the products addon is optional, so PHPStan
+        // cannot see the class and calls a literal method_exists() on it impossible.
+        if (! class_exists($model) || ! in_array('grantSlugs', get_class_methods($model), true)) {
             return null;
         }
 
