@@ -168,6 +168,10 @@ function expectedTestRunFailures(): array
         // action says; an EMPTY URL (a token that resolved to nothing) is
         // reported as missing in a test run, not failed.
         'asset.fetch_from_url' => 'The dummy URL "1" is not an http or https URL.',
+        // The sweep's dummy email "1" is not an address, so the node refuses
+        // before it looks at the booking table (statamic-booking is not in the
+        // test app). A test run reads for real, so it does not preview this away.
+        'booking.check_booking' => 'A valid "email" is required (the dummy email "1" is not an address).',
         // Reading cal.com's free slots changes nothing over there, so this
         // action deliberately has no test-mode short-circuit: a test run really
         // asks, because a preview made of invented times would be worth

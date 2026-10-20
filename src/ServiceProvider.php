@@ -23,6 +23,7 @@ use Goldnead\StatamicAutomations\Export\AutomationExporter;
 use Goldnead\StatamicAutomations\Export\AutomationFileSync;
 use Goldnead\StatamicAutomations\Export\AutomationImporter;
 use Goldnead\StatamicAutomations\Integrations\Affiliates\Triggers as AfT;
+use Goldnead\StatamicAutomations\Integrations\Booking\Actions as BA;
 use Goldnead\StatamicAutomations\Integrations\Booking\Triggers as BT;
 use Goldnead\StatamicAutomations\Integrations\CalCom\Actions as CalA;
 use Goldnead\StatamicAutomations\Integrations\CalCom\Triggers as CalT;
@@ -96,6 +97,7 @@ use Goldnead\StatamicAutomations\Nodes\Logic\SwitchNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\ThrottleNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\WaitForAutomationNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilNode;
+use Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilTimeNode;
 use Goldnead\StatamicAutomations\Nodes\Triggers\AssetDeletedTrigger;
 use Goldnead\StatamicAutomations\Nodes\Triggers\AssetSavedTrigger;
 use Goldnead\StatamicAutomations\Nodes\Triggers\AssetUploadedTrigger;
@@ -599,6 +601,7 @@ class ServiceProvider extends AddonServiceProvider
             'delay' => DelayNode::class,
             'wait_until' => WaitUntilNode::class,
             'wait_for_automation' => WaitForAutomationNode::class,
+            'wait_until_time' => WaitUntilTimeNode::class,
             'loop' => LoopNode::class,
             'parallel' => ParallelNode::class,
             'throttle' => ThrottleNode::class,
@@ -964,11 +967,21 @@ class ServiceProvider extends AddonServiceProvider
                 $automations->trigger($triggerClass::handle(), $triggerClass);
             }
 
-            // No booking actions. The booking addon exposes no public way to
-            // create, move or cancel a booking — its one public method takes a
-            // provider webhook payload — and writing to the model directly
-            // would skip its idempotency key and fire none of its events. An
-            // action that quietly does the wrong thing is worse than none.
+            foreach ([
+                BA\CheckBookingAction::class,
+            ] as $actionClass) {
+                $automations->registerBuiltIn($actionClass::handle());
+                $automations->action($actionClass::handle(), $actionClass);
+            }
+
+            // Only one booking action, and it only reads: booking.check_booking
+            // looks at the addon's table and writes nothing. There are no booking
+            // write actions. The booking addon exposes no public way to create,
+            // move or cancel a booking — its one public method takes a provider
+            // webhook payload — and writing to the model directly would skip its
+            // idempotency key and fire none of its events. An action that quietly
+            // does the wrong thing is worse than none.
+
             $this->listenForSisterEvents(HandleCommerceEvent::BOOKING_TRIGGERS, HandleCommerceEvent::class);
         }
 

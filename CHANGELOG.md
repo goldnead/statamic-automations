@@ -6,6 +6,21 @@
 
 An "entitlement granted" trigger that names a grant slug (say `kurs-vokale-aussprache`) now gets an edge from every product whose purchase grants that slug, not only from a product with that handle. The edge is labelled "Produkt gewährt Zugang, löst aus" and says in its derivation which product it came from. Needs statamic-products with `productsGranting()` (a release after 1.14.0, now listed under `suggest`); without it nothing changes. Nothing is stored. The products addon is asked once per grant slug and map run. Where two lines would share a key (a product whose handle is also the slug it grants), the direct "triggers" line stays and the grant line is dropped; the rule for equal keys across all other edges is unchanged (the last one wins).
 
+## 2.33.0 — 2026-10-20
+
+### Added
+
+- **Wait Until Time** node (`wait_until_time`, group Logic). Waits for a point in time from the run (`at`, any text Carbon parses, tokenable), shifted by `offset_amount` in `offset_unit` (minutes, hours or days; negative means earlier). After the point the run continues with the next node, it does not re-run this one. A point already passed continues at once with `late` = true. An unreadable or missing time fails the run. In a test run it reports `would_wait_until` and does not pause. See `docs/sequences.md`.
+- **Check Booking** node (`booking.check_booking`, group Booking, with `statamic-booking` installed). Reads the booking addon's table, the one named by `statamic-booking.table`, and ends the run in `require` or `forbid` mode when the answer is not the one required: a stop, not a failure. It matches by `email` (any case) or `external_id`, optionally by `endpoint` and `created_after`, and counts the `statuses` (default `booked,rescheduled`, so cancelled bookings do not count). It writes nothing. A missing table, or no email and no booking id, fails the run. Outputs `found`, `count` and the newest match's `status`, `scheduled_at`, `external_id` and `endpoint`. See `docs/integrations.md`.
+
+### Changed
+
+- **Call Automation** now enters the sub-automation like a trigger does. The enrollment gate of the target's trigger node decides first, and the sub-run carries the person's key (the target's `_subject_key`, or the usual paths such as `subscriber.email`). Before, sub-runs had no key, so the series opt-out, the re-entry policy and Wait for Automation did not apply to them. **Behaviour change:** a target automation with a re-entry policy other than `always` can now refuse the sub-run. The node then succeeds with `enrolled` = `false` and the `reason` (`sequence_opt_out`, `already_enrolled`, `already_running`), and no run starts. Targets on the default `always` behave as before. The output now always contains `enrolled`. In a test run the gate is not called: the sub-run is created as before 2.33.0, so a test run never cancels or refuses a person's real open runs.
+
+### Upgrading
+
+- No migration.
+
 ## 2.32.2 — 2026-10-19
 
 ### Fixed
