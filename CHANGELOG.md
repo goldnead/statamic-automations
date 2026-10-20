@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.34.0 — 2026-10-20
+
 ### Added: draw a product or lead magnet onto an automation on the funnels map
 
 The map provider now offers the pairs `product -> automation` and `lead_magnet -> automation` (kind `triggers`) through `connectionRules()`, `connectionAuthorized()`, `connectionPreview()`, `connect()` and `disconnect()`. Connecting writes the product or lead magnet slug into the `product_slug` of the automation's "Access Granted" trigger, the same way the editor saves it (version snapshot, version counted up, audit log line, both storage drivers). It is only written when that trigger exists exactly once and its slug is empty; a trigger that already listens to another slug, an automation with another or no trigger, or more than one trigger is refused with the reason, nothing is overwritten. Disconnecting empties the slug again, the exact reverse. English and German texts.
@@ -9,7 +11,7 @@ The map provider now offers the pairs `product -> automation` and `lead_magnet -
 - **The slug of a product is the access it grants**, not its handle: `masterclass-vokale-aussprache` writes `kurs-vokale-aussprache`, read from the catalogue row (`Product::grantSlugs()`). A product that grants nothing or several accesses is refused with the reason; a product the install cannot read the grants of is refused too. Disconnect recognises the slug it wrote (or the product's own handle, the older hand-written way). A lead magnet's slug stays its handle, which is what its entitlement carries. The preview names the slug, says when other products grant it too, and says when the automation is active ("applies immediately"): there is no draft stage, the change is versioned like an editor save.
 - **Permissions on both ends**: a product needs `access products utility` and a lead magnet `manage lead magnets` (the right that guards each in its own Control Panel), plus `edit automations` on the target. One does not stand in for the other.
 - **Compare and set**: connect and disconnect read the automation again right before writing and write only while the trigger's slug is still the one the preview showed, otherwise nothing is written and the refusal says so. There is no lock, so a write inside the few lines between that read and the save can still win.
-- Needs statamic-brand-context 1.19 (unreleased) for the map to offer connections at all; this addon calls no 1.19 symbol itself.
+- Needs statamic-brand-context 1.19 for the map to offer connections at all; this addon calls no 1.19 symbol itself.
 
 ### Added: map edge from a product that grants the slug an automation listens to
 
