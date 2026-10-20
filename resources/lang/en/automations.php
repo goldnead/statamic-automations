@@ -38,6 +38,13 @@ return [
     'map_disconnect_not_connected' => '":automation" does not start for ":object".',
 
     // A broken reference this automation carries, as the map shows it.
+    'map_detail_mails' => 'Mails',
+    'map_detail_wait_none' => 'right away',
+    'map_detail_wait_days' => 'after :count day|after :count days',
+    'map_detail_wait_hours' => 'after :count hour|after :count hours',
+    'map_detail_wait_minutes' => 'after :count minute|after :count minutes',
+    'map_detail_mail_fallback' => 'Mail without subject',
+    'map_detail_mail_template' => 'Mail without subject (template ":template")',
     'map_problem_template' => 'step ":step" sends template ":template", which does not exist',
     'map_problem_automation' => 'step ":step" points at automation ":automation", which does not exist',
 

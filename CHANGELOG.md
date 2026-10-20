@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added: the funnels map's detail panel lists an automation's mails
+
+`AutomationMapObjects::details()` (the optional detail method of the map contract) returns a "Mails" list: the automation's mails in step order, each with its subject (the template's subject when the step has none, a plain fallback title for a missing template), the wait since the step before ("right away", "after 2 days"; waits between two mails add up; English and German) and a thumbnail only when one has already been rendered. Read only, never renders, template subjects in one query, at most 12 entries with the rest counted.
+
 ## 2.34.1 — 2026-10-20
 
 ### Fixed: releasing a connection on a switched-on automation is refused

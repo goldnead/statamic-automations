@@ -23,10 +23,13 @@ use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Nodes\Actions\CallAutomationAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\SendEmailAction;
+use Goldnead\StatamicAutomations\Nodes\Logic\DelayNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\WaitForAutomationNode;
 use Goldnead\StatamicAutomations\Support\AuditLogger;
+use Goldnead\StatamicAutomations\Thumbnails\MailThumbnails;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Statamic\Facades\Entry;
 
 /**
  * The automations as objects a funnels map can point at.
@@ -106,6 +109,222 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
             ->count();
 
         return new MapMetric((int) $count, __('statamic-automations::insights.runs'), $period);
+    }
+
+    /** The most mails the panel lists; the rest is counted in `more`. */
+    public const DETAIL_LIMIT = 12;
+
+    /**
+     * The panel's extra blocks (optional method of the map contract, found with
+     * method_exists): one "list" block with the automation's mails in step
+     * order. Each title is the subject, the meta the wait since the step before
+     * (waits between two mails add up), the image a thumbnail that already
+     * exists. Read only: nothing is rendered here, and the template subjects
+     * come in one lookup.
+     *
+     * @return list<array<string, mixed>>|null
+     */
+    public function details(string $id, MapPeriod $period): ?array
+    {
+        $automation = $this->resolve($id);
+
+        if (! $automation) {
+            return null;
+        }
+
+        $automation->loadMissing(['nodes', 'edges']);
+
+        $mails = [];
+        $wait = 0;
+
+        foreach ($this->stepOrder($automation) as $node) {
+            if ($node->type === DelayNode::handle()) {
+                $wait += $this->delaySeconds($node);
+
+                continue;
+            }
+
+            if ($node->type === SendEmailAction::handle()) {
+                $mails[] = ['node' => $node, 'wait' => $wait];
+                $wait = 0;
+            }
+        }
+
+        if ($mails === []) {
+            return null;
+        }
+
+        $shown = array_slice($mails, 0, self::DETAIL_LIMIT);
+        $slugs = [];
+
+        foreach ($shown as $mail) {
+            if ($this->writtenSubject($mail['node']) === null && ($slug = $this->writtenTemplate($mail['node'])) !== null) {
+                $slugs[] = $slug;
+            }
+        }
+
+        $subjects = $slugs === [] ? [] : $this->templateSubjects(array_values(array_unique($slugs)));
+
+        $items = [];
+
+        foreach ($shown as $mail) {
+            $node = $mail['node'];
+
+            $items[] = [
+                'title' => Str::limit($this->mailTitle($node, $subjects), 120),
+                'meta' => $this->waitWords($mail['wait']),
+                'image' => $this->thumbnailOf($automation, $node),
+            ];
+        }
+
+        return [[
+            'kind' => 'list',
+            'title' => __('statamic-automations::automations.map_detail_mails'),
+            'items' => $items,
+            'more' => count($mails) > count($shown) ? count($mails) - count($shown) : null,
+        ]];
+    }
+
+    /**
+     * The steps as a run takes them: from the trigger (or the steps nothing
+     * points at) along the edges, depth first in stored order. Steps no edge
+     * reaches follow in creation order, so a half-wired automation still lists.
+     *
+     * @return list<AutomationNode>
+     */
+    protected function stepOrder(Automation $automation): array
+    {
+        $nodes = $automation->nodes->sortBy('id')->keyBy('node_key');
+        $next = [];
+        $pointedAt = [];
+
+        foreach ($automation->edges->sortBy('id') as $edge) {
+            $next[$edge->from_node_key][] = $edge->to_node_key;
+            $pointedAt[$edge->to_node_key] = true;
+        }
+
+        $ordered = [];
+        $seen = [];
+
+        $visit = function (string $key) use (&$visit, &$ordered, &$seen, $nodes, $next): void {
+            if (isset($seen[$key]) || ! $nodes->has($key)) {
+                return;
+            }
+
+            $seen[$key] = true;
+            $ordered[] = $nodes[$key];
+
+            foreach ($next[$key] ?? [] as $to) {
+                $visit($to);
+            }
+        };
+
+        foreach ($nodes as $key => $node) {
+            if (! isset($pointedAt[$key])) {
+                $visit((string) $key);
+            }
+        }
+
+        foreach ($nodes as $key => $node) {
+            $visit((string) $key);
+        }
+
+        return $ordered;
+    }
+
+    protected function delaySeconds(AutomationNode $node): int
+    {
+        $amount = max(0, (int) $node->getConfigValue('amount'));
+
+        return $amount * match ((string) $node->getConfigValue('unit')) {
+            'days' => 86400,
+            'hours' => 3600,
+            default => 60,
+        };
+    }
+
+    /** "right away", "after 2 days", "after 90 minutes": the largest unit that divides the wait evenly. */
+    protected function waitWords(int $seconds): string
+    {
+        if ($seconds <= 0) {
+            return __('statamic-automations::automations.map_detail_wait_none');
+        }
+
+        [$key, $count] = match (true) {
+            $seconds % 86400 === 0 => ['days', intdiv($seconds, 86400)],
+            $seconds % 3600 === 0 => ['hours', intdiv($seconds, 3600)],
+            default => ['minutes', max(1, (int) ceil($seconds / 60))],
+        };
+
+        return trans_choice('statamic-automations::automations.map_detail_wait_'.$key, $count, ['count' => $count]);
+    }
+
+    /** The subject the editor wrote on the step, trimmed, or null. */
+    protected function writtenSubject(AutomationNode $node): ?string
+    {
+        $value = $node->getConfigValue('subject');
+
+        if (! is_scalar($value) || trim((string) $value) === '') {
+            return null;
+        }
+
+        return trim((string) $value);
+    }
+
+    /** @param  array<string, string>  $subjects  template slug => subject */
+    protected function mailTitle(AutomationNode $node, array $subjects): string
+    {
+        $subject = $this->writtenSubject($node);
+
+        if ($subject !== null) {
+            return $subject;
+        }
+
+        $template = $this->writtenTemplate($node);
+
+        if ($template !== null && trim((string) ($subjects[$template] ?? '')) !== '') {
+            return trim((string) $subjects[$template]);
+        }
+
+        return $template !== null
+            ? __('statamic-automations::automations.map_detail_mail_template', ['template' => $template])
+            : __('statamic-automations::automations.map_detail_mail_fallback');
+    }
+
+    /**
+     * The subjects of managed templates, by slug, in one query on the template
+     * collection. Without the template addon, or on any failure, nothing is known.
+     *
+     * @param  list<string>  $slugs
+     * @return array<string, string>
+     */
+    protected function templateSubjects(array $slugs): array
+    {
+        if (! class_exists(EmailTemplates::class)) {
+            return [];
+        }
+
+        try {
+            $subjects = [];
+
+            foreach (Entry::query()->where('collection', 'et_templates')->whereIn('slug', $slugs)->get() as $entry) {
+                $subjects[(string) $entry->slug()] = (string) ($entry->value('subject') ?? '');
+            }
+
+            return $subjects;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /** The picture a mail already has, or null. Looks only; never renders. */
+    protected function thumbnailOf(Automation $automation, AutomationNode $node): ?string
+    {
+        try {
+            return MailThumbnails::url($automation, (string) $node->type, (string) $node->node_key, is_array($node->config) ? $node->config : []);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
