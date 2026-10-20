@@ -13,6 +13,7 @@ return [
     'map_edge_waits_for' => 'awaited by',
     'map_edge_starts' => 'starts',
     'map_edge_triggers' => 'triggers',
+    'map_edge_triggers_by_grant' => 'product grants it, triggers',
     'map_edge_grants' => 'grants access',
 
     // A broken reference this automation carries, as the map shows it.
