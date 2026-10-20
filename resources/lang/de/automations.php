@@ -16,6 +16,26 @@ return [
     'map_edge_triggers_by_grant' => 'Produkt gewährt Zugang, löst aus',
     'map_edge_grants' => 'gewährt Zugang',
 
+    // Eine Verbindung auf der Funnel-Landkarte ziehen: die Folge in Klartext und der Grund einer Absage.
+    'map_connect_product' => 'Ab jetzt startet „:automation“, sobald der Zugang „:slug“ gewährt wird, etwa wenn jemand „:object“ kauft.',
+    'map_connect_shared' => 'Andere Produkte gewähren ihn auch und starten sie ebenfalls: :products.',
+    'map_live_note' => 'Die Automatisierung ist aktiv, die Änderung gilt sofort.',
+    'map_connect_changed' => '„:automation“ wurde zwischenzeitlich geändert. Es wurde nichts geschrieben, bitte neu ansehen.',
+    'map_connect_grants_nothing' => '„:object“ gewährt keinen Zugang und kann „:automation“ deshalb nicht starten.',
+    'map_connect_grants_many' => '„:object“ gewährt mehrere Zugänge (:slugs). Wähle einen im Automatisierungs-Editor.',
+    'map_connect_grants_unknown' => 'Hier lässt sich nicht feststellen, welchen Zugang „:object“ gewährt. Wähle ihn im Automatisierungs-Editor.',
+    'map_connect_lead_magnet' => 'Ab jetzt startet „:automation“ für alle, die „:object“ bekommen.',
+    'map_disconnect' => 'Ab jetzt startet „:automation“ nicht mehr für „:object“.',
+    'map_connect_unsupported' => 'Dieses Paar lässt sich hier nicht verbinden.',
+    'map_connect_no_automation' => 'Die Automatisierung „:id“ gibt es nicht.',
+    'map_connect_no_source' => '„:id“ gibt es nicht.',
+    'map_connect_no_trigger' => '„:automation“ hat keinen Auslöser-Schritt.',
+    'map_connect_many_triggers' => '„:automation“ hat mehr als einen Auslöser-Schritt.',
+    'map_connect_other_trigger' => '„:automation“ hat einen anderen Auslöser.',
+    'map_connect_other_slug' => '„:automation“ startet schon für „:slug“. Erst lösen.',
+    'map_connect_already' => '„:automation“ ist schon mit „:object“ verbunden.',
+    'map_disconnect_not_connected' => '„:automation“ startet nicht für „:object“.',
+
     // Ein kaputter Verweis dieser Automatisierung, wie ihn die Landkarte zeigt.
     'map_problem_template' => 'Schritt „:step“ sendet die Vorlage „:template“, die es nicht gibt',
     'map_problem_automation' => 'Schritt „:step“ verweist auf die Automatisierung „:automation“, die es nicht gibt',

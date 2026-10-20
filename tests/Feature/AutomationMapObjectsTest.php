@@ -8,11 +8,16 @@ use Goldnead\BrandContext\Map\MapObject;
 use Goldnead\BrandContext\Map\MapObjectRegistry;
 use Goldnead\BrandContext\Map\MapPeriod;
 use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
+use Goldnead\StatamicAutomations\Engine\VersionManager;
 use Goldnead\StatamicAutomations\Integrations\Map\AutomationMapObjects;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
+use Statamic\Facades\Permission;
+use Statamic\Facades\Role;
+use Statamic\Facades\User;
 
 /*
  * Fake addons for the entitlement edges: a lead magnet and a product provider,
@@ -66,7 +71,9 @@ class MapTestProducts implements ProvidesMapObjects
 
     public function find(string $id): ?MapObject
     {
-        return $id === 'choir-course' ? new MapObject('product', 'choir-course', 'Choir course') : null;
+        return in_array($id, ['choir-course', 'masterclass-vokale-aussprache', 'multi', 'nothing'], true)
+            ? new MapObject('product', $id, $id === 'choir-course' ? 'Choir course' : $id)
+            : null;
     }
 
     public function metric(string $id, MapPeriod $period): ?MapMetric
@@ -115,10 +122,51 @@ function mapRun(string $automationUuid, string $startedAt, bool $isTest = false)
     ]);
 }
 
+/**
+ * The grants of a product handle are the products addon's knowledge (absent
+ * here), so the writing tests pin them through the seam. The default is the
+ * catalogue the connection tests share: `choir-course` grants its own handle,
+ * the site's `masterclass-vokale-aussprache` grants `kurs-vokale-aussprache`,
+ * `multi` grants two slugs and `nothing` none.
+ *
+ * @param  array<string, list<string>>|null  $grantsOfHandle
+ */
+function mapGrantsOf(?array $grantsOfHandle = null, bool $alsoAnswerGranting = false): AutomationMapObjects
+{
+    $grantsOfHandle ??= [
+        'choir-course' => ['choir-course'],
+        'masterclass-vokale-aussprache' => ['kurs-vokale-aussprache'],
+        'multi' => ['kurs-a', 'kurs-b'],
+        'nothing' => [],
+    ];
+
+    return new class(app(AutomationRepository::class), $grantsOfHandle, $alsoAnswerGranting) extends AutomationMapObjects
+    {
+        public function __construct(AutomationRepository $automations, protected array $grantsOfHandle, protected bool $alsoAnswerGranting)
+        {
+            parent::__construct($automations);
+        }
+
+        protected function grantSlugsOf(string $handle): ?array
+        {
+            return $this->grantsOfHandle[$handle] ?? null;
+        }
+
+        protected function productsGranting(string $slug): array
+        {
+            if (! $this->alsoAnswerGranting) {
+                return parent::productsGranting($slug);
+            }
+
+            return array_keys(array_filter($this->grantsOfHandle, fn (array $slugs) => in_array($slug, $slugs, true)));
+        }
+    };
+}
+
 beforeEach(function () {
     Carbon::setTestNow(Carbon::parse(AUTOMATION_MAP_HEUTE));
 
-    $this->map = app(AutomationMapObjects::class);
+    $this->map = mapGrantsOf();
 });
 
 afterEach(function () {
@@ -560,4 +608,404 @@ it('reports a send step whose template does not exist and not a plain-text step'
     };
 
     expect($asker->find('vokale-bonus')->problems)->toBe(['step "Tag 3" sends template "tag-3", which does not exist']);
+});
+
+/*
+ * Drawing a connection: product or lead magnet -> automation writes the
+ * product_slug of the automation's "access granted" trigger. Only an existing
+ * trigger with an empty slug is written; anything else is refused, so that
+ * disconnect is always the exact reverse and needs no memory.
+ */
+
+function mapConnection(string $fromType = 'product', string $fromId = 'choir-course', string $toId = 'welcome-daily'): array
+{
+    return ['from_type' => $fromType, 'from_id' => $fromId, 'to_type' => 'automation', 'to_id' => $toId, 'kind' => 'triggers'];
+}
+
+function mapTriggerOf(string $handle): ?AutomationNode
+{
+    return app(AutomationRepository::class)->findByRef($handle)->nodes->first(fn (AutomationNode $n) => $n->type === 'entitlements.granted');
+}
+
+function mapConnectable(array $config = [], bool $enabled = false): Automation
+{
+    app(MapObjectRegistry::class)->register(MapTestLeadMagnets::class);
+    app(MapObjectRegistry::class)->register(MapTestProducts::class);
+
+    $automation = mapAutomation('uuid-willkommen', 'Willkommensserie', 'welcome-daily', $enabled);
+    mapNode($automation, 'entitlements.granted', $config, 'Zugang');
+    mapNode($automation, 'send_email', ['template' => 'x'], 'Mail');
+
+    return $automation;
+}
+
+it('offers product and lead magnet to automation as a triggers connection', function () {
+    $rules = collect($this->map->connectionRules());
+
+    expect($rules->map(fn ($r) => $r['from_type'].'>'.$r['to_type'].'>'.$r['kind'])->all())
+        ->toBe(['product>automation>triggers', 'lead_magnet>automation>triggers'])
+        ->and($rules->every(fn ($r) => $r['label'] === 'starts'))->toBeTrue();
+});
+
+it('describes the consequence in words with both names and refuses nothing for a free trigger', function () {
+    mapConnectable();
+
+    $preview = $this->map->connectionPreview(mapConnection(), 'connect');
+
+    expect($preview['consequence'])->toBe('From now on "Willkommensserie" starts whenever access "choir-course" is granted, which happens when someone buys "Choir course".')
+        ->and($preview['before'])->toBe('')
+        ->and($preview['after'])->toBe('choir-course');
+
+    $lead = $this->map->connectionPreview(mapConnection('lead_magnet', 'freebie'), 'connect');
+
+    expect($lead['consequence'])->toBe('From now on "Willkommensserie" starts for everyone who gets "Freebie".');
+});
+
+it('writes the slug into the trigger on connect and leaves everything else as it was', function () {
+    mapConnectable(['source' => 'mollie']);
+    $versionBefore = app(AutomationRepository::class)->findByRef('welcome-daily')->version;
+
+    $result = $this->map->connect(mapConnection());
+
+    $trigger = mapTriggerOf('welcome-daily');
+
+    expect($result)->toBe(['before' => '', 'after' => 'choir-course'])
+        ->and($trigger->config)->toBe(['source' => 'mollie', 'product_slug' => 'choir-course'])
+        ->and($trigger->label)->toBe('Zugang')
+        ->and(app(AutomationRepository::class)->findByRef('welcome-daily')->nodes)->toHaveCount(2)
+        ->and(app(AutomationRepository::class)->findByRef('welcome-daily')->version)->toBe($versionBefore + 1);
+
+    $edge = mapEdgeByKey($this->map->edges(), 'product:choir-course>triggers>automation:welcome-daily');
+    expect($edge)->not->toBeNull();
+});
+
+it('disconnect is the exact reverse of connect', function () {
+    mapConnectable(['source' => 'mollie']);
+
+    $this->map->connect(mapConnection());
+    $result = $this->map->disconnect(mapConnection());
+
+    expect($result)->toBe(['before' => 'choir-course', 'after' => ''])
+        ->and(mapTriggerOf('welcome-daily')->config)->toBe(['source' => 'mollie'])
+        ->and(app(AutomationRepository::class)->findByRef('welcome-daily')->nodes)->toHaveCount(2);
+
+    expect(fn () => $this->map->disconnect(mapConnection()))->toThrow(DomainException::class);
+});
+
+it('describes the disconnect consequence in words', function () {
+    mapConnectable(['product_slug' => 'choir-course']);
+
+    expect($this->map->connectionPreview(mapConnection(), 'disconnect')['consequence'])
+        ->toBe('From now on "Willkommensserie" no longer starts for "Choir course".');
+});
+
+it('writes the grant slug of the product, not its handle, and draws the line it wrote', function () {
+    mapConnectable();
+    $c = mapConnection('product', 'masterclass-vokale-aussprache');
+
+    $preview = $this->map->connectionPreview($c, 'connect');
+
+    expect($preview['after'])->toBe('kurs-vokale-aussprache')
+        ->and($preview['consequence'])->toContain('"kurs-vokale-aussprache"');
+
+    $result = $this->map->connect($c);
+
+    expect($result)->toBe(['before' => '', 'after' => 'kurs-vokale-aussprache'])
+        ->and(mapTriggerOf('welcome-daily')->config)->toBe(['product_slug' => 'kurs-vokale-aussprache']);
+
+    // The line the map draws afterwards is the one the user drew, from the product that grants the slug.
+    expect(mapEdgeByKey($this->map->edges(), 'product:masterclass-vokale-aussprache>triggers>automation:welcome-daily'))->not->toBeNull();
+
+    // Disconnect compares the same slug, and empties it again.
+    expect($this->map->connectionPreview($c, 'disconnect')['before'])->toBe('kurs-vokale-aussprache')
+        ->and($this->map->disconnect($c))->toBe(['before' => 'kurs-vokale-aussprache', 'after' => ''])
+        ->and(mapTriggerOf('welcome-daily')->config)->toBe([]);
+});
+
+it('refuses a product that grants nothing, naming why, and writes nothing', function () {
+    mapConnectable();
+
+    expect(fn () => $this->map->connect(mapConnection('product', 'nothing')))
+        ->toThrow(DomainException::class, 'grants no access')
+        ->and(mapTriggerOf('welcome-daily')->config)->toBe([]);
+});
+
+it('refuses a product that grants several slugs and names them', function () {
+    mapConnectable();
+
+    expect(fn () => $this->map->connect(mapConnection('product', 'multi')))
+        ->toThrow(DomainException::class, 'kurs-a, kurs-b')
+        ->and(mapTriggerOf('welcome-daily')->config)->toBe([]);
+});
+
+it('refuses a product whose grants are unknown to this install', function () {
+    mapConnectable();
+    $unknown = mapGrantsOf([]);
+
+    expect(fn () => $unknown->connect(mapConnection('product', 'choir-course')))->toThrow(DomainException::class, 'cannot tell');
+});
+
+it('can release one of several grant slugs of a product that is connected through it', function () {
+    mapConnectable(['product_slug' => 'kurs-b']);
+
+    expect($this->map->disconnect(mapConnection('product', 'multi')))->toBe(['before' => 'kurs-b', 'after' => ''])
+        ->and(mapTriggerOf('welcome-daily')->config)->toBe([]);
+});
+
+it('says when other products grant the same slug, because they start the automation too', function () {
+    mapConnectable();
+    $shared = mapGrantsOf(['choir-course' => ['kurs'], 'masterclass-vokale-aussprache' => ['kurs']], true);
+
+    expect($shared->connectionPreview(mapConnection(), 'connect')['consequence'])
+        ->toContain('masterclass-vokale-aussprache');
+});
+
+it('says that a running automation changes at once, in both languages', function () {
+    mapConnectable(enabled: true);
+
+    expect($this->map->connectionPreview(mapConnection(), 'connect')['consequence'])->toEndWith('The automation is active, so this applies immediately.');
+
+    app()->setLocale('de');
+
+    expect($this->map->connectionPreview(mapConnection(), 'connect')['consequence'])->toEndWith('Die Automatisierung ist aktiv, die Änderung gilt sofort.');
+
+    $this->map->connect(mapConnection());
+
+    expect($this->map->connectionPreview(mapConnection(), 'disconnect')['consequence'])->toEndWith('Die Automatisierung ist aktiv, die Änderung gilt sofort.');
+});
+
+it('keeps a version the editor can roll back to when it writes', function () {
+    $automation = mapConnectable();
+    $versions = app(VersionManager::class);
+    $before = count($versions->versions($automation));
+
+    $this->map->connect(mapConnection());
+
+    expect(count($versions->versions($automation)))->toBe($before + 1);
+});
+
+it('writes nothing when the slug changed between the preview and the write', function () {
+    mapConnectable();
+    // The user confirmed a preview that said "empty"; by the time of the write another tab has set a slug.
+    $stale = new class(app(AutomationRepository::class)) extends AutomationMapObjects
+    {
+        public function connectionPreview(array $c, string $action): array
+        {
+            return ['consequence' => '', 'before' => '', 'after' => 'choir-course'];
+        }
+    };
+    $trigger = mapTriggerOf('welcome-daily');
+    $trigger->update(['config' => ['product_slug' => 'freebie']]);
+    $version = app(AutomationRepository::class)->findByRef('welcome-daily')->version;
+
+    expect(fn () => $stale->connect(mapConnection('lead_magnet', 'freebie')))
+        ->toThrow(DomainException::class, 'changed in the meantime')
+        ->and(mapTriggerOf('welcome-daily')->config)->toBe(['product_slug' => 'freebie'])
+        ->and(app(AutomationRepository::class)->findByRef('welcome-daily')->version)->toBe($version);
+});
+
+it('writes nothing on disconnect when the slug changed between the preview and the write', function () {
+    mapConnectable(['product_slug' => 'freebie']);
+    $stale = new class(app(AutomationRepository::class)) extends AutomationMapObjects
+    {
+        public function connectionPreview(array $c, string $action): array
+        {
+            return ['consequence' => '', 'before' => 'choir-course', 'after' => ''];
+        }
+    };
+
+    expect(fn () => $stale->disconnect(mapConnection('lead_magnet', 'freebie')))
+        ->toThrow(DomainException::class, 'changed in the meantime')
+        ->and(mapTriggerOf('welcome-daily')->config)->toBe(['product_slug' => 'freebie']);
+});
+
+it('words the compare-and-set refusal in German', function () {
+    app()->setLocale('de');
+    mapConnectable(['product_slug' => 'freebie']);
+    $stale = new class(app(AutomationRepository::class)) extends AutomationMapObjects
+    {
+        public function connectionPreview(array $c, string $action): array
+        {
+            return ['consequence' => '', 'before' => '', 'after' => 'choir-course'];
+        }
+    };
+
+    expect(fn () => $stale->connect(mapConnection('lead_magnet', 'freebie')))
+        ->toThrow(DomainException::class, 'zwischenzeitlich geändert');
+});
+
+it('runs the whole chain from the registry to the provider, product and lead magnet', function () {
+    mapConnectable();
+    app()->instance(AutomationMapObjects::class, mapGrantsOf(null, true));
+    $registry = app(MapObjectRegistry::class);
+    $registry->register(AutomationMapObjects::class);
+    mapRegisterSourceRights();
+    $user = User::make()->email('chain@example.com')->makeSuper();
+    $user->save();
+
+    $rules = collect($registry->connectionRules());
+    expect($rules->where('to_type', 'automation')->pluck('owner')->unique()->all())->toBe(['automation']);
+
+    $applied = $registry->applyConnection(mapConnection('product', 'masterclass-vokale-aussprache'), 'connect', $user, '');
+
+    expect($applied['after'])->toBe('kurs-vokale-aussprache')
+        ->and(mapTriggerOf('welcome-daily')->config)->toBe(['product_slug' => 'kurs-vokale-aussprache']);
+
+    // The drawn line belongs to the provider that owns the rule: the owner of a `triggers` line is `automation`.
+    $edge = $registry->edges()['product:masterclass-vokale-aussprache>triggers>automation:welcome-daily'] ?? null;
+    expect($edge)->not->toBeNull()
+        ->and($edge->ownerType)->toBe('automation');
+
+    // A second tab that still shows "empty" is refused and nothing moves.
+    expect(fn () => $registry->applyConnection(mapConnection('lead_magnet', 'freebie'), 'connect', $user, ''))
+        ->toThrow(DomainException::class);
+
+    $undone = $registry->applyConnection($applied['undo'], 'disconnect', $user, 'kurs-vokale-aussprache');
+    expect($undone['after'])->toBe('')
+        ->and(mapTriggerOf('welcome-daily')->config)->toBe([]);
+
+    $registry->applyConnection(mapConnection('lead_magnet', 'freebie'), 'connect', $user, '');
+    expect(mapTriggerOf('welcome-daily')->config)->toBe(['product_slug' => 'freebie']);
+});
+
+it('refuses when the trigger already listens to another slug and does not touch it', function () {
+    mapConnectable(['product_slug' => 'freebie']);
+
+    expect(fn () => $this->map->connect(mapConnection()))
+        ->toThrow(DomainException::class, '"Willkommensserie" already starts for "freebie". Release that first.')
+        ->and(mapTriggerOf('welcome-daily')->config)->toBe(['product_slug' => 'freebie']);
+});
+
+it('refuses when the trigger already has this slug', function () {
+    mapConnectable(['product_slug' => 'choir-course']);
+
+    expect(fn () => $this->map->connect(mapConnection()))->toThrow(DomainException::class, 'already connected');
+});
+
+it('refuses a disconnect when the trigger names another slug', function () {
+    mapConnectable(['product_slug' => 'freebie']);
+
+    expect(fn () => $this->map->disconnect(mapConnection()))->toThrow(DomainException::class);
+    expect(mapTriggerOf('welcome-daily')->config)->toBe(['product_slug' => 'freebie']);
+});
+
+it('refuses an automation with another kind of trigger', function () {
+    app(MapObjectRegistry::class)->register(MapTestProducts::class);
+    $other = mapAutomation('uuid-eintrag', 'Eintrag', 'eintrag');
+    mapNode($other, 'entry_published', [], 'Eintrag');
+
+    expect(fn () => $this->map->connect(mapConnection(toId: 'eintrag')))
+        ->toThrow(DomainException::class, 'has a different trigger');
+});
+
+it('refuses an automation without any trigger step', function () {
+    app(MapObjectRegistry::class)->register(MapTestProducts::class);
+    $bare = mapAutomation('uuid-leer', 'Leer', 'leer');
+    mapNode($bare, 'send_email', ['template' => 'x']);
+
+    expect(fn () => $this->map->connect(mapConnection(toId: 'leer')))->toThrow(DomainException::class, 'no trigger');
+});
+
+it('refuses an automation with more than one trigger step', function () {
+    $automation = mapConnectable();
+    mapNode($automation, 'entry_published', [], 'Zweiter');
+
+    expect(fn () => $this->map->connect(mapConnection()))->toThrow(DomainException::class, 'more than one trigger');
+});
+
+it('refuses an unknown automation, an unknown source, and a pair that is not offered', function () {
+    mapConnectable();
+
+    expect(fn () => $this->map->connect(mapConnection(toId: 'gibt-es-nicht')))->toThrow(DomainException::class)
+        ->and(fn () => $this->map->connect(mapConnection(fromId: 'gibt-es-nicht')))->toThrow(DomainException::class)
+        ->and(fn () => $this->map->connect(['from_type' => 'course', 'from_id' => 'x'] + mapConnection()))->toThrow(DomainException::class);
+});
+
+/**
+ * The two source rights belong to addons that are not installed here; on a real
+ * site they are registered, and the gate only answers for registered permissions.
+ */
+function mapRegisterSourceRights(): void
+{
+    foreach (['access products utility', 'manage lead magnets'] as $foreign) {
+        Permission::register($foreign);
+    }
+}
+
+function mapUserWith(string $name, array $permissions): Statamic\Contracts\Auth\User
+{
+    mapRegisterSourceRights();
+
+    $role = Role::make($name)->title($name);
+    foreach ($permissions as $permission) {
+        $role->addPermission($permission);
+    }
+    $role->save();
+
+    $user = User::make()->email($name.'@example.com');
+    $user->assignRole($role);
+    $user->save();
+
+    return $user;
+}
+
+it('asks for the right on the source and on the target, whichever pair is drawn', function () {
+    $super = User::make()->email('a@example.com')->makeSuper();
+    $super->save();
+
+    $cases = [
+        // [from_type, permissions held, allowed]
+        ['product', ['access products utility', 'edit automations'], true],
+        ['product', ['edit automations'], false],
+        ['product', ['access products utility'], false],
+        ['product', [], false],
+        ['lead_magnet', ['manage lead magnets', 'edit automations'], true],
+        ['lead_magnet', ['edit automations'], false],
+        ['lead_magnet', ['manage lead magnets'], false],
+        // The right for the other kind of source does not stand in.
+        ['product', ['manage lead magnets', 'edit automations'], false],
+        ['lead_magnet', ['access products utility', 'edit automations'], false],
+    ];
+
+    foreach ($cases as $i => [$from, $permissions, $allowed]) {
+        $user = mapUserWith('case-'.$i, $permissions);
+
+        expect($this->map->connectionAuthorized(mapConnection($from, 'x'), $user))->toBe($allowed, "case {$i}: {$from} with [".implode(', ', $permissions).']');
+    }
+
+    expect($this->map->connectionAuthorized(mapConnection(), $super))->toBeTrue()
+        ->and($this->map->connectionAuthorized(mapConnection('lead_magnet', 'freebie'), $super))->toBeTrue()
+        ->and($this->map->connectionAuthorized(mapConnection(), null))->toBeFalse()
+        ->and($this->map->connectionAuthorized(['from_type' => 'course', 'to_type' => 'automation'], $super))->toBeFalse();
+});
+
+it('refuses a preview to a user who lacks the right on the target', function () {
+    mapConnectable();
+    app()->instance(AutomationMapObjects::class, $this->map);
+    $registry = app(MapObjectRegistry::class);
+    $registry->register(AutomationMapObjects::class);
+    $sourceOnly = mapUserWith('source-only', ['access products utility']);
+
+    expect(fn () => $registry->previewConnection(mapConnection(), 'connect', $sourceOnly))
+        ->toThrow(AuthorizationException::class);
+});
+
+it('words the consequence and the refusal in German when the app speaks German', function () {
+    app()->setLocale('de');
+    mapConnectable();
+
+    expect($this->map->connectionPreview(mapConnection(), 'connect')['consequence'])
+        ->toBe('Ab jetzt startet „Willkommensserie“, sobald der Zugang „choir-course“ gewährt wird, etwa wenn jemand „Choir course“ kauft.');
+
+    $this->map->connect(mapConnection());
+
+    expect(fn () => $this->map->connect(mapConnection('lead_magnet', 'freebie')))
+        ->toThrow(DomainException::class, '„Willkommensserie“ startet schon für „choir-course“. Erst lösen.');
+});
+
+it('refuses a pair that has no source provider installed', function () {
+    // Without the product addon registered there is nothing to refuse on, only the pair rules; the source check does.
+    mapAutomation('uuid-willkommen', 'Willkommensserie', 'welcome-daily');
+
+    expect(fn () => $this->map->connectionPreview(mapConnection(), 'connect'))->toThrow(DomainException::class);
 });

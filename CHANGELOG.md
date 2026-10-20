@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added: draw a product or lead magnet onto an automation on the funnels map
+
+The map provider now offers the pairs `product -> automation` and `lead_magnet -> automation` (kind `triggers`) through `connectionRules()`, `connectionAuthorized()`, `connectionPreview()`, `connect()` and `disconnect()`. Connecting writes the product or lead magnet slug into the `product_slug` of the automation's "Access Granted" trigger, the same way the editor saves it (version snapshot, version counted up, audit log line, both storage drivers). It is only written when that trigger exists exactly once and its slug is empty; a trigger that already listens to another slug, an automation with another or no trigger, or more than one trigger is refused with the reason, nothing is overwritten. Disconnecting empties the slug again, the exact reverse. English and German texts.
+
+- **The slug of a product is the access it grants**, not its handle: `masterclass-vokale-aussprache` writes `kurs-vokale-aussprache`, read from the catalogue row (`Product::grantSlugs()`). A product that grants nothing or several accesses is refused with the reason; a product the install cannot read the grants of is refused too. Disconnect recognises the slug it wrote (or the product's own handle, the older hand-written way). A lead magnet's slug stays its handle, which is what its entitlement carries. The preview names the slug, says when other products grant it too, and says when the automation is active ("applies immediately"): there is no draft stage, the change is versioned like an editor save.
+- **Permissions on both ends**: a product needs `access products utility` and a lead magnet `manage lead magnets` (the right that guards each in its own Control Panel), plus `edit automations` on the target. One does not stand in for the other.
+- **Compare and set**: connect and disconnect read the automation again right before writing and write only while the trigger's slug is still the one the preview showed, otherwise nothing is written and the refusal says so. There is no lock, so a write inside the few lines between that read and the save can still win.
+- Needs statamic-brand-context 1.19 (unreleased) for the map to offer connections at all; this addon calls no 1.19 symbol itself.
+
 ### Added: map edge from a product that grants the slug an automation listens to
 
 An "entitlement granted" trigger that names a grant slug (say `kurs-vokale-aussprache`) now gets an edge from every product whose purchase grants that slug, not only from a product with that handle. The edge is labelled "Produkt gewährt Zugang, löst aus" and says in its derivation which product it came from. Needs statamic-products with `productsGranting()` (a release after 1.14.0, now listed under `suggest`); without it nothing changes. Nothing is stored. The products addon is asked once per grant slug and map run. Where two lines would share a key (a product whose handle is also the slug it grants), the direct "triggers" line stays and the grant line is dropped; the rule for equal keys across all other edges is unchanged (the last one wins).
