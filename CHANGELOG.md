@@ -9,7 +9,7 @@
 
 ### Changed
 
-- **Call Automation** now enters the sub-automation like a trigger does. The enrollment gate of the target's trigger node decides first, and the sub-run carries the person's key (the target's `_subject_key`, or the usual paths such as `subscriber.email`). Before, sub-runs had no key, so the series opt-out, the re-entry policy and Wait for Automation did not apply to them. **Behaviour change:** a target automation with a re-entry policy other than `always` can now refuse the sub-run. The node then succeeds with `enrolled` = `false` and the `reason` (`sequence_opt_out`, `already_enrolled`, `already_running`), and no run starts. Targets on the default `always` behave as before. The output now always contains `enrolled`.
+- **Call Automation** now enters the sub-automation like a trigger does. The enrollment gate of the target's trigger node decides first, and the sub-run carries the person's key (the target's `_subject_key`, or the usual paths such as `subscriber.email`). Before, sub-runs had no key, so the series opt-out, the re-entry policy and Wait for Automation did not apply to them. **Behaviour change:** a target automation with a re-entry policy other than `always` can now refuse the sub-run. The node then succeeds with `enrolled` = `false` and the `reason` (`sequence_opt_out`, `already_enrolled`, `already_running`), and no run starts. Targets on the default `always` behave as before. The output now always contains `enrolled`. In a test run the gate is not called: the sub-run is created as before 2.33.0, so a test run never cancels or refuses a person's real open runs.
 
 ### Upgrading
 

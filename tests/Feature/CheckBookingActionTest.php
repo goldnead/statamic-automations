@@ -172,7 +172,8 @@ it('require stops the run when there is no matching booking', function (): void 
     $result = checkBookingRun(['email' => 'nobody@example.com', 'mode' => CheckBookingAction::MODE_REQUIRE]);
 
     expect($result->status)->toBe('stopped');
-    expect($result->output['reason'])->toContain('no matching booking');
+    expect($result->output['reason'])->toContain('The person has no matching booking');
+    expect($result->output['reason'])->not->toContain('nobody@example.com');
 });
 
 it('require lets the run go on when a booking matches', function (): void {
@@ -190,7 +191,8 @@ it('forbid stops the run when a booking matches', function (): void {
     $result = checkBookingRun(['email' => 'anna@example.com', 'mode' => CheckBookingAction::MODE_FORBID]);
 
     expect($result->status)->toBe('stopped');
-    expect($result->output['reason'])->toContain('already has 1 matching booking');
+    expect($result->output['reason'])->toContain('The person already has 1 matching booking');
+    expect($result->output['reason'])->not->toContain('anna@example.com');
 });
 
 it('report never stops, with or without a match', function (): void {
@@ -249,4 +251,67 @@ it('reports the newest matching booking', function (): void {
 
     expect($result->output['count'])->toBe(2);
     expect($result->output['external_id'])->toBe('late');
+});
+
+it('needs the email and the booking id to match together', function (): void {
+    DB::table('bookings')->insert(checkBookingRow(['external_id' => 'cal-1', 'email' => 'anna@example.com']));
+
+    $bothMatch = checkBookingRun(['email' => 'anna@example.com', 'external_id' => 'cal-1']);
+    $idOnly = checkBookingRun(['email' => 'other@example.com', 'external_id' => 'cal-1']);
+    $emailOnly = checkBookingRun(['email' => 'anna@example.com', 'external_id' => 'cal-2']);
+
+    expect($bothMatch->output['found'])->toBeTrue();
+    expect($idOnly->output['found'])->toBeFalse();
+    expect($emailOnly->output['found'])->toBeFalse();
+});
+
+it('fails on an invalid email instead of looking it up', function (): void {
+    DB::table('bookings')->insert(checkBookingRow());
+
+    $result = checkBookingRun(['email' => 'anna@', 'mode' => CheckBookingAction::MODE_REQUIRE]);
+
+    expect($result->isFailed())->toBeTrue();
+    expect($result->error)->toBe('A valid "email" is required.');
+});
+
+it('accepts an address with umlauts', function (): void {
+    DB::table('bookings')->insert(checkBookingRow(['email' => 'jörg@example.com']));
+
+    $result = checkBookingRun(['email' => 'jörg@example.com']);
+
+    expect($result->isSuccess())->toBeTrue();
+    expect($result->output['found'])->toBeTrue();
+});
+
+it('reads created_after in app.timezone, and an explicit zone in the argument is honoured', function (): void {
+    config(['app.timezone' => 'UTC']);
+
+    // 12:00 UTC is the boundary. 14:00 in Berlin on 10 October (summer time, UTC+2)
+    // is the same instant.
+    DB::table('bookings')->insert([
+        checkBookingRow(['external_id' => 'just-before', 'created_at' => '2026-10-10 11:59:00']),
+        checkBookingRow(['external_id' => 'just-after', 'created_at' => '2026-10-10 12:01:00']),
+    ]);
+
+    $utc = checkBookingRun(['email' => 'anna@example.com', 'created_after' => '2026-10-10 12:00:00']);
+    $berlin = checkBookingRun(['email' => 'anna@example.com', 'created_after' => '2026-10-10 14:00:00 Europe/Berlin']);
+
+    expect($utc->output['count'])->toBe(1);
+    expect($utc->output['external_id'])->toBe('just-after');
+    expect($berlin->output['count'])->toBe(1);
+    expect($berlin->output['external_id'])->toBe('just-after');
+});
+
+it('a read error names its class and SQLSTATE, never the address it was reading for', function (): void {
+    // A table without the status column: the query fails and carries the bound email.
+    Schema::dropIfExists('bookings');
+    Schema::create('bookings', function (Blueprint $table): void {
+        $table->id();
+    });
+
+    $result = checkBookingRun(['email' => 'anna@example.com', 'mode' => CheckBookingAction::MODE_FORBID]);
+
+    expect($result->isFailed())->toBeTrue();
+    expect($result->error)->toStartWith('Reading the bookings failed (Illuminate\Database\QueryException, SQLSTATE ');
+    expect($result->error)->not->toContain('anna@example.com');
 });

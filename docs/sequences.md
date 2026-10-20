@@ -335,6 +335,8 @@ If the point has already passed, the run continues at once and the output `late`
 `true`. An unreadable time fails the run, it never passes silently. In a test run
 the node never pauses and reports `would_wait_until`.
 
+A time without a zone is read in `app.timezone`; a time with an explicit offset such as `+02:00` is read as written. `days` and `hours` count a fixed 86400 and 3600 seconds, so across a change to or from summer time "1 day before" lands an hour away from the same wall-clock time.
+
 ## Call Automation and the enrollment gate
 
 The **Call Automation** node (`call_automation`) enters the sub-automation the way a

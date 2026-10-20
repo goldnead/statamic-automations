@@ -9,6 +9,7 @@ use Goldnead\StatamicAutomations\Engine\EnrollmentGate;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
 use Goldnead\StatamicAutomations\Models\Automation;
+use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 use Goldnead\StatamicAutomations\Support\NormalizesKeyValue;
 
@@ -98,15 +99,24 @@ class CallAutomationAction implements AutomationAction
         $childData['_call_depth'] = $depth + 1;
 
         $childContext = AutomationContext::make($childData, $context->isTestMode());
-        $trigger = $target->nodes->first(fn ($n) => $n->type !== null && str_contains($n->type, 'manual'))
+
+        // The trigger node is the first one whose type is a registered trigger. Only
+        // when there is none does the old guess apply: a type named "manual", then
+        // the first node.
+        $registry = app(NodeRegistry::class);
+        $trigger = $target->nodes->first(fn ($n) => $n->type !== null && $registry->kind($n->type) === 'trigger')
+            ?? $target->nodes->first(fn ($n) => $n->type !== null && str_contains($n->type, 'manual'))
             ?? $target->nodes->first();
 
         // The sub-run enters like a trigger does: the same enrollment gate decides
         // whether the person may start it, and the run carries the person's key,
         // so the series-exit, re-entry and wait_for_automation rules apply to it.
+        // A test run is the exception: the gate would cancel the person's open real
+        // runs under the "restart" rule, so a test run is created without it, as
+        // before 2.33.0.
         $subjectKey = null;
 
-        if ($trigger !== null) {
+        if ($trigger !== null && ! $context->isTestMode()) {
             $verdict = app(EnrollmentGate::class)->evaluate($target, $trigger, $childContext);
 
             if (! $verdict['allowed']) {

@@ -147,6 +147,25 @@ class WaitUntilTimeNodeTest extends TestCase
             ->and($result->waitUntil['due_at'])->toBe('2026-10-22T12:00:00+00:00');
     }
 
+    public function test_a_time_without_a_zone_is_read_in_the_app_timezone(): void
+    {
+        // The process zone is what Laravel sets from app.timezone at boot; the test
+        // sets both and puts the process zone back afterwards.
+        $previous = date_default_timezone_get();
+        config(['app.timezone' => 'Europe/Berlin']);
+        date_default_timezone_set('Europe/Berlin');
+
+        try {
+            // 09:00 in Berlin on 21 October is still summer time (UTC+2), so 07:00 UTC.
+            $result = $this->execNode(['at' => '2026-10-21 09:00:00', 'offset_amount' => 0, 'offset_unit' => 'hours']);
+
+            expect($result->isWaiting())->toBeTrue()
+                ->and($result->waitUntil['due_at'])->toBe('2026-10-21T07:00:00+00:00');
+        } finally {
+            date_default_timezone_set($previous);
+        }
+    }
+
     public function test_it_is_registered_as_a_logic_node(): void
     {
         expect(WaitUntilTimeNode::handle())->toBe('wait_until_time')

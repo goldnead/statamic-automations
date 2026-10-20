@@ -5,6 +5,7 @@ namespace Goldnead\StatamicAutomations\Integrations\Booking\Actions;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Contracts\AutomationAction;
 use Goldnead\StatamicAutomations\Support\ActionResult;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -145,9 +146,9 @@ class CheckBookingAction implements AutomationAction
                 'required' => true,
                 'default' => self::MODE_REPORT,
                 'options' => [
-                    self::MODE_REQUIRE => 'has a matching booking',
-                    self::MODE_FORBID => 'has no matching booking',
-                    self::MODE_REPORT => 'any (just report, never stop)',
+                    ['value' => self::MODE_REQUIRE, 'label' => 'has a matching booking'],
+                    ['value' => self::MODE_FORBID, 'label' => 'has no matching booking'],
+                    ['value' => self::MODE_REPORT, 'label' => 'any (just report, never stop)'],
                 ],
                 'help' => 'When the condition does not hold, the run ends here. That is a stop, not a failure. "Just report" never stops: the node outputs found and count, and a branch node splits on them.',
             ],
@@ -197,7 +198,8 @@ class CheckBookingAction implements AutomationAction
             );
         }
 
-        if ($email !== '' && ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        // EMAIL_UNICODE: an address with umlauts (jörg@example.com) is valid too.
+        if ($email !== '' && ! filter_var($email, FILTER_VALIDATE_EMAIL, FILTER_FLAG_EMAIL_UNICODE)) {
             return ActionResult::failed('A valid "email" is required.', ['mode' => $mode]);
         }
 
@@ -248,11 +250,16 @@ class CheckBookingAction implements AutomationAction
                 ? $matching()->orderByDesc('scheduled_at')->orderByDesc('id')->first()
                 : null;
         } catch (Throwable $e) {
-            return ActionResult::failed('Reading the bookings failed: '.$e->getMessage(), ['mode' => $mode]);
+            // Class and SQLSTATE only: the message can carry the bound values, the
+            // address among them, and this text ends up in the run log.
+            $detail = $e instanceof QueryException
+                ? get_class($e).', SQLSTATE '.$e->getCode()
+                : get_class($e);
+
+            return ActionResult::failed('Reading the bookings failed ('.$detail.').', ['mode' => $mode]);
         }
 
         $found = $count > 0;
-        $who = $email !== '' ? $email : 'booking '.$externalId;
 
         $output = [
             'found' => $found,
@@ -265,16 +272,14 @@ class CheckBookingAction implements AutomationAction
 
         if ($mode === self::MODE_REQUIRE && ! $found) {
             return ActionResult::stopped(sprintf(
-                '%s has no matching booking (statuses: %s), so the run ends here.',
-                $who,
+                'The person has no matching booking (statuses: %s), so the run ends here.',
                 implode(', ', $statuses),
             ));
         }
 
         if ($mode === self::MODE_FORBID && $found) {
             return ActionResult::stopped(sprintf(
-                '%s already has %d matching booking(s), so the run ends here.',
-                $who,
+                'The person already has %d matching booking(s), so the run ends here.',
                 $count,
             ));
         }
