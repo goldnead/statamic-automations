@@ -650,6 +650,42 @@ First hit wins, so `product_title` is a name a person can read or empty:
 
 No hit leaves the title empty. Nothing in the addon knows a site's collection names.
 
+## Booking
+
+With `goldnead/statamic-booking` installed the **Check Booking** node appears
+(group **Booking**). It is the only booking action, and it only reads: it looks at
+the table the booking addon owns (`statamic-booking.table`, default `bookings`)
+and writes nothing. The addon does not have to be a dependency of this one, and
+the test app does not have it.
+
+### Check Booking
+
+`booking.check_booking` asks "does this person hold a booking now?" and ends the
+run when the answer is not the one the flow was built on.
+
+Example, stop the sales mails once a coaching hour is booked: `mode` **forbid**,
+`endpoint` `coaching`, `email` `{{ subscriber.email }}` (or whichever token carries
+the address in your flow).
+
+| Field | | |
+| --- | --- | --- |
+| `mode` | default `report` | `require`: continue only with a matching booking. `forbid`: continue only without one. `report`: never stop, a branch splits on `found`. |
+| `email` | tokenable, one of email or `external_id` | The booker's address. Compared without regard to case and surrounding spaces. |
+| `external_id` | tokenable, one of email or `external_id` | The provider's id for the booking. |
+| `endpoint` | optional | Only bookings that came through this endpoint, for example `coaching`. Empty means every endpoint. |
+| `statuses` | default `booked,rescheduled` | Comma separated. The status is what counts; `cancelled`, `rejected` and `requested` do not count unless you list them. |
+| `created_after` | tokenable, optional | Only bookings created after this time, any text Carbon reads. |
+
+Output, always all six keys: `found` (bool), `count` (int), and `status`,
+`scheduled_at` (ISO 8601), `external_id` and `endpoint` of the newest matching
+booking (by `scheduled_at`, then `id`). Without a match the last four are empty.
+
+A stop in `require` or `forbid` is a stop, not a failure. A failure means the
+check could not be made: the table is missing (`statamic-booking is not installed
+or not migrated`), the query threw, or neither `email` nor `external_id` is set.
+In a test run the node reads for real. Only when no identifier is given at all
+does it return a preview.
+
 ## Secrets across integrations
 
 Never embed an API key or signing secret in a node config — it would be

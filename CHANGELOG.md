@@ -5,6 +5,7 @@
 ### Added
 
 - **Wait Until Time** node (`wait_until_time`, group Logic). Waits for a point in time from the run (`at`, any text Carbon parses, tokenable), shifted by `offset_amount` in `offset_unit` (minutes, hours or days; negative means earlier). After the point the run continues with the next node, it does not re-run this one. A point already passed continues at once with `late` = true. An unreadable or missing time fails the run. In a test run it reports `would_wait_until` and does not pause. See `docs/sequences.md`.
+- **Check Booking** node (`booking.check_booking`, group Booking, with `statamic-booking` installed). Reads the booking addon's table, the one named by `statamic-booking.table`, and ends the run in `require` or `forbid` mode when the answer is not the one required: a stop, not a failure. It matches by `email` (any case) or `external_id`, optionally by `endpoint` and `created_after`, and counts the `statuses` (default `booked,rescheduled`, so cancelled bookings do not count). It writes nothing. A missing table, or no email and no booking id, fails the run. Outputs `found`, `count` and the newest match's `status`, `scheduled_at`, `external_id` and `endpoint`. See `docs/integrations.md`.
 
 ### Changed
 

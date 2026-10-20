@@ -168,6 +168,10 @@ function expectedTestRunFailures(): array
         // action says; an EMPTY URL (a token that resolved to nothing) is
         // reported as missing in a test run, not failed.
         'asset.fetch_from_url' => 'The dummy URL "1" is not an http or https URL.',
+        // Reads the statamic-booking table, which the test app does not have.
+        // A test run reads for real, so it refuses with the install message
+        // instead of reporting "nothing found".
+        'booking.check_booking' => 'statamic-booking is not installed or not migrated in the test app.',
         // Reading cal.com's free slots changes nothing over there, so this
         // action deliberately has no test-mode short-circuit: a test run really
         // asks, because a preview made of invented times would be worth
