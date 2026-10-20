@@ -1169,6 +1169,20 @@ it('takes the subject of the template in one lookup when the mail has none of it
         ->and($asker->lookups)->toBe(1);
 });
 
+it('lists the marketing mail node too, in template and campaign mode', function () {
+    $automation = mapAutomation('uuid-serie', 'Serie', 'serie');
+    mapDetailNode($automation, 'm1', 'marketing.send_email', ['template' => 'kauf-1', 'subject' => 'Danke, {{ contact.first_name }}']);
+    mapDetailNode($automation, 'w1', 'delay', ['amount' => 3, 'unit' => 'days']);
+    mapDetailNode($automation, 'm2', 'marketing.send_email', ['campaign' => 'nachfass']);
+    mapDetailNode($automation, 'm3', 'send_email', ['subject' => 'Plain']);
+    mapDetailChain($automation, ['m1', 'w1', 'm2', 'm3']);
+
+    $items = $this->map->details('serie', MapPeriod::lastDays(30))[0]['items'];
+
+    expect(array_column($items, 'title'))->toBe(['Danke, {{ contact.first_name }}', 'Campaign "nachfass"', 'Plain'])
+        ->and(array_column($items, 'meta'))->toBe(['right away', 'after 3 days', 'right away']);
+});
+
 it('shows at most twelve mails and counts the rest', function () {
     $automation = mapAutomation('uuid-serie', 'Serie', 'serie');
     $keys = [];

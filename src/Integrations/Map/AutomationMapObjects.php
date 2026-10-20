@@ -114,6 +114,9 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
     /** The most mails the panel lists; the rest is counted in `more`. */
     public const DETAIL_LIMIT = 12;
 
+    /** The marketing addon's mail node: same `subject` and `template` keys, optionally a `campaign` instead. */
+    public const MARKETING_SEND = 'marketing.send_email';
+
     /**
      * The panel's extra blocks (optional method of the map contract, found with
      * method_exists): one "list" block with the automation's mails in step
@@ -144,7 +147,7 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
                 continue;
             }
 
-            if ($node->type === SendEmailAction::handle()) {
+            if (in_array($node->type, [SendEmailAction::handle(), self::MARKETING_SEND], true)) {
                 $mails[] = ['node' => $node, 'wait' => $wait];
                 $wait = 0;
             }
@@ -284,6 +287,12 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
 
         if ($template !== null && trim((string) ($subjects[$template] ?? '')) !== '') {
             return trim((string) $subjects[$template]);
+        }
+
+        $campaign = $node->getConfigValue('campaign');
+
+        if ($template === null && is_scalar($campaign) && trim((string) $campaign) !== '') {
+            return __('statamic-automations::automations.map_detail_mail_campaign', ['campaign' => trim((string) $campaign)]);
         }
 
         return $template !== null

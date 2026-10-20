@@ -44,6 +44,7 @@ return [
     'map_detail_wait_hours' => 'after :count hour|after :count hours',
     'map_detail_wait_minutes' => 'after :count minute|after :count minutes',
     'map_detail_mail_fallback' => 'Mail without subject',
+    'map_detail_mail_campaign' => 'Campaign ":campaign"',
     'map_detail_mail_template' => 'Mail without subject (template ":template")',
     'map_problem_template' => 'step ":step" sends template ":template", which does not exist',
     'map_problem_automation' => 'step ":step" points at automation ":automation", which does not exist',

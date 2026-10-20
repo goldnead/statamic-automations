@@ -44,6 +44,7 @@ return [
     'map_detail_wait_hours' => 'nach :count Stunde|nach :count Stunden',
     'map_detail_wait_minutes' => 'nach :count Minute|nach :count Minuten',
     'map_detail_mail_fallback' => 'Mail ohne Betreff',
+    'map_detail_mail_campaign' => 'Kampagne „:campaign“',
     'map_detail_mail_template' => 'Mail ohne Betreff (Vorlage „:template“)',
     'map_problem_template' => 'Schritt „:step“ sendet die Vorlage „:template“, die es nicht gibt',
     'map_problem_automation' => 'Schritt „:step“ verweist auf die Automatisierung „:automation“, die es nicht gibt',
