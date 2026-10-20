@@ -214,16 +214,18 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
     {
         $provider = 'Goldnead\\StatamicProducts\\Integrations\\Map\\ProductMapObjects';
 
-        if (! class_exists($provider) || ! method_exists($provider, 'productsGranting')
-            || ! app(MapObjectRegistry::class)->has('product')) {
+        if (! class_exists($provider) || ! app(MapObjectRegistry::class)->has('product')) {
             return [];
         }
 
         try {
-            return array_values(array_filter(
-                app($provider)->productsGranting($slug),
-                'is_string',
-            ));
+            $source = app($provider);
+
+            if (! method_exists($source, 'productsGranting')) {
+                return [];
+            }
+
+            return array_values(array_filter($source->productsGranting($slug), 'is_string'));
         } catch (\Throwable $e) {
             report($e);
 
