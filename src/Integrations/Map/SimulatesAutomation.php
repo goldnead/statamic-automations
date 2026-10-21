@@ -37,6 +37,8 @@ use Illuminate\Support\Str;
  * effects. A step the planner does not understand is an "unknown" effect with
  * the step's own name, never a guess. The automation's own switches stay where
  * they are: a branch asks "which way" and, with nobody known, answers with a fork.
+ * A known person (and the trigger match of the event) is not read yet: until then
+ * every condition forks, whoever the person is.
  *
  * @phpstan-require-extends AutomationMapObjects
  */
@@ -44,6 +46,9 @@ trait SimulatesAutomation
 {
     /** Steps that change nothing outside the run: left out of the dry run. */
     private const SILENT_STEPS = ['set_variable', 'compose_text', 'add_log_entry'];
+
+    /** Most steps one automation is planned through; a graph larger than that is cut with a line saying so. */
+    private const SIM_STEP_LIMIT = 500;
 
     /** Where a path can begin: the automation's own trigger. */
     public function paths(string $id): array
@@ -81,16 +86,21 @@ trait SimulatesAutomation
         }
 
         $automation->loadMissing(['nodes', 'edges']);
-        $trigger = $this->triggerNode($automation);
-
-        if (! $trigger) {
+        if (! $this->triggerNode($automation)) {
             return [Effect::unknown(__('statamic-automations::automations.sim_no_trigger'))];
         }
+
+        $triggers = $automation->nodes->sortBy('id')->filter(fn (AutomationNode $n) => app(NodeRegistry::class)->kind($n->type) === 'trigger')->values();
 
         $plan = new class($automation, $person, $this->simSubjects($automation))
         {
             /** @var array<string, true> */
             public array $visited = [];
+
+            /** @var array<string, list<Effect>> what comes after a step, by step: a diamond is built once */
+            public array $memo = [];
+
+            public int $effects = 0;
 
             public function __construct(
                 public readonly Automation $automation,
@@ -100,7 +110,14 @@ trait SimulatesAutomation
             ) {}
         };
 
-        return $this->simFrom($plan, $trigger->node_key, 'default');
+        if ($triggers->count() === 1) {
+            return $this->simFrom($plan, $triggers[0]->node_key, 'default');
+        }
+
+        // More than one trigger: each one begins its own way.
+        return [Effect::fork(__('statamic-automations::automations.sim_triggers'), $triggers->map(
+            fn (AutomationNode $t) => Effect::alt($this->simName($t), $this->simFrom($plan, $t->node_key, 'default'))
+        )->all())];
     }
 
     /** The step's own label, else the name of its kind ("Filter"), else its key. */
@@ -180,10 +197,21 @@ trait SimulatesAutomation
             return [Effect::unknown(__('statamic-automations::automations.sim_loop'))];
         }
 
+        // A step reached over two ways (both sides of a branch lead to the same mail) is planned once.
+        // The planner then holds a graph, not a tree twice the size at every diamond; the planner of
+        // the map walks it as a tree and stops at its own budget.
+        if (isset($plan->memo[$node->node_key])) {
+            return $plan->memo[$node->node_key];
+        }
+
+        if (++$plan->effects > self::SIM_STEP_LIMIT) {
+            return [Effect::unknown(__('statamic-automations::automations.sim_too_big'))];
+        }
+
         $plan->visited[$node->node_key] = true;
 
         try {
-            return $this->simStep($plan, $node);
+            return $plan->memo[$node->node_key] = $this->simStep($plan, $node);
         } finally {
             unset($plan->visited[$node->node_key]);
         }
@@ -245,6 +273,15 @@ trait SimulatesAutomation
         }
 
         if ($type === DelayNode::handle()) {
+            $amount = $node->getConfigValue('amount');
+
+            // A wait written as a variable is as long as the variable says: not known here, not "right away".
+            if (! is_numeric($amount)) {
+                return Effect::chain([
+                    new Effect(Effect::WAIT, $name, __('statamic-automations::automations.sim_wait_unknown'), 0, ['duration_known' => false]),
+                ], $next());
+            }
+
             $seconds = $this->delaySeconds($node);
 
             return Effect::chain([Effect::wait($this->waitWords($seconds), $seconds)], $next());
@@ -323,10 +360,17 @@ trait SimulatesAutomation
             }
 
             $operator = (string) ($condition['operator'] ?? 'equals');
+            $value = array_key_exists('value', $condition) && is_scalar($condition['value']) ? (string) $condition['value'] : '';
+
+            if ($operator === 'includes_tag') {
+                $parts[] = __('statamic-automations::automations.sim_cond_tag', ['value' => $value]);
+
+                continue;
+            }
+
             $key = 'statamic-automations::automations.sim_op_'.$operator;
             $word = __($key) !== $key ? __($key) : str_replace('_', ' ', $operator);
-            $value = array_key_exists('value', $condition) && is_scalar($condition['value']) ? ' '.$condition['value'] : '';
-            $parts[] = trim((string) $condition['field']).' '.$word.$value;
+            $parts[] = trim($this->fieldWords((string) $condition['field']).' '.$word.($value !== '' ? ' '.$value : ''));
         }
 
         if ($parts === []) {
@@ -336,5 +380,14 @@ trait SimulatesAutomation
         $joined = implode($mode === 'any' ? ' '.__('statamic-automations::automations.sim_or').' ' : ' '.__('statamic-automations::automations.sim_and').' ', $parts);
 
         return Str::limit($joined, 140);
+    }
+
+    /** `contact.first_name` as the words the editor sees elsewhere ("Vorname"), any other field spelled out. */
+    private function fieldWords(string $field): string
+    {
+        $field = trim($field);
+        $key = 'statamic-automations::automations.map_var_'.Str::afterLast($field, '.');
+
+        return __($key) !== $key ? __($key) : str_replace(['.', '_'], ' ', $field);
     }
 }

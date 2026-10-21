@@ -11,6 +11,8 @@ use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\Events\StatementPrepared;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
@@ -109,7 +111,7 @@ it('forks at a branch with the condition in words, and at a filter with the stop
 
     expect($fork->kind)->toBe(Effect::FORK)
         ->and(simEffects($fork->children))->toBe([
-            'alt:if lead.status = Qualified', 'mail:Qualified mail',
+            'alt:if lead status = Qualified', 'mail:Qualified mail',
             'alt:otherwise', 'mail:Nurture mail',
         ]);
 
@@ -231,7 +233,8 @@ it('plans the tree of two automations in order and counts its leaves', function 
     // Without a user who may see automations the tree says so instead of showing mails.
     $denied = (new Simulator($registry))->tree($nodes, $edges, SimPerson::unknown(), null);
 
-    expect(collect($denied['roots'])->pluck('children.0.kind')->all())->toBe(['denied']);
+    // Both: "zwei" is not reached through the denied "eins", so it begins on its own trigger, and is denied too.
+    expect(collect($denied['roots'])->pluck('children.0.kind')->all())->toBe(['denied', 'denied']);
 
     $admin = User::make()->email('a@example.test')->makeSuper();
     $admin->save();
@@ -272,8 +275,13 @@ it('writes nothing, sends nothing, dispatches nothing and adds no run', function
 
     Mail::fake();
     Queue::fake();
-    Event::fake();
     $before = AutomationRun::query()->count();
+
+    // Every event the dry run raises, by name. Reading models and querying raise the framework's own; nothing else may.
+    $events = [];
+    Event::listen('*', function (string $name) use (&$events) {
+        $events[] = $name;
+    });
 
     $writes = [];
     DB::listen(function ($q) use (&$writes) {
@@ -289,6 +297,77 @@ it('writes nothing, sends nothing, dispatches nothing and adds no run', function
     Mail::assertNothingQueued();
     Queue::assertNothingPushed();
 
+    $own = array_values(array_filter($events, fn (string $name) => ! preg_match('/^eloquent\.(retrieved|booting|booted)/', $name)
+        && ! in_array($name, [StatementPrepared::class, QueryExecuted::class], true)));
+
     expect($writes)->toBe([])
+        ->and($own)->toBe([])
         ->and(AutomationRun::query()->count())->toBe($before);
+});
+
+it('plans a chain of branches whose two sides lead to the same step without doubling at every one', function () {
+    $a = simAutomation('raute');
+    simStep($a, 't', 'manual');
+    $previous = 't';
+
+    foreach (range(1, 30) as $i) {
+        simStep($a, "b$i", 'branch', ['conditions' => [['field' => 'x', 'operator' => 'equals', 'value' => (string) $i]]]);
+        simStep($a, "m$i", 'send_email', ['subject' => "Mail $i"]);
+        simWire($a, $previous, "b$i");
+        simWire($a, "b$i", "m$i", 'true');
+        simWire($a, "b$i", "m$i", 'false');
+        $previous = "m$i";
+    }
+
+    $started = microtime(true);
+    $effects = simReact('raute');
+
+    // 2^30 ways in the written graph; planned in a moment, as a graph that shares what is the same.
+    expect(microtime(true) - $started)->toBeLessThan(2.0)
+        ->and($effects)->toHaveCount(1);
+});
+
+it('cuts a graph that is larger than it will plan, with a line saying so', function () {
+    $a = simAutomation('lang');
+    simStep($a, 't', 'manual');
+    $previous = 't';
+
+    foreach (range(1, 600) as $i) {
+        simStep($a, "m$i", 'send_email', ['subject' => "Mail $i"]);
+        simWire($a, $previous, "m$i");
+        $previous = "m$i";
+    }
+
+    $flat = simEffects(simReact('lang'));
+
+    expect($flat)->toContain('unknown:This automation is too large to plan further')
+        ->and(count($flat))->toBeLessThan(600);
+});
+
+it('begins one way for each trigger when there is more than one', function () {
+    $a = simAutomation('zwei-ausloeser');
+    simStep($a, 't1', 'manual', []);
+    simStep($a, 't2', 'manual', []);
+    simStep($a, 'm', 'send_email', ['subject' => 'Gemeinsam']);
+    simWire($a, 't1', 'm');
+    simWire($a, 't2', 'm');
+
+    $fork = simReact('zwei-ausloeser')[0];
+
+    expect($fork->kind)->toBe(Effect::FORK)
+        ->and($fork->children)->toHaveCount(2);
+});
+
+it('does not read a wait written as a variable as "right away"', function () {
+    $a = simAutomation('variabel');
+    simStep($a, 't', 'manual');
+    simStep($a, 'w', 'delay', ['amount' => '{{ contact.wait }}', 'unit' => 'days']);
+    simStep($a, 'm', 'send_email', ['subject' => 'Spaeter']);
+    simLine($a, ['t', 'w', 'm']);
+
+    $wait = simReact('variabel')[0];
+
+    expect($wait->kind)->toBe(Effect::WAIT)
+        ->and($wait->meta['duration_known'])->toBeFalse()
+        ->and($wait->afterSeconds)->toBe(0);
 });
