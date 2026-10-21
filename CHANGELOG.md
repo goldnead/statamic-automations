@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Added: a person source for the dry run ("as it is for person X")
+
+`Integrations\Map\SimPersonSource` (brand-context 1.25, registered in `boot()` when the planner is there): given the identity the CRM found, it
+says which automations she has been through, read from the runs that carry her address as `subject_key` (the editor's test runs do not count).
+Read only: no write, no log line about her. Guarded by `view automations`. It finds nobody itself.
+
+### Added: the mail of a step for the dry run's mailbox
+
+`AutomationMapObjects::mailPreview()` (optional method of the map contract, brand-context 1.23) writes the mail of a
+`send_email` step as it would read for one person: the template or the step's own text, tokens resolved against the
+sample data with her traits laid over it (`EmailTemplatePreviewController::mailForConfig()`, the same resolution as the
+builder's preview). Nothing is sent or stored and no link is rewritten to a tracking address; the map registry then makes the
+HTML safe to look at. The marketing addon's send step is not rendered here. (The phpstan baseline counts the optional
+`EmailTemplates` facade call once more: 3 to 4, the same unresolved optional dependency in a fourth method.)
+
+### Added: the dry run decides for a known person
+
+With a known person (brand-context 1.22) `react()` answers every condition instead of forking: branch, filter and
+switch are decided with the engine's own pure parts (`ConditionEvaluator`, the nodes' `evaluate()`/`execute()`) on a
+context built from her traits (`contact.tags` is `['contact' => ['tags' => …]]`), and the way she took is said as a
+decision line ("took the way if the tag is set"). A parity test holds the planner against the real engine in test
+mode for five different people (mails and waits, in order, with the length of each wait). Waits carry their step in
+`meta.node`.
+
 ## 2.36.0 — 2026-10-21
 
 ### Added: the funnels map's dry run ("Probelauf") reads an automation

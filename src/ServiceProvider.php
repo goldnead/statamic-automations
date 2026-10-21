@@ -4,6 +4,7 @@ namespace Goldnead\StatamicAutomations;
 
 use Goldnead\BrandContext\Map\MapObjectRegistry;
 use Goldnead\BrandContext\Settings\SettingsRegistry;
+use Goldnead\BrandContext\Simulation\PersonSources;
 use Goldnead\StatamicAutomations\Console\Commands\PruneRuns;
 use Goldnead\StatamicAutomations\Console\Commands\RunDueScheduledJobs;
 use Goldnead\StatamicAutomations\Console\Commands\RunScheduledAutomations;
@@ -47,6 +48,7 @@ use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubAdapter;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\LeadHubEventTriggers;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\Triggers as LHT;
 use Goldnead\StatamicAutomations\Integrations\Map\AutomationMapObjects;
+use Goldnead\StatamicAutomations\Integrations\Map\SimPersonSource;
 use Goldnead\StatamicAutomations\Integrations\Marketing\Actions\SendCampaignAction;
 use Goldnead\StatamicAutomations\Integrations\Marketing\Actions\SubscribeToListAction;
 use Goldnead\StatamicAutomations\Integrations\Marketing\Actions\UnsubscribeFromListAction;
@@ -288,6 +290,12 @@ class ServiceProvider extends AddonServiceProvider
         // bootAddon() for the same reason as the settings above.
         $this->app->make(MapObjectRegistry::class)
             ->register(AutomationMapObjects::class);
+
+        // Which automations a real person has been through, for the dry run's "as it is for person X"
+        // (brand-context 1.25). Read only; an older brand-context simply has no place to register it.
+        if (class_exists(PersonSources::class)) {
+            $this->app->make(PersonSources::class)->register(SimPersonSource::class);
+        }
 
         // Resolve the {automationFlow} route parameter through the active
         // storage driver so flat-file definitions (which have no DB row) bind

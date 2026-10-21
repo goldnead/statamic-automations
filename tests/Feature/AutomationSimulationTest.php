@@ -291,6 +291,7 @@ it('writes nothing, sends nothing, dispatches nothing and adds no run', function
     });
 
     simReact('eins');
+    simReact('eins', SimPerson::known(['contact.tags' => ['chorleitung']]));
     app(AutomationMapObjects::class)->paths('eins');
 
     Mail::assertNothingSent();

@@ -6,6 +6,10 @@ use Carbon\CarbonImmutable;
 use Goldnead\BrandContext\Simulation\Effect;
 use Goldnead\BrandContext\Simulation\SimEvent;
 use Goldnead\BrandContext\Simulation\SimPerson;
+use Goldnead\StatamicAutomations\Context\AutomationContext;
+use Goldnead\StatamicAutomations\Engine\ConditionEvaluator;
+use Goldnead\StatamicAutomations\Engine\TokenResolver;
+use Goldnead\StatamicAutomations\Http\Controllers\EmailTemplatePreviewController;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\Actions\GrantEntitlementAction;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
@@ -25,6 +29,7 @@ use Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilTimeNode;
 use Goldnead\StatamicAutomations\Nodes\Triggers\EventTrigger;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Support\NodeOutputs;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
 /**
@@ -37,8 +42,10 @@ use Illuminate\Support\Str;
  * effects. A step the planner does not understand is an "unknown" effect with
  * the step's own name, never a guess. The automation's own switches stay where
  * they are: a branch asks "which way" and, with nobody known, answers with a fork.
- * A known person (and the trigger match of the event) is not read yet: until then
- * every condition forks, whoever the person is.
+ * A known person answers every condition: the branch, filter and switch are
+ * decided with the engine's own pure parts (`ConditionEvaluator`, the nodes'
+ * `evaluate()`), on a context built from her traits, and the way she took is
+ * said as a decision line. The trigger match of the event is not read yet.
  *
  * @phpstan-require-extends AutomationMapObjects
  */
@@ -102,6 +109,8 @@ trait SimulatesAutomation
 
             public int $effects = 0;
 
+            public ?AutomationContext $context = null;
+
             public function __construct(
                 public readonly Automation $automation,
                 public readonly SimPerson $person,
@@ -109,6 +118,10 @@ trait SimulatesAutomation
                 public readonly array $subjects,
             ) {}
         };
+
+        // The person's traits as the data a real run would carry: `contact.tags` is `['contact' => ['tags' => …]]`.
+        // A test-mode context: nothing it touches may leave the process.
+        $plan->context = $person->isKnown() ? AutomationContext::make(Arr::undot($person->traits), true) : null;
 
         if ($triggers->count() === 1) {
             return $this->simFrom($plan, $triggers[0]->node_key, 'default');
@@ -133,6 +146,38 @@ trait SimulatesAutomation
         $kind = $class !== null && method_exists($class, 'label') && ! ($class === EventTrigger::class) ? trim((string) $class::label()) : '';
 
         return $kind !== '' ? $kind : (string) $node->node_key;
+    }
+
+    /**
+     * The mail of one `send_email` step as it would read for this person: the template or the step's own text,
+     * tokens resolved against sample data with her traits laid over it. Nothing is sent, nothing is stored, no
+     * link is rewritten to a tracking address (the registry then makes the HTML safe to look at). The marketing
+     * addon's send step is not rendered here: its mail belongs to a campaign.
+     *
+     * @param  array<string, mixed>  $meta  what the effect said about itself: `node` is the step
+     * @return array{subject: string, html: string, from: ?string}|null
+     */
+    public function mailPreview(string $id, array $meta, SimPerson $person): ?array
+    {
+        $automation = $this->resolve($id);
+
+        if (! $automation) {
+            return null;
+        }
+
+        $automation->loadMissing('nodes');
+        $node = $automation->nodes->firstWhere('node_key', (string) ($meta['node'] ?? ''));
+
+        if (! $node || $node->type !== SendEmailAction::handle()) {
+            return null;
+        }
+
+        $mail = app(EmailTemplatePreviewController::class)->mailForConfig(
+            is_array($node->config) ? $node->config : [],
+            $person->isKnown() ? Arr::undot($person->traits) : [],
+        );
+
+        return $mail === null ? null : ['subject' => $mail['subject'], 'html' => $mail['html'], 'from' => $mail['from']];
     }
 
     private function triggerNode(Automation $automation): ?AutomationNode
@@ -224,12 +269,36 @@ trait SimulatesAutomation
         $next = fn () => $this->simFrom($plan, $node->node_key, 'default');
         $name = $this->simName($node);
 
+        // A switched off step does not pass on: the engine ends the run there (NodeExecutor: skipped,
+        // WorkflowRunner: stopped), and so does the dry run.
+        if ($node->disabled) {
+            return [Effect::stop(__('statamic-automations::automations.sim_step_off', ['step' => $name]))];
+        }
+
         if ($type === StopNode::handle()) {
             return [Effect::stop(__('statamic-automations::automations.sim_stop'))];
         }
 
         if ($type === BranchNode::handle()) {
-            $words = $this->conditionWords((array) $node->getConfigValue('conditions', []), (string) $node->getConfigValue('mode', 'all'));
+            $conditions = (array) $node->getConfigValue('conditions', []);
+            $words = $this->conditionWords($conditions, (string) $node->getConfigValue('mode', 'all'));
+
+            if ($plan->context !== null) {
+                if ($this->dependsOnTheRun($conditions)) {
+                    return [Effect::unknown($name, __('statamic-automations::automations.sim_depends_on_run'))];
+                }
+
+                $result = BranchNode::evaluate($plan->context, $this->resolvedConfig($node, $plan->context), app(ConditionEvaluator::class));
+                $yes = $result->outputHandle === 'true';
+
+                return [Effect::decision(
+                    $name,
+                    $yes
+                        ? __('statamic-automations::automations.sim_took_if', ['condition' => $words])
+                        : __('statamic-automations::automations.sim_took_else', ['condition' => $words]),
+                    $this->simFrom($plan, $node->node_key, $yes ? 'true' : 'false'),
+                )];
+            }
 
             return [Effect::fork($name, [
                 Effect::alt(__('statamic-automations::automations.sim_if', ['condition' => $words]), $this->simFrom($plan, $node->node_key, 'true')),
@@ -240,6 +309,18 @@ trait SimulatesAutomation
         if ($type === FilterNode::handle()) {
             $words = $this->conditionWords((array) $node->getConfigValue('conditions', []), (string) $node->getConfigValue('mode', 'all'));
 
+            if ($plan->context !== null) {
+                if ($this->dependsOnTheRun((array) $node->getConfigValue('conditions', []))) {
+                    return [Effect::unknown($name, __('statamic-automations::automations.sim_depends_on_run'))];
+                }
+
+                $passes = ! FilterNode::evaluate($plan->context, $this->resolvedConfig($node, $plan->context), app(ConditionEvaluator::class))->isStopped();
+
+                return $passes
+                    ? [Effect::decision($name, __('statamic-automations::automations.sim_took_if', ['condition' => $words]), $next())]
+                    : [Effect::decision($name, __('statamic-automations::automations.sim_took_else', ['condition' => $words]), [Effect::stop(__('statamic-automations::automations.sim_filter_stop'))])];
+            }
+
             return [Effect::fork($name, [
                 Effect::alt(__('statamic-automations::automations.sim_if', ['condition' => $words]), $next()),
                 Effect::alt(__('statamic-automations::automations.sim_else'), [Effect::stop(__('statamic-automations::automations.sim_filter_stop'))]),
@@ -247,9 +328,24 @@ trait SimulatesAutomation
         }
 
         if ($type === SwitchNode::handle()) {
+            $rows = NodeOutputs::resolve(app(NodeRegistry::class)->outputSpec($type), $node->config ?? []);
+
+            if ($plan->context !== null) {
+                if (str_contains((string) $node->getConfigValue('value'), 'nodes.')) {
+                    return [Effect::unknown($name, __('statamic-automations::automations.sim_depends_on_run'))];
+                }
+
+                $result = (new SwitchNode)->execute($plan->context, $this->resolvedConfig($node, $plan->context));
+                $handle = (string) $result->outputHandle;
+                $row = collect($rows)->firstWhere('handle', $handle);
+                $label = trim((string) ($row['label'] ?? '')) !== '' ? (string) $row['label'] : $handle;
+
+                return [Effect::decision($name, __('statamic-automations::automations.sim_took_case', ['case' => $label]), $this->simFrom($plan, $node->node_key, $handle))];
+            }
+
             $alts = [];
 
-            foreach (NodeOutputs::resolve(app(NodeRegistry::class)->outputSpec($type), $node->config ?? []) as $row) {
+            foreach ($rows as $row) {
                 $label = trim((string) ($row['label'] ?? '')) !== '' ? (string) $row['label'] : (string) $row['handle'];
                 $alts[] = Effect::alt(__('statamic-automations::automations.sim_case', ['case' => $label]), $this->simFrom($plan, $node->node_key, (string) $row['handle']));
             }
@@ -278,13 +374,13 @@ trait SimulatesAutomation
             // A wait written as a variable is as long as the variable says: not known here, not "right away".
             if (! is_numeric($amount)) {
                 return Effect::chain([
-                    new Effect(Effect::WAIT, $name, __('statamic-automations::automations.sim_wait_unknown'), 0, ['duration_known' => false]),
+                    new Effect(Effect::WAIT, $name, __('statamic-automations::automations.sim_wait_unknown'), 0, ['duration_known' => false, 'node' => $node->node_key]),
                 ], $next());
             }
 
             $seconds = $this->delaySeconds($node);
 
-            return Effect::chain([Effect::wait($this->waitWords($seconds), $seconds)], $next());
+            return Effect::chain([new Effect(Effect::WAIT, $this->waitWords($seconds), null, $seconds, ['node' => $node->node_key])], $next());
         }
 
         if (in_array($type, [WaitUntilNode::handle(), WaitUntilTimeNode::handle(), ThrottleNode::handle()], true)) {
@@ -309,7 +405,8 @@ trait SimulatesAutomation
                     $this->mailTitle($node, $plan->subjects),
                     $template !== null ? __('statamic-automations::automations.sim_template', ['template' => $template]) : null,
                     0,
-                    ['node' => $node->node_key, 'template' => $template],
+                    // The marketing addon's send step is a campaign mail: an unsubscribed person does not get it.
+                    ['node' => $node->node_key, 'template' => $template, 'marketing' => $type === self::MARKETING_SEND],
                 ),
             ], $next());
         }
@@ -343,6 +440,42 @@ trait SimulatesAutomation
 
         // Any other step does something this planner does not model. It says so.
         return Effect::chain([Effect::unknown($name, __('statamic-automations::automations.sim_step_unknown', ['type' => $type]))], $next());
+    }
+
+    /**
+     * The step's config with its tokens resolved against the context, as the engine hands it to the node.
+     *
+     * @return array<string, mixed>
+     */
+    private function resolvedConfig(AutomationNode $node, AutomationContext $context): array
+    {
+        $config = app(TokenResolver::class)->resolve($node->config ?? [], $context);
+
+        return is_array($config) ? $config : [];
+    }
+
+    /**
+     * Whether a question reads what an earlier step of the run produced (`nodes.x.output`, the engine's own
+     * `_` keys). The dry run runs no step, so there is nothing to read: it says it cannot decide.
+     *
+     * @param  array<int, mixed>  $conditions
+     */
+    private function dependsOnTheRun(array $conditions): bool
+    {
+        foreach ($conditions as $condition) {
+            if (! is_array($condition)) {
+                continue;
+            }
+
+            $field = trim((string) ($condition['field'] ?? ''));
+            $value = is_scalar($condition['value'] ?? null) ? (string) $condition['value'] : '';
+
+            if (str_starts_with($field, 'nodes.') || str_starts_with($field, '_') || str_contains($value, 'nodes.') || str_contains($field, '{{')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
