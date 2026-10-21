@@ -10,6 +10,7 @@ use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Engine\ConditionEvaluator;
 use Goldnead\StatamicAutomations\Engine\TokenResolver;
 use Goldnead\StatamicAutomations\Http\Controllers\EmailTemplatePreviewController;
+use Goldnead\StatamicAutomations\Integrations\Entitlements\Actions\CheckAccessAction;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\Actions\GrantEntitlementAction;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
@@ -192,7 +193,7 @@ trait SimulatesAutomation
      * The mail of one `send_email` step as it would read for this person: the template or the step's own text,
      * tokens resolved against sample data with her traits laid over it. Nothing is sent, nothing is stored, no
      * link is rewritten to a tracking address (the registry then makes the HTML safe to look at). The marketing
-     * addon's send step is not rendered here: its mail belongs to a campaign.
+     * addon's send step is rendered by that addon's own node class ({@see marketingMailPreview()}).
      *
      * @param  array<string, mixed>  $meta  what the effect said about itself: `node` is the step
      * @return array{subject: string, html: string, from: ?string}|null
@@ -208,6 +209,10 @@ trait SimulatesAutomation
         $automation->loadMissing('nodes');
         $node = $automation->nodes->firstWhere('node_key', (string) ($meta['node'] ?? ''));
 
+        if ($node && $node->type === self::MARKETING_SEND) {
+            return $this->marketingMailPreview($node, $person);
+        }
+
         if (! $node || $node->type !== SendEmailAction::handle()) {
             return null;
         }
@@ -218,6 +223,64 @@ trait SimulatesAutomation
         );
 
         return $mail === null ? null : ['subject' => $mail['subject'], 'html' => $mail['html'], 'from' => $mail['from']];
+    }
+
+    /**
+     * The mail of a `marketing.send_email` step. The marketing addon owns the mail (its template, its campaign,
+     * its variables), so its node class renders it: `mailPreview(array $config, array $person)`, found with
+     * `method_exists` so an older release simply has no preview. This side hands over what only it knows: the
+     * step's config with the tokens of the run resolved for the person (a step that reads what an earlier step
+     * produced, `nodes.…`, keeps its token: there is no run), and the person's four fields. Nothing is
+     * sent, stored or counted here, and the class is asked for a look, not a send.
+     *
+     * @return array{subject: string, html: string, from: ?string}|null
+     */
+    private function marketingMailPreview(AutomationNode $node, SimPerson $person): ?array
+    {
+        $class = app(NodeRegistry::class)->class($node->type);
+
+        if ($class === null || ! method_exists($class, 'mailPreview') || ! (new \ReflectionMethod($class, 'mailPreview'))->isStatic()) {
+            return null;
+        }
+
+        $sample = app(EmailTemplatePreviewController::class)->sampleFor($person->isKnown() ? Arr::undot($person->traits) : []);
+        $context = AutomationContext::make($sample, true);
+        $resolver = app(TokenResolver::class);
+
+        $resolve = function (mixed $value) use (&$resolve, $resolver, $context): mixed {
+            if (is_array($value)) {
+                return array_map($resolve, $value);
+            }
+
+            // What an earlier step of a run produced stays a token (there is no run), and so does a secret: it is
+            // never read for a look.
+            return is_string($value) && ! str_contains($value, 'nodes.') && ! str_contains($value, 'secret.') ? $resolver->resolve($value, $context) : $value;
+        };
+
+        $config = $resolve(is_array($node->config) ? $node->config : []);
+        $who = is_array($sample['subscriber'] ?? null) ? $sample['subscriber'] : [];
+        $contact = is_array($sample['contact'] ?? null) ? $sample['contact'] : [];
+        $first = array_replace($who, array_filter($contact, fn ($v): bool => is_scalar($v) && (string) $v !== ''));
+
+        // The other addon's code: whatever it throws is no reason to lose the whole dry run, and says "no preview".
+        try {
+            $mail = $class::mailPreview(is_array($config) ? $config : [], [
+                'email' => (string) ($first['email'] ?? ''),
+                'first_name' => (string) ($first['first_name'] ?? ''),
+                'last_name' => (string) ($first['last_name'] ?? ''),
+                'name' => (string) ($first['name'] ?? ''),
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return null;
+        }
+
+        if (! is_array($mail) || ! is_string($mail['html'] ?? null)) {
+            return null;
+        }
+
+        return ['subject' => (string) ($mail['subject'] ?? ''), 'html' => $mail['html'], 'from' => is_string($mail['from'] ?? null) ? $mail['from'] : null];
     }
 
     private function triggerNode(Automation $automation): ?AutomationNode
@@ -324,7 +387,7 @@ trait SimulatesAutomation
             $words = $this->conditionWords($conditions, (string) $node->getConfigValue('mode', 'all'));
 
             if ($plan->context !== null) {
-                if ($this->dependsOnTheRun($conditions)) {
+                if ($this->dependsOnTheRun($conditions, $plan)) {
                     return [Effect::unknown($name, __('statamic-automations::automations.sim_depends_on_run'))];
                 }
 
@@ -350,7 +413,7 @@ trait SimulatesAutomation
             $words = $this->conditionWords((array) $node->getConfigValue('conditions', []), (string) $node->getConfigValue('mode', 'all'));
 
             if ($plan->context !== null) {
-                if ($this->dependsOnTheRun((array) $node->getConfigValue('conditions', []))) {
+                if ($this->dependsOnTheRun((array) $node->getConfigValue('conditions', []), $plan)) {
                     return [Effect::unknown($name, __('statamic-automations::automations.sim_depends_on_run'))];
                 }
 
@@ -371,7 +434,7 @@ trait SimulatesAutomation
             $rows = NodeOutputs::resolve(app(NodeRegistry::class)->outputSpec($type), $node->config ?? []);
 
             if ($plan->context !== null) {
-                if (str_contains((string) $node->getConfigValue('value'), 'nodes.')) {
+                if ($this->dependsOnTheRun([['field' => '', 'value' => (string) $node->getConfigValue('value')]], $plan)) {
                     return [Effect::unknown($name, __('statamic-automations::automations.sim_depends_on_run'))];
                 }
 
@@ -451,6 +514,24 @@ trait SimulatesAutomation
             ], $next());
         }
 
+        // A step that asks whether the person holds a product: she is known, so it is answered. "Require" and
+        // "forbid" end the run on the wrong answer, "report" only says it (a branch after it splits on it).
+        if ($type === CheckAccessAction::handle() && $plan->context !== null && ($known = $this->knownOutput($plan, $node)) !== null) {
+            $has = $known['has_access'] === true;
+            $product = (string) $this->productSlugOf($node);
+            $mode = $this->accessMode($node);
+
+            if ($mode === CheckAccessAction::MODE_REQUIRE && ! $has) {
+                return [Effect::stop(__('statamic-automations::automations.sim_access_require_stop', ['product' => $product]))];
+            }
+
+            if ($mode === CheckAccessAction::MODE_FORBID && $has) {
+                return [Effect::stop(__('statamic-automations::automations.sim_access_forbid_stop', ['product' => $product]))];
+            }
+
+            return $next();
+        }
+
         if ($type === CallAutomationAction::handle()) {
             $called = $this->writtenAutomation($node);
             $target = $called !== null ? $this->resolve($called) : null;
@@ -496,11 +577,12 @@ trait SimulatesAutomation
 
     /**
      * Whether a question reads what an earlier step of the run produced (`nodes.x.output`, the engine's own
-     * `_` keys). The dry run runs no step, so there is nothing to read: it says it cannot decide.
+     * `_` keys). The dry run runs no step, so there is nothing to read: it says it cannot decide, except
+     * for the answers it knows about the person ({@see knownOutput()}), which it reads like a run would have.
      *
      * @param  array<int, mixed>  $conditions
      */
-    private function dependsOnTheRun(array $conditions): bool
+    private function dependsOnTheRun(array $conditions, ?object $plan = null): bool
     {
         foreach ($conditions as $condition) {
             if (! is_array($condition)) {
@@ -510,12 +592,109 @@ trait SimulatesAutomation
             $field = trim((string) ($condition['field'] ?? ''));
             $value = is_scalar($condition['value'] ?? null) ? (string) $condition['value'] : '';
 
-            if (str_starts_with($field, 'nodes.') || str_starts_with($field, '_') || str_contains($value, 'nodes.') || str_contains($field, '{{')) {
+            if (str_starts_with($field, '_') || str_contains($field, '{{')) {
                 return true;
+            }
+
+            foreach ([$field, $value] as $text) {
+                if (! str_contains($text, 'nodes.')) {
+                    continue;
+                }
+
+                // `nodes.<step>.<field>`: only a step whose answer is known for this person can be read.
+                $found = preg_match_all('/nodes\.([A-Za-z0-9_\-]+)\.([A-Za-z0-9_]+)/', $text, $matches, PREG_SET_ORDER) > 0;
+
+                foreach ($found ? $matches : [] as [, $key, $outputField]) {
+                    if ($plan === null || ! $this->learnOutput($plan, (string) $key, (string) $outputField)) {
+                        return true;
+                    }
+                }
+
+                if (! $found) {
+                    return true;
+                }
             }
         }
 
         return false;
+    }
+
+    /** Puts the answer of one step into the plan's context, when the dry run knows that field of it. */
+    private function learnOutput(object $plan, string $key, string $field): bool
+    {
+        if (! isset($plan->context->nodeOutputs()[$key])) {
+            $node = $plan->automation->nodes->firstWhere('node_key', $key);
+            $output = $node ? $this->knownOutput($plan, $node) : null;
+
+            if ($output === null) {
+                return false;
+            }
+
+            $plan->context->recordNodeOutput($key, $output);
+        }
+
+        // The field itself has to be one that is known: another field of the same step is a run's answer.
+        return array_key_exists($field, $plan->context->nodeOutputs()[$key]);
+    }
+
+    /**
+     * What a step would answer for the person of this dry run, when that is a fact about her and not about a run:
+     * "does she hold the product" (the access she is given) and "did she run through the awaited automation to
+     * the end" (the automations she has been through). Everything else a run produces (a click, a recent grant, a
+     * message id) is not known here: null.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function knownOutput(object $plan, AutomationNode $node): ?array
+    {
+        $person = $plan->person;
+
+        if (! $person->isKnown() || $node->disabled) {
+            return null;
+        }
+
+        // The answer is about the person of the dry run only when the step looks up her address; a fixed address, or none
+        // (the engine then fails the step for want of data), is somebody else's answer.
+        if (! $this->looksUpThePerson($node)) {
+            return null;
+        }
+
+        if ($node->type === CheckAccessAction::handle()) {
+            $slug = $this->productSlugOf($node);
+
+            if ($slug === null || str_contains($slug, '{{') || $this->accessMode($node) === null) {
+                return null;
+            }
+
+            // Only what is a fact about her: the answer, not the grant's state (grace, expired ...), which a run reads from the store.
+            return ['has_access' => $person->hasAccess($slug)];
+        }
+
+        if ($node->type === WaitForAutomationNode::handle()) {
+            $awaited = $this->writtenAutomation($node);
+
+            if ($awaited === null || str_contains($awaited, '{{')) {
+                return null;
+            }
+
+            return ['ran_to_end' => $person->hasRun($awaited)];
+        }
+
+        return null;
+    }
+
+    /** The mode of a check-access step, or null when the engine would fail the step for it. */
+    private function accessMode(AutomationNode $node): ?string
+    {
+        $mode = trim((string) ($node->getConfigValue('mode') ?: CheckAccessAction::MODE_REQUIRE));
+
+        return in_array($mode, [CheckAccessAction::MODE_REQUIRE, CheckAccessAction::MODE_FORBID, CheckAccessAction::MODE_REPORT], true) ? $mode : null;
+    }
+
+    /** Whether the step looks up the address of the person the run is about (`{{ subscriber.email }}`, `{{ contact.email }}`). */
+    private function looksUpThePerson(AutomationNode $node): bool
+    {
+        return preg_match('/^\s*\{\{\s*(subscriber|contact)\.email\s*\}\}\s*$/', (string) $node->getConfigValue('email')) === 1;
     }
 
     /**

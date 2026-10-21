@@ -307,6 +307,18 @@ class EmailTemplatePreviewController extends Controller
     }
 
     /**
+     * The data a preview renders against: the sample person (`subscriber`, `contact`) with the traits of
+     * a known person laid over it, so a person who has no name yet still reads as "Max".
+     *
+     * @param  array<string, mixed>  $traits  as the context carries them (nested keys)
+     * @return array<string, mixed>
+     */
+    public function sampleFor(array $traits = []): array
+    {
+        return array_replace_recursive($this->sampleData(), $traits);
+    }
+
+    /**
      * The mail of a `send_email` config for one person of the dry run: subject and HTML, tokens
      * resolved against the sample data with the person's own traits laid over it. Like
      * {@see htmlForConfig()} without a request or a login, and like it a read: nothing is rendered

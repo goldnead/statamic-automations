@@ -82,6 +82,8 @@ return [
     'sim_if' => 'if :condition',
     'sim_else' => 'otherwise',
     'sim_filter_stop' => 'The flow ends: the filter does not let it through',
+    'sim_access_require_stop' => 'The flow ends: the person does not hold ":product"',
+    'sim_access_forbid_stop' => 'The flow ends: the person already holds ":product"',
     'sim_case' => 'case :case',
     'sim_loop_body' => 'Runs once for each item; how many items there are is not known here',
     'sim_wait_unknown' => 'How long this takes depends on the person; not known here',
