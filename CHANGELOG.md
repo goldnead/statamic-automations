@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added: the dry run decides for a known person
+
+With a known person (brand-context 1.22) `react()` answers every condition instead of forking: branch, filter and
+switch are decided with the engine's own pure parts (`ConditionEvaluator`, the nodes' `evaluate()`/`execute()`) on a
+context built from her traits (`contact.tags` is `['contact' => ['tags' => …]]`), and the way she took is said as a
+decision line ("took the way if the tag is set"). A parity test holds the planner against the real engine in test
+mode for five different people (mails and waits, in order, with the length of each wait). Waits carry their step in
+`meta.node`.
+
 ### Added: the funnels map's dry run ("Probelauf") reads an automation
 
 `AutomationMapObjects` answers the two optional dry-run halves of the map contract (brand-context 1.21):

@@ -6,6 +6,9 @@ use Carbon\CarbonImmutable;
 use Goldnead\BrandContext\Simulation\Effect;
 use Goldnead\BrandContext\Simulation\SimEvent;
 use Goldnead\BrandContext\Simulation\SimPerson;
+use Goldnead\StatamicAutomations\Context\AutomationContext;
+use Goldnead\StatamicAutomations\Engine\ConditionEvaluator;
+use Goldnead\StatamicAutomations\Engine\TokenResolver;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\Actions\GrantEntitlementAction;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
@@ -25,6 +28,7 @@ use Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilTimeNode;
 use Goldnead\StatamicAutomations\Nodes\Triggers\EventTrigger;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Support\NodeOutputs;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 
 /**
@@ -37,8 +41,10 @@ use Illuminate\Support\Str;
  * effects. A step the planner does not understand is an "unknown" effect with
  * the step's own name, never a guess. The automation's own switches stay where
  * they are: a branch asks "which way" and, with nobody known, answers with a fork.
- * A known person (and the trigger match of the event) is not read yet: until then
- * every condition forks, whoever the person is.
+ * A known person answers every condition: the branch, filter and switch are
+ * decided with the engine's own pure parts (`ConditionEvaluator`, the nodes'
+ * `evaluate()`), on a context built from her traits, and the way she took is
+ * said as a decision line. The trigger match of the event is not read yet.
  *
  * @phpstan-require-extends AutomationMapObjects
  */
@@ -102,6 +108,8 @@ trait SimulatesAutomation
 
             public int $effects = 0;
 
+            public ?AutomationContext $context = null;
+
             public function __construct(
                 public readonly Automation $automation,
                 public readonly SimPerson $person,
@@ -109,6 +117,10 @@ trait SimulatesAutomation
                 public readonly array $subjects,
             ) {}
         };
+
+        // The person's traits as the data a real run would carry: `contact.tags` is `['contact' => ['tags' => …]]`.
+        // A test-mode context: nothing it touches may leave the process.
+        $plan->context = $person->isKnown() ? AutomationContext::make(Arr::undot($person->traits), true) : null;
 
         if ($triggers->count() === 1) {
             return $this->simFrom($plan, $triggers[0]->node_key, 'default');
@@ -229,7 +241,21 @@ trait SimulatesAutomation
         }
 
         if ($type === BranchNode::handle()) {
-            $words = $this->conditionWords((array) $node->getConfigValue('conditions', []), (string) $node->getConfigValue('mode', 'all'));
+            $conditions = (array) $node->getConfigValue('conditions', []);
+            $words = $this->conditionWords($conditions, (string) $node->getConfigValue('mode', 'all'));
+
+            if ($plan->context !== null) {
+                $result = BranchNode::evaluate($plan->context, $node->config ?? [], app(ConditionEvaluator::class));
+                $yes = $result->outputHandle === 'true';
+
+                return [Effect::decision(
+                    $name,
+                    $yes
+                        ? __('statamic-automations::automations.sim_took_if', ['condition' => $words])
+                        : __('statamic-automations::automations.sim_took_else', ['condition' => $words]),
+                    $this->simFrom($plan, $node->node_key, $yes ? 'true' : 'false'),
+                )];
+            }
 
             return [Effect::fork($name, [
                 Effect::alt(__('statamic-automations::automations.sim_if', ['condition' => $words]), $this->simFrom($plan, $node->node_key, 'true')),
@@ -240,6 +266,14 @@ trait SimulatesAutomation
         if ($type === FilterNode::handle()) {
             $words = $this->conditionWords((array) $node->getConfigValue('conditions', []), (string) $node->getConfigValue('mode', 'all'));
 
+            if ($plan->context !== null) {
+                $passes = ! FilterNode::evaluate($plan->context, $node->config ?? [], app(ConditionEvaluator::class))->isStopped();
+
+                return $passes
+                    ? [Effect::decision($name, __('statamic-automations::automations.sim_took_if', ['condition' => $words]), $next())]
+                    : [Effect::decision($name, __('statamic-automations::automations.sim_took_else', ['condition' => $words]), [Effect::stop(__('statamic-automations::automations.sim_filter_stop'))])];
+            }
+
             return [Effect::fork($name, [
                 Effect::alt(__('statamic-automations::automations.sim_if', ['condition' => $words]), $next()),
                 Effect::alt(__('statamic-automations::automations.sim_else'), [Effect::stop(__('statamic-automations::automations.sim_filter_stop'))]),
@@ -247,9 +281,22 @@ trait SimulatesAutomation
         }
 
         if ($type === SwitchNode::handle()) {
+            $rows = NodeOutputs::resolve(app(NodeRegistry::class)->outputSpec($type), $node->config ?? []);
+
+            if ($plan->context !== null) {
+                // The engine resolves the tokens of the step's config before it asks the node: the same here.
+                $config = app(TokenResolver::class)->resolve($node->config ?? [], $plan->context);
+                $result = (new SwitchNode)->execute($plan->context, is_array($config) ? $config : []);
+                $handle = (string) $result->outputHandle;
+                $row = collect($rows)->firstWhere('handle', $handle);
+                $label = trim((string) ($row['label'] ?? '')) !== '' ? (string) $row['label'] : $handle;
+
+                return [Effect::decision($name, __('statamic-automations::automations.sim_took_case', ['case' => $label]), $this->simFrom($plan, $node->node_key, $handle))];
+            }
+
             $alts = [];
 
-            foreach (NodeOutputs::resolve(app(NodeRegistry::class)->outputSpec($type), $node->config ?? []) as $row) {
+            foreach ($rows as $row) {
                 $label = trim((string) ($row['label'] ?? '')) !== '' ? (string) $row['label'] : (string) $row['handle'];
                 $alts[] = Effect::alt(__('statamic-automations::automations.sim_case', ['case' => $label]), $this->simFrom($plan, $node->node_key, (string) $row['handle']));
             }
@@ -278,13 +325,13 @@ trait SimulatesAutomation
             // A wait written as a variable is as long as the variable says: not known here, not "right away".
             if (! is_numeric($amount)) {
                 return Effect::chain([
-                    new Effect(Effect::WAIT, $name, __('statamic-automations::automations.sim_wait_unknown'), 0, ['duration_known' => false]),
+                    new Effect(Effect::WAIT, $name, __('statamic-automations::automations.sim_wait_unknown'), 0, ['duration_known' => false, 'node' => $node->node_key]),
                 ], $next());
             }
 
             $seconds = $this->delaySeconds($node);
 
-            return Effect::chain([Effect::wait($this->waitWords($seconds), $seconds)], $next());
+            return Effect::chain([new Effect(Effect::WAIT, $this->waitWords($seconds), null, $seconds, ['node' => $node->node_key])], $next());
         }
 
         if (in_array($type, [WaitUntilNode::handle(), WaitUntilTimeNode::handle(), ThrottleNode::handle()], true)) {
