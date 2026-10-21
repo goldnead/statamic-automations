@@ -372,3 +372,21 @@ it('does not read a wait written as a variable as "right away"', function () {
         ->and($wait->meta['duration_known'])->toBeFalse()
         ->and($wait->afterSeconds)->toBe(0);
 });
+
+it('lists the tags the conditions of branches and filters ask for, once each, in order', function () {
+    $a = simAutomation('merkmale');
+    simStep($a, 't', 'manual');
+    simStep($a, 'b', 'branch', ['mode' => 'all', 'conditions' => [
+        ['field' => 'contact.tags', 'operator' => 'includes_tag', 'value' => 'vip'],
+        ['field' => 'contact.tags', 'operator' => 'includes_tag', 'value' => 'chor'],
+        ['field' => 'contact.tags', 'operator' => 'includes_tag', 'value' => 'vip'],
+    ]]);
+    simStep($a, 'f', 'filter', ['conditions' => [['field' => 'contact.tags', 'operator' => 'includes_tag', 'value' => 'nur-probe']]]);
+    simStep($a, 'm', 'send_email', ['subject' => 'Gefiltert']);
+    simLine($a, ['t', 'b', 'f', 'm']);
+
+    $map = app(AutomationMapObjects::class);
+
+    expect($map->simulationTags('merkmale'))->toBe(['vip', 'chor', 'nur-probe'])
+        ->and($map->simulationTags('gibt-es-nicht'))->toBe([]);
+});

@@ -71,6 +71,46 @@ trait SimulatesAutomation
         return $this->triggerNode($automation) ? [new SimEvent(SimEvent::STARTED)] : [];
     }
 
+    /**
+     * The tags this automation asks for in the conditions of its branches and filters, in the order they first
+     * appear: the dry run offers them as a picker. Placeholders are left out, they are filled in per run.
+     *
+     * @return list<string>
+     */
+    public function simulationTags(string $id): array
+    {
+        $automation = $this->resolve($id);
+
+        if (! $automation) {
+            return [];
+        }
+
+        $automation->loadMissing('nodes');
+        $tags = [];
+
+        foreach ($automation->nodes->sortBy('id') as $node) {
+            if (! in_array($node->type, [BranchNode::handle(), FilterNode::handle()], true)) {
+                continue;
+            }
+
+            foreach ((array) $node->getConfigValue('conditions', []) as $condition) {
+                if (! is_array($condition) || ($condition['operator'] ?? null) !== 'includes_tag' || ! is_string($condition['value'] ?? null)) {
+                    continue;
+                }
+
+                $tag = trim($condition['value']);
+
+                if ($tag === '' || str_contains($tag, '{{') || str_contains($tag, 'nodes.')) {
+                    continue;
+                }
+
+                $tags[] = mb_substr($tag, 0, 64);
+            }
+        }
+
+        return array_slice(array_values(array_unique($tags)), 0, 30);
+    }
+
     /** The dry run shows mails and steps, so it is as guarded as the panel details. */
     public function simulationAuthorized(string $id, $user): bool
     {
