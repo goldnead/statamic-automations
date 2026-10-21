@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added: the mail of a step for the dry run's mailbox
+
+`AutomationMapObjects::mailPreview()` (optional method of the map contract, brand-context 1.23) writes the mail of a
+`send_email` step as it would read for one person: the template or the step's own text, tokens resolved against the
+sample data with her traits laid over it (`EmailTemplatePreviewController::mailForConfig()`, the same resolution as the
+builder's preview). Nothing is sent or stored and no link is rewritten to a tracking address; the map registry then makes the
+HTML safe to look at. The marketing addon's send step is not rendered here. (The phpstan baseline counts the optional
+`EmailTemplates` facade call once more: 3 to 4, the same unresolved optional dependency in a fourth method.)
+
 ### Added: the dry run decides for a known person
 
 With a known person (brand-context 1.22) `react()` answers every condition instead of forking: branch, filter and

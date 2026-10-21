@@ -9,6 +9,7 @@ use Goldnead\BrandContext\Simulation\SimPerson;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Engine\ConditionEvaluator;
 use Goldnead\StatamicAutomations\Engine\TokenResolver;
+use Goldnead\StatamicAutomations\Http\Controllers\EmailTemplatePreviewController;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\Actions\GrantEntitlementAction;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
@@ -145,6 +146,38 @@ trait SimulatesAutomation
         $kind = $class !== null && method_exists($class, 'label') && ! ($class === EventTrigger::class) ? trim((string) $class::label()) : '';
 
         return $kind !== '' ? $kind : (string) $node->node_key;
+    }
+
+    /**
+     * The mail of one `send_email` step as it would read for this person: the template or the step's own text,
+     * tokens resolved against sample data with her traits laid over it. Nothing is sent, nothing is stored, no
+     * link is rewritten to a tracking address (the registry then makes the HTML safe to look at). The marketing
+     * addon's send step is not rendered here: its mail belongs to a campaign.
+     *
+     * @param  array<string, mixed>  $meta  what the effect said about itself: `node` is the step
+     * @return array{subject: string, html: string, from: ?string}|null
+     */
+    public function mailPreview(string $id, array $meta, SimPerson $person): ?array
+    {
+        $automation = $this->resolve($id);
+
+        if (! $automation) {
+            return null;
+        }
+
+        $automation->loadMissing('nodes');
+        $node = $automation->nodes->firstWhere('node_key', (string) ($meta['node'] ?? ''));
+
+        if (! $node || $node->type !== SendEmailAction::handle()) {
+            return null;
+        }
+
+        $mail = app(EmailTemplatePreviewController::class)->mailForConfig(
+            is_array($node->config) ? $node->config : [],
+            $person->isKnown() ? Arr::undot($person->traits) : [],
+        );
+
+        return $mail === null ? null : ['subject' => $mail['subject'], 'html' => $mail['html'], 'from' => $mail['from']];
     }
 
     private function triggerNode(Automation $automation): ?AutomationNode

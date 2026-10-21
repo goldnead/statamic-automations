@@ -307,6 +307,54 @@ class EmailTemplatePreviewController extends Controller
     }
 
     /**
+     * The mail of a `send_email` config for one person of the dry run: subject and HTML, tokens
+     * resolved against the sample data with the person's own traits laid over it. Like
+     * {@see htmlForConfig()} without a request or a login, and like it a read: nothing is rendered
+     * into a file, no link is rewritten to a tracking address, nothing is sent. Null when the step
+     * names no template and has no text of its own, or the template is gone.
+     *
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $traits  the person's data as the context carries it (`contact.first_name` as nested keys)
+     * @return array{subject: string, html: string, from: ?string, source: string}|null
+     */
+    public function mailForConfig(array $config, array $traits = []): ?array
+    {
+        $slug = (string) ($config['template'] ?? '');
+        $body = (string) ($config['body'] ?? '');
+        $subject = (string) ($config['subject'] ?? '');
+        $source = 'inline';
+
+        if ($slug !== '' && $this->addonInstalled()) {
+            $resolved = EmailTemplates::resolve($slug);
+
+            if ($resolved === null || (string) ($resolved->body ?? '') === '') {
+                return null;
+            }
+
+            $body = (string) $resolved->body;
+            $source = 'template';
+
+            if ($subject === '' && (string) ($resolved->subject ?? '') !== '') {
+                $subject = (string) $resolved->subject;
+            }
+        }
+
+        if ($body === '') {
+            return null;
+        }
+
+        $sample = array_replace_recursive($this->sampleData(), $traits);
+        $html = $this->renderWithSample($body, $sample);
+
+        return [
+            'subject' => $this->renderWithSample($subject, $sample),
+            'html' => $source === 'inline' && ! str_contains($html, '<') ? nl2br(e($html)) : $html,
+            'from' => isset($config['from']) && is_string($config['from']) && $config['from'] !== '' ? $config['from'] : null,
+            'source' => $source,
+        ];
+    }
+
+    /**
      * Die ungespeicherte Konfiguration aus dem Rumpf — oder null, wenn keine
      * mitgeschickt wurde (dann gilt der Knoten aus der Datenbank).
      *
