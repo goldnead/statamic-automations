@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.39.0 — 2026-10-21
+
 ### Fixed: the Probelauf of a real series shows its mails and goes on past its questions
 
 - A `marketing.send_email` step had no mail in the Probelauf ("no preview yet"). The step's own class (marketing) is asked
