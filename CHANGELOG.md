@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added: the funnels map's dry run ("Probelauf") reads an automation
+
+`AutomationMapObjects` answers the two optional dry-run halves of the map contract (brand-context 1.21):
+`paths()` (an automation with a trigger begins a path) and `react()` (what the automation would do), guarded by
+`simulationAuthorized()` (`view automations`). The graph is only read: mails with their subject, waits, forks at a
+branch, filter and switch with the condition in words, a stop, a call to another automation handed on as an
+event, a granted access. A switched off automation stops, a step the planner does not model is an "effect unknown"
+line with the step's name, never a guess. No run row is written, no mail sent, no job or event dispatched
+(tested). German and English wording.
+
 ## 2.35.0 — 2026-10-21
 
 ### Added: the funnels map's detail panel lists an automation's mails
