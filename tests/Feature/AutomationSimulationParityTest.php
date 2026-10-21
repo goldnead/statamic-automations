@@ -154,6 +154,6 @@ it('says which way a known person took and why', function () {
     };
     $walk($effects);
 
-    expect($decisions)->toContain('Branch: took the way "if the tag "chorleitung" is set"')
-        ->and($decisions)->toContain('Filter: took the way "if contact optout is empty"');
+    expect($decisions)->toContain('Branch: took the way “if the tag ‘chorleitung’ is set”')
+        ->and($decisions)->toContain('Filter: took the way “if contact optout is empty”');
 });
