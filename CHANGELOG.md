@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.36.0 — 2026-10-21
+
 ### Added: the funnels map's dry run ("Probelauf") reads an automation
 
 `AutomationMapObjects` answers the two optional dry-run halves of the map contract (brand-context 1.21):
