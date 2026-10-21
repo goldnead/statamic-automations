@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added: a person source for the dry run ("as it is for person X")
+
+`Integrations\Map\SimPersonSource` (brand-context 1.25, registered in `boot()` when the planner is there): given the identity the CRM found, it
+says which automations she has been through, read from the runs that carry her address as `subject_key` (the editor's test runs do not count).
+Read only: no write, no log line about her. Guarded by `view automations`. It finds nobody itself.
+
 ### Added: the mail of a step for the dry run's mailbox
 
 `AutomationMapObjects::mailPreview()` (optional method of the map contract, brand-context 1.23) writes the mail of a
