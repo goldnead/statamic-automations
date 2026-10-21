@@ -57,7 +57,7 @@ function sopWelcomeGate(): void
 {
     sopGraph([
         ['trigger', 'manual', []],
-        ['wait_welcome', 'wait_for_automation', ['automation' => 'welcome-daily', 'poll_hours' => 6]],
+        ['wait_welcome', 'wait_for_automation', ['email' => '{{ subscriber.email }}', 'automation' => 'welcome-daily', 'poll_hours' => 6]],
         ['welcome_done', 'branch', ['mode' => 'all', 'conditions' => [['field' => 'nodes.wait_welcome.ran_to_end', 'operator' => 'equals', 'value' => 'true']]]],
         ['end_early', 'stop', []],
         ['send_v1', 'marketing.send_email', ['template' => 'v1', 'subject' => 'Vokale 1', 'list' => 'newsletter']],
@@ -119,6 +119,23 @@ it('stops a person where a step requires an access she does not hold', function 
 
     expect(sopFlat(sopReact(SimPerson::known([], ['kurs']))))->toContain('mail:Nur mit Kurs')
         ->and(sopFlat(sopReact(SimPerson::known())))->not->toContain('mail:Nur mit Kurs');
+});
+
+it('does not decide for a step that looks up somebody else, or asks for a field only a run knows', function () {
+    sopGraph([
+        ['trigger', 'manual', []],
+        ['own', 'entitlements.check_access', ['email' => 'fest@example.com', 'product_slug' => 'kurs', 'mode' => 'report']],
+        ['own2', 'entitlements.check_access', ['email' => '{{ subscriber.email }}', 'product_slug' => 'kurs', 'mode' => 'report']],
+        ['has', 'branch', ['mode' => 'all', 'conditions' => [['field' => 'nodes.own.has_access', 'operator' => 'equals', 'value' => 'true']]]],
+        ['st', 'branch', ['mode' => 'all', 'conditions' => [['field' => 'nodes.own2.state', 'operator' => 'equals', 'value' => 'active']]]],
+        ['m', 'marketing.send_email', ['template' => 't', 'subject' => 'Weiter', 'list' => 'newsletter']],
+    ], [['trigger', 'default', 'own'], ['own', 'default', 'has'], ['has', 'true', 'own2'], ['has', 'false', 'own2'], ['own2', 'default', 'st'], ['st', 'true', 'm']]);
+
+    $flat = implode('|', sopFlat(sopReact(SimPerson::known([], ['kurs']))));
+
+    // Both questions stay open: the first step looks up another address, the second asks for the state of a grant.
+    expect(substr_count($flat, 'unknown:'))->toBeGreaterThanOrEqual(1)
+        ->and($flat)->not->toContain('mail:Weiter');
 });
 
 it('still says "unknown" for an answer only a run could give', function () {

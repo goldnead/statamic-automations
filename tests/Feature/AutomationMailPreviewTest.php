@@ -152,6 +152,25 @@ it('has the marketing send step render its own mail for the person', function ()
         ->and(FakeMarketingSendStep::$calls[0]['person']['email'])->not->toBe('');
 });
 
+class ThrowingMarketingSendStep
+{
+    public static function handle(): string
+    {
+        return 'marketing.send_email';
+    }
+
+    public static function mailPreview(array $config, array $person = []): ?array
+    {
+        throw new RuntimeException('boom');
+    }
+}
+
+it('has no mail, and no failed dry run, when the marketing step throws while rendering', function () {
+    mpMarketingStep(ThrowingMarketingSendStep::class);
+
+    expect(app(MapObjectRegistry::class)->mailPreview('automation', 'serie', ['node' => 'tag1'], SimPerson::unknown()))->toBeNull();
+});
+
 it('has no mail for a marketing send step whose addon cannot render it yet, or whose mail is gone', function () {
     mpMarketingStep(OldMarketingSendStep::class);
 

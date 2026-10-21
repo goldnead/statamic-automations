@@ -239,7 +239,7 @@ trait SimulatesAutomation
     {
         $class = app(NodeRegistry::class)->class($node->type);
 
-        if ($class === null || ! method_exists($class, 'mailPreview')) {
+        if ($class === null || ! method_exists($class, 'mailPreview') || ! (new \ReflectionMethod($class, 'mailPreview'))->isStatic()) {
             return null;
         }
 
@@ -252,7 +252,9 @@ trait SimulatesAutomation
                 return array_map($resolve, $value);
             }
 
-            return is_string($value) && ! str_contains($value, 'nodes.') ? $resolver->resolve($value, $context) : $value;
+            // What an earlier step of a run produced stays a token (there is no run), and so does a secret: it is
+            // never read for a look.
+            return is_string($value) && ! str_contains($value, 'nodes.') && ! str_contains($value, 'secret.') ? $resolver->resolve($value, $context) : $value;
         };
 
         $config = $resolve(is_array($node->config) ? $node->config : []);
@@ -260,12 +262,19 @@ trait SimulatesAutomation
         $contact = is_array($sample['contact'] ?? null) ? $sample['contact'] : [];
         $first = array_replace($who, array_filter($contact, fn ($v): bool => is_scalar($v) && (string) $v !== ''));
 
-        $mail = $class::mailPreview(is_array($config) ? $config : [], [
-            'email' => (string) ($first['email'] ?? ''),
-            'first_name' => (string) ($first['first_name'] ?? ''),
-            'last_name' => (string) ($first['last_name'] ?? ''),
-            'name' => (string) ($first['name'] ?? ''),
-        ]);
+        // The other addon's code: whatever it throws is no reason to lose the whole dry run, and says "no preview".
+        try {
+            $mail = $class::mailPreview(is_array($config) ? $config : [], [
+                'email' => (string) ($first['email'] ?? ''),
+                'first_name' => (string) ($first['first_name'] ?? ''),
+                'last_name' => (string) ($first['last_name'] ?? ''),
+                'name' => (string) ($first['name'] ?? ''),
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return null;
+        }
 
         if (! is_array($mail) || ! is_string($mail['html'] ?? null)) {
             return null;
@@ -509,13 +518,14 @@ trait SimulatesAutomation
         // "forbid" end the run on the wrong answer, "report" only says it (a branch after it splits on it).
         if ($type === CheckAccessAction::handle() && $plan->context !== null && ($known = $this->knownOutput($plan, $node)) !== null) {
             $has = $known['has_access'] === true;
-            $product = (string) $known['product_slug'];
+            $product = (string) $this->productSlugOf($node);
+            $mode = $this->accessMode($node);
 
-            if ($known['mode'] === CheckAccessAction::MODE_REQUIRE && ! $has) {
+            if ($mode === CheckAccessAction::MODE_REQUIRE && ! $has) {
                 return [Effect::stop(__('statamic-automations::automations.sim_access_require_stop', ['product' => $product]))];
             }
 
-            if ($known['mode'] === CheckAccessAction::MODE_FORBID && $has) {
+            if ($mode === CheckAccessAction::MODE_FORBID && $has) {
                 return [Effect::stop(__('statamic-automations::automations.sim_access_forbid_stop', ['product' => $product]))];
             }
 
@@ -592,10 +602,10 @@ trait SimulatesAutomation
                 }
 
                 // `nodes.<step>.<field>`: only a step whose answer is known for this person can be read.
-                $found = preg_match_all('/nodes\.([A-Za-z0-9_\-]+)\./', $text, $matches) > 0;
+                $found = preg_match_all('/nodes\.([A-Za-z0-9_\-]+)\.([A-Za-z0-9_]+)/', $text, $matches, PREG_SET_ORDER) > 0;
 
-                foreach ($found ? array_unique($matches[1]) : [] as $key) {
-                    if ($plan === null || ! $this->learnOutput($plan, (string) $key)) {
+                foreach ($found ? $matches : [] as [, $key, $outputField]) {
+                    if ($plan === null || ! $this->learnOutput($plan, (string) $key, (string) $outputField)) {
                         return true;
                     }
                 }
@@ -609,23 +619,22 @@ trait SimulatesAutomation
         return false;
     }
 
-    /** Puts the answer of one step into the plan's context, when the dry run knows it. */
-    private function learnOutput(object $plan, string $key): bool
+    /** Puts the answer of one step into the plan's context, when the dry run knows that field of it. */
+    private function learnOutput(object $plan, string $key, string $field): bool
     {
-        if (isset($plan->context->nodeOutputs()[$key])) {
-            return true;
+        if (! isset($plan->context->nodeOutputs()[$key])) {
+            $node = $plan->automation->nodes->firstWhere('node_key', $key);
+            $output = $node ? $this->knownOutput($plan, $node) : null;
+
+            if ($output === null) {
+                return false;
+            }
+
+            $plan->context->recordNodeOutput($key, $output);
         }
 
-        $node = $plan->automation->nodes->firstWhere('node_key', $key);
-        $output = $node ? $this->knownOutput($plan, $node) : null;
-
-        if ($output === null) {
-            return false;
-        }
-
-        $plan->context->recordNodeOutput($key, $output);
-
-        return true;
+        // The field itself has to be one that is known: another field of the same step is a run's answer.
+        return array_key_exists($field, $plan->context->nodeOutputs()[$key]);
     }
 
     /**
@@ -644,21 +653,21 @@ trait SimulatesAutomation
             return null;
         }
 
+        // The answer is about the person of the dry run only when the step looks up her address; a fixed address, or none
+        // (the engine then fails the step for want of data), is somebody else's answer.
+        if (! $this->looksUpThePerson($node)) {
+            return null;
+        }
+
         if ($node->type === CheckAccessAction::handle()) {
             $slug = $this->productSlugOf($node);
 
-            if ($slug === null || str_contains($slug, '{{')) {
+            if ($slug === null || str_contains($slug, '{{') || $this->accessMode($node) === null) {
                 return null;
             }
 
-            $has = $person->hasAccess($slug);
-
-            return [
-                'has_access' => $has,
-                'state' => $has ? 'active' : null,
-                'product_slug' => $slug,
-                'mode' => (string) ($node->getConfigValue('mode') ?: CheckAccessAction::MODE_REQUIRE),
-            ];
+            // Only what is a fact about her: the answer, not the grant's state (grace, expired ...), which a run reads from the store.
+            return ['has_access' => $person->hasAccess($slug)];
         }
 
         if ($node->type === WaitForAutomationNode::handle()) {
@@ -668,12 +677,24 @@ trait SimulatesAutomation
                 return null;
             }
 
-            $ran = $person->hasRun($awaited);
-
-            return ['state' => $ran ? 'ran_to_end' : 'none', 'ran_to_end' => $ran];
+            return ['ran_to_end' => $person->hasRun($awaited)];
         }
 
         return null;
+    }
+
+    /** The mode of a check-access step, or null when the engine would fail the step for it. */
+    private function accessMode(AutomationNode $node): ?string
+    {
+        $mode = trim((string) ($node->getConfigValue('mode') ?: CheckAccessAction::MODE_REQUIRE));
+
+        return in_array($mode, [CheckAccessAction::MODE_REQUIRE, CheckAccessAction::MODE_FORBID, CheckAccessAction::MODE_REPORT], true) ? $mode : null;
+    }
+
+    /** Whether the step looks up the address of the person the run is about (`{{ subscriber.email }}`, `{{ contact.email }}`). */
+    private function looksUpThePerson(AutomationNode $node): bool
+    {
+        return preg_match('/^\s*\{\{\s*(subscriber|contact)\.email\s*\}\}\s*$/', (string) $node->getConfigValue('email')) === 1;
     }
 
     /**
