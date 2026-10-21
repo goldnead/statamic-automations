@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.38.0 — 2026-10-21
+
 ### Added: optional simulationTags() on the map provider
 
 `simulationTags(string $id)` lists the tags an automation's branches and filters ask for (`includes_tag`), unique and in order, at most 30 of them. The dry run uses it to offer those tags as a picker, so a tester can choose one instead of typing it.
