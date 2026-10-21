@@ -405,7 +405,8 @@ trait SimulatesAutomation
                     $this->mailTitle($node, $plan->subjects),
                     $template !== null ? __('statamic-automations::automations.sim_template', ['template' => $template]) : null,
                     0,
-                    ['node' => $node->node_key, 'template' => $template],
+                    // The marketing addon's send step is a campaign mail: an unsubscribed person does not get it.
+                    ['node' => $node->node_key, 'template' => $template, 'marketing' => $type === self::MARKETING_SEND],
                 ),
             ], $next());
         }
