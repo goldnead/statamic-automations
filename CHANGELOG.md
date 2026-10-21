@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.37.0 — 2026-10-21
+
 ### Added: a person source for the dry run ("as it is for person X")
 
 `Integrations\Map\SimPersonSource` (brand-context 1.25, registered in `boot()` when the planner is there): given the identity the CRM found, it
