@@ -11,10 +11,15 @@ use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
 use Goldnead\StatamicAutomations\Engine\VersionManager;
 use Goldnead\StatamicAutomations\Integrations\Map\AutomationMapObjects;
 use Goldnead\StatamicAutomations\Models\Automation;
+use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
+use Goldnead\StatamicAutomations\Thumbnails\MailThumbnails;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Storage;
+use Statamic\Facades\Collection;
+use Statamic\Facades\Entry;
 use Statamic\Facades\Permission;
 use Statamic\Facades\Role;
 use Statamic\Facades\User;
@@ -1035,4 +1040,247 @@ it('refuses a pair that has no source provider installed', function () {
     mapAutomation('uuid-willkommen', 'Willkommensserie', 'welcome-daily');
 
     expect(fn () => $this->map->connectionPreview(mapConnection(), 'connect'))->toThrow(DomainException::class);
+});
+
+/*
+ * Details: the mails of an automation in step order, for the panel on the
+ * funnels map. Read only; a picture appears only when one has been rendered.
+ */
+
+function mapDetailNode(Automation $automation, string $key, string $type, array $config = []): AutomationNode
+{
+    return AutomationNode::query()->create([
+        'automation_id' => $automation->id,
+        'node_key' => $key,
+        'type' => $type,
+        'config' => $config,
+    ]);
+}
+
+function mapDetailChain(Automation $automation, array $keys): void
+{
+    foreach (array_slice($keys, 0, -1) as $i => $from) {
+        AutomationEdge::query()->create([
+            'automation_id' => $automation->id,
+            'from_node_key' => $from,
+            'to_node_key' => $keys[$i + 1],
+        ]);
+    }
+}
+
+it('lists the mails in step order, not in creation order', function () {
+    $automation = mapAutomation('uuid-serie', 'Serie', 'serie');
+    mapDetailNode($automation, 'm2', 'send_email', ['subject' => 'Tag 3']);
+    mapDetailNode($automation, 'w1', 'delay', ['amount' => 2, 'unit' => 'days']);
+    mapDetailNode($automation, 't', 'event_trigger');
+    mapDetailNode($automation, 'm1', 'send_email', ['subject' => 'Willkommen']);
+    mapDetailChain($automation, ['t', 'm1', 'w1', 'm2']);
+
+    $blocks = $this->map->details('serie', MapPeriod::lastDays(30));
+
+    expect($blocks)->toHaveCount(1)
+        ->and($blocks[0]['kind'])->toBe('list')
+        ->and($blocks[0]['title'])->toBe('Mails')
+        ->and(array_column($blocks[0]['items'], 'title'))->toBe(['Willkommen', 'Tag 3'])
+        ->and($blocks[0]['items'][0]['image'])->toBeNull()
+        ->and($blocks[0]['more'])->toBeNull();
+});
+
+it('words the waits in whole units, German too', function () {
+    app()->setLocale('de');
+    $automation = mapAutomation('uuid-serie', 'Serie', 'serie');
+    mapDetailNode($automation, 'm1', 'send_email', ['subject' => 'Eins']);
+    mapDetailNode($automation, 'w1', 'delay', ['amount' => 2, 'unit' => 'days']);
+    mapDetailNode($automation, 'm2', 'send_email', ['subject' => 'Zwei']);
+    mapDetailNode($automation, 'w2', 'delay', ['amount' => 5, 'unit' => 'hours']);
+    mapDetailNode($automation, 'm3', 'send_email', ['subject' => 'Drei']);
+    mapDetailChain($automation, ['m1', 'w1', 'm2', 'w2', 'm3']);
+
+    $blocks = $this->map->details('serie', MapPeriod::lastDays(30));
+
+    expect($blocks[0]['title'])->toBe('Mails')
+        ->and(array_column($blocks[0]['items'], 'meta'))->toBe(['sofort', 'nach 2 Tagen', 'nach 5 Stunden']);
+});
+
+it('adds up the waits between two mails', function () {
+    $automation = mapAutomation('uuid-serie', 'Serie', 'serie');
+    mapDetailNode($automation, 'm1', 'send_email', ['subject' => 'One']);
+    mapDetailNode($automation, 'w1', 'delay', ['amount' => 1, 'unit' => 'days']);
+    mapDetailNode($automation, 'w2', 'delay', ['amount' => 1, 'unit' => 'days']);
+    mapDetailNode($automation, 'm2', 'send_email', ['subject' => 'Two']);
+    mapDetailNode($automation, 'w3', 'delay', ['amount' => 90, 'unit' => 'minutes']);
+    mapDetailNode($automation, 'm3', 'send_email', ['subject' => 'Three']);
+    mapDetailChain($automation, ['m1', 'w1', 'w2', 'm2', 'w3', 'm3']);
+
+    $items = $this->map->details('serie', MapPeriod::lastDays(30))[0]['items'];
+
+    expect(array_column($items, 'meta'))->toBe(['right away', 'after 2 days', 'after 90 minutes']);
+});
+
+it('never touches the thumbnail storage when the panel opens', function () {
+    Storage::fake('public');
+    config()->set('automations.thumbnails.enabled', true);
+    config()->set('automations.thumbnails.disk', 'public');
+    $automation = mapAutomation('uuid-serie', 'Serie', 'serie');
+    $first = mapDetailNode($automation, 'm1', 'send_email', ['subject' => 'Eins']);
+    mapDetailNode($automation, 'm2', 'send_email', ['subject' => 'Zwei']);
+    mapDetailChain($automation, ['m1', 'm2']);
+    Storage::disk('public')->put(MailThumbnails::path($automation, 'm1', $first->config), 'PNG');
+
+    // From here on any disk access fails the test: a lookup per mail would be one per row.
+    Storage::shouldReceive('disk')->never();
+
+    $items = $this->map->details('serie', MapPeriod::lastDays(30))[0]['items'];
+
+    expect(array_column($items, 'title'))->toBe(['Eins', 'Zwei'])
+        ->and(array_column($items, 'image'))->toBe([null, null]);
+});
+
+it('falls back to a clear title when a mail has neither subject nor a known template', function () {
+    $automation = mapAutomation('uuid-serie', 'Serie', 'serie');
+    mapDetailNode($automation, 'm1', 'send_email', ['subject' => '', 'template' => 'weg']);
+    mapDetailNode($automation, 'm2', 'send_email', []);
+    mapDetailChain($automation, ['m1', 'm2']);
+
+    $items = $this->map->details('serie', MapPeriod::lastDays(30))[0]['items'];
+
+    expect($items[0]['title'])->toBe('Mail without subject (template "weg")')
+        ->and($items[1]['title'])->toBe('Mail without subject');
+});
+
+it('takes the subject of the template in one lookup when the mail has none of its own', function () {
+    $asker = new class(app(AutomationRepository::class)) extends AutomationMapObjects
+    {
+        public int $lookups = 0;
+
+        protected function templateSubjects(array $slugs): array
+        {
+            $this->lookups++;
+
+            return ['a' => 'Subject of A', 'b' => 'Subject of B'];
+        }
+    };
+    $automation = mapAutomation('uuid-serie', 'Serie', 'serie');
+    mapDetailNode($automation, 'm1', 'send_email', ['template' => 'a']);
+    mapDetailNode($automation, 'm2', 'send_email', ['template' => 'b']);
+    mapDetailNode($automation, 'm3', 'send_email', ['subject' => 'Own', 'template' => 'a']);
+    mapDetailChain($automation, ['m1', 'm2', 'm3']);
+
+    $items = $asker->details('serie', MapPeriod::lastDays(30))[0]['items'];
+
+    expect(array_column($items, 'title'))->toBe(['Subject of A', 'Subject of B', 'Own'])
+        ->and($asker->lookups)->toBe(1);
+});
+
+it('lists the marketing mail node too, in template and campaign mode', function () {
+    $automation = mapAutomation('uuid-serie', 'Serie', 'serie');
+    mapDetailNode($automation, 'm1', 'marketing.send_email', ['template' => 'kauf-1', 'subject' => 'Danke, {{ contact.first_name }}']);
+    mapDetailNode($automation, 'w1', 'delay', ['amount' => 3, 'unit' => 'days']);
+    mapDetailNode($automation, 'm2', 'marketing.send_email', ['campaign' => 'nachfass']);
+    mapDetailNode($automation, 'm3', 'send_email', ['subject' => 'Plain']);
+    mapDetailChain($automation, ['m1', 'w1', 'm2', 'm3']);
+
+    $items = $this->map->details('serie', MapPeriod::lastDays(30))[0]['items'];
+
+    expect(array_column($items, 'title'))->toBe(['Danke, {First name}', 'Campaign "nachfass"', 'Plain'])
+        ->and(array_column($items, 'meta'))->toBe(['right away', 'after 3 days', 'right away']);
+});
+
+it('shows at most twelve mails and counts the rest', function () {
+    $automation = mapAutomation('uuid-serie', 'Serie', 'serie');
+    $keys = [];
+    foreach (range(1, 14) as $i) {
+        mapDetailNode($automation, "m{$i}", 'send_email', ['subject' => "Mail {$i}"]);
+        $keys[] = "m{$i}";
+    }
+    mapDetailChain($automation, $keys);
+
+    $block = $this->map->details('serie', MapPeriod::lastDays(30))[0];
+
+    expect($block['items'])->toHaveCount(12)->and($block['more'])->toBe(2);
+});
+
+it('has no details for an unknown automation or one without mails', function () {
+    $automation = mapAutomation('uuid-leer', 'Leer', 'leer');
+    mapDetailNode($automation, 'w', 'delay', ['amount' => 1, 'unit' => 'days']);
+
+    expect($this->map->details('gibt-es-nicht', MapPeriod::lastDays(30)))->toBeNull()
+        ->and($this->map->details('leer', MapPeriod::lastDays(30)))->toBeNull();
+});
+
+it('opens the details only to a user who may view automations, and fails closed', function () {
+    $super = User::make()->email('s@example.com')->makeSuper();
+    $super->save();
+
+    expect($this->map->detailsAuthorized('serie', mapUserWith('viewer', ['view automations'])))->toBeTrue()
+        ->and($this->map->detailsAuthorized('serie', $super))->toBeTrue()
+        ->and($this->map->detailsAuthorized('serie', mapUserWith('editor', ['edit automations'])))->toBeFalse()
+        ->and($this->map->detailsAuthorized('serie', mapUserWith('nobody', [])))->toBeFalse()
+        ->and($this->map->detailsAuthorized('serie', null))->toBeFalse()
+        ->and($this->map->detailsAuthorized('serie', new stdClass))->toBeFalse();
+});
+
+it('words a placeholder in a subject instead of showing it raw', function () {
+    $words = fn (string $s) => (new class(app(AutomationRepository::class)) extends AutomationMapObjects
+    {
+        public function say(string $s): string
+        {
+            return $this->readableSubject($s);
+        }
+    })->say($s);
+
+    expect($words('Hallo {{ contact.first_name }}'))->toBe('Hallo {First name}')
+        ->and($words('Hi {{contact.last_name}}!'))->toBe('Hi {Last name}!')
+        ->and($words("{{ contact.first_name | default:'du' }}, los"))->toBe('{First name}, los')
+        ->and($words('{{ contact.name }} / {{ contact.full_name }}'))->toBe('{Name} / {Name}')
+        ->and($words('Mail an {{ contact.email }}'))->toBe('Mail an {Email}')
+        ->and($words('Summe {{ order.total }}'))->toBe('Summe {total}')
+        ->and($words('{{ order.shipping_cost|number }}'))->toBe('{shipping cost}')
+        ->and($words('{{ title }}'))->toBe('{title}')
+        ->and($words('Kein Platzhalter'))->toBe('Kein Platzhalter');
+
+    app()->setLocale('de');
+
+    expect($words('Hallo {{ contact.first_name }}'))->toBe('Hallo {Vorname}')
+        ->and($words('{{ contact.last_name }}'))->toBe('{Nachname}')
+        ->and($words('{{ contact.email }}'))->toBe('{E-Mail}');
+});
+
+it('words the placeholders of a written subject and of a template subject alike', function () {
+    $asker = new class(app(AutomationRepository::class)) extends AutomationMapObjects
+    {
+        protected function templateSubjects(array $slugs): array
+        {
+            return ['a' => 'Willkommen {{ contact.first_name | default:"du" }}'];
+        }
+    };
+    $automation = mapAutomation('uuid-serie', 'Serie', 'serie');
+    mapDetailNode($automation, 'm1', 'send_email', ['template' => 'a']);
+    mapDetailNode($automation, 'm2', 'send_email', ['subject' => 'Danke {{contact.last_name}}']);
+    mapDetailChain($automation, ['m1', 'm2']);
+
+    $items = $asker->details('serie', MapPeriod::lastDays(30))[0]['items'];
+
+    expect(array_column($items, 'title'))->toBe(['Willkommen {First name}', 'Danke {Last name}']);
+});
+
+it('reads only the wanted templates from the collection', function () {
+    require_once __DIR__.'/../Fixtures/EmailTemplatesStub.php';
+
+    Collection::make('et_templates')->title('Email Templates')->save();
+
+    foreach (['a' => 'Eins', 'b' => 'Zwei', 'c' => 'Drei'] as $slug => $subject) {
+        Entry::make()->collection('et_templates')->locale('default')->slug($slug)->data(['title' => $slug, 'subject' => $subject])->save();
+    }
+
+    $reader = new class(app(AutomationRepository::class)) extends AutomationMapObjects
+    {
+        public function read(array $slugs): array
+        {
+            return $this->templateSubjects($slugs);
+        }
+    };
+
+    expect($reader->read(['a', 'c', 'fehlt']))->toBe(['a' => 'Eins', 'c' => 'Drei'])
+        ->and($reader->read(['b']))->toBe(['b' => 'Zwei']);
 });

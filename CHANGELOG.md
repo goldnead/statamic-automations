@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added: the funnels map's detail panel lists an automation's mails
+
+`AutomationMapObjects::details()` (the optional detail method of the map contract) returns a "Mails" list: the automation's mails in step order, each with its subject (the template's subject when the step has none, a plain fallback title for a missing template), the wait since the step before ("right away", "after 2 days"; waits between two mails add up; English and German). Placeholders in a subject are worded instead of shown raw: `{{ contact.first_name }}` becomes `{First name}` (`{Vorname}` in German), any other variable its last segment in braces (`{{ order.total }}` becomes `{total}`), filters dropped. The marketing addon's `marketing.send_email` steps are listed too (a campaign-mode step is titled with its campaign handle). Read only: nothing is rendered and the thumbnail storage is not touched (`image` is `null`, no file lookup per mail); the template subjects of the listed mails come in one query (`whereIn` on the slugs); at most 12 entries with the rest counted.
+
+`AutomationMapObjects::detailsAuthorized()` answers the map registry's rights check (brand-context 1.20, `MapObjectRegistry::detailsAllowed()`): the details open only to a user with `view automations`, a missing user is refused. On brand-context 1.19 the panel stays empty.
+
 ## 2.34.1 — 2026-10-20
 
 ### Fixed: releasing a connection on a switched-on automation is refused

@@ -23,10 +23,13 @@ use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Nodes\Actions\CallAutomationAction;
 use Goldnead\StatamicAutomations\Nodes\Actions\SendEmailAction;
+use Goldnead\StatamicAutomations\Nodes\Logic\DelayNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\WaitForAutomationNode;
 use Goldnead\StatamicAutomations\Support\AuditLogger;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
+use Statamic\Facades\Entry;
+use Statamic\Query\Builder;
 
 /**
  * The automations as objects a funnels map can point at.
@@ -108,6 +111,262 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
         return new MapMetric((int) $count, __('statamic-automations::insights.runs'), $period);
     }
 
+    /** The most mails the panel lists; the rest is counted in `more`. */
+    public const DETAIL_LIMIT = 12;
+
+    /** The marketing addon's mail node: same `subject` and `template` keys, optionally a `campaign` instead. */
+    public const MARKETING_SEND = 'marketing.send_email';
+
+    /**
+     * The panel's extra blocks (optional method of the map contract, found with
+     * method_exists): one "list" block with the automation's mails in step
+     * order. Each title is the subject (placeholders in words), the meta the
+     * wait since the step before (waits between two mails add up). Read only:
+     * nothing is rendered, the thumbnail storage is not touched, and the
+     * template subjects come in one lookup.
+     *
+     * @return list<array<string, mixed>>|null
+     */
+    public function details(string $id, MapPeriod $period): ?array
+    {
+        $automation = $this->resolve($id);
+
+        if (! $automation) {
+            return null;
+        }
+
+        $automation->loadMissing(['nodes', 'edges']);
+
+        $mails = [];
+        $wait = 0;
+
+        foreach ($this->stepOrder($automation) as $node) {
+            if ($node->type === DelayNode::handle()) {
+                $wait += $this->delaySeconds($node);
+
+                continue;
+            }
+
+            if (in_array($node->type, [SendEmailAction::handle(), self::MARKETING_SEND], true)) {
+                $mails[] = ['node' => $node, 'wait' => $wait];
+                $wait = 0;
+            }
+        }
+
+        if ($mails === []) {
+            return null;
+        }
+
+        $shown = array_slice($mails, 0, self::DETAIL_LIMIT);
+        $slugs = [];
+
+        foreach ($shown as $mail) {
+            if ($this->writtenSubject($mail['node']) === null && ($slug = $this->writtenTemplate($mail['node'])) !== null) {
+                $slugs[] = $slug;
+            }
+        }
+
+        $subjects = $slugs === [] ? [] : $this->templateSubjects(array_values(array_unique($slugs)));
+
+        $items = [];
+
+        foreach ($shown as $mail) {
+            $node = $mail['node'];
+
+            $items[] = [
+                'title' => Str::limit($this->mailTitle($node, $subjects), 120),
+                'meta' => $this->waitWords($mail['wait']),
+                // No picture here: whether one exists is a lookup on the thumbnail disk per mail.
+                'image' => null,
+            ];
+        }
+
+        return [[
+            'kind' => 'list',
+            'title' => __('statamic-automations::automations.map_detail_mails'),
+            'items' => $items,
+            'more' => count($mails) > count($shown) ? count($mails) - count($shown) : null,
+        ]];
+    }
+
+    /**
+     * The steps as a run takes them: from the trigger (or the steps nothing
+     * points at) along the edges, depth first in stored order. Steps no edge
+     * reaches follow in creation order, so a half-wired automation still lists.
+     *
+     * @return list<AutomationNode>
+     */
+    protected function stepOrder(Automation $automation): array
+    {
+        $nodes = $automation->nodes->sortBy('id')->keyBy('node_key');
+        $next = [];
+        $pointedAt = [];
+
+        foreach ($automation->edges->sortBy('id') as $edge) {
+            $next[$edge->from_node_key][] = $edge->to_node_key;
+            $pointedAt[$edge->to_node_key] = true;
+        }
+
+        $ordered = [];
+        $seen = [];
+
+        $visit = function (string $key) use (&$visit, &$ordered, &$seen, $nodes, $next): void {
+            if (isset($seen[$key]) || ! $nodes->has($key)) {
+                return;
+            }
+
+            $seen[$key] = true;
+            $ordered[] = $nodes[$key];
+
+            foreach ($next[$key] ?? [] as $to) {
+                $visit($to);
+            }
+        };
+
+        foreach ($nodes as $key => $node) {
+            if (! isset($pointedAt[$key])) {
+                $visit((string) $key);
+            }
+        }
+
+        foreach ($nodes as $key => $node) {
+            $visit((string) $key);
+        }
+
+        return $ordered;
+    }
+
+    protected function delaySeconds(AutomationNode $node): int
+    {
+        $amount = max(0, (int) $node->getConfigValue('amount'));
+
+        return $amount * match ((string) $node->getConfigValue('unit')) {
+            'days' => 86400,
+            'hours' => 3600,
+            default => 60,
+        };
+    }
+
+    /** "right away", "after 2 days", "after 90 minutes": the largest unit that divides the wait evenly. */
+    protected function waitWords(int $seconds): string
+    {
+        if ($seconds <= 0) {
+            return __('statamic-automations::automations.map_detail_wait_none');
+        }
+
+        [$key, $count] = match (true) {
+            $seconds % 86400 === 0 => ['days', intdiv($seconds, 86400)],
+            $seconds % 3600 === 0 => ['hours', intdiv($seconds, 3600)],
+            default => ['minutes', max(1, (int) ceil($seconds / 60))],
+        };
+
+        return trans_choice('statamic-automations::automations.map_detail_wait_'.$key, $count, ['count' => $count]);
+    }
+
+    /** The subject the editor wrote on the step, trimmed, or null. */
+    protected function writtenSubject(AutomationNode $node): ?string
+    {
+        $value = $node->getConfigValue('subject');
+
+        if (! is_scalar($value) || trim((string) $value) === '') {
+            return null;
+        }
+
+        return trim((string) $value);
+    }
+
+    /** @param  array<string, string>  $subjects  template slug => subject */
+    protected function mailTitle(AutomationNode $node, array $subjects): string
+    {
+        $subject = $this->writtenSubject($node);
+
+        if ($subject !== null) {
+            return $this->readableSubject($subject);
+        }
+
+        $template = $this->writtenTemplate($node);
+
+        if ($template !== null && trim((string) ($subjects[$template] ?? '')) !== '') {
+            return $this->readableSubject(trim((string) $subjects[$template]));
+        }
+
+        $campaign = $node->getConfigValue('campaign');
+
+        if ($template === null && is_scalar($campaign) && trim((string) $campaign) !== '') {
+            return __('statamic-automations::automations.map_detail_mail_campaign', ['campaign' => trim((string) $campaign)]);
+        }
+
+        return $template !== null
+            ? __('statamic-automations::automations.map_detail_mail_template', ['template' => $template])
+            : __('statamic-automations::automations.map_detail_mail_fallback');
+    }
+
+    /**
+     * The subjects of managed templates, by slug, in one query on the template
+     * collection. Without the template addon, or on any failure, nothing is known.
+     *
+     * @param  list<string>  $slugs
+     * @return array<string, string>
+     */
+    protected function templateSubjects(array $slugs): array
+    {
+        if (! class_exists(EmailTemplates::class)) {
+            return [];
+        }
+
+        try {
+            $subjects = [];
+
+            // The facade only promises the contract, which has no methods: a store
+            // that is not a Statamic query builder cannot be asked by slug.
+            $query = Entry::query();
+
+            if (! $query instanceof Builder) {
+                return [];
+            }
+
+            foreach ($query->where('collection', 'et_templates')->whereIn('slug', $slugs)->get() as $entry) {
+                $subjects[(string) $entry->slug()] = (string) ($entry->value('subject') ?? '');
+            }
+
+            return $subjects;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /** The variables a subject names most often, as the words of the editor's own fields. */
+    private const SUBJECT_VARIABLES = [
+        'contact.first_name' => 'map_var_first_name',
+        'contact.last_name' => 'map_var_last_name',
+        'contact.name' => 'map_var_name',
+        'contact.full_name' => 'map_var_name',
+        'contact.email' => 'map_var_email',
+    ];
+
+    /**
+     * `{{ contact.first_name }}` as `{First name}`: every `{{ ... }}` in a subject
+     * becomes the variable's name in single braces. Filters (`| default:'du'`)
+     * are dropped; a variable without a word of its own gives its last segment,
+     * underscores as spaces (`order.total` becomes `{total}`).
+     */
+    protected function readableSubject(string $subject): string
+    {
+        return (string) preg_replace_callback('/\{\{\s*(.*?)\s*\}\}/s', function (array $m): string {
+            $variable = trim(explode('|', $m[1], 2)[0]);
+            $key = self::SUBJECT_VARIABLES[$variable] ?? null;
+
+            if ($key !== null) {
+                return '{'.__('statamic-automations::automations.'.$key).'}';
+            }
+
+            $segments = explode('.', $variable);
+            $name = str_replace('_', ' ', trim((string) end($segments)));
+
+            return '{'.$name.'}';
+        }, $subject);
+    }
+
     /**
      * The pairs this addon can write: a product or a lead magnet starts an
      * automation by being the slug of its "access granted" trigger.
@@ -139,6 +398,21 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
         $source = self::SOURCE_PERMISSION[(string) ($c['from_type'] ?? '')] ?? null;
 
         return $source !== null && (bool) $user->can($source) && (bool) $user->can('edit automations');
+    }
+
+    /**
+     * Who may open the panel's details: the right that shows automations (and
+     * with them their mails and steps) in the Control Panel, not the one that
+     * edits them. Asked by the map registry before details() is called; a
+     * missing user or one that cannot answer is refused.
+     */
+    public function detailsAuthorized(string $id, $user): bool
+    {
+        if ($user === null || ! method_exists($user, 'can')) {
+            return false;
+        }
+
+        return (bool) $user->can('view automations');
     }
 
     /** The right that guards each kind of source on its own Control Panel. */

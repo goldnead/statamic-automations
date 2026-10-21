@@ -38,6 +38,18 @@ return [
     'map_disconnect_not_connected' => '„:automation“ startet nicht für „:object“.',
 
     // Ein kaputter Verweis dieser Automatisierung, wie ihn die Landkarte zeigt.
+    'map_detail_mails' => 'Mails',
+    'map_detail_wait_none' => 'sofort',
+    'map_detail_wait_days' => 'nach :count Tag|nach :count Tagen',
+    'map_detail_wait_hours' => 'nach :count Stunde|nach :count Stunden',
+    'map_detail_wait_minutes' => 'nach :count Minute|nach :count Minuten',
+    'map_detail_mail_fallback' => 'Mail ohne Betreff',
+    'map_detail_mail_campaign' => 'Kampagne „:campaign“',
+    'map_detail_mail_template' => 'Mail ohne Betreff (Vorlage „:template“)',
+    'map_var_first_name' => 'Vorname',
+    'map_var_last_name' => 'Nachname',
+    'map_var_name' => 'Name',
+    'map_var_email' => 'E-Mail',
     'map_problem_template' => 'Schritt „:step“ sendet die Vorlage „:template“, die es nicht gibt',
     'map_problem_automation' => 'Schritt „:step“ verweist auf die Automatisierung „:automation“, die es nicht gibt',
 
