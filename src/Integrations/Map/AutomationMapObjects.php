@@ -52,6 +52,8 @@ use Statamic\Query\Builder;
  */
 class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
 {
+    use SimulatesAutomation;
+
     public const TYPE = 'automation';
 
     public function __construct(protected AutomationRepository $automations) {}
