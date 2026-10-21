@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+### Fixed: the Probelauf of a real series shows its mails and goes on past its questions
+
+- A `marketing.send_email` step had no mail in the Probelauf ("no preview yet"). The step's own class (marketing) is asked
+  (`mailPreview(array $config, array $person)`, found with `method_exists`); the run's tokens are resolved for the person first, a token
+  that reads what an earlier step produced (`nodes.…`) or a secret stays as it is. Whatever the other addon throws is "no preview", not a
+  failed dry run.
+- A known person's way ended at every question that reads an earlier step (`nodes.<step>.<field>`: "depends on what an earlier step
+  delivers"). Two answers are a fact about her and are read now: `entitlements.check_access` (`has_access`, from the access she holds; the
+  modes require and forbid end the way with a line that says why) and `wait_for_automation` (`ran_to_end`, from the automations she has been
+  through, which the person editor offers). Only when the step looks up her own address (`{{ subscriber.email }}`). Every other answer (a
+  click, a recent grant, the state of a grant) stays unknown and says so.
+
 ## 2.38.0 — 2026-10-21
 
 ### Added: optional simulationTags() on the map provider
