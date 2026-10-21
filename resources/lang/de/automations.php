@@ -82,6 +82,8 @@ return [
     'sim_if' => 'wenn :condition',
     'sim_else' => 'sonst',
     'sim_filter_stop' => 'Der Ablauf endet: Der Filter lässt ihn nicht durch',
+    'sim_access_require_stop' => 'Der Ablauf endet: Die Person hat „:product“ nicht',
+    'sim_access_forbid_stop' => 'Der Ablauf endet: Die Person hat „:product“ schon',
     'sim_case' => 'Fall :case',
     'sim_loop_body' => 'Läuft einmal je Eintrag; wie viele es sind, ist hier nicht bekannt',
     'sim_wait_unknown' => 'Wie lange das dauert, hängt von der Person ab; hier nicht bekannt',
