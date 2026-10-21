@@ -96,6 +96,8 @@ return [
     'sim_took_if' => 'ging den Weg „wenn :condition“',
     'sim_took_else' => 'ging den Weg „sonst“, denn „wenn :condition“ traf nicht zu',
     'sim_took_case' => 'ging den Fall :case',
+    'sim_step_off' => 'Der Schritt „:step“ ist ausgeschaltet: der Ablauf endet hier',
+    'sim_depends_on_run' => 'Die Antwort hängt davon ab, was ein früherer Schritt liefert; hier nicht bekannt',
     'sim_no_condition' => 'keine Bedingung',
     'sim_or' => 'oder',
     'sim_and' => 'und',

@@ -96,6 +96,8 @@ return [
     'sim_took_if' => 'took the way “if :condition”',
     'sim_took_else' => 'took the way “otherwise”, because “if :condition” did not hold',
     'sim_took_case' => 'took the case :case',
+    'sim_step_off' => 'The step ":step" is switched off: the flow ends here',
+    'sim_depends_on_run' => 'The answer depends on what an earlier step produces; not known here',
     'sim_no_condition' => 'no condition',
     'sim_or' => 'or',
     'sim_and' => 'and',

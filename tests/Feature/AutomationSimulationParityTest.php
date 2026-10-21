@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\Mail;
  * each wait) must be the same. A branch the planner takes differently from the engine fails here.
  */
 
-function parityBuild(): Automation
+function parityBuild(array $disabled = []): Automation
 {
     $a = Automation::query()->create(['uuid' => 'uuid-parity', 'name' => 'Parity', 'handle' => 'parity', 'enabled' => true]);
 
@@ -44,7 +44,7 @@ function parityBuild(): Automation
     ];
 
     foreach ($steps as $key => [$type, $config]) {
-        AutomationNode::query()->create(['automation_id' => $a->id, 'node_key' => $key, 'type' => $type, 'config' => $config]);
+        AutomationNode::query()->create(['automation_id' => $a->id, 'node_key' => $key, 'type' => $type, 'config' => $config, 'disabled' => in_array($key, $disabled, true)]);
     }
 
     $wires = [
@@ -83,7 +83,8 @@ function parityReal(Automation $a, array $traits): array
     $lines = [];
 
     foreach (AutomationNodeRun::query()->where('automation_run_id', $run->id)->orderBy('id')->get() as $nodeRun) {
-        if (isset($seen[$nodeRun->node_key])) {
+        // A step the engine skipped (switched off) did nothing for the person.
+        if (isset($seen[$nodeRun->node_key]) || $nodeRun->status === 'skipped') {
             continue;
         }
 
@@ -156,4 +157,43 @@ it('says which way a known person took and why', function () {
 
     expect($decisions)->toContain('Branch: took the way “if the tag ‘chorleitung’ is set”')
         ->and($decisions)->toContain('Filter: took the way “if contact optout is empty”');
+});
+
+it('stops where the engine stops at a switched off step', function () {
+    $a = parityBuild(['w1']);
+
+    expect(parityPlanned([]))->toBe(parityReal($a, []))->and(parityPlanned([]))->toBe(['mail:m1']);
+});
+
+it('resolves a token in a condition as the engine does', function () {
+    $a = parityBuild();
+    // The branch asks for the tag named by the person's own trait, not for a fixed one.
+    AutomationNode::query()->where('automation_id', $a->id)->where('node_key', 'b')->update(['config' => [
+        'mode' => 'all',
+        'conditions' => [['field' => 'contact.tags', 'operator' => 'includes_tag', 'value' => '{{ contact.wanted }}']],
+    ]]);
+
+    foreach ([['contact.tags' => ['chor'], 'contact.wanted' => 'chor'], ['contact.tags' => ['chor'], 'contact.wanted' => 'solo']] as $traits) {
+        expect(parityPlanned($traits))->toBe(parityReal($a->fresh(['nodes', 'edges']), $traits));
+    }
+});
+
+it('says it cannot decide a question that reads what an earlier step produced', function () {
+    parityBuild();
+    AutomationNode::query()->where('node_key', 'b')->update(['config' => [
+        'mode' => 'all',
+        'conditions' => [['field' => 'nodes.m1.output.status', 'operator' => 'equals', 'value' => 'sent']],
+    ]]);
+
+    $effects = app(AutomationMapObjects::class)->react('parity', new SimEvent(SimEvent::STARTED), SimPerson::known([]), CarbonImmutable::now());
+    $kinds = [];
+    $walk = function (array $list) use (&$walk, &$kinds) {
+        foreach ($list as $e) {
+            $kinds[] = $e->kind;
+            $walk($e->children);
+        }
+    };
+    $walk($effects);
+
+    expect($kinds)->toBe(['mail', 'wait', 'unknown']);
 });

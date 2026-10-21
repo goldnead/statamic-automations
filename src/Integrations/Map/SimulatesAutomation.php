@@ -236,6 +236,12 @@ trait SimulatesAutomation
         $next = fn () => $this->simFrom($plan, $node->node_key, 'default');
         $name = $this->simName($node);
 
+        // A switched off step does not pass on: the engine ends the run there (NodeExecutor: skipped,
+        // WorkflowRunner: stopped), and so does the dry run.
+        if ($node->disabled) {
+            return [Effect::stop(__('statamic-automations::automations.sim_step_off', ['step' => $name]))];
+        }
+
         if ($type === StopNode::handle()) {
             return [Effect::stop(__('statamic-automations::automations.sim_stop'))];
         }
@@ -245,7 +251,11 @@ trait SimulatesAutomation
             $words = $this->conditionWords($conditions, (string) $node->getConfigValue('mode', 'all'));
 
             if ($plan->context !== null) {
-                $result = BranchNode::evaluate($plan->context, $node->config ?? [], app(ConditionEvaluator::class));
+                if ($this->dependsOnTheRun($conditions)) {
+                    return [Effect::unknown($name, __('statamic-automations::automations.sim_depends_on_run'))];
+                }
+
+                $result = BranchNode::evaluate($plan->context, $this->resolvedConfig($node, $plan->context), app(ConditionEvaluator::class));
                 $yes = $result->outputHandle === 'true';
 
                 return [Effect::decision(
@@ -267,7 +277,11 @@ trait SimulatesAutomation
             $words = $this->conditionWords((array) $node->getConfigValue('conditions', []), (string) $node->getConfigValue('mode', 'all'));
 
             if ($plan->context !== null) {
-                $passes = ! FilterNode::evaluate($plan->context, $node->config ?? [], app(ConditionEvaluator::class))->isStopped();
+                if ($this->dependsOnTheRun((array) $node->getConfigValue('conditions', []))) {
+                    return [Effect::unknown($name, __('statamic-automations::automations.sim_depends_on_run'))];
+                }
+
+                $passes = ! FilterNode::evaluate($plan->context, $this->resolvedConfig($node, $plan->context), app(ConditionEvaluator::class))->isStopped();
 
                 return $passes
                     ? [Effect::decision($name, __('statamic-automations::automations.sim_took_if', ['condition' => $words]), $next())]
@@ -284,9 +298,11 @@ trait SimulatesAutomation
             $rows = NodeOutputs::resolve(app(NodeRegistry::class)->outputSpec($type), $node->config ?? []);
 
             if ($plan->context !== null) {
-                // The engine resolves the tokens of the step's config before it asks the node: the same here.
-                $config = app(TokenResolver::class)->resolve($node->config ?? [], $plan->context);
-                $result = (new SwitchNode)->execute($plan->context, is_array($config) ? $config : []);
+                if (str_contains((string) $node->getConfigValue('value'), 'nodes.')) {
+                    return [Effect::unknown($name, __('statamic-automations::automations.sim_depends_on_run'))];
+                }
+
+                $result = (new SwitchNode)->execute($plan->context, $this->resolvedConfig($node, $plan->context));
                 $handle = (string) $result->outputHandle;
                 $row = collect($rows)->firstWhere('handle', $handle);
                 $label = trim((string) ($row['label'] ?? '')) !== '' ? (string) $row['label'] : $handle;
@@ -390,6 +406,42 @@ trait SimulatesAutomation
 
         // Any other step does something this planner does not model. It says so.
         return Effect::chain([Effect::unknown($name, __('statamic-automations::automations.sim_step_unknown', ['type' => $type]))], $next());
+    }
+
+    /**
+     * The step's config with its tokens resolved against the context, as the engine hands it to the node.
+     *
+     * @return array<string, mixed>
+     */
+    private function resolvedConfig(AutomationNode $node, AutomationContext $context): array
+    {
+        $config = app(TokenResolver::class)->resolve($node->config ?? [], $context);
+
+        return is_array($config) ? $config : [];
+    }
+
+    /**
+     * Whether a question reads what an earlier step of the run produced (`nodes.x.output`, the engine's own
+     * `_` keys). The dry run runs no step, so there is nothing to read: it says it cannot decide.
+     *
+     * @param  array<int, mixed>  $conditions
+     */
+    private function dependsOnTheRun(array $conditions): bool
+    {
+        foreach ($conditions as $condition) {
+            if (! is_array($condition)) {
+                continue;
+            }
+
+            $field = trim((string) ($condition['field'] ?? ''));
+            $value = is_scalar($condition['value'] ?? null) ? (string) $condition['value'] : '';
+
+            if (str_starts_with($field, 'nodes.') || str_starts_with($field, '_') || str_contains($value, 'nodes.') || str_contains($field, '{{')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
