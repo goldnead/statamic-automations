@@ -258,6 +258,18 @@ class RecentGrantActionTest extends TestCase
         $this->assertSame('Das Toolkit', $this->recent()->output['product_title']);
     }
 
+    public function test_a_purchase_of_the_same_access_keeps_the_catalogue_name(): void
+    {
+        // Somebody who paid for the access did not come through the freebie: the product is called what the catalogue calls it.
+        $this->manager->products = [
+            'toolkit' => ['slug' => 'toolkit', 'label' => 'Das Toolkit — Masterclass', 'group' => null],
+        ];
+        config()->set('automations.integrations.lead_magnets.resource_model', RecentGrantFakeResource::class);
+        $this->seedGrant('email', 'anna@example.test', 'toolkit', startedMinutesAgo: 3, source: 'thrivecart');
+
+        $this->assertSame('Das Toolkit — Masterclass', $this->recent()->output['product_title']);
+    }
+
     public function test_the_dry_run_and_a_real_run_name_a_freebie_the_same_way(): void
     {
         $this->manager->products = [

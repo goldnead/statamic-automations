@@ -175,7 +175,7 @@ class RecentGrantAction implements AutomationAction
 
         return ActionResult::success(self::answer([
             'product_slug' => $grant['product_slug'],
-            'product_title' => $this->titleFor($grant['product_slug'], $grant['id']),
+            'product_title' => $this->titleFor($grant['product_slug'], $grant['id'], (string) $grant['source']),
             'source' => $grant['source'],
             'granted_at' => Carbon::instance($grant['granted_at'])->toIso8601String(),
         ]));
@@ -236,13 +236,23 @@ class RecentGrantAction implements AutomationAction
      * A freebie is named by its lead magnet first: the catalogue names the *access* ("CVT im Chor — Masterclass"),
      * the person came for "CVT im Chor". Then the catalogue, then the site's configured collections.
      */
-    public function titleFor(string $slug, mixed $entitlementId = null): string
+    public function titleFor(string $slug, mixed $entitlementId = null, ?string $source = null): string
     {
         return $this->titleFromLeadMagnet($entitlementId)
-            ?? $this->titleFromLeadMagnetProduct($slug)
+            ?? ($this->isFreebieSource($source) ? $this->titleFromLeadMagnetProduct($slug) : null)
             ?? $this->adapter->productLabel($slug)
             ?? $this->titleFromEntries($slug)
             ?? '';
+    }
+
+    /**
+     * Whether a grant of this source came through a freebie. No source (the dry run: a grant nobody has been given)
+     * counts: the person is a freebie person by the choice on the screen. A purchase of the same access does not.
+     */
+    protected function isFreebieSource(?string $source): bool
+    {
+        return $source === null
+            || in_array($source, (array) config('automations.entitlements.freebie_sources', ['lead_magnet', 'lead_magnet_access', 'newsletter_optin']), true);
     }
 
     /**

@@ -7,6 +7,7 @@ use Goldnead\StatamicAutomations\Integrations\Map\AutomationMapObjects;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
+use Goldnead\StatamicAutomations\Tests\Fixtures\FakeEntitlementManager;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 
@@ -230,10 +231,10 @@ function srgCatalogue(array $products): void
 {
     require_once __DIR__.'/../Fixtures/CommerceServiceDoubles.php';
 
-    $manager = new \Goldnead\StatamicAutomations\Tests\Fixtures\FakeEntitlementManager;
+    $manager = new FakeEntitlementManager;
     $manager->products = $products;
-    app()->instance(\Goldnead\StatamicAutomations\Tests\Fixtures\FakeEntitlementManager::class, $manager);
-    config()->set('automations.integrations.entitlements.manager', \Goldnead\StatamicAutomations\Tests\Fixtures\FakeEntitlementManager::class);
+    app()->instance(FakeEntitlementManager::class, $manager);
+    config()->set('automations.integrations.entitlements.manager', FakeEntitlementManager::class);
 }
 
 it('names the freebie in the bridge mail by its lead magnet, not by the access the catalogue names', function () {

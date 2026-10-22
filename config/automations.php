@@ -735,11 +735,14 @@ return [
     | Titles for "Recent Grant"
     |--------------------------------------------------------------------------
     |
-    | The node reports a readable `product_title` next to the product slug. The
-    | entitlements addon's own product catalogue is asked first. Where the names
-    | live in Statamic entries instead, list where to find them: the entry of
-    | `collection` whose `match` field equals the product slug, and its `field`
-    | as the title. First hit wins; no hit leaves the title empty (never the slug).
+    | The node reports a readable `product_title` next to the product slug. A
+    | freebie is called by its lead magnet first (the title behind the grant, and,
+    | for a grant whose `source` is listed in `freebie_sources`, the lead magnet
+    | that hands out this access). Then the entitlements addon's own product
+    | catalogue. Where the names live in Statamic entries instead, list where to
+    | find them: the entry of `collection` whose `match` field equals the product
+    | slug, and its `field` as the title. First hit wins; no hit leaves the title
+    | empty (never the slug).
     |
     |   'title_sources' => [
     |       ['collection' => 'resources', 'match' => 'resource_slug', 'field' => 'title'],
@@ -751,6 +754,9 @@ return [
         'title_sources' => [
             //
         ],
+
+        // Grant sources that mean "came through a freebie". A purchase of the same access keeps the catalogue's name.
+        'freebie_sources' => ['lead_magnet', 'lead_magnet_access', 'newsletter_optin'],
     ],
 
     /*

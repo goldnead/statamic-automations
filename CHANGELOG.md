@@ -9,8 +9,9 @@
 - `entitlements.recent_grant` took the catalogue's name of the access first. On production the catalogue (statamic-products) calls the access
   of the freebie "CVT im Chor" `CVT im Chor — Masterclass`, so the bridge mail said "Wie es nach „CVT im Chor — Masterclass“ weitergeht" in a real
   run too, not only in the Probelauf. The order is now the freebie first: the title of the lead magnet behind the grant, then the lead magnet
-  found by the access it hands out (`access_product`; covers a newer grant of the newsletter opt-in that no lead magnet wrote), then the
-  catalogue, then `automations.entitlements.title_sources`. A grant that is no freebie keeps the catalogue name as before.
+  found by the access it hands out (`access_product`; covers a newer grant of the newsletter opt-in that no lead magnet wrote, only for a grant
+  whose `source` is in the new `automations.entitlements.freebie_sources`, default `lead_magnet`, `lead_magnet_access`, `newsletter_optin`), then
+  the catalogue, then `automations.entitlements.title_sources`. A purchase of the same access keeps the catalogue name as before.
 - One function for both: `RecentGrantAction::titleFor($slug, $entitlementId = null)`. The run calls it with the id of the grant, the Probelauf
   without; the Probelauf no longer assembles the name itself.
 - "Why this way": the case a switch on `{{ nodes.x.product_slug }}` took is named by the freebie ("ging den Fall CVT im Chor") instead of
