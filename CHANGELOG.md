@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.40.0 — 2026-10-22
+
 ### Added: the Probelauf answers "did she just unlock something?" and says its questions in names
 
 - The newsletter's welcome series asks `entitlements.recent_grant` ("Gerade etwas freigeschaltet?") and branches on `found`,
