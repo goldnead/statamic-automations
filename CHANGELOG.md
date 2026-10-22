@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 2.42.0 — 2026-10-22
+
 ### Added: AutomationRunFinished event
 
 Other addons learn that a run went through to its end, with its automation handle, status and the address the run is about. The event does not fire when a run fails or when it is a test run. A listener that throws is reported and does not affect the run.
