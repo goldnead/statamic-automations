@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 2.42.0 — 2026-10-22
+## 2.43.0 — 2026-10-22
 
 ### Added: "Wo springen sie ab?", the step table in the panel of an automation on the funnels map
 
@@ -19,6 +19,11 @@ time zone). A second block says how many started, are still waiting, finished, u
 - The numbers per mail come from `Goldnead\Marketing\Services\MessageEngagement` (statamic-marketing 2.38.0), found through the container; the
   node run names the message by `output.message_uuid`. Without that addon the table shows how many were sent and nothing about opens.
 - Refactor: the period's runs are one query helper (`periodRuns()`), shared with the card's number.
+## 2.42.0 — 2026-10-22
+
+### Added: AutomationRunFinished event
+
+Other addons learn that a run went through to its end, with its automation handle, status and the address the run is about. The event does not fire when a run fails or when it is a test run. A listener that throws is reported and does not affect the run.
 
 ## 2.41.0 — 2026-10-22
 
