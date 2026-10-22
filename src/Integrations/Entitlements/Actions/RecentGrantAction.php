@@ -60,6 +60,9 @@ class RecentGrantAction implements AutomationAction
     /** Default FQCN of the lead-magnets grant model (overridable via config). */
     public const LEAD_MAGNET_GRANT = 'Goldnead\\LeadMagnets\\Models\\Grant';
 
+    /** Default FQCN of the lead-magnets resource model (overridable via config), for a title found by the grant's product name. */
+    public const LEAD_MAGNET_RESOURCE = 'Goldnead\\LeadMagnets\\Models\\Resource';
+
     public function __construct(protected EntitlementsAdapter $adapter) {}
 
     public static function handle(): string
@@ -196,7 +199,28 @@ class RecentGrantAction implements AutomationAction
      */
     public function nameFor(string $slug): ?string
     {
-        return $this->adapter->productLabel($slug) ?? $this->titleFromEntries($slug);
+        return $this->adapter->productLabel($slug) ?? $this->titleFromEntries($slug) ?? $this->titleFromLeadMagnetProduct($slug);
+    }
+
+    /**
+     * The title of the lead magnet whose access is this product: what {@see titleFromLeadMagnet()} finds through a grant,
+     * found from the name of the grant alone. Reached by class-string like every sibling; null without that addon.
+     */
+    protected function titleFromLeadMagnetProduct(string $slug): ?string
+    {
+        $class = (string) config('automations.integrations.lead_magnets.resource_model', self::LEAD_MAGNET_RESOURCE);
+
+        if ($slug === '' || $class === '' || ! class_exists($class)) {
+            return null;
+        }
+
+        try {
+            $title = $class::query()->where('access_product', $slug)->first()?->title;
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return (is_string($title) && trim($title) !== '') ? trim($title) : null;
     }
 
     protected function title(string $slug, mixed $entitlementId): string

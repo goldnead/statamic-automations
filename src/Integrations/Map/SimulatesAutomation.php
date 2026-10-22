@@ -905,7 +905,9 @@ trait SimulatesAutomation
         }
 
         // Any other answer of a step: the step by its title, the answer by its field, a yes or no as such.
-        $word = $yes ? __('statamic-automations::automations.sim_yes') : ($no ? __('statamic-automations::automations.sim_no') : $value);
+        // Only for a comparison with yes or no: `count > 0` keeps its 0.
+        $asked = in_array($operator, ['equals', 'does_not_equal'], true);
+        $word = $asked && $yes ? __('statamic-automations::automations.sim_yes') : ($asked && $no ? __('statamic-automations::automations.sim_no') : $value);
         $opKey = 'statamic-automations::automations.sim_op_'.$operator;
         $op = __($opKey) !== $opKey ? __($opKey) : str_replace('_', ' ', $operator);
 

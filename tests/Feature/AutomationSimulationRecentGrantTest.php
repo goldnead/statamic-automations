@@ -151,3 +151,72 @@ it('words a question about the awaited automation and about an access by their n
         ->and($text)->not->toContain('ran to end')
         ->and($text)->not->toContain('nodes own')->and($text)->toContain('has access to ‘kurs-x’');
 });
+
+/** A stand-in for the lead magnets resource model: the title of the lead magnet whose `access_product` is asked. */
+class SrgFakeResource
+{
+    public ?string $title = null;
+
+    private ?string $product = null;
+
+    public static function query(): static
+    {
+        return new static;
+    }
+
+    public function where(string $column, mixed $value): static
+    {
+        $this->product = $column === 'access_product' ? (string) $value : null;
+
+        return $this;
+    }
+
+    public function first(): ?static
+    {
+        $this->title = $this->product === 'toolkit' ? 'Das Toolkit (Lead Magnet)' : null;
+
+        return $this->title === null ? null : $this;
+    }
+}
+
+it('names a freebie by the lead magnet behind it when the catalogue and the site do not', function () {
+    srgWelcome();
+    config()->set('automations.integrations.lead_magnets.resource_model', SrgFakeResource::class);
+
+    $text = implode("\n", srgFlat(srgReact(SimPerson::known(['entitlements.recent_grant' => 'toolkit']))));
+
+    expect($text)->toContain('mail:Wie es nach „Das Toolkit (Lead Magnet)“ weitergeht');
+});
+
+it('does not decide for a step whose window the engine would refuse', function () {
+    srgWelcome(['email' => '{{ subscriber.email }}', 'within_minutes' => 0]);
+
+    $text = implode("\n", srgFlat(srgReact(SimPerson::known(['entitlements.recent_grant' => 'toolkit']))));
+
+    expect($text)->toContain('unknown:');
+});
+
+it('keeps the number of a comparison that is not about yes or no, and turns a negated one around', function () {
+    $a = Automation::query()->create(['uuid' => 'uuid-srg', 'name' => 'Zahl', 'handle' => 'srg', 'enabled' => true]);
+
+    foreach ([
+        ['trigger', 'manual', null, []],
+        ['recent', 'entitlements.recent_grant', 'Gerade etwas freigeschaltet?', ['email' => '{{ subscriber.email }}']],
+        ['neg', 'branch', 'Nicht frisch?', ['mode' => 'all', 'conditions' => [['field' => 'nodes.recent.found', 'operator' => 'does_not_equal', 'value' => 'true']]]],
+        ['n', 'branch', 'Zahl?', ['mode' => 'all', 'conditions' => [['field' => 'nodes.other.count', 'operator' => 'greater_than', 'value' => '0']]]],
+        ['other', 'delay', 'Anderer Schritt', ['amount' => 1, 'unit' => 'days']],
+        ['end', 'stop', null, []],
+    ] as [$key, $type, $label, $config]) {
+        AutomationNode::query()->create(['automation_id' => $a->id, 'node_key' => $key, 'type' => $type, 'label' => $label, 'config' => $config]);
+    }
+
+    foreach ([['trigger', 'default', 'recent'], ['recent', 'default', 'neg'], ['neg', 'true', 'n'], ['neg', 'false', 'end'], ['n', 'true', 'end'], ['n', 'false', 'end']] as [$from, $output, $to]) {
+        AutomationEdge::query()->create(['automation_id' => $a->id, 'from_node_key' => $from, 'from_output' => $output, 'to_node_key' => $to]);
+    }
+
+    $text = implode("\n", srgFlat(srgReact(SimPerson::known())));
+
+    // Nothing was just unlocked, so "found is not true" holds: said as the person's, not as "found ≠ yes".
+    expect($text)->toContain('the person has not just unlocked anything')
+        ->and($text)->not->toContain('≠');
+});

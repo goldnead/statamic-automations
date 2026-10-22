@@ -10,7 +10,8 @@
   `entitlements.recent_grant` is the name of the freebie she came through (no trait: nothing was just unlocked), the trait
   `entitlements.recent_grant_age` how many minutes ago, which has to lie inside the step's own `within_minutes`. A step that looks up
   another address, filters by `sources` or has a window the engine would refuse stays unknown. The title is the one a run would find without a
-  grant (`RecentGrantAction::nameFor()`: the entitlements catalogue, then `automations.entitlements.title_sources`), so the bridge mail
+  grant (`RecentGrantAction::nameFor()`: the entitlements catalogue, then `automations.entitlements.title_sources`, then the title of the lead
+  magnet whose `access_product` is that name, `automations.integrations.lead_magnets.resource_model`), so the bridge mail
   says "Wie es nach „Das Toolkit“ weitergeht" in its subject and in its preview.
 - A real person (`SimPersonSource`) brings how she came: her newest grant that gives access now, as the two traits above (lead magnet
   grants included: the adapter finds them like a run does). Read only; it needs the right to view entitlements, without it nothing is read.
