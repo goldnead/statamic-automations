@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 2.42.0 — 2026-10-22
+
+### Added: "Wo springen sie ab?", the step table in the panel of an automation on the funnels map
+
+Clicking an automation card now lists its mails in the order of the flow with what became of the people who started in the period (runs of the
+period, no test runs, each person once by `subject_key`): per mail sent, opened (a person's open or a click; opens a mail program makes by
+itself, Apple Mail Privacy Protection, are shown apart as "+n proxy only"), clicked, unsubscribed and "stopped here"; per wait (a delay and the
+newsletter-day gate between two mails are one row) how many people are in it now and when the next one is due (in the Control Panel's display
+time zone). A second block says how many started, are still waiting, finished, unsubscribed, were stopped, cancelled or failed. It reuses the
+`list` and `facts` blocks of `details()`; without a run in the period the plain list of mails stays.
+
+- Read only: nothing is written, no tracking counter moves, no mail is rendered.
+- Runs that failed with "No Recipient to act on" (a parallel trigger on a lead-magnet contact, nobody behind it) are not counted as a drop-off
+  and are named in the second block. The cause is not touched here.
+- The numbers per mail come from `Goldnead\Marketing\Services\MessageEngagement` (statamic-marketing 2.38.0), found through the container; the
+  node run names the message by `output.message_uuid`. Without that addon the table shows how many were sent and nothing about opens.
+- Refactor: the period's runs are one query helper (`periodRuns()`), shared with the card's number.
+
 ## 2.41.0 — 2026-10-22
 
 ### Fixed: a freebie is called by its own name, in a real run and in the Probelauf

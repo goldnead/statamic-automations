@@ -14,6 +14,7 @@ use Goldnead\StatamicAutomations\Nodes\Logic\WaitForAutomationNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\WaitUntilTimeNode;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 
 /**
@@ -79,6 +80,7 @@ trait ShowsStepTable
      */
     protected function stepBlocks(Automation $automation, MapPeriod $period): ?array
     {
+        /** @var \Illuminate\Database\Eloquent\Collection<int, AutomationRun> $runs */
         $runs = $this->periodRuns($automation, $period)->get(['id', 'subject_key', 'status']);
 
         if ($runs->isEmpty()) {
@@ -139,7 +141,7 @@ trait ShowsStepTable
                 ->whereIn('automation_run_id', $ids->all())
                 ->whereIn('status', [AutomationScheduledJob::STATUS_PENDING, AutomationScheduledJob::STATUS_QUEUED])
                 ->get(['automation_run_id', 'node_key', 'due_at']) as $job) {
-                $jobs[$job->node_key][] = $job;
+                $jobs[(string) $job->getAttribute('node_key')][] = $job;
             }
         }
 
@@ -190,7 +192,7 @@ trait ShowsStepTable
         $unsubscribed = 0;
 
         $flush = function () use (&$wait, &$rows, $jobs, $personOfRun): void {
-            if ($wait !== []) {
+            if (count($wait) > 0) {
                 $rows[] = $this->waitRow($wait, $jobs, $personOfRun);
                 $wait = [];
             }
@@ -258,9 +260,12 @@ trait ShowsStepTable
             }
 
             foreach ($jobs[$node->node_key] ?? [] as $job) {
-                if (isset($personOfRun[$job->automation_run_id])) {
-                    $people[$personOfRun[$job->automation_run_id]] = true;
-                    $due = $job->due_at !== null && ($due === null || $job->due_at->lt($due)) ? $job->due_at : $due;
+                $who = $personOfRun[(int) $job->getAttribute('automation_run_id')] ?? null;
+                $at = $job->getAttribute('due_at');
+
+                if ($who !== null) {
+                    $people[$who] = true;
+                    $due = $at instanceof Carbon && ($due === null || $at->lt($due)) ? $at : $due;
                 }
             }
         }
@@ -291,7 +296,7 @@ trait ShowsStepTable
     }
 
     /**
-     * @param  \Illuminate\Support\Collection<int, AutomationRun>  $real
+     * @param  Collection<int, AutomationRun>  $real
      * @param  array<int, string>  $personOfRun
      * @return list<array{label: string, value: string, href: null}>
      */
