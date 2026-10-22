@@ -12,6 +12,7 @@ use Goldnead\StatamicAutomations\Engine\TokenResolver;
 use Goldnead\StatamicAutomations\Http\Controllers\EmailTemplatePreviewController;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\Actions\CheckAccessAction;
 use Goldnead\StatamicAutomations\Integrations\Entitlements\Actions\GrantEntitlementAction;
+use Goldnead\StatamicAutomations\Integrations\Entitlements\Actions\RecentGrantAction;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Nodes\Actions\CallAutomationAction;
@@ -210,7 +211,7 @@ trait SimulatesAutomation
         $node = $automation->nodes->firstWhere('node_key', (string) ($meta['node'] ?? ''));
 
         if ($node && $node->type === self::MARKETING_SEND) {
-            return $this->marketingMailPreview($node, $person);
+            return $this->marketingMailPreview($node, $person, $automation);
         }
 
         if (! $node || $node->type !== SendEmailAction::handle()) {
@@ -235,7 +236,7 @@ trait SimulatesAutomation
      *
      * @return array{subject: string, html: string, from: ?string}|null
      */
-    private function marketingMailPreview(AutomationNode $node, SimPerson $person): ?array
+    private function marketingMailPreview(AutomationNode $node, SimPerson $person, Automation $automation): ?array
     {
         $class = app(NodeRegistry::class)->class($node->type);
 
@@ -247,14 +248,22 @@ trait SimulatesAutomation
         $context = AutomationContext::make($sample, true);
         $resolver = app(TokenResolver::class);
 
-        $resolve = function (mixed $value) use (&$resolve, $resolver, $context): mixed {
+        // The answers about the person that the dry run knows (her access, the freebie she came through) are read like
+        // the branches do, so a subject that names the freebie says its name.
+        $plan = (object) ['person' => $person, 'automation' => $automation, 'context' => $context];
+
+        $resolve = function (mixed $value) use (&$resolve, $resolver, $context, $plan): mixed {
             if (is_array($value)) {
                 return array_map($resolve, $value);
             }
 
-            // What an earlier step of a run produced stays a token (there is no run), and so does a secret: it is
-            // never read for a look.
-            return is_string($value) && ! str_contains($value, 'nodes.') && ! str_contains($value, 'secret.') ? $resolver->resolve($value, $context) : $value;
+            if (! is_string($value) || str_contains($value, 'secret.')) {
+                return $value;
+            }
+
+            // What an earlier step of a run produced stays a token (there is no run), unless it is a fact about the
+            // person; a secret is never read for a look.
+            return $this->readsAnswers($plan, $value) ? $resolver->resolve($value, $context) : $value;
         };
 
         $config = $resolve(is_array($node->config) ? $node->config : []);
@@ -384,7 +393,7 @@ trait SimulatesAutomation
 
         if ($type === BranchNode::handle()) {
             $conditions = (array) $node->getConfigValue('conditions', []);
-            $words = $this->conditionWords($conditions, (string) $node->getConfigValue('mode', 'all'));
+            $words = $this->conditionWords($conditions, (string) $node->getConfigValue('mode', 'all'), $plan->automation);
 
             if ($plan->context !== null) {
                 if ($this->dependsOnTheRun($conditions, $plan)) {
@@ -410,7 +419,7 @@ trait SimulatesAutomation
         }
 
         if ($type === FilterNode::handle()) {
-            $words = $this->conditionWords((array) $node->getConfigValue('conditions', []), (string) $node->getConfigValue('mode', 'all'));
+            $words = $this->conditionWords((array) $node->getConfigValue('conditions', []), (string) $node->getConfigValue('mode', 'all'), $plan->automation);
 
             if ($plan->context !== null) {
                 if ($this->dependsOnTheRun((array) $node->getConfigValue('conditions', []), $plan)) {
@@ -505,7 +514,7 @@ trait SimulatesAutomation
 
             return Effect::chain([
                 Effect::mail(
-                    $this->mailTitle($node, $plan->subjects),
+                    $this->subjectWithAnswers($plan, $node) ?? $this->mailTitle($node, $plan->subjects),
                     $template !== null ? __('statamic-automations::automations.sim_template', ['template' => $template]) : null,
                     0,
                     // The marketing addon's send step is a campaign mail: an unsubscribed person does not get it.
@@ -530,6 +539,19 @@ trait SimulatesAutomation
             }
 
             return $next();
+        }
+
+        // "Did she just unlock something?": the person says how she came, so the answer is given and said.
+        if ($type === RecentGrantAction::handle() && $plan->context !== null && ($known = $this->knownOutput($plan, $node)) !== null) {
+            $plan->context->recordNodeOutput((string) $node->node_key, $known);
+
+            return [Effect::decision(
+                $name,
+                $known['found'] === true
+                    ? __('statamic-automations::automations.sim_recent_found', ['freebie' => $known['product_title'] !== '' ? $known['product_title'] : $known['product_slug']])
+                    : __('statamic-automations::automations.sim_recent_none'),
+                $next(),
+            )];
         }
 
         if ($type === CallAutomationAction::handle()) {
@@ -619,6 +641,48 @@ trait SimulatesAutomation
         return false;
     }
 
+    /**
+     * Whether every `nodes.<step>.<field>` a text names is an answer the dry run knows for this person (and is now in
+     * the plan's context), so the tokens of the text can be resolved. A text with no such token is fine as it is.
+     */
+    private function readsAnswers(object $plan, string $text): bool
+    {
+        if (! str_contains($text, 'nodes.')) {
+            return true;
+        }
+
+        if (preg_match_all('/nodes\.([A-Za-z0-9_\-]+)\.([A-Za-z0-9_]+)/', $text, $matches, PREG_SET_ORDER) === 0) {
+            return false;
+        }
+
+        foreach ($matches as [, $key, $field]) {
+            if (! $this->learnOutput($plan, (string) $key, (string) $field)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** The written subject of a step with the answers about the person put in, or null when there is nothing to put in. */
+    private function subjectWithAnswers(object $plan, AutomationNode $node): ?string
+    {
+        $subject = $this->writtenSubject($node);
+
+        if ($plan->context === null || $subject === null || ! str_contains($subject, 'nodes.') || ! $this->readsAnswers($plan, $subject)) {
+            return null;
+        }
+
+        // Only a subject whose every token is such an answer: a first name or a date in it would come out empty here.
+        if (str_contains(preg_replace('/\{\{\s*nodes\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_]+\s*\}\}/', '', $subject) ?? '', '{{')) {
+            return null;
+        }
+
+        $resolved = app(TokenResolver::class)->resolve($subject, $plan->context);
+
+        return is_string($resolved) && trim($resolved) !== '' ? trim($resolved) : null;
+    }
+
     /** Puts the answer of one step into the plan's context, when the dry run knows that field of it. */
     private function learnOutput(object $plan, string $key, string $field): bool
     {
@@ -680,7 +744,58 @@ trait SimulatesAutomation
             return ['ran_to_end' => $person->hasRun($awaited)];
         }
 
+        if ($node->type === RecentGrantAction::handle()) {
+            return $this->recentGrantOutput($person, $node);
+        }
+
         return null;
+    }
+
+    /**
+     * What "did she just unlock something" answers for this person. A run asks the grants of the address; the dry run
+     * has no grants to ask, it has the person: the trait `entitlements.recent_grant` is the slug of the freebie she
+     * came through (a test person: chosen on the screen; a real one: her newest grant, with `…_age` in minutes). No trait
+     * means nothing was unlocked just now. A grant older than the window of this very step does not count.
+     *
+     * Null (not known) when the engine would fail the step, or when the step only looks at some sources of grants: the
+     * person carries no source.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function recentGrantOutput(SimPerson $person, AutomationNode $node): ?array
+    {
+        if (trim((string) $node->getConfigValue('sources', '')) !== '') {
+            return null;
+        }
+
+        $rawWindow = $node->getConfigValue('within_minutes', '');
+        $window = ($rawWindow === '' || $rawWindow === null) ? RecentGrantAction::DEFAULT_WITHIN_MINUTES : $rawWindow;
+
+        if (! is_numeric($window) || (int) $window < 1) {
+            return null;
+        }
+
+        $slug = $person->trait('entitlements.recent_grant');
+        $slug = is_string($slug) ? trim($slug) : '';
+        $age = $person->trait('entitlements.recent_grant_age');
+        $found = $slug !== '' && (! is_numeric($age) || (int) $age <= (int) $window);
+
+        return [
+            'found' => $found,
+            'product_slug' => $found ? $slug : '',
+            'product_title' => $found ? ($this->productNameOrNull($slug) ?? '') : '',
+            'source' => '',
+            'granted_at' => '',
+        ];
+    }
+
+    private function productNameOrNull(string $slug): ?string
+    {
+        try {
+            return app(RecentGrantAction::class)->nameFor($slug);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /** The mode of a check-access step, or null when the engine would fail the step for it. */
@@ -702,12 +817,19 @@ trait SimulatesAutomation
      *
      * @param  array<int, mixed>  $conditions
      */
-    private function conditionWords(array $conditions, string $mode): string
+    private function conditionWords(array $conditions, string $mode, ?Automation $automation = null): string
     {
         $parts = [];
 
         foreach ($conditions as $condition) {
             if (! is_array($condition) || ! isset($condition['field'])) {
+                continue;
+            }
+
+            // A question about what an earlier step found out reads as the step's name, not as its key.
+            if (($readable = $this->readableCondition($condition, $automation)) !== null) {
+                $parts[] = $readable;
+
                 continue;
             }
 
@@ -732,6 +854,90 @@ trait SimulatesAutomation
         $joined = implode($mode === 'any' ? ' '.__('statamic-automations::automations.sim_or').' ' : ' '.__('statamic-automations::automations.sim_and').' ', $parts);
 
         return Str::limit($joined, 140);
+    }
+
+    /**
+     * A condition on `nodes.<step>.<field>` in words a person reads: the step's own title, the name of the course or
+     * the automation, never the key (`nodes wait welcome ran to end = true`). Null when the field is not of that shape,
+     * the step is not in this automation, or the operator is one the words do not cover: the caller then spells the
+     * condition out as it is written.
+     *
+     * @param  array<string, mixed>  $condition
+     */
+    private function readableCondition(array $condition, ?Automation $automation): ?string
+    {
+        if ($automation === null || preg_match('/^nodes\.([A-Za-z0-9_\-]+)\.([A-Za-z0-9_]+)$/', trim((string) ($condition['field'] ?? '')), $m) !== 1) {
+            return null;
+        }
+
+        $node = $automation->nodes->firstWhere('node_key', $m[1]);
+
+        if (! $node) {
+            return null;
+        }
+
+        $operator = (string) ($condition['operator'] ?? 'equals');
+        $value = is_scalar($condition['value'] ?? null) ? trim((string) $condition['value']) : '';
+        $yes = in_array(mb_strtolower($value), ['true', '1', 'yes', 'ja'], true);
+        $no = in_array(mb_strtolower($value), ['false', '0', 'no', 'nein'], true);
+        $is = $operator === 'equals' && $yes || $operator === 'does_not_equal' && $no;
+        $isNot = $operator === 'equals' && $no || $operator === 'does_not_equal' && $yes;
+        $key = fn (string $name, bool $positive): string => 'statamic-automations::automations.sim_q_'.$name.($positive ? '' : '_not');
+
+        if ($node->type === CheckAccessAction::handle() && $m[2] === 'has_access' && ($is || $isNot)) {
+            return __($key('has_access', $is), ['product' => $this->productName((string) $this->productSlugOf($node))]);
+        }
+
+        if ($node->type === WaitForAutomationNode::handle() && $m[2] === 'ran_to_end' && ($is || $isNot)) {
+            $handle = (string) $this->writtenAutomation($node);
+
+            return __($key('ran_to_end', $is), ['automation' => $this->automationName($handle)]);
+        }
+
+        if ($node->type === RecentGrantAction::handle()) {
+            if ($m[2] === 'found' && ($is || $isNot)) {
+                return __($key('recent_found', $is));
+            }
+
+            if ($m[2] === 'product_title' && in_array($operator, ['is_empty', 'is_not_empty'], true)) {
+                return __($key('recent_title', $operator === 'is_not_empty'));
+            }
+        }
+
+        // Any other answer of a step: the step by its title, the answer by its field, a yes or no as such.
+        // Only for a comparison with yes or no: `count > 0` keeps its 0.
+        $asked = in_array($operator, ['equals', 'does_not_equal'], true);
+        $word = $asked && $yes ? __('statamic-automations::automations.sim_yes') : ($asked && $no ? __('statamic-automations::automations.sim_no') : $value);
+        $opKey = 'statamic-automations::automations.sim_op_'.$operator;
+        $op = __($opKey) !== $opKey ? __($opKey) : str_replace('_', ' ', $operator);
+
+        return __('statamic-automations::automations.sim_q_generic', [
+            'step' => $this->simName($node),
+            'answer' => trim(str_replace('_', ' ', $m[2]).' '.$op.($word !== '' ? ' '.$word : '')),
+        ]);
+    }
+
+    /** The name a person reads for a product: the catalogue's or the site's configured title, else the slug as written. */
+    private function productName(string $slug): string
+    {
+        if ($slug === '' || str_contains($slug, '{{')) {
+            return $slug;
+        }
+
+        try {
+            return app(RecentGrantAction::class)->nameFor($slug) ?? $slug;
+        } catch (\Throwable) {
+            return $slug;
+        }
+    }
+
+    /** The name of an automation by the handle a step writes, else the handle. */
+    private function automationName(string $handle): string
+    {
+        $automation = $handle !== '' && ! str_contains($handle, '{{') ? $this->resolve($handle) : null;
+        $name = $automation ? trim((string) $automation->name) : '';
+
+        return $name !== '' ? $name : $handle;
     }
 
     /** `contact.first_name` as the words the editor sees elsewhere ("Vorname"), any other field spelled out. */

@@ -397,6 +397,7 @@ return [
         // contact (`subject`). Reached by class name, never type-hinted.
         'lead_magnets' => [
             'grant_model' => 'Goldnead\\LeadMagnets\\Models\\Grant',
+            'resource_model' => 'Goldnead\\LeadMagnets\\Models\\Resource',
             'subject' => 'Goldnead\\LeadMagnets\\Support\\LeadMagnetSubject',
         ],
 

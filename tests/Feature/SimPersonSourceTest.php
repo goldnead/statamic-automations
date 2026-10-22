@@ -1,6 +1,7 @@
 <?php
 
 use Goldnead\BrandContext\Contracts\ProvidesSimPersons;
+use Goldnead\StatamicAutomations\Integrations\Entitlements\EntitlementsAdapter;
 use Goldnead\StatamicAutomations\Integrations\Map\SimPersonSource;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
@@ -104,4 +105,68 @@ it('reads without writing, and logs nobody', function () {
 
     expect($writes)->toBe([])
         ->and($logged)->toBe([]);
+});
+
+/** An adapter that answers "her newest grant" with a fixed grant, and remembers what it was asked. */
+function spAdapterWithGrant(?array $grant): object
+{
+    $adapter = new class($grant) extends EntitlementsAdapter
+    {
+        public ?array $asked = null;
+
+        public function __construct(private ?array $grant) {}
+
+        public function recentGrant(string $email, int $withinMinutes, array $sources = []): array
+        {
+            $this->asked = [$email, $withinMinutes];
+
+            return ['ok' => true, 'grant' => $this->grant];
+        }
+    };
+
+    app()->instance(EntitlementsAdapter::class, $adapter);
+
+    return $adapter;
+}
+
+function spViewer(bool $entitlements): void
+{
+    Permission::register('view automations');
+    Permission::register('view entitlements');
+    $role = 'viewer'.(int) $entitlements;
+    $made = Role::make($role)->title($role)->addPermission('view automations');
+
+    if ($entitlements) {
+        $made->addPermission('view entitlements');
+    }
+
+    $made->save();
+    $user = User::make()->email($role.'@example.test')->assignRole($role);
+    $user->save();
+    test()->actingAs($user);
+}
+
+it('says how a real person came: the freebie she was given last, and how long ago', function () {
+    spViewer(true);
+    $adapter = spAdapterWithGrant([
+        'id' => 1, 'product_slug' => 'cvt-im-chor-minikurs', 'source' => 'lead_magnet', 'granted_at' => now()->subMinutes(12),
+    ]);
+
+    $facet = app(SimPersonSource::class)->personFacet(['email' => ' Lena@Example.test ']);
+
+    expect($facet['traits']['entitlements.recent_grant'])->toBe('cvt-im-chor-minikurs')
+        ->and($facet['traits']['entitlements.recent_grant_age'])->toBeIn([11, 12])
+        ->and($adapter->asked[0])->toBe('lena@example.test');
+});
+
+it('says nothing about how she came when the user may not view entitlements, or she has no grant', function () {
+    spViewer(false);
+    spAdapterWithGrant(['id' => 1, 'product_slug' => 'x', 'source' => 's', 'granted_at' => now()]);
+
+    expect(app(SimPersonSource::class)->personFacet(['email' => 'lena@example.test']))->toBe([]);
+
+    spViewer(true);
+    spAdapterWithGrant(null);
+
+    expect(app(SimPersonSource::class)->personFacet(['email' => 'lena@example.test']))->toBe([]);
 });
