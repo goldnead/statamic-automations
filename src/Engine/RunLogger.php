@@ -2,6 +2,7 @@
 
 namespace Goldnead\StatamicAutomations\Engine;
 
+use Goldnead\StatamicAutomations\Events\AutomationRunFinished;
 use Goldnead\StatamicAutomations\Integrations\LeadHub\TimelineRecorder;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationNodeRun;
@@ -46,6 +47,16 @@ class RunLogger
                 : null,
             'error_message' => $error,
         ])->save();
+
+        // A run that went through to the end. A listener must never break the run,
+        // so its errors are reported and swallowed here.
+        if ($status === AutomationRun::STATUS_SUCCESS && ! $run->is_test) {
+            try {
+                AutomationRunFinished::dispatch($run);
+            } catch (\Throwable $e) {
+                report($e);
+            }
+        }
 
         // Fire a throttled failure alert for failed, non-test runs.
         if ($status === AutomationRun::STATUS_FAILED && ! $run->is_test) {
