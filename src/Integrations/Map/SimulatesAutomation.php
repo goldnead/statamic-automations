@@ -450,7 +450,7 @@ trait SimulatesAutomation
                 $result = (new SwitchNode)->execute($plan->context, $this->resolvedConfig($node, $plan->context));
                 $handle = (string) $result->outputHandle;
                 $row = collect($rows)->firstWhere('handle', $handle);
-                $label = trim((string) ($row['label'] ?? '')) !== '' ? (string) $row['label'] : $handle;
+                $label = $this->caseLabel($node, trim((string) ($row['label'] ?? '')) !== '' ? (string) $row['label'] : $handle);
 
                 return [Effect::decision($name, __('statamic-automations::automations.sim_took_case', ['case' => $label]), $this->simFrom($plan, $node->node_key, $handle))];
             }
@@ -458,7 +458,7 @@ trait SimulatesAutomation
             $alts = [];
 
             foreach ($rows as $row) {
-                $label = trim((string) ($row['label'] ?? '')) !== '' ? (string) $row['label'] : (string) $row['handle'];
+                $label = $this->caseLabel($node, trim((string) ($row['label'] ?? '')) !== '' ? (string) $row['label'] : (string) $row['handle']);
                 $alts[] = Effect::alt(__('statamic-automations::automations.sim_case', ['case' => $label]), $this->simFrom($plan, $node->node_key, (string) $row['handle']));
             }
 
@@ -783,19 +783,35 @@ trait SimulatesAutomation
         return [
             'found' => $found,
             'product_slug' => $found ? $slug : '',
-            'product_title' => $found ? ($this->productNameOrNull($slug) ?? '') : '',
+            'product_title' => $found ? $this->freebieTitle($slug) : '',
             'source' => '',
             'granted_at' => '',
         ];
     }
 
-    private function productNameOrNull(string $slug): ?string
+    /** What a real run puts in `product_title` for this slug: the very function the action uses, never a copy of it. */
+    private function freebieTitle(string $slug): string
     {
         try {
-            return app(RecentGrantAction::class)->nameFor($slug);
+            return app(RecentGrantAction::class)->titleFor($slug);
         } catch (\Throwable) {
-            return null;
+            return '';
         }
+    }
+
+    /**
+     * The label of a case of a switch. A switch on `{{ nodes.x.product_slug }}` has the slugs as its cases; a person
+     * reads the name of the freebie behind each, the slug stays where no name is known.
+     */
+    private function caseLabel(AutomationNode $node, string $label): string
+    {
+        if ($label === '' || str_contains($label, '{{') || preg_match('/\{\{\s*nodes\.[\w-]+\.product_slug\s*\}\}/', (string) $node->getConfigValue('value')) !== 1) {
+            return $label;
+        }
+
+        $title = $this->freebieTitle($label);
+
+        return $title !== '' ? $title : $label;
     }
 
     /** The mode of a check-access step, or null when the engine would fail the step for it. */

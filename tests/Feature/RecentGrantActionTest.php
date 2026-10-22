@@ -29,6 +29,33 @@ class FakeLeadMagnetSubject
     }
 }
 
+/** Stands for `Goldnead\LeadMagnets\Models\Resource`: the lead magnet whose `access_product` is asked. */
+class RecentGrantFakeResource
+{
+    public ?string $title = null;
+
+    private ?string $product = null;
+
+    public static function query(): static
+    {
+        return new static;
+    }
+
+    public function where(string $column, mixed $value): static
+    {
+        $this->product = $column === 'access_product' ? (string) $value : null;
+
+        return $this;
+    }
+
+    public function first(): ?static
+    {
+        $this->title = $this->product === 'toolkit' ? 'Das Toolkit' : null;
+
+        return $this->title === null ? null : $this;
+    }
+}
+
 /**
  * The "Recent Grant" node: has this person just unlocked something?
  *
@@ -203,6 +230,47 @@ class RecentGrantActionTest extends TestCase
         FakeLeadMagnetGrant::$titles[$this->manager->grants[0]->id] = 'Warm-up Kompass';
 
         $this->assertSame('Warm-up Kompass', $this->recent()->output['product_title']);
+    }
+
+    public function test_a_freebie_is_named_by_its_lead_magnet_before_the_catalogue(): void
+    {
+        // Production: the catalogue names the access "CVT im Chor — Masterclass", the freebie is "CVT im Chor".
+        $this->manager->products = [
+            'toolkit' => ['slug' => 'toolkit', 'label' => 'Das Toolkit — Masterclass', 'group' => null],
+        ];
+        config()->set('automations.integrations.lead_magnets.grant_model', FakeLeadMagnetGrant::class);
+        $this->seedGrant('email', 'anna@example.test', 'toolkit', startedMinutesAgo: 3);
+        FakeLeadMagnetGrant::$titles[$this->manager->grants[0]->id] = 'Das Toolkit';
+
+        $this->assertSame('Das Toolkit', $this->recent()->output['product_title']);
+    }
+
+    public function test_a_freebie_is_named_by_its_lead_magnet_also_when_a_newsletter_grant_carries_the_slug(): void
+    {
+        // The newest grant may be the newsletter opt-in's, with no lead magnet grant behind it; the access still is
+        // the one a lead magnet hands out, and that is how the dry run names it.
+        $this->manager->products = [
+            'toolkit' => ['slug' => 'toolkit', 'label' => 'Das Toolkit — Masterclass', 'group' => null],
+        ];
+        config()->set('automations.integrations.lead_magnets.resource_model', RecentGrantFakeResource::class);
+        $this->seedGrant('email', 'anna@example.test', 'toolkit', startedMinutesAgo: 3, source: 'newsletter_optin');
+
+        $this->assertSame('Das Toolkit', $this->recent()->output['product_title']);
+    }
+
+    public function test_the_dry_run_and_a_real_run_name_a_freebie_the_same_way(): void
+    {
+        $this->manager->products = [
+            'toolkit' => ['slug' => 'toolkit', 'label' => 'Das Toolkit — Masterclass', 'group' => null],
+        ];
+        config()->set('automations.integrations.lead_magnets.grant_model', FakeLeadMagnetGrant::class);
+        config()->set('automations.integrations.lead_magnets.resource_model', RecentGrantFakeResource::class);
+        $this->seedGrant('email', 'anna@example.test', 'toolkit', startedMinutesAgo: 3);
+        FakeLeadMagnetGrant::$titles[$this->manager->grants[0]->id] = 'Das Toolkit';
+
+        $action = new RecentGrantAction(new EntitlementsAdapter);
+
+        $this->assertSame($this->recent()->output['product_title'], $action->titleFor('toolkit'));
     }
 
     public function test_the_title_is_empty_and_never_the_slug_when_nothing_knows_it(): void
