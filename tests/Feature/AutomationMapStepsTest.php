@@ -196,6 +196,13 @@ it('reads the period from the start of the run, not from the mail', function () 
         ->and(array_column($long[1]['rows'], 'value', 'label')['Started'])->toBe('7 people');
 });
 
+it('does not count a pending job of a run that has stopped as somebody waiting', function () {
+    $automation = stepScenario();
+    stepWaits(stepRun($automation, 'z@x.de', 'cancelled', ['m1' => 'u-i1']), 'w1', '2026-08-20 13:00:00');
+
+    expect($this->map->details('kurs', $this->period)[0]['items'][1]['meta'])->toBe('Waiting now: 2 · next due 21. Aug, 09:00');
+});
+
 it('says the wait that nobody is in as an empty wait', function () {
     $automation = stepSeries();
     stepRun($automation, 'c@x.de', 'success', ['m1' => 'u-c1', 'm2' => 'u-c2']);

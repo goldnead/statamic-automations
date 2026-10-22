@@ -136,7 +136,10 @@ trait ShowsStepTable
 
         $jobs = [];
 
-        foreach ($real->pluck('id')->chunk(self::STEP_CHUNK) as $ids) {
+        // A pending job on a run that has since stopped, failed or been cancelled is nobody waiting.
+        $alive = [AutomationRun::STATUS_WAITING, AutomationRun::STATUS_RUNNING, AutomationRun::STATUS_QUEUED];
+
+        foreach ($real->filter(fn (AutomationRun $run) => in_array($run->status, $alive, true))->pluck('id')->chunk(self::STEP_CHUNK) as $ids) {
             foreach (AutomationScheduledJob::query()
                 ->whereIn('automation_run_id', $ids->all())
                 ->whereIn('status', [AutomationScheduledJob::STATUS_PENDING, AutomationScheduledJob::STATUS_QUEUED])
