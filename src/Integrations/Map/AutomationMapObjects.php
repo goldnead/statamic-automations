@@ -26,6 +26,7 @@ use Goldnead\StatamicAutomations\Nodes\Actions\SendEmailAction;
 use Goldnead\StatamicAutomations\Nodes\Logic\DelayNode;
 use Goldnead\StatamicAutomations\Nodes\Logic\WaitForAutomationNode;
 use Goldnead\StatamicAutomations\Support\AuditLogger;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 use Statamic\Facades\Entry;
@@ -52,6 +53,7 @@ use Statamic\Query\Builder;
  */
 class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
 {
+    use ShowsStepTable;
     use SimulatesAutomation;
 
     public const TYPE = 'automation';
@@ -99,18 +101,21 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
             return null;
         }
 
+        return new MapMetric($this->periodRuns($automation, $period)->count(), __('statamic-automations::insights.runs'), $period);
+    }
+
+    /** The real runs (no test runs) that started in the period. */
+    protected function periodRuns(Automation $automation, MapPeriod $period): EloquentBuilder
+    {
         $zone = date_default_timezone_get();
         $format = MillisecondDateTime::FORMAT;
 
-        $count = AutomationRun::query()
+        return AutomationRun::query()
             ->where('automation_uuid', $automation->uuid)
             ->where('is_test', false)
             ->where('started_at', '>=', $period->from->setTimezone($zone)->format($format))
             ->where('started_at', '<', $period->to->setTimezone($zone)->format($format))
-            ->where('started_at', '<=', Carbon::now($zone)->format($format))
-            ->count();
-
-        return new MapMetric((int) $count, __('statamic-automations::insights.runs'), $period);
+            ->where('started_at', '<=', Carbon::now($zone)->format($format));
     }
 
     /** The most mails the panel lists; the rest is counted in `more`. */
@@ -138,6 +143,13 @@ class AutomationMapObjects implements ProvidesMapEdges, ProvidesMapObjects
         }
 
         $automation->loadMissing(['nodes', 'edges']);
+
+        // Somebody started in the period: the mails with what became of the people, instead of the plain list.
+        $steps = $this->stepBlocks($automation, $period);
+
+        if ($steps !== null) {
+            return $steps;
+        }
 
         $mails = [];
         $wait = 0;
