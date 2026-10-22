@@ -190,6 +190,15 @@ class RecentGrantAction implements AutomationAction
         ];
     }
 
+    /**
+     * The name of a product a person can read, from the sources that need no grant (the catalogue, the configured
+     * collections), or null. The dry run asks this for a freebie nobody has been given: there is no grant to look up.
+     */
+    public function nameFor(string $slug): ?string
+    {
+        return $this->adapter->productLabel($slug) ?? $this->titleFromEntries($slug);
+    }
+
     protected function title(string $slug, mixed $entitlementId): string
     {
         return $this->adapter->productLabel($slug)

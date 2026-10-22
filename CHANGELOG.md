@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Added: the Probelauf answers "did she just unlock something?" and says its questions in names
+
+- The newsletter's welcome series asks `entitlements.recent_grant` ("Gerade etwas freigeschaltet?") and branches on `found`,
+  `product_title` and a switch on `product_slug`. A run asks the grants of the address; the dry run has no grants to ask, so the question
+  ended every way at "depends on what an earlier step delivers" and the start showed nothing. It reads the person now: the trait
+  `entitlements.recent_grant` is the name of the freebie she came through (no trait: nothing was just unlocked), the trait
+  `entitlements.recent_grant_age` how many minutes ago, which has to lie inside the step's own `within_minutes`. A step that looks up
+  another address, filters by `sources` or has a window the engine would refuse stays unknown. The title is the one a run would find without a
+  grant (`RecentGrantAction::nameFor()`: the entitlements catalogue, then `automations.entitlements.title_sources`), so the bridge mail
+  says "Wie es nach „Das Toolkit“ weitergeht" in its subject and in its preview.
+- A real person (`SimPersonSource`) brings how she came: her newest grant that gives access now, as the two traits above (lead magnet
+  grants included: the adapter finds them like a run does). Read only; it needs the right to view entitlements, without it nothing is read.
+- "Why this way" reads `nodes.<step>.<field>` as words: the name of the awaited automation ("‚Minikurs CVT im Chor‘ bis zum Ende gelaufen"),
+  the name of the product ("die Person Zugang zu ‚Kurs‘ hat"), the unlock question, and for any other answer the step's own title instead of
+  the key (`nodes wait welcome ran to end = true`).
+- A subject that names an answer about the person (`{{ nodes.recent.product_title }}`) shows the name in the timeline, not the placeholder.
+
 ## 2.39.0 — 2026-10-21
 
 ### Fixed: the Probelauf of a real series shows its mails and goes on past its questions
