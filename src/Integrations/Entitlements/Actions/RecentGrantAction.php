@@ -37,14 +37,20 @@ use Statamic\Facades\Entry;
  *
  * `product_title` is a name a person can read, or empty. Never the slug: a mail
  * that says "Schön, dass du toolkit-2026 hast" is worse than one that leaves the
- * name out. Sources, first hit wins:
+ * name out. Sources, first hit wins ({@see titleFor()}):
  *
- *  1. the entitlements addon's own product catalogue, when anything registered one;
- *  2. `automations.entitlements.title_sources`, a list of
+ *  1. the lead-magnets addon: the title of the freebie behind the grant, when
+ *     that addon is installed and the grant belongs to one;
+ *  2. the same freebie found by the access it hands out (`access_product`),
+ *     for a grant of that access that no lead magnet wrote (the newsletter's);
+ *  3. the entitlements addon's own product catalogue, when anything registered one;
+ *  4. `automations.entitlements.title_sources`, a list of
  *     `['collection' => 'resources', 'match' => 'resource_slug', 'field' => 'title']`:
- *     the Statamic entry of that collection whose `match` field equals the slug;
- *  3. the lead-magnets addon: the title of the resource behind the grant, when
- *     that addon is installed and the grant belongs to one.
+ *     the Statamic entry of that collection whose `match` field equals the slug.
+ *
+ * The freebie comes before the catalogue because the catalogue names the access
+ * ("CVT im Chor — Masterclass"), and a mail about what she just got names the
+ * freebie ("CVT im Chor").
  *
  * Nothing here knows a site's collections; the config names them.
  *
@@ -169,7 +175,7 @@ class RecentGrantAction implements AutomationAction
 
         return ActionResult::success(self::answer([
             'product_slug' => $grant['product_slug'],
-            'product_title' => $this->title($grant['product_slug'], $grant['id']),
+            'product_title' => $this->titleFor($grant['product_slug'], $grant['id'], (string) $grant['source']),
             'source' => $grant['source'],
             'granted_at' => Carbon::instance($grant['granted_at'])->toIso8601String(),
         ]));
@@ -223,12 +229,30 @@ class RecentGrantAction implements AutomationAction
         return (is_string($title) && trim($title) !== '') ? trim($title) : null;
     }
 
-    protected function title(string $slug, mixed $entitlementId): string
+    /**
+     * The name of the thing a person just unlocked, or an empty string. The one place both a real run (`execute()`,
+     * with the id of the grant) and the dry run (a freebie nobody has been given: no id) take it from.
+     *
+     * A freebie is named by its lead magnet first: the catalogue names the *access* ("CVT im Chor — Masterclass"),
+     * the person came for "CVT im Chor". Then the catalogue, then the site's configured collections.
+     */
+    public function titleFor(string $slug, mixed $entitlementId = null, ?string $source = null): string
     {
-        return $this->adapter->productLabel($slug)
+        return $this->titleFromLeadMagnet($entitlementId)
+            ?? ($this->isFreebieSource($source) ? $this->titleFromLeadMagnetProduct($slug) : null)
+            ?? $this->adapter->productLabel($slug)
             ?? $this->titleFromEntries($slug)
-            ?? $this->titleFromLeadMagnet($entitlementId)
             ?? '';
+    }
+
+    /**
+     * Whether a grant of this source came through a freebie. No source (the dry run: a grant nobody has been given)
+     * counts: the person is a freebie person by the choice on the screen. A purchase of the same access does not.
+     */
+    protected function isFreebieSource(?string $source): bool
+    {
+        return $source === null
+            || in_array($source, (array) config('automations.entitlements.freebie_sources', ['lead_magnet', 'lead_magnet_access', 'newsletter_optin']), true);
     }
 
     /**

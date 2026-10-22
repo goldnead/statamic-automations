@@ -7,6 +7,7 @@ use Goldnead\StatamicAutomations\Integrations\Map\AutomationMapObjects;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
+use Goldnead\StatamicAutomations\Tests\Fixtures\FakeEntitlementManager;
 use Statamic\Facades\Collection;
 use Statamic\Facades\Entry;
 
@@ -219,4 +220,57 @@ it('keeps the number of a comparison that is not about yes or no, and turns a ne
     // Nothing was just unlocked, so "found is not true" holds: said as the person's, not as "found ≠ yes".
     expect($text)->toContain('the person has not just unlocked anything')
         ->and($text)->not->toContain('≠');
+});
+
+/*
+ * Production, 22.10.2026: the product catalogue (statamic-products) names the access of the freebie "CVT im Chor"
+ * "CVT im Chor — Masterclass", the lead magnet is called "CVT im Chor". The mail to a person who came through the
+ * freebie must name the freebie, in the dry run and in a real run alike.
+ */
+function srgCatalogue(array $products): void
+{
+    require_once __DIR__.'/../Fixtures/CommerceServiceDoubles.php';
+
+    $manager = new FakeEntitlementManager;
+    $manager->products = $products;
+    app()->instance(FakeEntitlementManager::class, $manager);
+    config()->set('automations.integrations.entitlements.manager', FakeEntitlementManager::class);
+}
+
+it('names the freebie in the bridge mail by its lead magnet, not by the access the catalogue names', function () {
+    srgWelcome();
+    srgCatalogue(['toolkit' => ['slug' => 'toolkit', 'label' => 'Das Toolkit — Masterclass', 'group' => null]]);
+    config()->set('automations.integrations.lead_magnets.resource_model', SrgFakeResource::class);
+
+    $text = implode("\n", srgFlat(srgReact(SimPerson::known(['entitlements.recent_grant' => 'toolkit']))));
+
+    expect($text)->toContain('mail:Wie es nach „Das Toolkit (Lead Magnet)“ weitergeht')
+        ->and($text)->not->toContain('Masterclass');
+});
+
+it('shows the name of the case in "why", not the slug the switch compares', function () {
+    $a = Automation::query()->create(['uuid' => 'uuid-srg', 'name' => 'Weiche', 'handle' => 'srg', 'enabled' => true]);
+    srgCatalogue([]);
+    config()->set('automations.integrations.lead_magnets.resource_model', SrgFakeResource::class);
+
+    foreach ([
+        ['trigger', 'manual', null, []],
+        ['recent', 'entitlements.recent_grant', 'Gerade etwas freigeschaltet?', ['email' => '{{ subscriber.email }}']],
+        ['which', 'switch', 'Welches Freebie?', ['value' => '{{ nodes.recent.product_slug }}', 'cases' => ['toolkit' => 'toolkit']]],
+        ['end', 'stop', null, []],
+    ] as [$key, $type, $label, $config]) {
+        AutomationNode::query()->create(['automation_id' => $a->id, 'node_key' => $key, 'type' => $type, 'label' => $label, 'config' => $config]);
+    }
+
+    foreach ([['trigger', 'default', 'recent'], ['recent', 'default', 'which'], ['which', 'toolkit', 'end'], ['which', 'default', 'end']] as [$from, $output, $to]) {
+        AutomationEdge::query()->create(['automation_id' => $a->id, 'from_node_key' => $from, 'from_output' => $output, 'to_node_key' => $to]);
+    }
+
+    $taken = implode("\n", srgFlat(srgReact(SimPerson::known(['entitlements.recent_grant' => 'toolkit']))));
+    $tree = implode("\n", srgFlat(app(AutomationMapObjects::class)->react('srg', new SimEvent(SimEvent::STARTED), SimPerson::unknown(), CarbonImmutable::parse('2026-10-22 10:00:00'))));
+
+    expect($taken)->toContain('Das Toolkit (Lead Magnet)')
+        ->and($taken)->not->toMatch('/(case|Fall) toolkit/')
+        ->and($tree)->toContain('Das Toolkit (Lead Magnet)')
+        ->and($tree)->not->toMatch('/(case|Fall) toolkit/');
 });

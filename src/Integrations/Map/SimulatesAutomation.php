@@ -32,6 +32,7 @@ use Goldnead\StatamicAutomations\Nodes\Triggers\EventTrigger;
 use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Support\NodeOutputs;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
@@ -450,7 +451,7 @@ trait SimulatesAutomation
                 $result = (new SwitchNode)->execute($plan->context, $this->resolvedConfig($node, $plan->context));
                 $handle = (string) $result->outputHandle;
                 $row = collect($rows)->firstWhere('handle', $handle);
-                $label = trim((string) ($row['label'] ?? '')) !== '' ? (string) $row['label'] : $handle;
+                $label = $this->caseLabel($plan->automation, $node, trim((string) ($row['label'] ?? '')) !== '' ? (string) $row['label'] : $handle);
 
                 return [Effect::decision($name, __('statamic-automations::automations.sim_took_case', ['case' => $label]), $this->simFrom($plan, $node->node_key, $handle))];
             }
@@ -458,7 +459,7 @@ trait SimulatesAutomation
             $alts = [];
 
             foreach ($rows as $row) {
-                $label = trim((string) ($row['label'] ?? '')) !== '' ? (string) $row['label'] : (string) $row['handle'];
+                $label = $this->caseLabel($plan->automation, $node, trim((string) ($row['label'] ?? '')) !== '' ? (string) $row['label'] : (string) $row['handle']);
                 $alts[] = Effect::alt(__('statamic-automations::automations.sim_case', ['case' => $label]), $this->simFrom($plan, $node->node_key, (string) $row['handle']));
             }
 
@@ -783,19 +784,43 @@ trait SimulatesAutomation
         return [
             'found' => $found,
             'product_slug' => $found ? $slug : '',
-            'product_title' => $found ? ($this->productNameOrNull($slug) ?? '') : '',
+            'product_title' => $found ? $this->freebieTitle($slug) : '',
             'source' => '',
             'granted_at' => '',
         ];
     }
 
-    private function productNameOrNull(string $slug): ?string
+    /** What a real run puts in `product_title` for this slug: the very function the action uses, never a copy of it. */
+    private function freebieTitle(string $slug): string
     {
         try {
-            return app(RecentGrantAction::class)->nameFor($slug);
-        } catch (\Throwable) {
-            return null;
+            return app(RecentGrantAction::class)->titleFor($slug);
+        } catch (\Throwable $e) {
+            Log::warning('statamic-automations: the Probelauf could not name a freebie.', ['slug' => $slug, 'exception' => $e->getMessage()]);
+
+            return '';
         }
+    }
+
+    /**
+     * The label of a case of a switch. A switch on `{{ nodes.x.product_slug }}` has the slugs as its cases; a person
+     * reads the name of the freebie behind each, the slug stays where no name is known.
+     */
+    private function caseLabel(Automation $automation, AutomationNode $node, string $label): string
+    {
+        if ($label === '' || $label === 'default' || str_contains($label, '{{')
+            || preg_match('/^\s*\{\{\s*nodes\.([\w-]+)\.product_slug\s*\}\}\s*$/', (string) $node->getConfigValue('value'), $m) !== 1) {
+            return $label;
+        }
+
+        // Only the answer of a recent-grant step is a freebie slug.
+        if ($automation->nodes->firstWhere('node_key', $m[1])?->type !== RecentGrantAction::handle()) {
+            return $label;
+        }
+
+        $title = $this->freebieTitle($label);
+
+        return $title !== '' ? $title : $label;
     }
 
     /** The mode of a check-access step, or null when the engine would fail the step for it. */
