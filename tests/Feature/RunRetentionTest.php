@@ -44,7 +44,9 @@ it('prunes runs older than the retention window and their node runs with them', 
 
     // SQLite does not enforce the cascade unless foreign keys are on; the
     // command must not depend on it.
-    DB::statement('PRAGMA foreign_keys = OFF');
+    if (DB::getDriverName() === 'sqlite') {
+        DB::statement('PRAGMA foreign_keys = OFF');
+    }
 
     $this->artisan('automations:prune')->assertSuccessful();
 
