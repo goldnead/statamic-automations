@@ -542,6 +542,8 @@ class ServiceProvider extends AddonServiceProvider
             $schedule->command('automations:run-scheduled')->everyMinute()->withoutOverlapping();
             // Resume runs whose delay/wait window has elapsed.
             $schedule->command('automations:run-due')->everyMinute()->withoutOverlapping();
+            // Keep run storage bounded (runs.prune_after_days).
+            $schedule->command('automations:prune')->dailyAt('03:15')->withoutOverlapping();
         });
     }
 

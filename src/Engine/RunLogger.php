@@ -119,10 +119,10 @@ class RunLogger
             'node_type' => $nodeType,
             'status' => $status,
             'input' => config('automations.runs.store_node_io', true)
-                ? $this->tokens->redact($input)
+                ? static::capPayload($this->tokens->redact($input))
                 : null,
             'output' => $result && config('automations.runs.store_node_io', true)
-                ? $this->tokens->redact($result->output)
+                ? static::capPayload($this->tokens->redact($result->output))
                 : null,
             'error_message' => $exception?->getMessage() ?? $result?->error,
             'started_at' => $started,
@@ -133,6 +133,37 @@ class RunLogger
         $this->reportMailToTimeline($run, $nodeKey, $nodeType, $status, $result);
 
         return $nodeRun;
+    }
+
+    /**
+     * Replace a payload whose JSON exceeds `runs.max_node_io_bytes` by a marker.
+     *
+     * The marker stays an array, so the model cast and everything reading
+     * `input` / `output` (run detail, retry-from-node context) keeps working;
+     * a retry that needs the cut output simply sees the marker instead.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public static function capPayload(array $payload): array
+    {
+        $max = (int) config('automations.runs.max_node_io_bytes', 65536);
+
+        if ($max <= 0) {
+            return $payload;
+        }
+
+        $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR);
+
+        if ($json === false || strlen($json) <= $max) {
+            return $payload;
+        }
+
+        return [
+            '_truncated' => true,
+            '_original_bytes' => strlen($json),
+            '_preview' => mb_strcut($json, 0, min(1024, $max)),
+        ];
     }
 
     /**

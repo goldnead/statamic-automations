@@ -98,10 +98,10 @@ it('deletes the override when a value goes back to the default', function (): vo
 
     // Not "stores 30" — stores nothing. A row pinning a value to what it
     // already was would freeze that default across package upgrades.
-    ($this->patch)(['runs.prune_after_days' => 30])->assertRedirect();
+    ($this->patch)(['runs.prune_after_days' => 7])->assertRedirect();
 
     expect(BrandSetting::query()->where('namespace', 'automations')->count())->toBe(0)
-        ->and(config('automations.runs.prune_after_days'))->toBe(30);
+        ->and(config('automations.runs.prune_after_days'))->toBe(7);
 });
 
 it('saves a list setting as a list', function (): void {
@@ -121,7 +121,7 @@ it('refuses a retention of zero days', function (): void {
         ->assertStatus(422)
         ->assertJsonValidationErrors(['settings.runs.prune_after_days']);
 
-    expect(config('automations.runs.prune_after_days'))->toBe(30);
+    expect(config('automations.runs.prune_after_days'))->toBe(7);
 });
 
 it('refuses a queue name that is not there', function (): void {
