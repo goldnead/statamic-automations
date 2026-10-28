@@ -35,8 +35,9 @@ beforeEach(function (): void {
     };
 });
 
-it('prunes runs older than seven days by default and their node runs with them', function (): void {
-    expect(config('automations.runs.prune_after_days'))->toBe(7);
+it('prunes runs older than the retention window and their node runs with them', function (): void {
+    expect(config('automations.runs.prune_after_days'))->toBe(30);
+    config(['automations.runs.prune_after_days' => 7]);
 
     $old = ($this->makeRun)(10);
     $fresh = ($this->makeRun)(2);

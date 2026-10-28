@@ -112,7 +112,7 @@ return [
         'store_context' => true,
         'store_full_context' => true,
         'store_node_io' => true,
-        'prune_after_days' => 7,
+        'prune_after_days' => 30,
         'keep_failed_runs_days' => null, // null = same as prune_after_days
 
         // Upper bound, in bytes of JSON, for the `input` and for the `output`

@@ -32,7 +32,7 @@ class PruneRuns extends Command
 
     protected function handleForBrand(): int
     {
-        $days = (int) ($this->option('days') ?? config('automations.runs.prune_after_days', 7));
+        $days = (int) ($this->option('days') ?? config('automations.runs.prune_after_days', 30));
         $keepFailedDays = $this->option('keep-failed-days') ?? config('automations.runs.keep_failed_runs_days');
         $dryRun = (bool) $this->option('dry-run');
 
