@@ -7,7 +7,7 @@
 ### Fixed: run storage grew without bound
 
 - `automations:prune` was never scheduled, so nothing was ever pruned unless someone ran it by hand. It is now on the scheduler daily at 03:15.
-- Retention stays at `runs.prune_after_days` (default 30 days); set a lower value in `config/automations.php` or the settings screen.
+- Retention stays at `runs.prune_after_days` (default 30 days); set a lower value with the new env var `STATAMIC_AUTOMATIONS_PRUNE_AFTER_DAYS`, in `config/automations.php` or on the settings screen.
 - The prune deletes node runs explicitly before the runs, instead of relying on the foreign-key cascade (SQLite may not enforce it).
 - New `runs.max_node_io_bytes` (default 65536, 0 = off): the `input` and `output` of one node run above that size are stored as a marker
   (`_truncated`, `_original_bytes`, `_preview`) instead of in full. A "retry from this node" sees the marker for such a step.
