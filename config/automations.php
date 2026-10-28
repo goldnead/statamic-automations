@@ -112,8 +112,15 @@ return [
         'store_context' => true,
         'store_full_context' => true,
         'store_node_io' => true,
-        'prune_after_days' => 30,
+        'prune_after_days' => (int) env('STATAMIC_AUTOMATIONS_PRUNE_AFTER_DAYS', 30),
         'keep_failed_runs_days' => null, // null = same as prune_after_days
+
+        // Upper bound, in bytes of JSON, for the `input` and for the `output`
+        // of ONE node run. A payload above it is replaced by a small marker
+        // (`_truncated`, `_original_bytes`, `_preview`). Without a bound a
+        // flow that fetches a large document every few minutes stores it in
+        // full on every run. 0 or null switches the cap off.
+        'max_node_io_bytes' => 65536,
 
         // When true, AutomationRun.context and AutomationNodeRun.input/output
         // are encrypted at rest with Laravel Crypt (uses APP_KEY). Reads are

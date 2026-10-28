@@ -3,6 +3,7 @@
 namespace Goldnead\StatamicAutomations\Console\Commands;
 
 use Goldnead\BrandContext\Concerns\RunsForEachBrand;
+use Goldnead\StatamicAutomations\Models\AutomationNodeRun;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Illuminate\Console\Command;
 
@@ -59,6 +60,13 @@ class PruneRuns extends Command
 
             return self::SUCCESS;
         }
+
+        // Node runs first and by hand: the cascade on the foreign key only
+        // fires where the connection enforces foreign keys, and SQLite does
+        // not always. Orphaned node runs hold the bulk of the bytes.
+        AutomationNodeRun::query()
+            ->whereIn('automation_run_id', (clone $query)->select('id'))
+            ->delete();
 
         $query->delete();
         $this->info("Deleted {$count} run(s) older than {$cutoff->toDateTimeString()}.");

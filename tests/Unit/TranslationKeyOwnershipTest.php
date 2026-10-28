@@ -96,6 +96,14 @@ it('retranslates no string statamic/cms already owns', function (): void {
                 continue;
             }
 
+            // Newer statamic/cms releases translate "Trigger" themselves, with
+            // the very same word. A key that only duplicates the core's string
+            // is harmless, and dropping it would leave the CP in English on
+            // the cms versions that do not ship it yet (constraint is ^6.0).
+            if ($key === 'Trigger' && $core[$key] === $value) {
+                continue;
+            }
+
             $collisions[] = sprintf(
                 '%s.json: "%s" is statamic/cms\'s string (%s); this addon %s it to "%s"',
                 $locale,
