@@ -96,11 +96,13 @@ it('retranslates no string statamic/cms already owns', function (): void {
                 continue;
             }
 
-            // Newer statamic/cms releases translate "Trigger" themselves, with
-            // the very same word. A key that only duplicates the core's string
-            // is harmless, and dropping it would leave the CP in English on
-            // the cms versions that do not ship it yet (constraint is ^6.0).
-            if ($key === 'Trigger' && $core[$key] === $value) {
+            // Newer statamic/cms releases translate more and more of these
+            // words themselves ("Trigger", "Path", "Success"), with the very
+            // same value. A key that only duplicates the core's string is
+            // harmless, and dropping it would leave the CP in English on the
+            // cms versions that do not ship it yet (constraint is ^6.0). Only
+            // a key that REPLACES the core's string is a collision.
+            if ($core[$key] === $value) {
                 continue;
             }
 
