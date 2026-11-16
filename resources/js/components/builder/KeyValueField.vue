@@ -49,7 +49,7 @@
         />
 
         <p v-if="duplicateKeys.size" class="text-xs text-red-600 dark:text-red-400">
-            {{ __('Doppelte Schlüssel werden zusammengeführt, nur der letzte zählt.') }}
+            {{ __('Duplicate keys are merged, only the last one counts.') }}
         </p>
     </div>
 </template>

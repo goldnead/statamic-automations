@@ -11,22 +11,65 @@ function automationsGermanJson(): array
     return json_decode((string) file_get_contents(__DIR__.'/../../resources/lang/de.json'), true);
 }
 
-it('translates every text of the automations list into German', function (): void {
+/**
+ * Every literal key of a `__('…')` call in resources/js, with the file it sits in.
+ * Escaped quotes inside the key (`\'`) are unescaped, so the key is what the
+ * browser looks up.
+ *
+ * @return array<string, string>
+ */
+function automationsJsTextKeys(): array
+{
+    $root = __DIR__.'/../../resources/js';
+    $keys = [];
+
+    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root, FilesystemIterator::SKIP_DOTS)) as $file) {
+        if (! preg_match('/\.(vue|js)$/', (string) $file)) {
+            continue;
+        }
+
+        preg_match_all(
+            '/__\(\s*([\'"])((?:\\\\.|(?!\1)[^\\\\])+)\1/us',
+            (string) file_get_contents((string) $file),
+            $matches,
+        );
+
+        foreach ($matches[2] as $key) {
+            $keys[stripcslashes($key)] ??= substr((string) $file, strlen($root) + 1);
+        }
+    }
+
+    return $keys;
+}
+
+// Names of sister addons. JSON translations are global, so they stay unkeyed.
+const AUTOMATIONS_ADDON_NAMES = ['Webhook Manager', 'LeadHub'];
+
+it('translates every text of the control panel into German', function (): void {
     $de = automationsGermanJson();
     $core = json_decode((string) file_get_contents(__DIR__.'/../../vendor/statamic/cms/lang/de.json'), true);
 
-    preg_match_all(
-        '/__\(\s*([\'"])((?:(?!\1).)+)\1/u',
-        (string) file_get_contents(__DIR__.'/../../resources/js/pages/Automations/Index.vue'),
-        $matches,
-    );
+    $missing = [];
 
-    $missing = array_values(array_filter(
-        array_unique($matches[2]),
-        fn (string $key): bool => ! str_contains($key, '::') && ! isset($de[$key]) && ! isset($core[$key]),
-    ));
+    foreach (automationsJsTextKeys() as $key => $file) {
+        if (! str_contains($key, '::') && ! in_array($key, AUTOMATIONS_ADDON_NAMES, true) && ! isset($de[$key]) && ! isset($core[$key])) {
+            $missing[] = $file.': '.$key;
+        }
+    }
 
     expect($missing)->toBe([]);
+});
+
+it('keys the control panel texts in English', function (): void {
+    $german = [];
+
+    foreach (automationsJsTextKeys() as $key => $file) {
+        if (preg_match('/[äöüß]|\b(?:Vorlage|Vorlagen|Bitte|Keine|Diese|Doppelte|Erneut|Abbrechen|Betreff|Flow braucht)\b/u', $key)) {
+            $german[] = $file.': '.$key;
+        }
+    }
+
+    expect($german)->toBe([]);
 });
 
 it('writes the German JSON texts without dashes', function (): void {

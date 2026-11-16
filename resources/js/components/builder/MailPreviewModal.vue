@@ -1,7 +1,7 @@
 <template>
     <Modal
         :open="open"
-        :title="__('E-Mail-Vorschau')"
+        :title="__('Email preview')"
         icon="eye"
         class="max-w-3xl!"
         @update:open="$emit('update:open', $event)"
@@ -15,11 +15,11 @@
                     size="xs"
                     variant="ghost"
                     icon="arrow-left"
-                    :aria-label="__('Vorherige Mail')"
+                    :aria-label="__('Previous mail')"
                     :disabled="index <= 0"
                     @click="step(-1)"
                 />
-                <nav class="flex min-w-0 flex-1 gap-1 overflow-x-auto" :aria-label="__('Mails dieses Ablaufs')">
+                <nav class="flex min-w-0 flex-1 gap-1 overflow-x-auto" :aria-label="__('Mails in this flow')">
                     <button
                         v-for="(mail, i) in mails"
                         :key="mail.node_key"
@@ -38,7 +38,7 @@
                     size="xs"
                     variant="ghost"
                     icon="arrow-right"
-                    :aria-label="__('Nächste Mail')"
+                    :aria-label="__('Next mail')"
                     :disabled="index >= mails.length - 1"
                     @click="step(1)"
                 />
@@ -47,13 +47,13 @@
             <!-- Vorlage von heute oder das, was rausging. Der zweite Reiter
                  erscheint nur, wenn es zu dieser Mail einen Versand gibt. -->
             <ToggleGroup v-if="snapshot" v-model="tab" size="sm">
-                <ToggleItem value="template" icon="eye" :label="__('Vorlage von heute')" />
+                <ToggleItem value="template" icon="eye" :label="__('Template as of today')" />
                 <ToggleItem value="sent" icon="mail" :label="sentLabel" />
             </ToggleGroup>
 
             <div v-if="loading" class="flex flex-col items-center justify-center gap-2 min-h-72 text-sm text-gray-500 dark:text-gray-400">
                 <Icon name="loading" class="size-5 animate-spin" />
-                <span>{{ __('Vorschau wird geladen…') }}</span>
+                <span>{{ __('Loading preview…') }}</span>
             </div>
 
             <!-- Der Grund kommt vom Endpunkt. Eine feste Zeile hier war Bug F17. -->
@@ -62,9 +62,9 @@
                 class="flex flex-col items-center justify-center gap-2 min-h-72 px-6 text-center text-sm text-red-600 dark:text-red-400"
             >
                 <Icon name="warning-diamond" class="size-5 shrink-0" />
-                <span class="font-medium">{{ __('Diese Mail lässt sich nicht anzeigen.') }}</span>
+                <span class="font-medium">{{ __('This mail cannot be displayed.') }}</span>
                 <span class="text-xs text-gray-600 dark:text-gray-400">{{ error }}</span>
-                <Button size="xs" variant="filled" :text="__('Erneut versuchen')" @click="load(true)" />
+                <Button size="xs" variant="filled" :text="__('Try again')" @click="load(true)" />
             </div>
 
             <template v-else-if="mail">
@@ -73,10 +73,10 @@
                     class="px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900"
                 >
                     <p class="m-0 mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-                        {{ __('Betreff') }}
+                        {{ __('Subject') }}
                     </p>
                     <h4 class="m-0 text-[0.95rem] font-semibold leading-snug text-gray-900 dark:text-gray-100">
-                        {{ mail.subject || __('(kein Betreff)') }}
+                        {{ mail.subject || __('(no subject)') }}
                     </h4>
                 </header>
 
@@ -91,7 +91,7 @@
                         :src="snapshot.url"
                         sandbox="allow-same-origin"
                         class="sa-email-canvas block w-full h-[42vh] min-h-72 border-0"
-                        :title="__('Wie diese Mail rausging')"
+                        :title="__('How this mail went out')"
                     />
                     <!-- `sandbox` ohne Token: der Inhalt kommt aus `srcdoc`
                          und braucht keine Herkunft. `allow-same-origin` gäbe
@@ -103,20 +103,20 @@
                         :srcdoc="mail.html"
                         sandbox=""
                         class="sa-email-canvas block w-full h-[42vh] min-h-72 border-0"
-                        :title="__('E-Mail-Vorschau')"
+                        :title="__('Email preview')"
                         loading="lazy"
                     />
                 </div>
 
                 <p v-if="tab === 'template'" class="m-0 text-center text-xs text-gray-400 dark:text-gray-500">
                     {{ mail.source === 'template'
-                        ? __('Die Vorlage, die dieser Schritt heute verschickt, mit Beispieldaten (Max Mustermann).')
-                        : __('Der eigene Text dieses Schritts, mit Beispieldaten (Max Mustermann).') }}
+                        ? __('The template this step sends today, with sample data (Max Mustermann).')
+                        : __('This step\'s own text, with sample data (Max Mustermann).') }}
                 </p>
             </template>
 
             <div v-else class="flex items-center justify-center min-h-72 text-sm text-gray-500 dark:text-gray-400">
-                <span>{{ __('Keine Mail ausgewählt.') }}</span>
+                <span>{{ __('No mail selected.') }}</span>
             </div>
         </div>
     </Modal>
@@ -167,8 +167,8 @@ const index = computed(() => props.mails.findIndex((m) => m.node_key === current
 
 const sentLabel = computed(() =>
     snapshot.value?.send_count > 1
-        ? __('Wie es rausging (:n Versände)', { n: snapshot.value.send_count })
-        : __('Wie es rausging'),
+        ? __('Sent (:n times)', { n: snapshot.value.send_count })
+        : __('Sent'),
 );
 
 function step(delta) {
@@ -206,7 +206,7 @@ async function load(force = false) {
         error.value =
             err?.response?.data?.message ||
             err?.message ||
-            __('Die Vorschau konnte nicht geladen werden. Der Grund steht im Laravel-Log.');
+            __('The preview could not be loaded. The reason is in the Laravel log.');
         mail.value = null;
         snapshot.value = null;
     } finally {
