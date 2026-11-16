@@ -76,14 +76,14 @@ Route::prefix('automations')
 
         Route::get('automations/{automationFlow}/edit', [AutomationsPageController::class, 'edit'])
             ->name('automations.edit')
-            ->middleware(['can:edit automations', $automationGuard]);
+            ->middleware($automationGuard);
 
         Route::get('runs', [RunsPageController::class, 'index'])
             ->name('runs.index');
 
         Route::get('runs/{run}', [RunsPageController::class, 'show'])
             ->name('runs.show')
-            ->middleware(['can:view automation runs', $runGuard]);
+            ->middleware($runGuard);
 
         // Every automation that is one trigger and one mail, as a sentence
         // each. See Http\Controllers\Pages\RulesPageController for which
@@ -125,7 +125,7 @@ Route::prefix('automations')
 
         Route::get('connections/{automationConnection}/edit', [ConnectionsPageController::class, 'edit'])
             ->name('connections.edit')
-            ->middleware(['can:manage automation connections', $connectionGuard]);
+            ->middleware($connectionGuard);
 
         // ================================================================
         // JSON API (consumed by Vue Flow canvas + Listing AJAX)
