@@ -387,7 +387,7 @@ async function save({ silent = false } = {}) {
     if (!automation.value.name?.trim()) {
         nameInvalid.value = true;
         if (!silent) {
-            notify('error', __('Bitte benenne die Automation, bevor du speicherst.'));
+            notify('error', __('Please name the automation before you save.'));
             nameInputRef.value?.focus();
             nameInputRef.value?.select();
         }

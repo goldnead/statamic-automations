@@ -289,7 +289,7 @@ export function useGraphMutations({ automation, selectedNodeKey, library, histor
         if (target && isTriggerHandle(target.type)) {
             const triggerCount = nodes().filter((n) => isTriggerHandle(n.type)).length;
             if (triggerCount <= 1) {
-                notify('error', __("Ein Flow braucht einen Trigger. Nutze 'Trigger ersetzen', um ihn zu wechseln."));
+                notify('error', __("A flow needs a trigger. Use 'Replace trigger' to switch it."));
                 return;
             }
         }

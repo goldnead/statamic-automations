@@ -1,7 +1,7 @@
 <template>
     <Modal
         :open="open"
-        :title="__('E-Mail-Vorlage wählen')"
+        :title="__('Choose email template')"
         icon="layout-list"
         class="max-w-4xl!"
         @update:open="$emit('update:open', $event)"
@@ -18,7 +18,7 @@
                 <Input
                     v-model="query"
                     type="search"
-                    :placeholder="__('Vorlagen durchsuchen…')"
+                    :placeholder="__('Search templates…')"
                     class="mb-2"
                     @keydown.down.prevent="moveHighlight(1)"
                     @keydown.up.prevent="moveHighlight(-1)"
@@ -36,10 +36,10 @@
                     @keydown.enter.prevent="confirmSelection"
                 >
                     <p v-if="listLoading" class="px-3 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
-                        {{ __('Vorlagen werden geladen…') }}
+                        {{ __('Loading templates…') }}
                     </p>
                     <p v-else-if="!filtered.length" class="px-3 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
-                        {{ query ? __('Keine Treffer.') : __('Keine Vorlagen vorhanden.') }}
+                        {{ query ? __('No matches.') : __('No templates yet.') }}
                     </p>
 
                     <button
@@ -67,7 +67,7 @@
                             />
                         </span>
                         <span class="mt-0.5 block truncate text-xs text-gray-500 dark:text-gray-400">
-                            {{ tpl.subject || __('(kein Betreff)') }}
+                            {{ tpl.subject || __('(no subject)') }}
                         </span>
                     </button>
                 </div>
@@ -80,7 +80,7 @@
                     class="flex flex-col items-center justify-center gap-2 h-full min-h-72 text-sm text-gray-500 dark:text-gray-400"
                 >
                     <Icon name="loading" class="size-5 animate-spin" />
-                    <span>{{ __('Vorschau wird geladen…') }}</span>
+                    <span>{{ __('Loading preview…') }}</span>
                 </div>
 
                 <!-- The reason comes from the endpoint (unknown slug, foreign
@@ -92,17 +92,17 @@
                     class="flex flex-col items-center justify-center gap-2 h-full min-h-72 px-6 text-center text-sm text-red-600 dark:text-red-400"
                 >
                     <Icon name="warning-diamond" class="size-5 shrink-0" />
-                    <span class="font-medium">{{ __('Diese Vorlage lässt sich nicht anzeigen.') }}</span>
+                    <span class="font-medium">{{ __('This template cannot be displayed.') }}</span>
                     <span class="text-xs text-gray-600 dark:text-gray-400">{{ previewError }}</span>
                 </div>
 
                 <div v-else-if="preview" class="flex flex-col gap-2">
                     <header class="px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900">
                         <p class="m-0 mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-                            {{ __('Betreff') }}
+                            {{ __('Subject') }}
                         </p>
                         <p class="m-0 text-sm font-semibold leading-snug text-gray-900 dark:text-gray-100 truncate">
-                            {{ preview.subject || __('(kein Betreff)') }}
+                            {{ preview.subject || __('(no subject)') }}
                         </p>
                         <p v-if="preview.preview" class="m-0 mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate">
                             {{ preview.preview }}
@@ -119,28 +119,28 @@
                             :srcdoc="preview.html"
                             sandbox=""
                             class="sa-email-canvas block w-full h-[40vh] min-h-72 border-0"
-                            :title="__('Vorschau der Vorlage')"
+                            :title="__('Template preview')"
                             loading="lazy"
                         />
                     </div>
                 </div>
 
                 <div v-else class="flex items-center justify-center h-full min-h-72 text-sm text-gray-500 dark:text-gray-400">
-                    <span>{{ __('Vorlage links auswählen, um die Vorschau zu sehen.') }}</span>
+                    <span>{{ __('Select a template on the left to see the preview.') }}</span>
                 </div>
             </div>
         </div>
 
         <template #footer>
             <div class="flex items-center justify-end gap-2 px-4 py-3">
-                <Button variant="ghost" :text="__('Abbrechen')" @click="$emit('update:open', false)" />
+                <Button variant="ghost" :text="__('Cancel')" @click="$emit('update:open', false)" />
                 <!-- A template that does not render here does not send either
                      (same brand-scoped resolve in SendEmailAction), so taking
                      it would arm a node with a mail nobody ever gets. -->
                 <Button
                     variant="primary"
                     icon="checkmark"
-                    :text="__('Diese Vorlage verwenden')"
+                    :text="__('Use this template')"
                     :disabled="!highlighted || previewLoading || !!previewError"
                     @click="confirmSelection"
                 />

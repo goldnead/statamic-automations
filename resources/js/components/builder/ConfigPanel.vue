@@ -106,7 +106,7 @@
                                 size="xs"
                                 variant="ghost"
                                 icon="layout-list"
-                                :text="__('Vorlage wählen')"
+                                :text="__('Choose template')"
                                 @click="openEmailPicker(field)"
                             />
                         </div>
