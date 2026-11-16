@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 2.45.0 — 2026-11-16
+
+### Changed
+
+- The Control Panel is translated into German: 197 more texts in `resources/lang/de.json`. The builder components that used German texts as keys (email template picker, mail preview, key/value field, config panel, graph mutations, automation editor) now use the English source text as key, like the rest of the addon; a site that overrides one of those German keys has to follow the key. The built Control Panel bundle is rebuilt.
 
 ### Fixed
 
