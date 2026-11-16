@@ -145,7 +145,7 @@ describe('the mail preview', () => {
             .map((el) => el.attributes('data-attr-text'));
 
         expect(buttons).not.toContain('Vorschau');
-        expect(buttons).toContain('Vorlage wählen');
+        expect(buttons).toContain('Choose template');
     });
 
     it('hands the pane the live config of the node, not just its key', () => {
@@ -196,10 +196,10 @@ describe('state carried across node selections', () => {
         });
 
         const picker = wrapper.findAll('[data-attr-text]')
-            .find((el) => el.attributes('data-attr-text') === 'Vorlage wählen');
+            .find((el) => el.attributes('data-attr-text') === 'Choose template');
         await picker.trigger('click');
 
-        const modal = () => wrapper.findAll('[data-attr-title="E-Mail-Vorlage wählen"]')[0];
+        const modal = () => wrapper.findAll('[data-attr-title="Choose email template"]')[0];
 
         expect(modal().attributes('data-attr-open')).toBe('true');
 
