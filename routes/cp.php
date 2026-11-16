@@ -1,5 +1,6 @@
 <?php
 
+use Goldnead\BrandContext\Http\Middleware\GuardSetup;
 use Goldnead\StatamicAutomations\Http\Controllers\ActivityController;
 use Goldnead\StatamicAutomations\Http\Controllers\AuditController;
 use Goldnead\StatamicAutomations\Http\Controllers\AutomationsController;
@@ -20,6 +21,7 @@ use Goldnead\StatamicAutomations\Http\Controllers\RuleController;
 use Goldnead\StatamicAutomations\Http\Controllers\RunsController;
 use Goldnead\StatamicAutomations\Http\Controllers\TemplatesController;
 use Goldnead\StatamicAutomations\Http\Controllers\VersionsController;
+use Goldnead\StatamicAutomations\Support\Setup;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -45,10 +47,20 @@ use Illuminate\Support\Facades\Route;
  * all applied by Statamic. That is why the route names resolve through
  * `cp_route('statamic-automations.*')` (= `statamic.cp.statamic-automations.*`)
  * in the controllers and CP navigation.
+ *
+ * The three detail pages below carry the setup guard. On an install whose
+ * migrations never ran they answer with the screen the listing shows, instead
+ * of a query error; the guard runs before route-model binding, which is where
+ * the failing query sits. Each list names the tables its controller's
+ * `Setup::guard()` names, and the definition table follows the storage driver.
  */
+$automationGuard = GuardSetup::using(Setup::class, 'statamic-automations::automations.nav.automations', 'automation_runs', ...Setup::definitionTables('automations'));
+$runGuard = GuardSetup::using(Setup::class, 'statamic-automations::automations.nav.runs', 'automation_runs', 'automations');
+$connectionGuard = GuardSetup::using(Setup::class, 'Connections', 'automation_connections', 'automation_connection_operations');
+
 Route::prefix('automations')
     ->name('statamic-automations.')
-    ->group(function () {
+    ->group(function () use ($automationGuard, $runGuard, $connectionGuard) {
         // ================================================================
         // Inertia pages (rendered via Statamic.$inertia.register())
         // ================================================================
@@ -63,13 +75,15 @@ Route::prefix('automations')
             ->name('automations.create');
 
         Route::get('automations/{automationFlow}/edit', [AutomationsPageController::class, 'edit'])
-            ->name('automations.edit');
+            ->name('automations.edit')
+            ->middleware(['can:edit automations', $automationGuard]);
 
         Route::get('runs', [RunsPageController::class, 'index'])
             ->name('runs.index');
 
         Route::get('runs/{run}', [RunsPageController::class, 'show'])
-            ->name('runs.show');
+            ->name('runs.show')
+            ->middleware(['can:view automation runs', $runGuard]);
 
         // Every automation that is one trigger and one mail, as a sentence
         // each. See Http\Controllers\Pages\RulesPageController for which
@@ -110,7 +124,8 @@ Route::prefix('automations')
             ->name('connections.create');
 
         Route::get('connections/{automationConnection}/edit', [ConnectionsPageController::class, 'edit'])
-            ->name('connections.edit');
+            ->name('connections.edit')
+            ->middleware(['can:manage automation connections', $connectionGuard]);
 
         // ================================================================
         // JSON API (consumed by Vue Flow canvas + Listing AJAX)

@@ -150,3 +150,43 @@ it('leaves the definition table out of the guard on a flat-file install', functi
         ->and($page['props']['tables'])->toContain('automation_runs')
         ->and($page['props']['tables'])->not->toContain('automations');
 });
+
+/**
+ * The detail pages: the same screen as the listing, and shown before
+ * route-model binding runs the query that throws. Each row is the route name and
+ * one of its tables.
+ */
+dataset('guarded detail pages', [
+    'automation edit' => ['statamic-automations.automations.edit', 'automation_runs'],
+    'run detail' => ['statamic-automations.runs.show', 'automation_runs'],
+    'connection edit' => ['statamic-automations.connections.edit', 'automation_connections'],
+]);
+
+/**
+ * A detail page as an Inertia XHR, the same way automationsSetupPage() asks for a listing.
+ */
+function automationsDetailPage(string $route, int $id): array
+{
+    $response = test()->withHeaders(['X-Inertia' => 'true'])->get(cp_route($route, $id));
+
+    $response->assertOk();
+
+    return json_decode($response->getContent(), true, flags: JSON_THROW_ON_ERROR);
+}
+
+it('shows the setup screen on a detail page when its tables are missing', function (string $route, string $table): void {
+    $page = withUnmigratedDatabase(fn () => automationsDetailPage($route, 1));
+
+    expect($page['component'])->toBe('statamic-automations::SetupRequired')
+        ->and($page['props']['tables'])->toContain($table);
+})->with('guarded detail pages');
+
+it('sends a guest to the login on a detail page with missing tables, never to the setup screen', function (string $route, string $table): void {
+    auth()->guard()->logout();
+
+    withUnmigratedDatabase(fn () => $this->get(cp_route($route, 1))->assertRedirect());
+})->with('guarded detail pages');
+
+it('still answers 404 for an unknown id on a migrated install', function (string $route, string $table): void {
+    $this->get(cp_route($route, 999999))->assertNotFound();
+})->with('guarded detail pages');
