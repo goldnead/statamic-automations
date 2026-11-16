@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixed
+
+- Control Panel: the detail pages (automation edit, run detail, connection edit) show the same setup screen as the listing when the addon's tables are missing, instead of a query error (HTTP 500). They carry the `brand.setup-guard` middleware of statamic-brand-context 1.27, which runs before route-model binding.
+
+### Upgrading
+
+- Requires statamic-brand-context 1.27 or newer. No migration, no new config key.
+
 ## 2.44.0 — 2026-10-28
 
 ### Fixed: run storage grew without bound
