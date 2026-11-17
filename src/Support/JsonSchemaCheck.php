@@ -74,20 +74,51 @@ class JsonSchemaCheck
 
     /**
      * Enum members come from the (assoc-decoded) schema, the value from the
-     * object-decoded reply, so compare their JSON forms.
+     * object-decoded reply, so compare their JSON forms, with the keys of every
+     * object in sorted order: two objects are equal whatever order their keys
+     * came in, while the order of a list still counts.
      *
      * @param  array<int, mixed>  $members
      */
     protected static function inEnum(mixed $value, array $members): bool
     {
-        $needle = json_encode($value);
+        $needle = json_encode(self::canonical($value));
 
         foreach ($members as $member) {
-            if (json_encode($member) === $needle) {
+            if (json_encode(self::canonical($member)) === $needle) {
+                return true;
+            }
+
+            // A schema decoded as an array turns `{}` into `[]`: an empty
+            // member stands for an empty object as well.
+            if ($member === [] && $value instanceof stdClass && get_object_vars($value) === []) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /** The value with the keys of every object (stdClass or associative array) sorted. */
+    protected static function canonical(mixed $value): mixed
+    {
+        if ($value instanceof stdClass) {
+            $value = get_object_vars($value);
+            ksort($value);
+
+            return (object) array_map(self::canonical(...), $value);
+        }
+
+        if (is_array($value)) {
+            if (! array_is_list($value)) {
+                ksort($value);
+
+                return (object) array_map(self::canonical(...), $value);
+            }
+
+            return array_map(self::canonical(...), $value);
+        }
+
+        return $value;
     }
 }

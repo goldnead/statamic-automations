@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- AI "Generate" node, JSON output: an `enum` member that is an object now matches a reply whose object has its keys in another order. Lists keep their order. Before, the two were compared as JSON text, so `{"b":2,"a":1}` failed against `{"a":1,"b":2}`.
+- "Fetch asset from URL": when the new file fails the final check after the asset was saved, the rollback now also takes the asset back in the repository. A new asset is deleted through Statamic (the record goes and `AssetDeleted` fires); an overwritten one is saved again from the restored files. Before, the files were restored but the saved record and the `AssetSaved` it had fired stayed.
+
 ## 2.45.0 — 2026-11-16
 
 ### Changed
