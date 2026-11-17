@@ -470,5 +470,6 @@
     "A flow can only have one trigger.": "Ein Ablauf kann nur einen Auslöser haben.",
     "A flow needs a trigger. Use 'Replace trigger' to switch it.": "Ein Ablauf braucht einen Auslöser. Nutze „Auslöser ersetzen“, um ihn zu wechseln.",
     "copy": "Kopie",
-    "Copied node added unconnected — the original has no output to attach it to.": "Die Kopie des Knotens wurde ohne Verbindung hinzugefügt, weil das Original keinen Ausgang hat, an dem sie hängen könnte."
+    "Copied node added unconnected — the original has no output to attach it to.": "Die Kopie des Knotens wurde ohne Verbindung hinzugefügt, weil das Original keinen Ausgang hat, an dem sie hängen könnte.",
+    "The test run stopped waiting for the AI after :seconds s. Try a shorter prompt or fewer max tokens, or run the automation for real: there the node timeout applies.": "Der Testlauf hat nach :seconds s nicht länger auf die KI gewartet. Nimm einen kürzeren Prompt oder weniger maximale Tokens, oder lass die Automation echt laufen: Dort gilt das Timeout des Knotens."
 }
