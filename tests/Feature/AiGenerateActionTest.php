@@ -222,6 +222,18 @@ it('explains a test mode timeout instead of hanging or showing a raw cURL error'
         ->and($result->error)->not->toContain('cURL');
 });
 
+it('explains a test mode timeout also when the node limit is below the cap', function (): void {
+    config()->set('automations.test_mode.call_real_ai', true);
+    Http::fake(fn () => throw new ConnectionException('cURL error 28: Operation timed out'));
+
+    $result = aiAction()->execute(AutomationContext::make([], testMode: true), ['prompt' => 'hi', 'timeout' => 20]);
+
+    expect($result->isFailed())->toBeTrue()
+        ->and($result->error)->toContain('20 s')
+        ->and($result->error)->toContain('test run')
+        ->and($result->error)->not->toContain('cURL');
+});
+
 it('passes a client failure through to the run log', function (): void {
     fakeAi(throws: new AiRequestException('AI request rejected: overloaded'));
 

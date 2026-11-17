@@ -359,16 +359,16 @@ class AiGenerateAction implements AutomationAction
         // A test run answers inside one web request, which FPM or nginx ends
         // long before a node's own limit (up to 900 s). So a real call in test
         // mode waits at most TEST_MODE_MAX_WAIT; queued runs keep their limit.
-        $cappedForTest = $context->isTestMode() && $timeout > self::TEST_MODE_MAX_WAIT;
-        if ($cappedForTest) {
-            $timeout = self::TEST_MODE_MAX_WAIT;
+        $testRun = $context->isTestMode();
+        if ($testRun) {
+            $timeout = min($timeout, self::TEST_MODE_MAX_WAIT);
         }
 
         try {
             $payload = $this->client->messages($body, $timeout);
         } catch (AiRequestException $e) {
-            if ($cappedForTest && $e->timedOut) {
-                return ActionResult::failed(__('The test run stopped waiting for the AI after :seconds s. Try a shorter prompt or fewer max tokens, or run the automation for real: there the node timeout applies.', ['seconds' => $timeout]));
+            if ($testRun && $e->timedOut) {
+                return ActionResult::failed(__('The test run got no answer from the AI within :seconds s. Try a shorter prompt or fewer max tokens.', ['seconds' => $timeout]));
             }
 
             return ActionResult::failed($e->getMessage());
