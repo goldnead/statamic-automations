@@ -295,13 +295,13 @@ it('takes the saved asset back when verifying a new download fails', function ()
 });
 
 it('saves the restored asset again when verifying an overwrite fails', function (): void {
-    FakeWeb::fake(['files.example.test/*' => FakeWeb::sequence()->push('old content')->push('new content')]);
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::sequence()->push('old content')->push('a much longer new content')]);
 
     fetchAction()->execute(AutomationContext::make(), fetchConfig());
 
     $events = [];
-    Event::listen(AssetSaved::class, function () use (&$events): void {
-        $events[] = 'saved';
+    Event::listen(AssetSaved::class, function ($event) use (&$events): void {
+        $events[] = 'saved:'.$event->asset->size();
     });
     Event::listen(AssetDeleted::class, function () use (&$events): void {
         $events[] = 'deleted';
@@ -310,8 +310,8 @@ it('saves the restored asset again when verifying an overwrite fails', function 
     $result = failingAfterOverwrite(true)->execute(AutomationContext::make(), fetchConfig(['overwrite' => true]));
 
     expect($result->isFailed())->toBeTrue();
-    // The new save, then the old state saved again; the asset is never deleted.
-    expect($events)->toBe(['saved', 'saved']);
+    // The new save (25 bytes), then the old state (11 bytes) saved again; never deleted.
+    expect($events)->toBe(['saved:25', 'saved:11']);
     expect(Asset::find('media::call.mp4')->size())->toBe(11);
     expect(file_get_contents($this->roots['media'].'/call.mp4'))->toBe('old content');
 });

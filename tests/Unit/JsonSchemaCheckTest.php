@@ -26,6 +26,14 @@ it('still rejects an enum object with another value or another list order', func
     expect(JsonSchemaCheck::violations(json_decode('{"a":1}'), $schema))->not->toBe([]);
 });
 
+it('matches an empty object against an empty enum member', function () {
+    $schema = ['enum' => [[]]];
+
+    expect(JsonSchemaCheck::violations(json_decode('{}'), $schema))->toBe([]);
+    expect(JsonSchemaCheck::violations(json_decode('[]'), $schema))->toBe([]);
+    expect(JsonSchemaCheck::violations(json_decode('{"a":1}'), $schema))->not->toBe([]);
+});
+
 it('keeps matching scalar enum members', function () {
     $schema = ['enum' => ['red', 3, null, true]];
 

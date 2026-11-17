@@ -678,8 +678,9 @@ class FetchAssetFromUrlAction implements AutomationAction
     {
         try {
             $asset->delete();
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             // The rollback removes the files; the record is all that may stay.
+            report($e);
         }
     }
 
@@ -690,9 +691,12 @@ class FetchAssetFromUrlAction implements AutomationAction
     protected function saveRestored(string $handle, string $path): void
     {
         try {
-            $this->makeAsset($handle, $path)->save();
-        } catch (\Throwable) {
+            if ($this->makeAsset($handle, $path)->save() === false) {
+                report(new \RuntimeException("The restored asset '{$handle}::{$path}' could not be saved again; its record may be stale."));
+            }
+        } catch (\Throwable $e) {
             // The files are right; a stale record is the lesser harm.
+            report($e);
         }
     }
 

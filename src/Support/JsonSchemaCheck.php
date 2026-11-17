@@ -88,6 +88,12 @@ class JsonSchemaCheck
             if (json_encode(self::canonical($member)) === $needle) {
                 return true;
             }
+
+            // A schema decoded as an array turns `{}` into `[]`: an empty
+            // member stands for an empty object as well.
+            if ($member === [] && $value instanceof stdClass && get_object_vars($value) === []) {
+                return true;
+            }
         }
 
         return false;
