@@ -16,8 +16,11 @@ use Goldnead\StatamicAutomations\Tests\Support\FakeRequest;
 use Goldnead\StatamicAutomations\Tests\Support\FakeWeb;
 use GuzzleHttp\Promise\FulfilledPromise;
 use GuzzleHttp\Psr7\Response as PsrResponse;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Statamic\Events\AssetDeleted;
+use Statamic\Events\AssetSaved;
 use Statamic\Facades\Asset;
 use Statamic\Facades\AssetContainer;
 
@@ -270,6 +273,47 @@ it('rolls back a failure inside store() after the overwrite', function (): void 
     expect(file_get_contents($this->roots['media'].'/call.mp4'))->toBe('old content');
     expect(file_get_contents($this->roots['media'].'/.meta/call.mp4.yaml'))->toBe($meta);
     expect(filesIn($this->roots['media']))->toBe(['.meta/call.mp4.yaml', 'call.mp4']);
+});
+
+it('takes the saved asset back when verifying a new download fails', function (): void {
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::response('new content')]);
+
+    $events = [];
+    Event::listen(AssetSaved::class, function () use (&$events): void {
+        $events[] = 'saved';
+    });
+    Event::listen(AssetDeleted::class, function () use (&$events): void {
+        $events[] = 'deleted';
+    });
+
+    $result = failingAfterOverwrite(true)->execute(AutomationContext::make(), fetchConfig());
+
+    expect($result->isFailed())->toBeTrue();
+    expect($events)->toBe(['saved', 'deleted']);
+    expect(Asset::find('media::call.mp4'))->toBeNull();
+    expect(filesIn($this->roots['media']))->toBe([]);
+});
+
+it('saves the restored asset again when verifying an overwrite fails', function (): void {
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::sequence()->push('old content')->push('new content')]);
+
+    fetchAction()->execute(AutomationContext::make(), fetchConfig());
+
+    $events = [];
+    Event::listen(AssetSaved::class, function () use (&$events): void {
+        $events[] = 'saved';
+    });
+    Event::listen(AssetDeleted::class, function () use (&$events): void {
+        $events[] = 'deleted';
+    });
+
+    $result = failingAfterOverwrite(true)->execute(AutomationContext::make(), fetchConfig(['overwrite' => true]));
+
+    expect($result->isFailed())->toBeTrue();
+    // The new save, then the old state saved again; the asset is never deleted.
+    expect($events)->toBe(['saved', 'saved']);
+    expect(Asset::find('media::call.mp4')->size())->toBe(11);
+    expect(file_get_contents($this->roots['media'].'/call.mp4'))->toBe('old content');
 });
 
 it('does not roll back a successful overwrite when deleting a backup throws', function (): void {

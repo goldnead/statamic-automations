@@ -552,6 +552,9 @@ class FetchAssetFromUrlAction implements AutomationAction
         $created = [];
         $backups = [];
         $restore = [];
+        $saved = null;
+        $existed = false;
+        $path = $original;
 
         try {
             $path = $plan['overwrite'] ? $original : $this->freePath($disk, $handle, $original);
@@ -613,6 +616,10 @@ class FetchAssetFromUrlAction implements AutomationAction
                 throw new \RuntimeException(__('The asset could not be saved.'));
             }
 
+            // From here the repository (and every AssetSaved listener) knows
+            // the asset, so a rollback has to take it back there too.
+            $saved = $asset;
+
             $this->verifyStored($disk, $asset);
 
             $output = [
@@ -634,7 +641,15 @@ class FetchAssetFromUrlAction implements AutomationAction
 
             return $output;
         } catch (\Throwable $e) {
+            if ($saved !== null && ! $existed) {
+                $this->forgetSaved($saved);
+            }
+
             $kept = $this->rollBack($disk, $created, $restore);
+
+            if ($saved !== null && $existed && $kept === []) {
+                $this->saveRestored($handle, $path);
+            }
 
             // A backup goes only once its file is confirmed back in place;
             // one that could not be restored is the only copy left.
@@ -651,6 +666,33 @@ class FetchAssetFromUrlAction implements AutomationAction
             throw $e;
         } finally {
             $lock->release();
+        }
+    }
+
+    /**
+     * A new asset that was saved and then failed verification: delete it
+     * through Statamic, so the repository record goes and AssetDeleted fires.
+     * Best effort; the file cleanup of the rollback follows either way.
+     */
+    protected function forgetSaved(AssetItem $asset): void
+    {
+        try {
+            $asset->delete();
+        } catch (\Throwable) {
+            // The rollback removes the files; the record is all that may stay.
+        }
+    }
+
+    /**
+     * An overwritten asset whose files are back: save it again from them, so
+     * the repository record and the listeners see the old state, not the new.
+     */
+    protected function saveRestored(string $handle, string $path): void
+    {
+        try {
+            $this->makeAsset($handle, $path)->save();
+        } catch (\Throwable) {
+            // The files are right; a stale record is the lesser harm.
         }
     }
 

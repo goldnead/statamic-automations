@@ -152,9 +152,13 @@ it('fails on a non-2xx status unless told otherwise', function () {
     $strict = runOperation('connection.slack.post_message', ['channel' => 'c', 'text' => 't']);
     $lenient = runOperation('connection.slack.lenient', ['channel' => 'c', 'text' => 't']);
 
-    expect($strict->status)->toBe(AutomationNodeRun::STATUS_FAILED);
+    // The error message first: if this test ever fails on a slow engine, the
+    // run shows why the lenient node failed instead of only that it did.
+    expect($lenient->error_message)->toBeNull();
     expect($lenient->status)->toBe(AutomationNodeRun::STATUS_SUCCESS);
     expect($lenient->output['status'])->toBe(500);
+    expect($strict->status)->toBe(AutomationNodeRun::STATUS_FAILED);
+    expect($strict->error_message)->toContain('HTTP 500');
 });
 
 it('fails cleanly when a required input is missing', function () {
