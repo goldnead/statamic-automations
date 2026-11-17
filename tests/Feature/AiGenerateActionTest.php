@@ -183,6 +183,57 @@ it('reports an HTTP timeout as a readable failure naming the limit', function ()
         ->and($result->error)->toContain('5 s');
 });
 
+it('caps the wait for a real AI call in test mode at 55 seconds', function (): void {
+    config()->set('automations.test_mode.call_real_ai', true);
+    $fake = fakeAi();
+
+    $result = aiAction()->execute(AutomationContext::make([], testMode: true), ['prompt' => 'hi', 'timeout' => 600]);
+
+    expect($result->isSuccess())->toBeTrue()->and($fake->timeout)->toBe(55);
+});
+
+it('keeps a node timeout below the test mode cap', function (): void {
+    config()->set('automations.test_mode.call_real_ai', true);
+    $fake = fakeAi();
+
+    aiAction()->execute(AutomationContext::make([], testMode: true), ['prompt' => 'hi', 'timeout' => 20]);
+
+    expect($fake->timeout)->toBe(20);
+});
+
+it('does not cap the timeout outside test mode', function (): void {
+    config()->set('automations.test_mode.call_real_ai', true);
+    $fake = fakeAi();
+
+    aiAction()->execute(AutomationContext::make([]), ['prompt' => 'hi', 'timeout' => 600]);
+
+    expect($fake->timeout)->toBe(600);
+});
+
+it('explains a test mode timeout instead of hanging or showing a raw cURL error', function (): void {
+    config()->set('automations.test_mode.call_real_ai', true);
+    Http::fake(fn () => throw new ConnectionException('cURL error 28: Operation timed out'));
+
+    $result = aiAction()->execute(AutomationContext::make([], testMode: true), ['prompt' => 'hi', 'timeout' => 600]);
+
+    expect($result->isFailed())->toBeTrue()
+        ->and($result->error)->toContain('55 s')
+        ->and($result->error)->toContain('test run')
+        ->and($result->error)->not->toContain('cURL');
+});
+
+it('explains a test mode timeout also when the node limit is below the cap', function (): void {
+    config()->set('automations.test_mode.call_real_ai', true);
+    Http::fake(fn () => throw new ConnectionException('cURL error 28: Operation timed out'));
+
+    $result = aiAction()->execute(AutomationContext::make([], testMode: true), ['prompt' => 'hi', 'timeout' => 20]);
+
+    expect($result->isFailed())->toBeTrue()
+        ->and($result->error)->toContain('20 s')
+        ->and($result->error)->toContain('test run')
+        ->and($result->error)->not->toContain('cURL');
+});
+
 it('passes a client failure through to the run log', function (): void {
     fakeAi(throws: new AiRequestException('AI request rejected: overloaded'));
 

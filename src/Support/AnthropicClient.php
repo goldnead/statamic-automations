@@ -23,11 +23,13 @@ class AnthropicClient implements AiClient
                 ->baseUrl(rtrim((string) config('automations.ai.base_url', 'https://api.anthropic.com'), '/'))
                 ->post('/v1/messages', $body);
         } catch (\Throwable $e) {
-            $hint = stripos($e->getMessage(), 'timed out') !== false || stripos($e->getMessage(), 'cURL error 28') !== false
-                ? " (no answer within {$timeout} s; raise the node's Timeout)"
-                : '';
+            $timedOut = stripos($e->getMessage(), 'timed out') !== false || stripos($e->getMessage(), 'cURL error 28') !== false;
+            $hint = $timedOut ? " (no answer within {$timeout} s; raise the node's Timeout)" : '';
 
-            throw new AiRequestException('AI request failed: '.$e->getMessage().$hint, 0, $e);
+            $failure = new AiRequestException('AI request failed: '.$e->getMessage().$hint, 0, $e);
+            $failure->timedOut = $timedOut;
+
+            throw $failure;
         }
 
         if (! $response->successful()) {

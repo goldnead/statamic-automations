@@ -34,6 +34,9 @@ use Goldnead\StatamicAutomations\Support\JsonSchemaCheck;
  */
 class AiGenerateAction implements AutomationAction
 {
+    /** Longest wait, in seconds, for a real AI call during a test run. */
+    public const TEST_MODE_MAX_WAIT = 55;
+
     public function __construct(protected AiClient $client) {}
 
     public static function handle(): string
@@ -353,9 +356,21 @@ class AiGenerateAction implements AutomationAction
             $body['system'] = $system;
         }
 
+        // A test run answers inside one web request, which FPM or nginx ends
+        // long before a node's own limit (up to 900 s). So a real call in test
+        // mode waits at most TEST_MODE_MAX_WAIT; queued runs keep their limit.
+        $testRun = $context->isTestMode();
+        if ($testRun) {
+            $timeout = min($timeout, self::TEST_MODE_MAX_WAIT);
+        }
+
         try {
             $payload = $this->client->messages($body, $timeout);
         } catch (AiRequestException $e) {
+            if ($testRun && $e->timedOut) {
+                return ActionResult::failed(__('The test run got no answer from the AI within :seconds s. Try a shorter prompt or fewer max tokens.', ['seconds' => $timeout]));
+            }
+
             return ActionResult::failed($e->getMessage());
         }
 
