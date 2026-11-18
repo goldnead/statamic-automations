@@ -16,6 +16,7 @@ use Goldnead\StatamicAutomations\Tests\Support\FakeRequest;
 use Goldnead\StatamicAutomations\Tests\Support\FakeWeb;
 use GuzzleHttp\Promise\FulfilledPromise;
 use GuzzleHttp\Psr7\Response as PsrResponse;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
@@ -23,6 +24,7 @@ use Statamic\Events\AssetDeleted;
 use Statamic\Events\AssetSaved;
 use Statamic\Facades\Asset;
 use Statamic\Facades\AssetContainer;
+use Statamic\Facades\YAML;
 
 require_once __DIR__.'/../Support/FakeWeb.php';
 
@@ -261,7 +263,9 @@ function failingAfterOverwrite(bool $restoreWorks): FetchAssetFromUrlAction
 }
 
 it('rolls back a failure inside store() after the overwrite', function (): void {
-    FakeWeb::fake(['files.example.test/*' => FakeWeb::sequence()->push('old content')->push('new content')]);
+    // The new body is longer, so the meta of the overwritten file (`size`) differs from the old one
+    // and a rollback that leaves the new meta behind cannot pass the comparison below.
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::sequence()->push('old content')->push('new content, and longer')]);
 
     fetchAction()->execute(AutomationContext::make(), fetchConfig());
     $meta = file_get_contents($this->roots['media'].'/.meta/call.mp4.yaml');
@@ -271,7 +275,13 @@ it('rolls back a failure inside store() after the overwrite', function (): void 
     expect($result->isFailed())->toBeTrue();
     expect($result->error)->toContain('boom after overwrite');
     expect(file_get_contents($this->roots['media'].'/call.mp4'))->toBe('old content');
-    expect(file_get_contents($this->roots['media'].'/.meta/call.mp4.yaml'))->toBe($meta);
+
+    // last_modified is the file's mtime in seconds; the restore runs in a later second
+    // than the first download, so it is checked for presence only and the rest must match.
+    $metaNow = YAML::parse(file_get_contents($this->roots['media'].'/.meta/call.mp4.yaml'));
+    expect($metaNow)->toHaveKey('last_modified');
+    expect($metaNow['last_modified'])->toBeInt();
+    expect(Arr::except($metaNow, ['last_modified']))->toBe(Arr::except(YAML::parse($meta), ['last_modified']));
     expect(filesIn($this->roots['media']))->toBe(['.meta/call.mp4.yaml', 'call.mp4']);
 });
 
