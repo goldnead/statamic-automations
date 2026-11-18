@@ -263,7 +263,9 @@ function failingAfterOverwrite(bool $restoreWorks): FetchAssetFromUrlAction
 }
 
 it('rolls back a failure inside store() after the overwrite', function (): void {
-    FakeWeb::fake(['files.example.test/*' => FakeWeb::sequence()->push('old content')->push('new content')]);
+    // The new body is longer, so the meta of the overwritten file (`size`) differs from the old one
+    // and a rollback that leaves the new meta behind cannot pass the comparison below.
+    FakeWeb::fake(['files.example.test/*' => FakeWeb::sequence()->push('old content')->push('new content, and longer')]);
 
     fetchAction()->execute(AutomationContext::make(), fetchConfig());
     $meta = file_get_contents($this->roots['media'].'/.meta/call.mp4.yaml');
