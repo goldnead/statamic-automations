@@ -20,7 +20,6 @@ use Goldnead\StatamicAutomations\Support\UnsafeHostException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Schema;
 
 const HARDENING_SECRET = 'sk-live-7f3a9c1e5b';
 
@@ -298,12 +297,12 @@ it('keeps the stored secret when an update sends the placeholder or nothing', fu
 })->with([ConnectionsController::PLACEHOLDER, '', null]);
 
 it('lists nodes and resolves handles while the connection tables are missing', function () {
-    Schema::drop('automation_connection_operations');
-    Schema::drop('automation_connections');
-    AutomationConnectionOperation::flushCache();
+    $this->withUnmigratedDatabase(function () {
+        AutomationConnectionOperation::flushCache();
 
-    $registry = app(NodeRegistry::class);
+        $registry = app(NodeRegistry::class);
 
-    expect(collect($registry->all())->pluck('handle'))->toContain('send_email');
-    expect($registry->has('connection.svc.op'))->toBeFalse();
+        expect(collect($registry->all())->pluck('handle'))->toContain('send_email');
+        expect($registry->has('connection.svc.op'))->toBeFalse();
+    });
 });

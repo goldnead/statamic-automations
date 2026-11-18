@@ -6,6 +6,7 @@ use Goldnead\StatamicAutomations\ServiceProvider;
 use Goldnead\StatamicAutomations\Tests\Feature\RouteParameterCollisionTest;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Support\Facades\DB;
 use Statamic\Facades\CP\Nav;
 use Statamic\Facades\User;
 use Statamic\Providers\StatamicServiceProvider;
@@ -257,5 +258,38 @@ abstract class TestCase extends AddonTestCase
         $this->actingAs($user);
 
         return $user;
+    }
+
+    /**
+     * Run something against a database on which nothing has ever been migrated.
+     *
+     * An empty second connection rather than `Schema::drop()` on the real one.
+     * DDL commits implicitly on MySQL: the transaction `RefreshDatabase` opened
+     * is gone, its rollback runs into nothing, and testbench's rollback of the
+     * registered migrations then fails on a table that no longer exists. An
+     * empty database is also the more faithful picture of the install this is
+     * about: the addon is there, the tables never were. Code standard, section 15.
+     */
+    protected function withUnmigratedDatabase(callable $work): mixed
+    {
+        config()->set('database.connections.unmigrated', [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+            'prefix' => '',
+            'foreign_key_constraints' => false,
+        ]);
+
+        $previous = (string) config('database.default');
+
+        config()->set('database.default', 'unmigrated');
+        DB::setDefaultConnection('unmigrated');
+
+        try {
+            return $work();
+        } finally {
+            config()->set('database.default', $previous);
+            DB::setDefaultConnection($previous);
+            DB::purge('unmigrated');
+        }
     }
 }

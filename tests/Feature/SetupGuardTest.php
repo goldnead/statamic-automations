@@ -10,46 +10,11 @@
  * the crash, and a line in the log saying why.
  */
 
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 beforeEach(function (): void {
     $this->actingAsSuperUser();
 });
-
-/**
- * Run something against a database on which nothing has ever been migrated.
- *
- * An empty second connection rather than `Schema::drop()` on the real one, and
- * the reason is worth writing down: testbench rolls its registered migrations
- * back when the application is torn down, and a `down()` cannot reverse a table
- * that is no longer there. Dropping leaves every case after the first one
- * failing in teardown instead of in its assertion — the worst place to look for
- * it. An empty database is also the more faithful picture of the install this
- * whole feature exists for: the addon is there, the tables never were.
- */
-function withUnmigratedDatabase(callable $work): mixed
-{
-    config()->set('database.connections.unmigrated', [
-        'driver' => 'sqlite',
-        'database' => ':memory:',
-        'prefix' => '',
-        'foreign_key_constraints' => false,
-    ]);
-
-    $previous = (string) config('database.default');
-
-    config()->set('database.default', 'unmigrated');
-    DB::setDefaultConnection('unmigrated');
-
-    try {
-        return $work();
-    } finally {
-        config()->set('database.default', $previous);
-        DB::setDefaultConnection($previous);
-        DB::purge('unmigrated');
-    }
-}
 
 /**
  * The Inertia page object behind a CP response.
@@ -96,13 +61,13 @@ dataset('guarded index pages', [
 ]);
 
 it('answers 200 rather than 500 when its tables are missing', function (string $route): void {
-    withUnmigratedDatabase(
+    $this->withUnmigratedDatabase(
         fn () => $this->withHeaders(['X-Inertia' => 'true'])->get(cp_route($route))->assertOk()
     );
 })->with('guarded index pages');
 
 it('renders the setup screen and names the missing table', function (string $route, string $table): void {
-    $page = withUnmigratedDatabase(fn () => automationsSetupPage($route));
+    $page = $this->withUnmigratedDatabase(fn () => automationsSetupPage($route));
 
     expect($page['component'])->toBe('statamic-automations::SetupRequired')
         ->and($page['props']['tables'])->toContain($table)
@@ -119,7 +84,7 @@ it('renders the setup screen and names the missing table', function (string $rou
 it('writes the reason to the log', function (string $route): void {
     Log::spy();
 
-    withUnmigratedDatabase(
+    $this->withUnmigratedDatabase(
         fn () => $this->withHeaders(['X-Inertia' => 'true'])->get(cp_route($route))->assertOk()
     );
 
@@ -144,7 +109,7 @@ it('still renders the listing on a migrated install', function (string $route, s
 it('leaves the definition table out of the guard on a flat-file install', function (): void {
     config()->set('automations.storage.driver', 'flat_file');
 
-    $page = withUnmigratedDatabase(fn () => automationsSetupPage('statamic-automations.dashboard'));
+    $page = $this->withUnmigratedDatabase(fn () => automationsSetupPage('statamic-automations.dashboard'));
 
     expect($page['component'])->toBe('statamic-automations::SetupRequired')
         ->and($page['props']['tables'])->toContain('automation_runs')
