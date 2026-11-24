@@ -1,5 +1,7 @@
 <?php
 
+use Goldnead\BrandContext\Facades\BrandContext;
+use Goldnead\BrandContext\Models\Brand;
 use Goldnead\StatamicAutomations\Context\AutomationContext;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Jobs\ResumeDelayedRun;
@@ -122,12 +124,12 @@ it('closes the run as failed when the queue aborts ResumeDelayedRun', function (
 it('keeps going with the other brands when one brand cannot dispatch', function () {
     config()->set('brand-context.multi_brand', true);
     app('brand-context')->forget();
-    $a = Goldnead\BrandContext\Models\Brand::query()->create(['handle' => 'brand-a', 'name' => 'A']);
-    $b = Goldnead\BrandContext\Models\Brand::query()->create(['handle' => 'brand-b', 'name' => 'B']);
+    $a = Brand::query()->create(['handle' => 'brand-a', 'name' => 'A']);
+    $b = Brand::query()->create(['handle' => 'brand-b', 'name' => 'B']);
 
     $runs = [];
     foreach ([$a, $b] as $brand) {
-        $runs[$brand->handle] = Goldnead\BrandContext\Facades\BrandContext::runFor($brand, function () use ($brand) {
+        $runs[$brand->handle] = BrandContext::runFor($brand, function () use ($brand) {
             $automation = Automation::create(['name' => 'S '.$brand->handle, 'handle' => 'strand-'.$brand->handle, 'enabled' => true]);
             AutomationNode::create(['automation_id' => $automation->id, 'node_key' => 't', 'type' => 'manual']);
             AutomationNode::create(['automation_id' => $automation->id, 'node_key' => 'wait', 'type' => 'delay', 'config' => ['amount' => 1, 'unit' => 'days']]);
@@ -145,7 +147,7 @@ it('keeps going with the other brands when one brand cannot dispatch', function 
     $this->artisan('automations:run-due')->assertExitCode(1);
 
     // Both brands were visited: each one's job was claimed, failed and handed back.
-    $statuses = Goldnead\BrandContext\Facades\BrandContext::withoutBrandScope(
+    $statuses = BrandContext::withoutBrandScope(
         fn () => AutomationScheduledJob::query()->pluck('status')->all()
     );
     expect($statuses)->toBe([AutomationScheduledJob::STATUS_PENDING, AutomationScheduledJob::STATUS_PENDING]);
