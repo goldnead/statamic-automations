@@ -40,6 +40,7 @@ class RunDueScheduledJobs extends Command
             ->get();
 
         $dispatched = 0;
+        $failed = 0;
 
         foreach ($due as $job) {
             // Atomically claim the job. If another overlapping tick already
@@ -50,12 +51,29 @@ class RunDueScheduledJobs extends Command
                 ->update(['status' => AutomationScheduledJob::STATUS_QUEUED]);
 
             if ($claimed === 1) {
-                ResumeDelayedRun::dispatch($job->id);
-                $dispatched++;
+                try {
+                    ResumeDelayedRun::dispatch($job->id);
+                    $dispatched++;
+                } catch (\Throwable $e) {
+                    // The queue is unreachable. Nothing picks a QUEUED row up
+                    // again, so hand the claim back: the next tick retries it.
+                    AutomationScheduledJob::query()
+                        ->where('id', $job->id)
+                        ->where('status', AutomationScheduledJob::STATUS_QUEUED)
+                        ->update(['status' => AutomationScheduledJob::STATUS_PENDING]);
+                    report($e);
+                    $failed++;
+                }
             }
         }
 
         $this->info("Dispatched {$dispatched} due scheduled job(s).");
+
+        if ($failed > 0) {
+            $this->error("{$failed} scheduled job(s) could not be dispatched and stay pending.");
+
+            return self::FAILURE;
+        }
 
         return self::SUCCESS;
     }

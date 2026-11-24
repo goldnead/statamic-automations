@@ -3,6 +3,7 @@
 namespace Goldnead\StatamicAutomations\Jobs;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
+use Goldnead\StatamicAutomations\Engine\FailsStrandedRuns;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Models\AutomationScheduledJob;
@@ -70,5 +71,18 @@ class ResumeDelayedRun implements ShouldQueue
         $job->forceFill(['status' => AutomationScheduledJob::STATUS_DISPATCHED])->save();
 
         $runner->resumeAfterNode($run, $context, $job->node_key);
+    }
+
+    /**
+     * The queue gave up on this job after the scheduled row was already marked
+     * dispatched: close the run as failed instead of leaving it `running`.
+     */
+    public function failed(\Throwable $e): void
+    {
+        $job = AutomationScheduledJob::find($this->scheduledJobId);
+
+        if ($job !== null) {
+            app(FailsStrandedRuns::class)((int) $job->automation_run_id, $e);
+        }
     }
 }
