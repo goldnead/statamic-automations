@@ -24,12 +24,28 @@ class RunDueScheduledJobs extends Command
 
     protected $description = 'Resume automation runs whose delay/wait window has elapsed.';
 
+    /** Dispatches that threw, summed over every brand of this run. */
+    protected int $failedDispatches = 0;
+
     public function handle(): int
     {
+        $this->failedDispatches = 0;
+
         // A scheduled run has no session and therefore no brand; without this
         // the fail-closed scope hides every row and the command silently
         // reports success while doing nothing.
-        return $this->forEachBrand(fn (): int => $this->handleForBrand());
+        $exit = $this->forEachBrand(fn (): int => $this->handleForBrand());
+
+        // Reported once at the end rather than returned per brand: a non-zero
+        // exit from one brand would make `forEachBrand()` stop, and the brands
+        // behind it would not be resumed in this tick.
+        if ($this->failedDispatches > 0) {
+            $this->error("{$this->failedDispatches} scheduled job(s) could not be dispatched and stay pending.");
+
+            return self::FAILURE;
+        }
+
+        return $exit;
     }
 
     protected function handleForBrand(): int
@@ -40,7 +56,6 @@ class RunDueScheduledJobs extends Command
             ->get();
 
         $dispatched = 0;
-        $failed = 0;
 
         foreach ($due as $job) {
             // Atomically claim the job. If another overlapping tick already
@@ -62,18 +77,12 @@ class RunDueScheduledJobs extends Command
                         ->where('status', AutomationScheduledJob::STATUS_QUEUED)
                         ->update(['status' => AutomationScheduledJob::STATUS_PENDING]);
                     report($e);
-                    $failed++;
+                    $this->failedDispatches++;
                 }
             }
         }
 
         $this->info("Dispatched {$dispatched} due scheduled job(s).");
-
-        if ($failed > 0) {
-            $this->error("{$failed} scheduled job(s) could not be dispatched and stay pending.");
-
-            return self::FAILURE;
-        }
 
         return self::SUCCESS;
     }

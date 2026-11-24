@@ -74,15 +74,23 @@ class ResumeDelayedRun implements ShouldQueue
     }
 
     /**
-     * The queue gave up on this job after the scheduled row was already marked
-     * dispatched: close the run as failed instead of leaving it `running`.
+     * The queue gave up on this job.
+     *
+     * Before the row was marked dispatched: it goes back to `pending`, so the
+     * next `automations:run-due` tick tries again (nothing ran yet). After:
+     * the run is closed as failed instead of staying `running`.
      */
     public function failed(\Throwable $e): void
     {
+        AutomationScheduledJob::query()
+            ->whereKey($this->scheduledJobId)
+            ->where('status', AutomationScheduledJob::STATUS_QUEUED)
+            ->update(['status' => AutomationScheduledJob::STATUS_PENDING]);
+
         $job = AutomationScheduledJob::find($this->scheduledJobId);
 
         if ($job !== null) {
-            app(FailsStrandedRuns::class)((int) $job->automation_run_id, $e);
+            app(FailsStrandedRuns::class)((int) $job->getAttribute('automation_run_id'), $e);
         }
     }
 }

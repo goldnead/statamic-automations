@@ -19,15 +19,29 @@ class FailsStrandedRuns
 
     public function __invoke(int $runId, \Throwable $e): void
     {
-        $run = AutomationRun::find($runId);
+        // Atomic: two closers (or a worker finishing at the same moment) cannot
+        // both win, so the alert fires once and a finished run is never undone.
+        $claimed = AutomationRun::query()
+            ->whereKey($runId)
+            ->whereIn('status', [AutomationRun::STATUS_QUEUED, AutomationRun::STATUS_RUNNING])
+            ->update(['status' => AutomationRun::STATUS_FAILED]);
 
-        if ($run === null || ! in_array($run->status, [
-            AutomationRun::STATUS_QUEUED,
-            AutomationRun::STATUS_RUNNING,
-        ], true)) {
+        if ($claimed !== 1) {
             return;
         }
 
-        $this->logger->finishRun($run, AutomationRun::STATUS_FAILED, 'Queue job aborted: '.$e->getMessage());
+        $run = AutomationRun::find($runId);
+
+        if ($run === null) {
+            return;
+        }
+
+        try {
+            $this->logger->finishRun($run, AutomationRun::STATUS_FAILED, 'Queue job aborted: '.$e->getMessage());
+        } catch (\Throwable $alertFailure) {
+            // finishRun() sends the alert synchronously; the run is already
+            // marked failed, and a throw here would only surface in the worker.
+            report($alertFailure);
+        }
     }
 }

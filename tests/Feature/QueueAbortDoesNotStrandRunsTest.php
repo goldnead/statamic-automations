@@ -118,3 +118,47 @@ it('closes the run as failed when the queue aborts ResumeDelayedRun', function (
 
     expect($run->fresh()->status)->toBe(AutomationRun::STATUS_FAILED);
 });
+
+it('keeps going with the other brands when one brand cannot dispatch', function () {
+    config()->set('brand-context.multi_brand', true);
+    app('brand-context')->forget();
+    $a = Goldnead\BrandContext\Models\Brand::query()->create(['handle' => 'brand-a', 'name' => 'A']);
+    $b = Goldnead\BrandContext\Models\Brand::query()->create(['handle' => 'brand-b', 'name' => 'B']);
+
+    $runs = [];
+    foreach ([$a, $b] as $brand) {
+        $runs[$brand->handle] = Goldnead\BrandContext\Facades\BrandContext::runFor($brand, function () use ($brand) {
+            $automation = Automation::create(['name' => 'S '.$brand->handle, 'handle' => 'strand-'.$brand->handle, 'enabled' => true]);
+            AutomationNode::create(['automation_id' => $automation->id, 'node_key' => 't', 'type' => 'manual']);
+            AutomationNode::create(['automation_id' => $automation->id, 'node_key' => 'wait', 'type' => 'delay', 'config' => ['amount' => 1, 'unit' => 'days']]);
+            AutomationEdge::create(['automation_id' => $automation->id, 'from_node_key' => 't', 'to_node_key' => 'wait']);
+
+            return strandRun($automation);
+        });
+    }
+    Carbon::setTestNow(now()->addDays(2));
+
+    $bus = Mockery::mock(Dispatcher::class);
+    $bus->shouldReceive('dispatch')->twice()->andThrow(new RuntimeException('redis down'));
+    app()->instance(Dispatcher::class, $bus);
+
+    $this->artisan('automations:run-due')->assertExitCode(1);
+
+    // Both brands were visited: each one's job was claimed, failed and handed back.
+    $statuses = Goldnead\BrandContext\Facades\BrandContext::withoutBrandScope(
+        fn () => AutomationScheduledJob::query()->pluck('status')->all()
+    );
+    expect($statuses)->toBe([AutomationScheduledJob::STATUS_PENDING, AutomationScheduledJob::STATUS_PENDING]);
+});
+
+it('hands a queued scheduled job back to pending when the resume job itself is aborted', function () {
+    $run = strandRun(strandAutomation());
+    $job = AutomationScheduledJob::where('automation_run_id', $run->id)->first();
+    $job->forceFill(['status' => AutomationScheduledJob::STATUS_QUEUED])->save();
+
+    (new ResumeDelayedRun($job->id))->failed(new RuntimeException('deserialisation failed'));
+
+    expect($job->fresh()->status)->toBe(AutomationScheduledJob::STATUS_PENDING)
+        // The run is parked, not stranded: it keeps waiting for the next tick.
+        ->and($run->fresh()->status)->toBe(AutomationRun::STATUS_WAITING);
+});
