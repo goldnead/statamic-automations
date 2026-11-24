@@ -25,10 +25,13 @@ class RunDueScheduledJobs extends Command
     protected $description = 'Resume automation runs whose delay/wait window has elapsed.';
 
     /** Dispatches that threw, summed over every brand of this run. */
-    protected int $failedDispatches = 0; // one instance per run, so never reset
+    protected int $failedDispatches = 0;
 
     public function handle(): int
     {
+        // The console may reuse this instance across invocations in one process.
+        $this->forgetFailures();
+
         // A scheduled run has no session and therefore no brand; without this
         // the fail-closed scope hides every row and the command silently
         // reports success while doing nothing.
@@ -44,6 +47,11 @@ class RunDueScheduledJobs extends Command
         }
 
         return $exit;
+    }
+
+    protected function forgetFailures(): void
+    {
+        $this->failedDispatches = 0;
     }
 
     protected function handleForBrand(): int
