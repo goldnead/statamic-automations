@@ -72,6 +72,29 @@ it('warns about an unknown frequency', function () {
         ->once();
 });
 
+it('warns about a broken schedule once an hour, not every minute', function () {
+    $automation = makeScheduledAutomation(['frequency' => 'cron', 'cron' => 'not a cron']);
+
+    Log::spy();
+
+    $this->artisan('automations:run-scheduled')->assertSuccessful();
+    $this->artisan('automations:run-scheduled')->assertSuccessful();
+
+    Log::shouldHaveReceived('warning')
+        ->withArgs(fn ($message, $context = []) => ($context['automation_id'] ?? null) === $automation->id)
+        ->once();
+});
+
+it('does not warn about a valid schedule', function () {
+    makeScheduledAutomation(['frequency' => 'daily', 'time' => '09:00']);
+
+    Log::spy();
+
+    $this->artisan('automations:run-scheduled')->assertSuccessful();
+
+    Log::shouldNotHaveReceived('warning');
+});
+
 it('skips disabled scheduled automations', function () {
     $automation = makeScheduledAutomation(['frequency' => 'cron', 'cron' => '* * * * *'], enabled: false);
 

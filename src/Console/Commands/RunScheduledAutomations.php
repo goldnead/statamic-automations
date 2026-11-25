@@ -95,8 +95,16 @@ class RunScheduledAutomations extends Command
     {
         $id = $automation->id ?? null;
 
-        if (! Cache::add('automations:invalid-schedule:'.($id ?? 'unknown'), true, now()->addHour())) {
-            return;
+        // The throttle must never take the command down: an unreachable cache
+        // store would otherwise stop every valid schedule as well, every minute.
+        try {
+            $key = 'automations:invalid-schedule:'.($automation->uuid ?? $id ?? 'unknown');
+
+            if (! Cache::add($key, true, now()->addHour())) {
+                return;
+            }
+        } catch (\Throwable) {
+            // Warn without a throttle.
         }
 
         Log::warning('[automations] schedule never fires: '.$reason, [
