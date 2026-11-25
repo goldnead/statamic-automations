@@ -18,6 +18,7 @@ use Goldnead\StatamicAutomations\Registries\NodeRegistry;
 use Goldnead\StatamicAutomations\Support\ActionResult;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Walks an automation's graph and executes nodes one after another.
@@ -415,6 +416,15 @@ class WorkflowRunner
                 // `on_item_error: continue` is usually what is meant: it
                 // ends the failed item's pass instead (driveInlineLoop()).
                 if ($this->onErrorPolicy($current) === 'continue') {
+                    // The run still ends as it always did; the log is where
+                    // a continued failure becomes visible at all.
+                    Log::warning("Automation [{$automation->handle}] node [{$current->node_key}] failed and the flow continued (_on_error: continue).", [
+                        'run_id' => $run->id,
+                        'automation_id' => $automation->id,
+                        'node_key' => $current->node_key,
+                        'error' => $result->error,
+                    ]);
+
                     $current = $this->nextNode($current, 'error', $edges, $nodes)
                         ?? $this->nextNode($current, 'default', $edges, $nodes);
 
@@ -442,6 +452,13 @@ class WorkflowRunner
 
             if ($result->isSkipped()) {
                 // Skipped nodes do not advance the flow.
+                Log::warning("Automation [{$automation->handle}] node [{$current->node_key}] was skipped and stopped the flow.", [
+                    'run_id' => $run->id,
+                    'automation_id' => $automation->id,
+                    'node_key' => $current->node_key,
+                    'reason' => $result->output['reason'] ?? null,
+                ]);
+
                 return AutomationRun::STATUS_STOPPED;
             }
 
