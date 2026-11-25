@@ -1,15 +1,11 @@
 <?php
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
-use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
-use Goldnead\StatamicAutomations\Engine\TriggerDispatcher;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationEdge;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
-use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
-use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 
@@ -94,40 +90,5 @@ it('leaves a warning in the log when a disabled node stops the flow', function (
     Log::shouldHaveReceived('warning')->withArgs(
         fn (string $message, array $context = []) => ($context['run_id'] ?? null) === $run->id
             && ($context['node_key'] ?? null) === 'mid'
-    );
-});
-
-it('keeps dispatching the other automations when one automation throws', function () {
-    Exceptions::fake();
-    Log::spy();
-
-    $broken = entrySavedFor('broken');
-    $healthy = entrySavedFor('healthy');
-
-    $real = app(WorkflowRunner::class);
-    $runner = Mockery::mock(WorkflowRunner::class);
-    $runner->shouldReceive('createRun')->andReturnUsing(
-        function (Automation $automation, ...$args) use ($real, $broken) {
-            if ($automation->id === $broken->id) {
-                throw new RuntimeException('boom in automation 1');
-            }
-
-            return $real->createRun($automation, ...$args);
-        }
-    );
-
-    $dispatcher = new TriggerDispatcher(
-        app(TriggerRegistry::class),
-        $runner,
-        app(AutomationRepository::class),
-    );
-
-    $dispatcher->dispatch('entry_saved', ['entry' => ['id' => '42', 'collection' => 'blog']]);
-
-    expect(AutomationRun::where('automation_id', $healthy->id)->count())->toBe(1);
-    expect(AutomationRun::where('automation_id', $broken->id)->count())->toBe(0);
-    Exceptions::assertReported(RuntimeException::class);
-    Log::shouldHaveReceived('error')->withArgs(
-        fn (string $message, array $context = []) => ($context['automation_id'] ?? null) === $broken->id
     );
 });

@@ -3,12 +3,9 @@
 namespace Goldnead\StatamicAutomations\Engine;
 
 use Goldnead\StatamicAutomations\Contracts\AutomationRepository;
-use Goldnead\StatamicAutomations\Contracts\AutomationTrigger;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
-use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Registries\TriggerRegistry;
 use Goldnead\StatamicAutomations\Support\DispatchMode;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Generic entry point for event-driven triggers.
@@ -41,67 +38,48 @@ class TriggerDispatcher
             ->filter(fn ($automation) => $automation->nodes->contains(fn ($n) => $n->type === $triggerHandle));
 
         foreach ($automations as $automation) {
-            // One automation throwing must not stop the others: the webhook
-            // controller frees its dedupe mark on a throw and the provider
-            // retries, which would re-run every automation before this one.
-            try {
-                $this->dispatchOne($trigger, $triggerHandle, $automation, $event);
-            } catch (\Throwable $e) {
-                report($e);
-
-                Log::error("Automation [{$automation->handle}] failed on trigger [{$triggerHandle}]: {$e->getMessage()}", [
-                    'automation_id' => $automation->id,
-                    'automation_handle' => $automation->handle,
-                    'trigger' => $triggerHandle,
-                    'exception' => $e::class,
-                ]);
+            $triggerNode = $automation->nodes->first(fn ($n) => $n->type === $triggerHandle);
+            if ($triggerNode === null) {
+                continue;
             }
+
+            $config = $triggerNode->config ?? [];
+
+            if (! $trigger->matches($event, $config)) {
+                continue;
+            }
+
+            $context = $trigger->buildContext($event, $config);
+
+            // The re-entry gate. Default `always`, which is what this method
+            // did before the gate existed — no automation changes behaviour
+            // until somebody sets a policy on its trigger.
+            $verdict = $this->enrollment()->evaluate($automation, $triggerNode, $context);
+
+            if (! $verdict['allowed']) {
+                continue;
+            }
+
+            $run = $this->runner->createRun(
+                $automation,
+                $context,
+                $triggerNode,
+                $verdict['subject_key'],
+            );
+
+            // The one place a run becomes a job. Async is the default and stays
+            // it; sync ties this run's outcome to the caller's request, which
+            // is the point — see DispatchMode.
+            $mode = DispatchMode::fromValue(
+                is_string($config[DispatchMode::CONFIG_KEY] ?? null)
+                    ? $config[DispatchMode::CONFIG_KEY]
+                    : null
+            );
+
+            $mode === DispatchMode::Sync
+                ? RunAutomation::dispatchSync($run->id, $context->all(), false)
+                : RunAutomation::dispatch($run->id, $context->all(), false);
         }
-    }
-
-    protected function dispatchOne(AutomationTrigger $trigger, string $triggerHandle, Automation $automation, object|array $event): void
-    {
-        $triggerNode = $automation->nodes->first(fn ($n) => $n->type === $triggerHandle);
-        if ($triggerNode === null) {
-            return;
-        }
-
-        $config = $triggerNode->config ?? [];
-
-        if (! $trigger->matches($event, $config)) {
-            return;
-        }
-
-        $context = $trigger->buildContext($event, $config);
-
-        // The re-entry gate. Default `always`, which is what this method
-        // did before the gate existed — no automation changes behaviour
-        // until somebody sets a policy on its trigger.
-        $verdict = $this->enrollment()->evaluate($automation, $triggerNode, $context);
-
-        if (! $verdict['allowed']) {
-            return;
-        }
-
-        $run = $this->runner->createRun(
-            $automation,
-            $context,
-            $triggerNode,
-            $verdict['subject_key'],
-        );
-
-        // The one place a run becomes a job. Async is the default and stays
-        // it; sync ties this run's outcome to the caller's request, which
-        // is the point — see DispatchMode.
-        $mode = DispatchMode::fromValue(
-            is_string($config[DispatchMode::CONFIG_KEY] ?? null)
-                ? $config[DispatchMode::CONFIG_KEY]
-                : null
-        );
-
-        $mode === DispatchMode::Sync
-            ? RunAutomation::dispatchSync($run->id, $context->all(), false)
-            : RunAutomation::dispatch($run->id, $context->all(), false);
     }
 
     /**
