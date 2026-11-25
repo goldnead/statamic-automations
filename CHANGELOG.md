@@ -6,6 +6,7 @@
 
 - `automations:run-due`: when the queue cannot take the job (Redis down), the claimed scheduled job goes back to `pending` and the next tick retries it. Before, it stayed `queued` for ever and the follow-up step of a series never ran. The command reports the failure and exits with 1.
 - A queued run that the queue aborts (timeout, worker kill, exception outside the runner) is closed as `failed` with the failure alert, instead of staying `running` for ever and blocking re-enrolment under the "resume" policy. Applies to `RunAutomation` and `ResumeDelayedRun` (`failed()` hook).
+- A scheduled trigger that can never fire (invalid cron expression, empty cron field, unknown frequency) writes a warning with the automation id, at most once an hour per automation, instead of silently never running. A run that ends in an unexpected exception (anything but a node failure) is also passed to `report()`, so the stack trace is not lost behind the message in the run row.
 
 ## 2.45.1 — 2026-11-17
 

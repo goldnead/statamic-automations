@@ -3,6 +3,7 @@
 use Goldnead\StatamicAutomations\Models\Automation;
 use Goldnead\StatamicAutomations\Models\AutomationNode;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 
 function makeScheduledAutomation(array $config, bool $enabled = true): Automation
@@ -44,6 +45,54 @@ it('does not dispatch a schedule that is not due', function () {
     $this->artisan('automations:run-scheduled')->assertSuccessful();
 
     expect(AutomationRun::where('automation_id', $automation->id)->count())->toBe(0);
+});
+
+it('warns about an invalid cron expression instead of silently never firing', function () {
+    $automation = makeScheduledAutomation(['frequency' => 'cron', 'cron' => 'not a cron']);
+
+    Log::spy();
+
+    $this->artisan('automations:run-scheduled')->assertSuccessful();
+
+    expect(AutomationRun::where('automation_id', $automation->id)->count())->toBe(0);
+    Log::shouldHaveReceived('warning')
+        ->withArgs(fn ($message, $context = []) => ($context['automation_id'] ?? null) === $automation->id)
+        ->once();
+});
+
+it('warns about an unknown frequency', function () {
+    $automation = makeScheduledAutomation(['frequency' => 'fortnightly']);
+
+    Log::spy();
+
+    $this->artisan('automations:run-scheduled')->assertSuccessful();
+
+    Log::shouldHaveReceived('warning')
+        ->withArgs(fn ($message, $context = []) => ($context['automation_id'] ?? null) === $automation->id)
+        ->once();
+});
+
+it('warns about a broken schedule once an hour, not every minute', function () {
+    $automation = makeScheduledAutomation(['frequency' => 'cron', 'cron' => 'not a cron']);
+
+    Log::spy();
+
+    $this->artisan('automations:run-scheduled')->assertSuccessful();
+    $this->artisan('automations:run-scheduled')->assertSuccessful();
+
+    Log::shouldHaveReceived('warning')
+        ->withArgs(fn ($message, $context = []) => ($context['automation_id'] ?? null) === $automation->id)
+        ->once();
+});
+
+it('does not warn about a valid schedule', function () {
+    makeScheduledAutomation(['frequency' => 'daily', 'time' => '09:00']);
+
+    Log::spy();
+
+    $this->artisan('automations:run-scheduled')->assertSuccessful();
+
+    Log::shouldNotHaveReceived('warning');
 });
 
 it('skips disabled scheduled automations', function () {
