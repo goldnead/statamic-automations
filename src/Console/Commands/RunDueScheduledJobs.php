@@ -24,12 +24,34 @@ class RunDueScheduledJobs extends Command
 
     protected $description = 'Resume automation runs whose delay/wait window has elapsed.';
 
+    /** Dispatches that threw, summed over every brand of this run. */
+    protected int $failedDispatches = 0;
+
     public function handle(): int
     {
+        // The console may reuse this instance across invocations in one process.
+        $this->forgetFailures();
+
         // A scheduled run has no session and therefore no brand; without this
         // the fail-closed scope hides every row and the command silently
         // reports success while doing nothing.
-        return $this->forEachBrand(fn (): int => $this->handleForBrand());
+        $exit = $this->forEachBrand(fn (): int => $this->handleForBrand());
+
+        // Reported once at the end rather than returned per brand: a non-zero
+        // exit from one brand would make `forEachBrand()` stop, and the brands
+        // behind it would not be resumed in this tick.
+        if ($this->failedDispatches > 0) {
+            $this->error("{$this->failedDispatches} scheduled job(s) could not be dispatched and stay pending.");
+
+            return self::FAILURE;
+        }
+
+        return $exit;
+    }
+
+    protected function forgetFailures(): void
+    {
+        $this->failedDispatches = 0;
     }
 
     protected function handleForBrand(): int
@@ -50,8 +72,19 @@ class RunDueScheduledJobs extends Command
                 ->update(['status' => AutomationScheduledJob::STATUS_QUEUED]);
 
             if ($claimed === 1) {
-                ResumeDelayedRun::dispatch($job->id);
-                $dispatched++;
+                try {
+                    ResumeDelayedRun::dispatch($job->id);
+                    $dispatched++;
+                } catch (\Throwable $e) {
+                    // The queue is unreachable. Nothing picks a QUEUED row up
+                    // again, so hand the claim back: the next tick retries it.
+                    AutomationScheduledJob::query()
+                        ->where('id', $job->id)
+                        ->where('status', AutomationScheduledJob::STATUS_QUEUED)
+                        ->update(['status' => AutomationScheduledJob::STATUS_PENDING]);
+                    report($e);
+                    $this->failedDispatches++;
+                }
             }
         }
 

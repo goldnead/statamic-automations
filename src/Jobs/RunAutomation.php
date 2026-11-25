@@ -3,6 +3,7 @@
 namespace Goldnead\StatamicAutomations\Jobs;
 
 use Goldnead\StatamicAutomations\Context\AutomationContext;
+use Goldnead\StatamicAutomations\Engine\FailsStrandedRuns;
 use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Models\AutomationRun;
 use Goldnead\StatamicAutomations\Nodes\Actions\AiGenerateAction;
@@ -78,5 +79,16 @@ class RunAutomation implements ShouldQueue
         $context = AutomationContext::make($this->context, $this->testMode);
 
         $runner->execute($run, $context);
+    }
+
+    /**
+     * The queue gave up on this job (timeout, worker kill, exception outside
+     * the runner). The runner's own catch never ran, so without this the run
+     * stays `running` for ever, raises no alert, and blocks re-enrolment under
+     * the "resume" policy.
+     */
+    public function failed(\Throwable $e): void
+    {
+        app(FailsStrandedRuns::class)($this->runId, $e);
     }
 }

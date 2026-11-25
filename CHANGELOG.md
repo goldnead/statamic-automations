@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `automations:run-due`: when the queue cannot take the job (Redis down), the claimed scheduled job goes back to `pending` and the next tick retries it. Before, it stayed `queued` for ever and the follow-up step of a series never ran. The command reports the failure and exits with 1.
+- A queued run that the queue aborts (timeout, worker kill, exception outside the runner) is closed as `failed` with the failure alert, instead of staying `running` for ever and blocking re-enrolment under the "resume" policy. Applies to `RunAutomation` and `ResumeDelayedRun` (`failed()` hook).
+
 ## 2.45.1 — 2026-11-17
 
 ### Fixed
