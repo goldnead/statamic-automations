@@ -17,6 +17,7 @@ use Goldnead\StatamicAutomations\Support\ActionResult;
 use Goldnead\StatamicAutomations\Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Exceptions;
 
 /**
  * What ends an item and what ends the run, inside an inline loop.
@@ -257,6 +258,46 @@ class LoopItemControlTest extends TestCase
         $this->assertSame(AutomationRun::STATUS_FAILED, $run->status);
         $this->assertSame('run log unavailable', $run->error_message);
         $this->assertSame([], $this->messages($run, 'done_log'));
+    }
+
+    /**
+     * The run row only keeps `getMessage()`. An engine error (not a failed
+     * node) must also reach the exception handler, or its stack trace is lost.
+     */
+    public function test_an_unexpected_engine_error_is_reported_with_its_stack_trace(): void
+    {
+        Exceptions::fake();
+
+        $this->app->bind(RunLogger::class, fn ($app) => new class($app->make(TokenResolver::class)) extends RunLogger
+        {
+            public function recordNodeRun(
+                AutomationRun $run,
+                string $nodeKey,
+                string $nodeType,
+                array $input,
+                ?ActionResult $result = null,
+                ?\Throwable $exception = null,
+                ?\DateTimeInterface $startedAt = null,
+            ): AutomationNodeRun {
+                if ($nodeKey === 'explode') {
+                    throw new \RuntimeException('run log unavailable');
+                }
+
+                return parent::recordNodeRun($run, $nodeKey, $nodeType, $input, $result, $exception, $startedAt);
+            }
+        });
+
+        $automation = $this->buildAutomation([
+            ['key' => 't', 'type' => 'manual'],
+            ['key' => 'explode', 'type' => 'add_log_entry', 'config' => ['level' => 'info', 'message' => 'x']],
+        ], [
+            ['t', 'explode'],
+        ]);
+
+        $run = $this->runFlow($automation);
+
+        $this->assertSame(AutomationRun::STATUS_FAILED, $run->status);
+        Exceptions::assertReported(fn (\RuntimeException $e) => $e->getMessage() === 'run log unavailable');
     }
 
     public function test_an_inner_loop_that_fails_ends_only_the_outer_item_when_the_outer_loop_continues(): void

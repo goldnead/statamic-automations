@@ -10,6 +10,8 @@ use Goldnead\StatamicAutomations\Engine\WorkflowRunner;
 use Goldnead\StatamicAutomations\Jobs\RunAutomation;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Evaluates every enabled automation with a `scheduled` trigger and
@@ -49,7 +51,7 @@ class RunScheduledAutomations extends Command
             $tz = ($config['timezone'] ?? '') ?: config('app.timezone', 'UTC');
             $now = Carbon::now($tz);
 
-            if (! $this->isDue($config, $now)) {
+            if (! $this->isDue($config, $now, $automation)) {
                 continue;
             }
 
@@ -66,18 +68,42 @@ class RunScheduledAutomations extends Command
         return self::SUCCESS;
     }
 
-    protected function isDue(array $config, Carbon $now): bool
+    protected function isDue(array $config, Carbon $now, ?object $automation = null): bool
     {
         $expression = $this->cronExpression($config);
         if ($expression === null) {
+            $this->warnInvalidSchedule($automation, $config, 'no usable cron expression or unknown frequency');
+
             return false;
         }
 
         try {
             return (new CronExpression($expression))->isDue($now->toDateTime());
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            $this->warnInvalidSchedule($automation, $config, $e->getMessage());
+
             return false;
         }
+    }
+
+    /**
+     * A schedule that can never fire used to fail without a trace. The
+     * command runs every minute, so the warning is throttled to once an
+     * hour per automation.
+     */
+    protected function warnInvalidSchedule(?object $automation, array $config, string $reason): void
+    {
+        $id = $automation->id ?? null;
+
+        if (! Cache::add('automations:invalid-schedule:'.($id ?? 'unknown'), true, now()->addHour())) {
+            return;
+        }
+
+        Log::warning('[automations] schedule never fires: '.$reason, [
+            'automation_id' => $id,
+            'frequency' => $config['frequency'] ?? null,
+            'cron' => $config['cron'] ?? null,
+        ]);
     }
 
     protected function cronExpression(array $config): ?string

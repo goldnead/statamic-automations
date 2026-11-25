@@ -138,6 +138,11 @@ class WorkflowRunner
         try {
             $finalStatus = $this->walk($run, $automation, $startNode, $context);
         } catch (\Throwable $e) {
+            // Only the message reaches the run row; keep the stack trace for
+            // anything that is not an expected node failure (DB errors etc.).
+            if (! $e instanceof NodeFailedException) {
+                report($e);
+            }
             $this->logger->finishRun($run, AutomationRun::STATUS_FAILED, $e->getMessage());
 
             return $run->fresh();
@@ -202,6 +207,11 @@ class WorkflowRunner
                 executeFirst: true,
             );
         } catch (\Throwable $e) {
+            // Only the message reaches the run row; keep the stack trace for
+            // anything that is not an expected node failure (DB errors etc.).
+            if (! $e instanceof NodeFailedException) {
+                report($e);
+            }
             $this->logger->finishRun($run, AutomationRun::STATUS_FAILED, $e->getMessage());
 
             return $run->fresh();
@@ -269,6 +279,11 @@ class WorkflowRunner
                 executeFirst: $this->reexecutesOnResume($startNode),
             );
         } catch (\Throwable $e) {
+            // Only the message reaches the run row; keep the stack trace for
+            // anything that is not an expected node failure (DB errors etc.).
+            if (! $e instanceof NodeFailedException) {
+                report($e);
+            }
             $this->logger->finishRun($run, AutomationRun::STATUS_FAILED, $e->getMessage());
 
             return $run->fresh();
